@@ -67,6 +67,19 @@ describe('ExecutionNodeV1 API control plane', () => {
     { validateUrl() {}, upload: async () => new Response(null, { status: 200 }) });
     expect(fake.calls.some(call => call.path.endsWith('/stop'))).toBe(false);
   });
+  it('should progress a replayed 202 stop once the runtime becomes quiescent', async () => {
+    const fake = await setup(); await fake.adapter.heartbeat(); let s = session();
+    const created = await fake.adapter.create(s, sandboxSpec(s), 'create'); s = { ...s, physicalUid: String(created.id) };
+    await fake.adapter.mutate(s, 'start', 'start', { uid: 1000, gid: 1000 });
+    const original = fake.node.adapter.stopSandbox.bind(fake.node.adapter);
+    vi.spyOn(fake.node.adapter, 'stopSandbox').mockResolvedValueOnce(false).mockImplementation(original);
+    const intent = { buildId: 'build', stopCommandId: 'stop', exportCommandId: 'export',
+      deleteCommandId: 'delete', presignedPutUrl: 'https://s3.test/object', maxBytes: 1024 * 1024 };
+    const options = { validateUrl() {}, upload: async () => new Response(null, { status: 200 }) };
+    await expect(exportRetainedBuild(fake.adapter, s, intent, options)).rejects.toMatchObject({ code: 'sandbox_not_quiesced' });
+    await expect(exportRetainedBuild(fake.adapter, s, intent, options)).resolves.toMatchObject({ provenance: { tenantId: 'sentropic' } });
+    expect(fake.node.adapter.stopSandbox).toHaveBeenCalledTimes(2);
+  });
   it('should refuse a command signed with an unregistered key', async () => {
     const fake = await setup(); await fake.adapter.heartbeat(); const s = session();
     const invalid = new ExecutionNodeAdapter({ ...fake.config, ticketKey: generateKeyPairSync('ed25519').privateKey }, fake.adapter.transport);
