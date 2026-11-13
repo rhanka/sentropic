@@ -1,5 +1,5 @@
 import { Agent, request } from 'node:https';
-import { createPrivateKey, createPublicKey, type KeyObject } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey, type KeyObject } from 'node:crypto';
 
 export interface NodeReply { status: number; headers: Record<string, string | string[] | undefined>; bytes: Buffer }
 export type NodeTransport = (method: string, path: string, body?: Buffer,
@@ -29,13 +29,21 @@ export function executionNodeConfig(env: Env): ExecutionNodeConfig {
     return parsed;
   });
   const ed25519 = (key: KeyObject) => { if (key.asymmetricKeyType !== 'ed25519') throw new Error(); return key; };
+  const nodeInstanceId = required('ARTIFACT_EXECUTION_NODE_INSTANCE_ID');
+  const provenanceKey = parse('ARTIFACT_EXECUTION_NODE_PROVENANCE_PUBLIC_KEY_B64', value =>
+    ed25519(createPublicKey(Buffer.from(value, 'base64'))));
+  // Operator handoff pin, SHA-256 of SPKI DER, never a private key or credential.
+  if (nodeInstanceId === '7c710995-cfa9-4e2f-8cad-61706f83d933'
+    && createHash('sha256').update(provenanceKey.export({ type: 'spki', format: 'der' })).digest('hex')
+      !== '74b5cd02287bead58bf4e27948dc7e2150d80ca5a20924d289325b95f6bc4aaa') {
+    throw new ExecutionNodeRefusal('invalid_config:ARTIFACT_EXECUTION_NODE_PROVENANCE_PUBLIC_KEY_B64');
+  }
   return { url, nodeId: required('ARTIFACT_EXECUTION_NODE_ID'),
-    nodeInstanceId: required('ARTIFACT_EXECUTION_NODE_INSTANCE_ID'),
+    nodeInstanceId,
     nodeEpoch: parse('ARTIFACT_EXECUTION_NODE_EPOCH', value => {
       const epoch = Number(value); if (!Number.isSafeInteger(epoch) || epoch < 1) throw new Error(); return epoch;
     }),
-    provenanceKey: parse('ARTIFACT_EXECUTION_NODE_PROVENANCE_PUBLIC_KEY_B64', value =>
-      ed25519(createPublicKey(Buffer.from(value, 'base64')))),
+    provenanceKey,
     ticketKey: parse('ARTIFACT_EXECUTION_TICKET_ED25519_KEY_B64', value =>
       ed25519(createPrivateKey(Buffer.from(value, 'base64')))),
     tls: { ca: Buffer.from(required('SANDBOX_MTLS_CA_CERT_B64'), 'base64'),
