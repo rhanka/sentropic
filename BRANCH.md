@@ -43,4 +43,5 @@
 - [ ] Lot 2: correct ownership, names and kinds; regenerate all SVGs through the kit.
 - [ ] Lot 3: prepare/build/export-static/validate/deliver; inspect output; independent code review.
 - [x] Lot 4a: produce .tmp/rv/ecosystem-compare/compare.html before any PR; stop for conductor/owner review.
+- [x] Reproducible preflight uses published DS static card/zone renderers and the embedded font metrics.
 - [ ] Lot 4b: after accepted comparison and passing local gates, push, open PR and verify exact-head CI; conductor merges.
