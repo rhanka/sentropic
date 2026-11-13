@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 3 B3d: lifecycle dispatcher regression added; create/start/claim/stop/export/delete/renew/revoke are routed with control-plane role, ticket and mandatory session devScope checks.
 - [x] RUN 3 B3c: runtime now prepares OCI bundles, tracks failed starts for cleanup, reads bounded quiescent archives and removes runsc state/scope/mounts/private directories before releasing capacity.
 - [x] RUN 3 B3b: OCI bundle regression added; EROFS bases feed private overlay, runtime workspace is read-only, build output is separate, and teardown unmounts before purging upperdir.
 - [x] RUN 3 B3a: reproduced discarded mounts; daemon retains validated mounts and passes them with the session command into the runtime.
