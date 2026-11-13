@@ -27,6 +27,7 @@ describe('real custody RPC to real agent data plane', () => {
     const f = await setup();
     expect((await f.call('issue', f.subject, false)).status).toBe(403);
     expect((await f.call('issue', { ...f.subject, route: { ...f.route, principalId: 'other' } })).status).toBe(403);
+    expect((await f.call('issue', { ...f.subject, route: { ...f.route, expiresAt: undefined } })).status).toBe(403);
     expect((await f.call('issue', { kind: 'supervisor', podName: 'unowned-pod' })).status).toBe(403);
     expect((await f.call('watch')).status).toBe(200); f.stop();
     expect((await f.call('watch')).status).toBe(403); expect((await f.call('issue')).status).toBe(403);
