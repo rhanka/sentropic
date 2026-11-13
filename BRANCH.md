@@ -48,7 +48,7 @@
   - [x] Add `api/tests/unit/llm-runtime-generation.test.ts` for the real title call and legacy model.
 - [x] Lot 2 — Warn on title failure with safe structured provider metadata; retain null result.
   - [x] Add focused title failure tests under `api/tests/unit/`.
-- [ ] Lot 3 — Add bounded observer and hermetic sentinel tests in `e2e/fixtures/provider-server.test.mjs`.
+- [x] Lot 3 — Add bounded observer and hermetic sentinel tests in `e2e/fixtures/provider-server.test.mjs`.
 - [ ] Lot 4 — Final validation and delivery.
   - [ ] Scoped make tests; API typecheck/lint; independent code review.
   - [ ] Scope check before each atomic commit under 150 lines.
