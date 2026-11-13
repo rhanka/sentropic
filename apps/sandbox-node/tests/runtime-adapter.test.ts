@@ -81,7 +81,7 @@ describe('runtime adapters', () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(box.state).toBe('stopped-output-retained');
       expect(node.admission.reservedMiB('immo')).toBe(1536);
-      await daemon.exportArtifacts('immo', box.id, { commandId: 'export', devScope, spec: { subPath: 'ui/dist', buildId: 'b', maxBytes: 1000, presignedPutUrl: 'https://example.test' } });
+      await daemon.exportArtifacts('immo', box.id, { commandId: 'export', devScope, spec: { subPath: 'ui/dist', buildId: 'b', maxBytes: 1000, destination: 'https://example.test' } });
       if (mode === 'delete') for (scopeState of ['active', 'unknown']) {
         await expect(daemon.deleteSandbox('immo', box.id, { commandId: `unsafe-${scopeState}`, devScope })).rejects.toThrow();
         expect(destroy).not.toHaveBeenCalled();
