@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { generateKeyPairSync } from 'node:crypto';
 import { ExecutionNodeAdapter, nodeJson } from '../../src/services/artifacts/live/execution-node-adapter';
 import { executionNodeTransport } from '../../src/services/artifacts/live/execution-node-transport';
 import { exportRetainedBuild } from '../../src/services/artifacts/live/execution-node-lifecycle';
@@ -18,8 +19,8 @@ describe('ExecutionNodeV1 API control plane', () => {
     await expect(fake.adapter.create(s, sandboxSpec(s), 'create')).rejects.toMatchObject({ code: 'control_plane_unavailable' });
     expect(fake.calls.filter(c => c.path.includes('heartbeat')).every(c => c.tenant === undefined)).toBe(true);
   });
-  it('should preserve the full ownership envelope and replay identical signed creation only once', async () => {
-    const fake = await setup(); await fake.adapter.heartbeat(); const s = session();
+  it.each(['sentropic', 'immo'] as const)('should preserve %s ownership and replay identical signed creation only once', async tenant => {
+    const fake = await setup(); await fake.adapter.heartbeat(); const s = session(tenant);
     const first = await fake.adapter.create(s, sandboxSpec(s), 'create');
     const replay = await fake.adapter.create(s, sandboxSpec(s), 'create');
     expect(first.id).toBe(replay.id);
@@ -47,6 +48,29 @@ describe('ExecutionNodeV1 API control plane', () => {
       deleteCommandId: 'delete', presignedPutUrl: 'https://s3.test/object', maxBytes: 1024 * 1024 },
     { validateUrl() {}, upload: async () => new Response(null, { status: 503 }) })).rejects.toMatchObject({ code: 'artifact_upload_failed' });
     expect(fake.node.daemon.getSandbox('sentropic', s.physicalUid)?.state).toBe('exported');
+    await exportRetainedBuild(fake.adapter, s, { buildId: 'build', stopCommandId: 'stop', exportCommandId: 'export',
+      deleteCommandId: 'delete', presignedPutUrl: 'https://s3.test/object', maxBytes: 1024 * 1024 },
+    { validateUrl() {}, upload: async () => new Response(null, { status: 200 }) });
+    expect(fake.node.daemon.getSandbox('sentropic', s.physicalUid)?.state).toBe('destroyed');
+  });
+  it('should export a naturally completed build without sending another stop', async () => {
+    const fake = await setup(); await fake.adapter.heartbeat(); let s = session();
+    const original = fake.node.adapter.runSandbox.bind(fake.node.adapter); let exited!: (code: number) => void;
+    vi.spyOn(fake.node.adapter, 'runSandbox').mockImplementation(async options => {
+      exited = options.onExit!; return original(options);
+    });
+    const created = await fake.adapter.create(s, sandboxSpec(s), 'create'); s = { ...s, physicalUid: String(created.id) };
+    await fake.adapter.mutate(s, 'start', 'start', { uid: 1000, gid: 1000 }); exited(0);
+    await vi.waitFor(async () => expect((await fake.adapter.status(s))?.state).toBe('stopped-output-retained'));
+    await exportRetainedBuild(fake.adapter, s, { buildId: 'build', stopCommandId: 'stop', exportCommandId: 'export',
+      deleteCommandId: 'delete', presignedPutUrl: 'https://s3.test/object', maxBytes: 1024 * 1024 },
+    { validateUrl() {}, upload: async () => new Response(null, { status: 200 }) });
+    expect(fake.calls.some(call => call.path.endsWith('/stop'))).toBe(false);
+  });
+  it('should refuse a command signed with an unregistered key', async () => {
+    const fake = await setup(); await fake.adapter.heartbeat(); const s = session();
+    const invalid = new ExecutionNodeAdapter({ ...fake.config, ticketKey: generateKeyPairSync('ed25519').privateKey }, fake.adapter.transport);
+    await expect(invalid.create(s, sandboxSpec(s), 'invalid-signature')).rejects.toMatchObject({ code: 'command_id_payload_mismatch' });
   });
   it('should reject foreign tenants and changed devScope on session mutation', async () => {
     const fake = await setup(); await fake.adapter.heartbeat(); const s = session();
