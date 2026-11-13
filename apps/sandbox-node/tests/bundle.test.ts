@@ -1,10 +1,23 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, mkdirSync, symlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { prepareBundle, destroyBundle } from '../src/bundle.js';
 
 describe('OCI bundle lifecycle', () => {
+  it('should reject symlinked output ancestors before creating anything outside the workspace', () => {
+    const root = mkdtempSync(join(tmpdir(), 'bundle-link-'));
+    const outside = join(root, 'outside'); mkdirSync(outside);
+    try {
+      expect(() => prepareBundle({ tenantId: 'immo', sandboxUid: 'link', overlayUpper: join(root, 'bundle/upper'),
+        overlayWork: join(root, 'bundle/work'), quotaMiB: 1536, uid: 1000, gid: 1000, command: ['/bin/sleep', 'infinity'],
+        mounts: [{ source: '/root.erofs', target: '/bases/rootfs/root', readOnly: true },
+          { source: '/source.erofs', target: '/bases/source/source', readOnly: true }] }, (command, args) => {
+          if (command === 'mount' && args.includes('overlay')) symlinkSync(outside, join(root, 'bundle/workspace/ui'));
+        })).toThrow();
+      expect(existsSync(join(outside, 'dist'))).toBe(false);
+    } finally { rmSync(root, { recursive: true }); }
+  });
   it('should mount immutable bases, confine writes and purge all private files after unmount', () => {
     const root = mkdtempSync(join(tmpdir(), 'bundle-'));
     const calls: string[][] = [];
