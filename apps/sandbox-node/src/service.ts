@@ -44,7 +44,7 @@ const server = createAgentServer(tls, (req, res, role) => {
 });
 server.requestTimeout = 5000;
 server.maxHeadersCount = 64;
-server.listen(Number(process.env.AGENT_PORT ?? 9443), '0.0.0.0');
+server.listen(Number(process.env.AGENT_PORT ?? 8443), '0.0.0.0');
 const heartbeat = () => sendJobAlertHeartbeat(jobAlerts, tls, { source: 'sandbox-node', nodeInstanceId, nodeEpoch,
   timestamp: new Date().toISOString() }).catch(error => { console.error('job-alerts heartbeat failed', String(error)); });
 void heartbeat();

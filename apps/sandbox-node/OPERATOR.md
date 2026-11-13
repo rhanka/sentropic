@@ -28,7 +28,7 @@ tenant ancestry before writing scope-only `cgroup.kill`. Require
 
 ## Hardening and public transport
 
-- Public IPv4, inbound mTLS on TCP 9443, no vRack. k8s synchronizes
+- Public IPv4, inbound mTLS on TCP 8443, no vRack. k8s synchronizes
   nftables allowlist of MKS egress IPs and operator IPs, default deny.
 - Separate operator/control-plane/data-plane certificates; CA, cert and
   key paths are mandatory. No plaintext agent listener.
@@ -54,7 +54,7 @@ forbidden deployment references. Keep the previous verified digest.
 
 `agent.env` requires `AGENT_CA`, `AGENT_CERT`, `AGENT_KEY`,
 `NODE_INSTANCE_ID`, `NODE_EPOCH` and HTTPS `JOB_ALERTS_URL`;
-`AGENT_PORT` defaults to 9443. Persist node identity/monotone epoch and
+`AGENT_PORT` defaults to 8443. Persist node identity/monotone epoch and
 custody WAL across restarts; environment/cert files are mode 0600.
 The cluster probes `/v1/node` using an operator certificate. The agent
 sends an mTLS job-alerts heartbeat every 15 s; alert on heartbeat/probe
