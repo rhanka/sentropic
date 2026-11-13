@@ -7,12 +7,30 @@ vi.mock('node:fs', async original => ({ ...await original<typeof import('node:fs
   readFileSync: (path: string, ...args: any[]) => path === '/tmp/config.json' ? '{}' :
     require('node:fs').readFileSync(path, ...args) }));
 import { FakeRuntimeAdapter, RunscRuntimeAdapter, createExecutionNode, ExecutionNodeDaemon } from '../src/index.js';
+import { SandboxCgroup } from '../src/cgroups.js';
 vi.mock('node:child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   return { ...actual, spawn: vi.fn(actual.spawn), execFileSync: vi.fn(actual.execFileSync) };
 });
 
 describe('runtime adapters', () => {
+  it('should stop the scope after runsc removal and retain deferred metadata cleanup', async () => {
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy() {} });
+    const available = vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter(); queueMicrotask(() => { child.emit('spawn'); child.emit('exit', 0); });
+      return child as ReturnType<typeof spawn>;
+    });
+    const stop = vi.spyOn(SandboxCgroup.prototype, 'stop').mockResolvedValue(true);
+    try {
+      const { runtimeId } = await adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'missing-binary', network: 'none',
+        mounts: [], overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 });
+      available.mockReturnValue(false);
+      await expect(adapter.stopSandbox(runtimeId)).resolves.toBe(true);
+      expect(stop).toHaveBeenCalledWith('builder-sbx-missing-binary.scope', 'immo');
+      await expect(adapter.destroySandbox(runtimeId)).rejects.toMatchObject({ runtimeId });
+    } finally { vi.restoreAllMocks(); }
+  });
   it('should enable the gVisor forwarding API only for an explicit ports workload', () => {
     const adapter = new RunscRuntimeAdapter();
     const input = { tenantId: 'immo', sandboxUid: 'network', mounts: [], overlayUpper: '/tmp/upper',
