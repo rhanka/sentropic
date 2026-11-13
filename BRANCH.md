@@ -35,7 +35,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 - [x] BRB0A-EX2: deliver the already-frozen sandbox GET needed to resume natural-stop/export/upload failures without mutating state blindly. Impact: authenticated control-plane tenant status only; k8s must deploy a new agent artifact before use. Rollback: revert these two agent-file changes and keep node backend disabled.
 - [x] BRB0A-EX3: allow an identical stop command returning 202 to recheck cgroup quiescence. Impact: the same authenticated method/path/body can progress stopping; mismatched replay still refuses before side effects. Rollback: revert daemon stop changes and keep node backend disabled pending agent correction.
 - [x] Track single writer: conductor imports this plan and lane report; this lane does not mutate the shared journal.
-- [ ] Verify delivered agent wire format against freeze; document discrepancies and bounded consumer handoffs.
+- [x] Verify delivered agent wire format against freeze; document discrepancies and bounded consumer handoffs.
   - [x] Fix explicit Content-Length for DELETE JSON; hermetic listener accepts both loopback families; sanitize synchronous TLS failures.
 
 ## AI Flaky tests
@@ -49,7 +49,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read packet/addendum/rules/frozen contract; check existing branch, disk and ports.
-- [ ] Lot 1: SandboxBackend seam, execution-node configuration and authenticated HTTPS transport.
+- [x] Lot 1: SandboxBackend seam, execution-node configuration and authenticated HTTPS transport.
   - [x] Select backend explicitly, preserve default Kubernetes composition, inject selected ports into existing controller.
   - [x] Do not initialize the Kubernetes client when execution-node is selected.
   - [x] Broad rollback regression identified relay validation precedence; retain the original relay refusal before Kubernetes client validation.
@@ -63,17 +63,17 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Preserve the narrowed immutable pending spec across the persisted dispatch-boundary write.
   - [x] Persist revocation intent before the remote mutation; reconcile only that exact custody epoch and preserve stable removal command ids after lost responses.
   - [x] Refuse provisioning whose tenant/principal/generation/session does not match authenticated runtime inputs.
-- [ ] Lot 2: Ed25519 tickets, ownership/devScope, identity/provenance pin and idempotent lifecycle.
+- [x] Lot 2: Ed25519 tickets, ownership/devScope, identity/provenance pin and idempotent lifecycle.
   - [x] Add mTLS configuration/transport, canonical Ed25519 tickets and pinned identity/export verification.
   - [x] Refuse incomplete ownership and verify configured node identity before the first heartbeat or tenant command.
   - [x] Add tenant-checked presigned base import; transport deadlines cover frozen base/stop/admission operations without changing test timeouts.
   - [x] Verify the supplied public provenance key's SPKI DER fingerprint against the operator handoff for instance 7c710995-cfa9-4e2f-8cad-61706f83d933.
-- [ ] Lot 3: one-node heartbeat, bounded tenant WFQ, stateless sources and custody issuer/revocation.
+- [x] Lot 3: one-node heartbeat, bounded tenant WFQ, stateless sources and custody issuer/revocation.
   - [x] Dedicated Postgres advisory-lock heartbeat leadership and S1-C1 EdDSA custody issuing/revocation functions.
   - [x] Product scheduler starts/stops selected-node leadership; identity mismatch latches an alarm and stops the loop.
   - [x] Bounded quantum-one tenant queue, concurrent head-read coalescing and retained-export-upload-delete client cycle.
   - [x] Tenant-specific BHS SigV4 presigned URLs; credentials remain in the API closure.
-- [ ] Lot 4: hermetic fake agent tests in api/tests/unit/execution-node*.test.ts; backend rollback regression.
+- [x] Lot 4: hermetic fake agent tests in api/tests/unit/execution-node*.test.ts; backend rollback regression.
   - [x] Native in-memory X.509 fixture and hermetic HTTPS server wrapping real agent dispatch/ticket/custody code.
   - [x] Contract tests cover heartbeat expiry, replay, ownership, lifecycle, tenant/scope refusal, admission and custody.
   - [x] Policy tests cover bounded alternation, fresh head coalescing, lazy rollback, BHS prefixes and heartbeat leadership.
@@ -84,7 +84,8 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Regress fresh wake replacement, absent-allocation cleanup, lost creation/revocation responses and 202 stop progression.
   - [x] Keep fault-injection clients on the fake node's explicit clock so custody freshness is exercised deterministically.
 - [ ] Lot 5: targeted make tests, API typecheck/lint, independent review and fixes.
+  - [x] Independent owner-routed Astra review findings reconciled in .tmp/rv/s1-b0a-review.md; no multi-host h2a consensus claimed.
   - [x] 17 hermetic tests pass; full API typecheck and scoped lint pass with workspace declarations built in an ephemeral container.
   - [x] Document preprod Secret names, heartbeat leadership, S1-C1 issuer and explicit S1-B1/agent handoffs in execution-node.md.
 - [ ] Lot 6: push, PR body from BRANCH.md, green exact-head CI; write .tmp/rv/s1-b0a-adapter.md and .done.
-- [ ] Cleanup: make down-volumes ENV=feat-s1-b0a; no merge or deployment.
+- [x] Cleanup: down-volumes refused the packet's feat-* ENV by its test-only guard; make down succeeded. No Compose stack/volume was created; ephemeral --rm runners only. disk-hygiene reclaimed 0B. No merge/deployment.
