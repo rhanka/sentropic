@@ -35,8 +35,16 @@ export function sandboxPaths(tenantId: ExecutionNodeTenantId, uid: string): {
 /** Per-tenant base registry: a miss returns undefined, never a foreign object. */
 export class TenantBaseRegistry {
   private readonly bases = new Map<string, TenantBase>();
+  constructor(private readonly sharedRootfs?: { path: string; digest: string }) {}
+
+  path(base: TenantBase): string {
+    return base.kind === 'rootfs' && this.sharedRootfs ? this.sharedRootfs.path : basePath(base);
+  }
 
   register(base: TenantBase): void {
+    if (base.kind === 'rootfs' && this.sharedRootfs && base.identityDigest !== this.sharedRootfs.digest) {
+      throw new ExecutionNodeError('cross_tenant_base_forbidden', 'rootfs must match installed release');
+    }
     if (!['sentropic', 'immo'].includes(base.tenantId) || !/^[a-zA-Z0-9_-]+$/.test(base.baseId)
       || !/^[a-zA-Z0-9:_-]+$/.test(base.identityDigest)) throw new ExecutionNodeError('command_id_payload_mismatch', 'invalid base identity');
     this.bases.set(`${base.tenantId}:${base.baseId}`, base);
@@ -57,7 +65,7 @@ export function resolveMounts(
     if (!base || base.kind !== ref.kind || base.identityDigest !== ref.identityDigest) {
       throw new ExecutionNodeError('cross_tenant_base_forbidden', `base ${ref.baseId} not visible to ${tenantId}`);
     }
-    return { source: basePath(base), target: `/bases/${base.kind}/${base.baseId}`, readOnly: true };
+    return { source: registry.path(base), target: `/bases/${base.kind}/${base.baseId}`, readOnly: true };
   });
 }
 

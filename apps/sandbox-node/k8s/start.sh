@@ -7,4 +7,6 @@ test "${#digest}" -eq 64
 test "$RELEASE_DIR" = "/opt/execution-node/releases/$digest"
 cd "$RELEASE_DIR"
 sha256sum -c SHA256SUMS
+ROOTFS_DIGEST=$(awk '$2 == "./rootfs.erofs" { print $1 }' SHA256SUMS)
+export ROOTFS_DIGEST
 exec ./execution-node

@@ -28,6 +28,7 @@ export class AgentApi {
       daemon.authorizeCommand(ticket, tenantId, commandId, body, method, path, body.ownership as ExecutionNodeOwnership);
       const base = body.base as TenantBase;
       if (base?.tenantId !== tenantId) throw new ExecutionNodeError('cross_tenant_base_forbidden');
+      if (base.kind === 'rootfs') throw new ExecutionNodeError('cross_tenant_base_forbidden', 'rootfs is delivered with the agent');
       await ensureBase(base, String(body.url)); this.node.bases.register(base);
       return { status: 200, body: base };
     }
