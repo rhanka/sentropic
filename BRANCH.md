@@ -1,7 +1,7 @@
 # Feature: Standard ecosystem diagram cards
 
 ## Objective
-- [ ] Render the existing ecosystem with published DiagramSceneFigure and real repository/package ownership.
+- [ ] Render the existing ecosystem with published standard cards and real repository/package ownership, preserving the original geometry.
 
 ## Scope / Guardrails
 - [x] Worktree tmp/worktrees/ecosystem-ds; branch feat/governance-ecosystem-ds-cards.
@@ -24,7 +24,9 @@
 - [x] Binding DS specification supplied by owner; no new design decisions.
 - [x] README scope limited to image references.
 - [x] Track single-writer reservation: conductor records this request and deliverable.
-- [x] npm confirms DS 0.40.0; standard renderer reproduces footer overflow with the required full npm names. Owner clarification pending; no truncation or gate relaxation.
+- [x] npm confirms DS 0.40.0; standard renderer reproduces footer overflow with the required full npm names. No truncation or gate relaxation.
+- [x] Original-geometry fallback preflight: 11 side-by-side SVG pairs and measured differences; 62 DS diagnostics block delivery.
+- [ ] DS owner: support the required complete footer/content at original dimensions; verify zero diagnostics before delivery.
 
 ## AI Flaky tests
 - [x] No provider calls required.
@@ -40,4 +42,5 @@
 - [ ] Lot 1: upgrade dependencies; use semantic documents, views and standard scene components.
 - [ ] Lot 2: correct ownership, names and kinds; regenerate all SVGs through the kit.
 - [ ] Lot 3: prepare/build/export-static/validate/deliver; inspect output; independent code review.
-- [ ] Lot 4: push, open PR, verify exact-head CI; report in .tmp/rv/ecosystem-ds.md; conductor merges.
+- [x] Lot 4a: produce .tmp/rv/ecosystem-compare/compare.html before any PR; stop for conductor/owner review.
+- [ ] Lot 4b: after accepted comparison and passing local gates, push, open PR and verify exact-head CI; conductor merges.

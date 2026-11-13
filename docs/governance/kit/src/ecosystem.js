@@ -25,7 +25,7 @@ export const inventory = [
   ['track-mcp', 'h2a', '@sentropic/track', 'service', 'track-mcp', 'api'],
   ['focus', 'h2a', '@sentropic/focus', 'lib', 'Decision dossier model', 'document'],
   ['focus-build', 'h2a', '@sentropic/h2a', 'function', 'buildFocusDossier', 'document'],
-  ['track-log', 'h2a', '.track/', 'store', 'In each consumer repository', 'document'],
+  ['track-log', 'sentropic', '.track/', 'store', 'Local log in each consumer repo', 'document'],
   ['engram', 'engram', '@sentropic/engram', 'lib', 'Ontology-typed memory graph', 'brain'],
   ['engram-mcp', 'engram', '@sentropic/engram/mcp-memory', 'service', 'MCP memory; injected storage', 'api'],
   ['svelte', 'design-system', '@sentropic/design-system-svelte', 'lib', 'Standard scene, cards and zones', 'window'],
@@ -54,12 +54,23 @@ export function ecosystemInput(selectedRepos = repos) {
     form: 'container', icon: 'cluster', text: { kicker: 'REPOSITORY', title: repo, subtitle: `${rows.filter(row => row[1] === repo).length} existing components`, footer: `repo: ${repo}` },
   });
   for (const [id, repo, pkg, kind, capability, icon] of rows) {
-    add(id, 'application-component', pkg, { form: 'card', icon, text: {
+    add(id, kind === 'function' ? 'application-function' : kind === 'store' ? 'data-object' : 'application-component', pkg, { form: 'card', icon, text: {
       kicker: `${nature[kind]} · ${kind.toUpperCase()}`, title: pkg, body: capability,
       footer: `repo: ${repo} · ${pkg}`,
     } });
     const key = `relation:contains.${id}`;
     document.relations[key] = { id: key, profile: 'archimate@2', type: 'groupingContainment', attributes: {}, endpoints: [{ role: 'parent', target: entity(`repo-${repo}`) }, { role: 'child', target: entity(id) }] };
+  }
+  for (const [source, target] of [
+    ['gateway-host', 'llm-gateway'], ['llm-gateway', 'llm-mesh'],
+    ['api', 'chat-server'], ['ui', 'chat-ui'], ['api', 'cluster-mesh'],
+    ['memory-compose', 'engram-mcp'], ['engram-mcp', 'postgres'],
+    ['h2a-cli', 'h2a'], ['focus-build', 'focus'], ['track', 'track-log'],
+    ['svelte', 'diagram-canvas'], ['diagram-canvas', 'diagram-core'],
+  ]) {
+    if (!document.entities[entity(source)] || !document.entities[entity(target)]) continue;
+    const id = `relation:uses.${source}.${target}`;
+    document.relations[id] = { id, profile: 'archimate@2', type: 'association', attributes: {}, endpoints: [{ role: 'source', target: entity(source) }, { role: 'target', target: entity(target) }] };
   }
   return { document, presentation, registry, bindings };
 }
