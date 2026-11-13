@@ -91,6 +91,7 @@ export class FakeRuntimeAdapter implements RuntimeAdapter {
 export class RunscRuntimeAdapter implements RuntimeAdapter {
   readonly kind = 'runsc-systrap';
   private readonly binary: string;
+  private readonly rootArg = '--root=/run/execution-node/runsc';
   private readonly scopes = new Map<string, { scope: string; tenantId: string; uid: string; bundle: Bundle; stopped: boolean }>();
 
   constructor(binary = 'runsc', private readonly bundles = { prepare: prepareBundle, destroy: destroyBundle }) {
@@ -112,7 +113,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   runscArgs(options: RunSandboxOptions): string[] {
-    const args = ['--network=none', '--platform=systrap', 'run', '--bundle', options.overlayUpper.replace(/\/upper$/, '')];
+    const args = [this.rootArg, '--network=none', '--platform=systrap', 'run', '--bundle', options.overlayUpper.replace(/\/upper$/, '')];
     args.push(`sandbox-${options.sandboxUid}`);
     return args;
   }
@@ -123,10 +124,14 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     const scope = `builder-sbx-${options.sandboxUid}.scope`;
     const runtimeId = `runsc-${options.tenantId}-${options.sandboxUid}`;
     this.scopes.set(runtimeId, { scope, tenantId: options.tenantId, uid: options.sandboxUid, bundle, stopped: false });
+    // systemd-run uses PID 1's StartTransientUnit D-Bus method; Slice is explicit.
     const child = spawn('systemd-run', ['--scope', `--unit=${scope}`,
       `--slice=builder-tenant-${options.tenantId}.slice`,
       `--property=MemoryMax=${options.quotaMiB}M`, `--property=MemorySwapMax=${options.quotaMiB > 704 ? '256M' : '0'}`,
-      '--property=MemoryOOMGroup=yes', this.binary, ...this.runscArgs(options)], { stdio: 'ignore' });
+      `--property=MemoryHigh=${options.quotaMiB > 704 ? '1280M' : 'infinity'}`,
+      `--property=MemoryLow=${options.quotaMiB > 704 ? '0' : '704M'}`,
+      `--property=CPUWeight=${options.quotaMiB > 704 ? 100 : 200}`,
+      '--property=OOMPolicy=kill', '--property=TasksMax=256', this.binary, ...this.runscArgs(options)], { stdio: 'ignore' });
     let ready = false;
     try { await new Promise<void>((resolve, reject) => {
       const deadline = Date.now() + 5000;
@@ -136,7 +141,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       child.once('exit', code => { fail(new Error(`sandbox launcher exited: ${code}`)); if (ready) options.onExit?.(code); });
       const poll = () => {
         try {
-          const state = JSON.parse(execFileSync(this.binary, ['state', `sandbox-${options.sandboxUid}`], { encoding: 'utf8', timeout: 1000 }));
+          const state = JSON.parse(execFileSync(this.binary, [this.rootArg, 'state', `sandbox-${options.sandboxUid}`], { encoding: 'utf8', timeout: 1000 }));
           if (state.status === 'running') { ready = true; resolve(); return; }
         } catch { /* The runtime may not have created its state yet. */ }
         if (Date.now() >= deadline) { fail(new Error('sandbox runtime readiness timeout')); return; }
@@ -173,8 +178,8 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     if (!this.hasRunsc()) failNoBinary();
     if (!await this.stopSandbox(runtimeId)) throw new Error('sandbox_not_quiesced');
     const entry = this.scopes.get(runtimeId)!;
-    const runtimes = JSON.parse(execFileSync(this.binary, ['list', '--format=json'], { encoding: 'utf8', timeout: 1000 })) as Array<{ id: string }>;
-    if (runtimes.some(runtime => runtime.id === `sandbox-${entry.uid}`)) execFileSync(this.binary, ['delete', '--force', `sandbox-${entry.uid}`], { timeout: 5000 });
+    const runtimes = JSON.parse(execFileSync(this.binary, [this.rootArg, 'list', '--format=json'], { encoding: 'utf8', timeout: 1000 })) as Array<{ id: string }>;
+    if (runtimes.some(runtime => runtime.id === `sandbox-${entry.uid}`)) execFileSync(this.binary, [this.rootArg, 'delete', '--force', `sandbox-${entry.uid}`], { timeout: 5000 });
     execFileSync('systemctl', ['stop', entry.scope], { timeout: 5000 });
     this.bundles.destroy(entry.bundle);
     this.scopes.delete(runtimeId);
