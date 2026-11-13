@@ -9,6 +9,7 @@ import { NodeControl } from '../../../apps/sandbox-node/src/node-control';
 import { createAgentServer, readJsonBody, agentRole } from '../../../apps/sandbox-node/src/transport';
 import { createDataPlane } from '../../../apps/sandbox-node/src/data-plane';
 import type { RequestOptions } from 'node:http';
+import type { Socket } from 'node:net';
 import { ExecutionNodeAdapter, nodeHash, type NodeSession } from '../../src/services/artifacts/live/execution-node-adapter';
 import { executionNodeTransport, type ExecutionNodeConfig } from '../../src/services/artifacts/live/execution-node-transport';
 import { nodeCertificates } from './execution-node-certificates';
@@ -60,6 +61,8 @@ export async function fakeExecutionNode(target?: (port: number) => Promise<Reque
     } catch (error) { const e = error as { status?: number; code?: string }; reply(e.status ?? 500, { error: e.code ?? 'internal_error' }); }
   });
   server.on('upgrade', (req, socket, head) => { void data.upgrade(req, socket, head, agentRole(req) ?? ''); });
+  const sockets = new Set<Socket>();
+  server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   await new Promise<void>(resolve => server.listen(0, resolve));
   const address = server.address() as { port: number };
   const config: ExecutionNodeConfig = { url: new URL(`https://localhost:${address.port}`), nodeId: node.daemon.nodeId,
@@ -67,5 +70,6 @@ export async function fakeExecutionNode(target?: (port: number) => Promise<Reque
     tls: { ca: Buffer.from(tls.ca), cert: Buffer.from(tls.client.cert), key: Buffer.from(tls.client.key) } };
   const transport = executionNodeTransport(config); const adapter = new ExecutionNodeAdapter(config, transport, now);
   return { adapter, config, node, custody, calls, now, tls, keys, server, advance(ms: number) { clock += ms; },
-    async close() { transport.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(directory, { recursive: true }); } };
+    async close() { transport.close(); for (const socket of sockets) socket.destroy();
+      server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(directory, { recursive: true }); } };
 }
