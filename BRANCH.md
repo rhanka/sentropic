@@ -15,6 +15,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `apps/sandbox-node/**`
+  - `scripts/security/sca-gate.test.mjs` (BR-SN1-EX11: expected covered lock inventory only)
   - `packages/contracts/**` (ExecutionNodeV1 types only: `src/execution-node-v1.ts` + its re-export in `src/index.ts`)
   - `spec/SPEC_EVOL_SANDBOX_NODE.md`
   - `BRANCH.md`
@@ -40,6 +41,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] BR-SN1-EX11: CI 43379243080 security-sca-gate failed because its expected lock inventory omitted the new SEA build-tools lock. Add that exact covered directory to its expectation; scanner coverage already includes it automatically. Impact: inventory assertion only, no policy exclusion/suppression; rollback: remove the directory from the expectation if the SEA tool lock is removed.
 - [x] RUN 5 final packaging: observed erofs-utils 1.5 rejects -q; corrected to its documented --quiet flag. Archive also carries OPERATOR.md and the restart B-test so the k8s digest handoff is self-contained.
 - [x] RUN 5 final rebase: origin/main advanced to 21f641113 during implementation; replayed branch and retained its own BRANCH.md instead of main's unrelated T3 plan. Build/test copies now exclude generated release archives after measured 709 MiB context amplification; EROFS progress is quiet.
 - [x] RUN 5 spec reconciled with AMD-17..27: admission, exact memory/scope policy, key custody, shared rootfs channel, pull metrics and operator/control heartbeat separation; all real-host acceptance remains explicit.
