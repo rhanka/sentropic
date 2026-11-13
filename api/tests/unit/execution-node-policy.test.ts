@@ -65,4 +65,15 @@ describe('execution node API policies', () => {
     expect(node.heartbeat).toHaveBeenCalledOnce(); expect(client.release).toHaveBeenCalledOnce();
     expect(query.mock.calls.at(-1)?.[0]).toContain('advisory_unlock');
   });
+  it('should release a candidate database connection when lock acquisition fails', async () => {
+    const failed = deferred(); const release = vi.fn();
+    const client = { query: vi.fn(async () => { throw new Error('database_unavailable'); }),
+      on: vi.fn(), removeListener: vi.fn(), release };
+    const pool = { connect: vi.fn(async () => client) } as unknown as Pool;
+    const alarm = vi.fn(() => failed.resolve());
+    const node = { config: { nodeId: 'node' }, inspect: vi.fn(), heartbeat: vi.fn() };
+    const leader = executionNodeHeartbeat(pool, node as unknown as ExecutionNodeAdapter, alarm);
+    leader.start(); await failed.promise; await leader.stop();
+    expect(release).toHaveBeenCalledExactlyOnceWith(true); expect(node.heartbeat).not.toHaveBeenCalled();
+  });
 });
