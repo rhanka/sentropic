@@ -52,7 +52,7 @@ jobs:
       CI_PROVIDER_MODE: live
       API_TEST_CI: '1'
       API_PORT: '9405'
-      UI_PORT: '5605'
+      UI_PORT: '5397'
       MAILDEV_UI_PORT: '1505'
       REGISTRY: ghcr.io/rhanka
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
