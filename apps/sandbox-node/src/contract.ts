@@ -282,7 +282,16 @@ export const EXECUTION_NODE_V1_SANDBOX_SPEC_SCHEMA: ExecutionNodeJsonSchema = {
     tenantId: { enum: ['sentropic', 'immo'] },
     physicalUid: { type: 'string', minLength: 1 },
     command: { type: 'array', minItems: 1, items: { type: 'string' } },
-    devScope: { type: 'object', required: ['kind', 'writable', 'refused', 'source'] },
+    devScope: {
+      type: 'object', required: ['kind', 'writable', 'refused', 'source'], additionalProperties: false,
+      properties: {
+        kind: { enum: ['ui', 'api', 'jobs', 'data', 'fullstack'] },
+        writable: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
+        refused: { type: 'array', items: { type: 'string', minLength: 1 } },
+        source: { type: 'object', required: ['repo', 'path', 'commit'], additionalProperties: false,
+          properties: { repo: { type: 'string', minLength: 1 }, path: { type: 'string', minLength: 1 }, commit: { type: 'string', minLength: 1 } } },
+      },
+    },
     profile: { type: 'string', minLength: 1 },
     runtimeClass: { type: 'string', minLength: 1 },
     baseMounts: {

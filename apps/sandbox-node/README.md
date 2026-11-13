@@ -1,8 +1,8 @@
 # Sandbox node daemon (S1-A1a)
 
-In-memory execution-node daemon implementing the frozen
-`spec/SPEC_EVOL_SANDBOX_NODE.md` contract against an injectable runtime
-adapter. No Python. No stack required for unit tests.
+Standalone mTLS execution-node service implementing
+`spec/SPEC_EVOL_SANDBOX_NODE.md` against an injectable runtime adapter.
+No Python. No stack required for local regression tests.
 
 ## Layout
 
@@ -13,7 +13,9 @@ adapter. No Python. No stack required for unit tests.
 - `src/admission.ts` — one warm session/tenant, complete memory.current reservations.
 - `src/build-queue.ts` — one global publish build, bounded strict tenant alternation.
 - `src/custody.ts` — fsync-persisted monotone revocation and stream fencing.
-- `src/service.ts` — public mTLS bootstrap and job-alerts heartbeat.
+- `src/service.ts`, `src/api.ts` — public mTLS lifecycle routes and job-alerts heartbeat.
+- `src/bundle.ts`, `src/base-store.ts` — digest-verified EROFS bases and private OCI bundles.
+- `src/source-write.ts`, `src/output.ts` — scoped source writer and bounded quiescent archive reader.
 - `src/audit.ts` — append-only audit log (every row carries `tenant_id`).
 - `src/mounts.ts` — per-tenant read-only base mounts + `/workspace` overlay.
 - `src/daemon.ts` — lifecycle automaton, tenant isolation, idempotence.
@@ -25,9 +27,10 @@ adapter. No Python. No stack required for unit tests.
   (`apps/sandbox-node/src/contract.ts`).
 - Normative cycle: `creating -> standby | running -> stopping ->`
   `stopped-output-retained -> exported -> destroyed` (`failed -> destroyed`).
-- Box network is always `none`; writes are allowed under `/workspace` only.
-- The real `runsc` adapter compiles everywhere but only spawns `runsc`
-  where the binary exists (`hasRunsc()` gate, tests skip otherwise).
+- Box network is always `none`; source writes require the host-supplied devScope.
+- Runtime source is read-only; build output is a separate writable bind.
+- The real adapter requires a ticket verification key, rootfs/source bases,
+  pinned runsc, EROFS, overlayfs, systemd and cgroup v2 on the qualification host.
 
 ## Qualification
 
@@ -37,5 +40,6 @@ Unit tests need no stack (fake adapter, no database):
 - `make -f Makefile -f apps/sandbox-node/checks.mk build-sandbox-node-artifact ENV=test-sandbox-node`
 
 See OPERATOR.md for d2-4 limits and the standalone VM systemd/cloud-init
-delivery contract. The bootstrap advertises only delivered operations;
-unit success does not qualify the host lifecycle or real export reader.
+delivery contract and wire protocol. Local tests cover dispatch, bundle planning,
+source confinement, real filesystem archives and injected runtime failures.
+They do not qualify kernel isolation or the complete runsc lifecycle on the VM.
