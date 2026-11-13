@@ -8,7 +8,7 @@ import type { SandboxRecord } from './daemon.js';
 import { ExecutionNodeError } from './errors.js';
 
 /** Only these runtime services are reachable; no host TCP destination comes from a request. */
-export const DATA_PLANE_PORTS = new Set([5173, 8792]);
+export const DATA_PLANE_PORTS = new Set([5173]);
 export function createDataPlane(options: {
   publicKey: KeyObject; custody: CustodyGuard;
   sandbox(tenant: ExecutionNodeSignedCustodyToken['tenantId'], uid: string): SandboxRecord | undefined;

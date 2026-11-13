@@ -206,7 +206,10 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
       || value.nodeInstanceId !== node.config.nodeInstanceId || value.nodeEpoch !== node.config.nodeEpoch) {
       throw new ExecutionNodeRefusal('custody_revoked', 403);
     }
-    const status = await node.status(value.session);
+    const status = await node.status(value.session).catch(error => {
+      if (error instanceof ExecutionNodeRefusal && error.code === 'invalid_node_session') throw new ExecutionNodeRefusal('custody_revoked', 403);
+      throw error;
+    });
     if (status?.state !== 'running') throw new ExecutionNodeRefusal('custody_revoked', 403);
     return value.session;
   } });
