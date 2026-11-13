@@ -52,9 +52,13 @@
   - [x] Review: retain HTTP custody through transformation and backpressure; validate upstream status before Response construction.
   - [x] Review regressions: status 600 and HTTP consumers paused after upstream completion.
   - [x] Review P1 regression: expiry/revocation during a post-fetch live-route check refuses buffered bytes.
-  - [x] Local result: 191 tests across 13 files, scoped TypeScript passed; lint zero errors (one existing console warning).
+  - [x] Local result: 194 tests across 13 files, scoped TypeScript passed; lint zero errors (one existing console warning).
   - [x] Distinct sentropic/immo resource admissions preserve separate custody headers and tokens.
   - [x] Second review P1: non-200 upstream HTML is discarded before response release; 201/500 live refusal regressions.
-- [ ] Lot 5: README contract/env documentation, independent code review, scoped validation.
+- [x] Lot 5: README contract/env documentation, independent code review, scoped validation.
   - [x] README documents env names, opaque issuer contract, WS renewal and agent prerequisite.
+  - [x] Independent Astra high closure APPROVE at b5b12ffa29cbf5b946115729271e69852120a6fd; all three P1 findings resolved and tested.
+  - [x] Final commit changes this plan only; reviewed implementation and test bytes are unchanged.
 - [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.
+  - [x] No Compose stack started; isolated Docker test commands self-remove; `make down ENV=feat-s1-c1` completed.
+  - [x] CI classifies this path as API but does not explicitly run the artifact-content test/typecheck program; report the coverage boundary, do not edit CI.
