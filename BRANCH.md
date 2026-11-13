@@ -1,128 +1,83 @@
-# Feature: S1-B0a ExecutionNodeV1 API adapter
+# Feature: S1-C1 artifact-content execution-node data plane
 
 ## Objective
-Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the Kubernetes rollback backend; no deployment or VM access.
+- [ ] Deliver the approved S1-C1 mTLS data-plane transport and D7-A CSP profile.
 
 ## Scope / Guardrails
-- [x] Worktree tmp/worktrees/s1-b0a; branch feat/s1-b0a-execution-node-adapter mechanically checked with harness.
-- [x] Approved design: .tmp/builder-dossier/dossier-consolide.md and spec/SPEC_EVOL_SANDBOX_NODE.md.
-- [x] Make-only, Docker-first; ENV=feat-s1-b0a last; API_PORT=9085 UI_PORT=5285 MAILDEV_UI_PORT=1185 checked free.
-- [x] No secrets printed; no VM, cluster, deployment or merge.
-- [x] Atomic commits below 150 changed lines, specific staging, make commit only.
+- [x] Worktree `tmp/worktrees/s1-c1`; branch `feat/s1-c1-artifact-content-data-plane` from origin/main.
+- [x] Make-only, Docker-first; no VM, cluster, merge or deployment.
+- [x] ENV=feat-s1-c1; API_PORT=9145, UI_PORT=5345, MAILDEV_UI_PORT=1245 checked free.
+- [x] Existing k8s path remains the configurable hot rollback, as explicitly required by the packet.
+- [x] No signing or heartbeat implementation: S1-B0a owns both.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `api/src/services/artifacts/**`
-  - `api/tests/**`
-  - `api/src/config*`
-  - `api/Dockerfile` (BRB0A-EX1)
-  - `Makefile` (BRB0A-EX4: API_VERSION inputs only)
-  - `apps/sandbox-node/**` (BRB0A-EX5)
+  - `apps/artifact-content/**`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `apps/artifact-content/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
-- **Exception process**:
-  - [x] Record BRB0A-EXn rationale, impact and rollback before an exception.
+  - `.cursor/rules/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/**`
+- [x] Exceptions: none.
 
 ## Feedback Loop
-- [x] BRB0A-EX5: Round 2 explicitly authorizes agent data-plane, provenance and tests. Impact: new agent archive requires operator qualification/install before G-A. Rollback: keep execution-node disabled and use Kubernetes.
-- [x] BRB0A-EX4: hash the sandbox-node source copied by BRB0A-EX1 into API_VERSION. CI run 43435868900 caught the omitted input. Impact: source changes now invalidate the API image tag; no workflow or runtime change. Rollback: remove this input together with the EX1 COPY.
-- [x] BRB0A-EX1: copy sandbox-node into the API tooling source stage so API type imports and hermetic contract tests use the actual normative agent code. Impact: one source COPY, no runtime activation or dependency change. Rollback: remove this COPY with the adapter tests/types.
-- [x] BRB0A-EX2: deliver the already-frozen sandbox GET needed to resume natural-stop/export/upload failures without mutating state blindly. Impact: authenticated control-plane tenant status only; k8s must deploy a new agent artifact before use. Rollback: revert these two agent-file changes and keep node backend disabled.
-- [x] BRB0A-EX3: allow an identical stop command returning 202 to recheck cgroup quiescence. Impact: the same authenticated method/path/body can progress stopping; mismatched replay still refuses before side effects. Rollback: revert daemon stop changes and keep node backend disabled pending agent correction.
-- [x] Track single writer: conductor imports this plan and lane report; this lane does not mutate the shared journal.
-- [x] Verify delivered agent wire format against freeze; document discrepancies and bounded consumer handoffs.
-  - [x] Fix explicit Content-Length for DELETE JSON; hermetic listener accepts both loopback families; sanitize synchronous TLS failures.
+- [ ] C1-AGENT: S1-B0a/PR #1022 owns real agent handlers, API authority and their integrated E2E; operator/browser qualification remains external to this lane.
+- [x] C1-ISSUER: published B0a Custody RPC is consumed by the real authenticated client; standalone execution-node composition refuses missing RPC configuration.
+- [x] Track single-writer: conductor imports this mergeable BRANCH.md; this concurrent lane does not append `.track`.
 
 ## AI Flaky tests
-- [x] No AI provider tests needed for the hermetic contract.
+- [x] No AI tests or flaky exceptions.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; independent code review after local validation.
+- [x] Mono-branch; no implementation delegation or integration into main.
 
 ## UAT Management (in orchestration context)
-- [x] Hermetic qualification only; Focus live/publish is S1-B1 and warm claim/L4 is S1-B2.
+- [x] Hermetic contract qualification only; no production or browser UAT claim.
 
 ## Plan / Todo (lot-based)
-- [x] Round 3: reuse controller guest authorization and revocation; hash authority only, excluding access/activity counters.
-  - [x] Regress all authority fields and concurrent activity during node I/O (14 tests).
-- [ ] Round 3: deliver guarded real-runsc data-plane qualification, archive, exact-head CI and report.
-  - [x] Add isolated real-daemon fixture with ephemeral signing/X.509 keys and signed lifecycle/revoke calls.
-  - [x] Add shared HTTP/HMR probes for mTLS, refusal matrix and bounded concurrent expiry/revoke cuts.
-  - [x] Guard real-host entry with inactive service, flock, empty inventory and isolated one-shot marker; verify no host TCP listener.
-  - [x] Test the qualification harness over private UDS; ship and verify its operator script and document the real-host gate.
-  - [x] Hash qualification images with a bounded 1 MiB buffer rather than loading the full rootfs into memory.
-- [ ] Round 2: publish Custody RPC contract, implement authoritative authenticated issue/watch-poll and agent HTTP/WS custody enforcement.
-  - [x] Agent HTTP/WS proxy authenticates custody JWS, tenant, UID, principal, epoch and port; attaches revocable streams.
-  - [x] Preserve frozen missing-tenant HTTP status and refuse execution-ticket header presence, including empty values.
-  - [x] Wire real listener and sandbox-private runsc UDS forwarding, preserving network=none confinement.
-  - [x] Verify upstream runsc port-forward protocol; use one --stream UDS donation per connection with bounded setup and short /run paths.
-  - [x] Test UDS donation direction/concurrency/launcher exit and document exact operator qualification requirements.
-  - [x] Implement body-bound HMAC RPC and authoritative durable runtime/allocation resolution on issue and watch.
-  - [x] Bound issued custody by the live route expiry and reject absent/nonfinite route deadlines.
-  - [x] Mount RPC in selected-node API composition and reject allocations with pending creation, revocation or removal.
-  - [x] Preserve the builder Hono host context type on the custody wrapper.
-- [ ] Round 2: fix review findings 2-7 with persisted controller export recovery and bounded heartbeat leadership.
-  - [x] Capture ticket clock once; bind signed export to physical UID, attempt, source and command; restrict production agent copy to its type contract.
-  - [x] Regress advancing ticket clock and valid signed-envelope substitution across resource/attempt/command/source/build/hash.
-  - [x] Require expected build and command on every export-verification call and update the delivered lifecycle contract.
-  - [x] Bound heartbeat pool acquisition/queries/node calls; destroy failed leadership connections and abort outstanding HTTPS requests on lock loss.
-  - [x] Add two-replica stalled-leader takeover, saturated-pool late-connect disposal and in-flight heartbeat cancellation regressions.
-  - [x] Preserve WS close-frame flushing and reject stale identity completion after leadership loss.
-  - [x] Separate durable export destination from fresh upload authorization; checkpoint upload and reconcile lost DELETE responses.
-  - [x] Persist export intent/progress/candidate in the backend; retain output and pending host job when export transport fails.
-  - [x] Resume retained exports through controller reconcile after process replacement, preserving publication and source fences.
-  - [x] Limit post-export SAVING/DECOMMISSIONING continuation to the node backend's durable pending-build opt-in.
-  - [x] Add composed controller/backend recreation tests after failed upload beyond URL TTL and lost successful DELETE response.
-  - [x] Update lifecycle contracts/tests to durable destination and fresh control-plane upload authorization.
-- [ ] Round 2: hermetic real-agent/RPC E2E, archive SHA256SUMS, exact-head green CI and report.
-  - [x] Extend hermetic fixture with actual agent data-plane handlers and independent mTLS identities.
-  - [x] Add real HTTP custody RPC harness using production mount/authenticator and durable allocation authority.
-  - [x] E2E assertions cover usable three-segment token, HTTP/WS revocation, expiry and unauthorized reissue refusal.
-  - [x] Demonstrate watch-poll cuts streams on both independent edge replicas after an API-only route change, plus WS expiry 1008.
-  - [x] Align multiplexed supervisor port with existing 5173 service; translate changed agent ownership into revoked custody.
-- [x] Lot 0: read packet/addendum/rules/frozen contract; check existing branch, disk and ports.
-- [x] Lot 1: SandboxBackend seam, execution-node configuration and authenticated HTTPS transport.
-  - [x] Select backend explicitly, preserve default Kubernetes composition, inject selected ports into existing controller.
-  - [x] Do not initialize the Kubernetes client when execution-node is selected.
-  - [x] Broad rollback regression identified relay validation precedence; retain the original relay refusal before Kubernetes client validation.
-  - [x] Concrete node backend implements lifecycle pods/renew/quiesce, persisted identities and deterministic command ids; B1 supplies sealed-base/W3 inputs.
-  - [x] Compose the concrete node backend by default; missing B1 hydration inputs refuse allocation without disabling the authenticated route mount.
-  - [x] Connect stateless forge/head coalescing and verified retained export into the selected backend; node mode never uses the codeload staging provider.
-  - [x] Preserve existing Kubernetes clean semantics while allowing a node clean to return a fresh physical UID, persisted with a new route fence before build/wake.
-  - [x] Persist create intent before dispatch and replay it to reconcile uncertain creation; missing allocation rows are safe to remove. Replace stopped physical sandboxes on clean.
-  - [x] Use explicit persisted closed tombstones (Postgres undefined means no write), and close definitive 4xx creation refusals; fake rows now match the real store semantics.
-  - [x] Persist the attempted-dispatch boundary atomically before I/O; a later 4xx cannot discard an allocation with an earlier uncertain outcome.
-  - [x] Preserve the narrowed immutable pending spec across the persisted dispatch-boundary write.
-  - [x] Persist revocation intent before the remote mutation; reconcile only that exact custody epoch and preserve stable removal command ids after lost responses.
-  - [x] Refuse provisioning whose tenant/principal/generation/session does not match authenticated runtime inputs.
-- [x] Lot 2: Ed25519 tickets, ownership/devScope, identity/provenance pin and idempotent lifecycle.
-  - [x] Add mTLS configuration/transport, canonical Ed25519 tickets and pinned identity/export verification.
-  - [x] Refuse incomplete ownership and verify configured node identity before the first heartbeat or tenant command.
-  - [x] Add tenant-checked presigned base import; transport deadlines cover frozen base/stop/admission operations without changing test timeouts.
-  - [x] Verify the supplied public provenance key's SPKI DER fingerprint against the operator handoff for instance 7c710995-cfa9-4e2f-8cad-61706f83d933.
-- [x] Lot 3: one-node heartbeat, bounded tenant WFQ, stateless sources and custody issuer/revocation.
-  - [x] Dedicated Postgres advisory-lock heartbeat leadership and S1-C1 EdDSA custody issuing/revocation functions.
-  - [x] Product scheduler starts/stops selected-node leadership; identity mismatch latches an alarm and stops the loop.
-  - [x] Bounded quantum-one tenant queue, concurrent head-read coalescing and retained-export-upload-delete client cycle.
-  - [x] Tenant-specific BHS SigV4 presigned URLs; credentials remain in the API closure.
-- [x] Lot 4: hermetic fake agent tests in api/tests/unit/execution-node*.test.ts; backend rollback regression.
-  - [x] Native in-memory X.509 fixture and hermetic HTTPS server wrapping real agent dispatch/ticket/custody code.
-  - [x] Contract tests cover heartbeat expiry, replay, ownership, lifecycle, tenant/scope refusal, admission and custody.
-  - [x] Policy tests cover bounded alternation, fresh head coalescing, lazy rollback, BHS prefixes and heartbeat leadership.
-  - [x] Add regressions for natural build exit, retry after failed S3 upload, invalid ticket signatures, both tenants and failed lock acquisition.
-  - [x] Extend artifacts-live/product-builder.test.ts to assert configured-node composition does not initialize Kubernetes or query DB at boot.
-  - [x] Concrete backend tests cover persisted physical identity, real agent lifecycle, tenant-bound provisioning and connected observeHead coalescing.
-  - [x] Controller regression asserts replacement UID and route fence are durable before worker preparation and live exposure.
-  - [x] Regress fresh wake replacement, absent-allocation cleanup, lost creation/revocation responses and 202 stop progression.
-  - [x] Keep fault-injection clients on the fake node's explicit clock so custody freshness is exercised deterministically.
-- [x] Lot 5: targeted make tests, API typecheck/lint, independent review and fixes.
-  - [x] Independent owner-routed Astra review findings reconciled in .tmp/rv/s1-b0a-review.md; no multi-host h2a consensus claimed.
-  - [x] Final local gates: 60 files / 512 live+rollback+adapter tests pass, including 31 hermetic adapter tests; 30 targeted agent tests pass. Full API typecheck and scoped lint pass in ephemeral containers.
-  - [x] Document preprod Secret names, heartbeat leadership, S1-C1 issuer and explicit S1-B1/agent handoffs in execution-node.md.
-- [ ] Lot 6: push, PR body from BRANCH.md, green exact-head CI; write .tmp/rv/s1-b0a-adapter.md and .done.
-- [x] Cleanup: down-volumes refused the packet's feat-* ENV by its test-only guard; make down succeeded. No Compose stack/volume was created; ephemeral --rm runners only. disk-hygiene reclaimed 0B. No merge/deployment.
+- [x] Round 3: fixed 250 ms polling and independent 900 ms request-send freshness bound; delayed stale OK regressions across two replicas.
+- [x] Round 3: fake agent rejects execution tickets, mismatched active principal/epoch and ports other than 5173; compact JWS verification mirrors B0a.
+- [x] Round 3: README and supervisor RPC fixture use 5173; 228 tests in 17 files, TypeScript 5.4.5 and lint pass (one existing console warning).
+- [x] Round 3: independent Astra high review APPROVE at `2f1de05fb`; `.h2a/reviews/pr-1020-astra.r3.md`; final commit changes this plan only.
+- [x] Round 3: B0a guest authority resolves to the active owner's signed principal; unchanged agent data-plane checks remain aligned with the fake.
+- [ ] Round 3: exact-head CI and report/done marker; conductor imports this result after CI, avoiding a post-CI source-only commit.
+- [x] Round 2: compact EdDSA fixture, faithful agent custody guard, authenticated RPC client and replica-wide watch.
+  - [x] Compact six-claim EdDSA JWS and real CustodyGuard WAL/stream lifecycle replace the two-segment fake and watcher-only revocation.
+  - [x] RPC: reuse controller HMAC identity, bounded responses, watch-before/after-issue and fail-closed per-replica polling.
+  - [x] Published B0a Custody RPC contract consumed; standalone composition creates the authenticated issuer in execution-node mode.
+  - [x] Round 2 review P1: mirror the unchanged agent guard in test-only content sources because the CI image omits sandbox-node; no Dockerfile/API scope expansion.
+  - [x] Round 2 review P2: validate RPC lease primitive types before use and dispose on all transport validation exceptions; malformed date/token/UID regressions stop polling.
+  - [x] Tests: `data-plane-agent.test.ts`, `data-plane-custody.test.ts`, `data-plane-rpc.test.ts`; existing HTTP/WS/live/supervisor/config/CSP/k8s regressions.
+  - [x] Final local result: 221 tests in 16 files, types and lint pass; 221 tests plus types also pass with sandbox-node sources masked absent.
+  - [x] Independent Astra high closure APPROVE at fde2382bc04972dae19d06f4a6b866d67e67b837; this final commit is plan-only.
+  - [ ] Exact-head CI and final report/done marker: conductor closes this source item from the recorded final run to avoid a post-CI self-referential commit.
+- [x] Lot 0: read binding packet/spec/agent code; mechanically check branch and record isolated ports.
+- [x] Lot 1: issuer interface, env validation, mTLS transport and bounded custody lifetime.
+- [x] Lot 2: wire live HTTP/HMR and supervisor relay; retain k8s selection.
+- [x] Lot 3: D7-A opt-in CSP and worker query admission.
+- [x] Lot 4: hermetic `data-plane.test.ts`, `data-plane-upgrade.test.ts`, `data-plane-config.test.ts`, `data-plane-relay.test.ts`; existing live/relay/config regressions; typecheck and lint.
+  - [x] Ephemeral certificates and fake signed-token issuer/server; no external service or credentials.
+  - [x] HMR 1008/reconnect and handshake refusal; config and both CSP profiles.
+  - [x] Scoped data-plane checks: 15 passing tests; TLS fixture time encoding corrected with a focused regression.
+  - [x] Live HTTP and signed supervisor integration tests added.
+  - [x] Issuance timeout/abort/revocation races and invalid token lifetimes covered.
+  - [x] Vite worker entry query verified against installed Vite source; opt-in admission preserves the default profile.
+  - [x] Revocation during asynchronous WS route recheck has a regression test.
+  - [x] Review: retain HTTP custody through transformation and backpressure; validate upstream status before Response construction.
+  - [x] Review regressions: status 600 and HTTP consumers paused after upstream completion.
+  - [x] Review P1 regression: expiry/revocation during a post-fetch live-route check refuses buffered bytes.
+  - [x] Local result: 197 tests across 13 files, scoped TypeScript 5.4.5 with locked Node types passed; lint zero errors (one existing console warning).
+  - [x] Distinct sentropic/immo resource admissions preserve separate custody headers and tokens.
+  - [x] Second review P1: non-200 upstream HTML is discarded before response release; 201/500 live refusal regressions.
+- [x] Lot 5: README contract/env documentation, independent code review, scoped validation.
+  - [x] README documents env names, opaque issuer contract, WS renewal and agent prerequisite.
+  - [x] Independent Astra high closure APPROVE at b5b12ffa29cbf5b946115729271e69852120a6fd; all three P1 findings resolved and tested.
+  - [x] Final commit changes this plan only; reviewed implementation and test bytes are unchanged.
+- [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.
+  - [x] CI finding: TypeScript 5.4 DOM types lack AbortSignal.any; use a local type bridge to the pinned Node 24 native composition and align the local compiler with the committed lock.
+  - [x] Compatibility review P2: remove manual source subscriptions; repeated issuance success/failure with a shared signal leaves no source listeners.
+  - [x] Independent Astra high compatibility closure APPROVE at e27f2a00b63c8e1fadb4cf0ff3ae86b8328e0e75; final change is plan-only.
+  - [x] No Compose stack started; isolated Docker test commands self-remove; `make down ENV=feat-s1-c1` completed.
+  - [x] CI classifies this path as API; app-cluster-mesh shards invoke test-artifact-content (tests, types, lint) through their Make dependency. No CI edits.

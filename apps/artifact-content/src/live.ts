@@ -3,6 +3,9 @@ import { createHash } from 'node:crypto';
 import type { ContentOrigin } from '@sentropic/artifacts/content/routing';
 import { podName } from '../../../api/src/services/artifacts/live/pods';
 import type { LiveKey } from '../../../api/src/services/artifacts/live/records';
+import type { DataPlaneTransport } from './data-plane';
+import { dataPlaneFetch } from './data-plane-http';
+import { combineAbortSignals } from './abort-signals';
 
 export interface LiveRoute extends LiveKey {
   sessionId: string; generation: number; routeEpoch: number; podUid: string; podName: string;
@@ -34,13 +37,15 @@ export const hmrPath = (sessionId: string) => `/_live/${encodeURIComponent(sessi
 export const LIVE_CONTROL_PATH = '/_live-control/v1';
 export const LIVE_FENCE_PATH = '/_live-fence/v1';
 export const DEFAULT_BUILDER_NAMESPACE = 'sentropic-artifact-builders';
-export function liveHeaders(mime: string, size: number, origin: string, sessionId: string, scriptHashes: string[] = []) {
+export type LiveCspProfile = 'default' | 'D7-A';
+export function liveHeaders(mime: string, size: number, origin: string, sessionId: string, scriptHashes: string[] = [],
+  profile: LiveCspProfile = 'default') {
   const endpoint = new URL(hmrPath(sessionId), origin); endpoint.protocol = 'wss:';
   return { ...contentHeaders({ mimeType: mime, size, mode: 'application' }),
     'cache-control': 'private, no-store',
     'content-security-policy': ["default-src 'self'", `script-src 'self' ${scriptHashes.join(' ')}`.trim(), "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:", "font-src 'self'", "media-src 'self' blob:",
-      `connect-src 'self' ${endpoint.href}`, "worker-src 'none'", "child-src 'none'", "frame-src 'none'",
+      `connect-src 'self' ${endpoint.href}`, profile === 'D7-A' ? "worker-src 'self' blob:" : "worker-src 'none'", "child-src 'none'", "frame-src 'none'",
       "frame-ancestors 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'"].join('; '),
   };
 }
@@ -54,7 +59,9 @@ function safePath(url: URL) {
       || /\.(?:pem|key|p12|pfx)$/.test(part));
 }
 /** `builderNamespace` is the per-environment worker namespace that serves the live pods' Vite port. */
-export function createLiveProxy(ports: LiveProxyPorts, options: { builderNamespace?: string } = {}) {
+export function createLiveProxy(ports: LiveProxyPorts, options: {
+  builderNamespace?: string; dataPlane?: DataPlaneTransport; cspProfile?: LiveCspProfile;
+} = {}) {
   const now = ports.now ?? Date.now;
   const namespace = options.builderNamespace ?? DEFAULT_BUILDER_NAMESPACE;
   if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(namespace)) throw new Error('Invalid live builder namespace');
@@ -75,18 +82,14 @@ export function createLiveProxy(ports: LiveProxyPorts, options: { builderNamespa
       return { route, upstream: `http://${route.podName}.${namespace}.svc.cluster.local:5173`,
         path: url.pathname + url.search };
     },
-    valid, watch: ports.watch, origin: (host: string) => ports.origin?.(host),
+    valid, watch: ports.watch, dataPlane: options.dataPlane, origin: (host: string) => ports.origin?.(host),
     control: async (request: Request, artifactId: string) => ports.control?.(request, artifactId),
     fence: async (request: Request) => ports.fence?.(request),
     async fetch(request: Request, artifactId: string): Promise<Response | undefined> {
       const admitted = await this.authorize(request, artifactId);
       if (!admitted) return new URL(request.url).pathname.startsWith('/_live/') ? refused() : undefined;
       const { route, upstream, path } = admitted;
-      const response = await (ports.fetch ?? fetch)(new URL(path, upstream), {
-        method: request.method, redirect: 'error', signal: AbortSignal.timeout(10_000),
-        // Build a new allowlist. Cookies, tokens, Authorization, Origin and forwarding credentials never reach Vite.
-        headers: { accept: request.headers.get('accept') ?? '*/*', 'accept-encoding': 'identity' },
-      });
+      const serveResponse = async (response: Response) => {
       if (response.status !== 200 || !await valid(route)) { await response.body?.cancel(); return refused(); }
       const reader = response.body?.getReader(); const chunks: Uint8Array[] = []; let size = 0;
       if (reader) for (;;) {
@@ -102,8 +105,19 @@ export function createLiveProxy(ports: LiveProxyPorts, options: { builderNamespa
       const hashes = mime === 'text/html' ? Array.from(bytes.toString('utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi),
         match => `'sha256-${createHash('sha256').update(match[1].replace(/\r\n?/g, '\n')).digest('base64')}'`) : [];
       return new Response(request.method === 'HEAD' ? null : bytes, {
-        status: 200, headers: liveHeaders(mime, size, new URL(request.url).origin, route.sessionId, hashes),
+        status: 200, headers: liveHeaders(mime, size, new URL(request.url).origin, route.sessionId, hashes, options.cspProfile),
       });
+      };
+      if (options.dataPlane) return dataPlaneFetch(options.dataPlane, { kind: 'live', route }, path, {
+        method: request.method, headers: { accept: request.headers.get('accept') ?? '*/*', 'accept-encoding': 'identity' },
+        signal: combineAbortSignals([request.signal, AbortSignal.timeout(10_000)]), maxBytes: 16 * 1024 * 1024,
+        consume: serveResponse,
+      });
+      return serveResponse(await (ports.fetch ?? fetch)(new URL(path, upstream), {
+        method: request.method, redirect: 'error', signal: AbortSignal.timeout(10_000),
+        // Build a new allowlist. Cookies, tokens, Authorization, Origin and forwarding credentials never reach Vite.
+        headers: { accept: request.headers.get('accept') ?? '*/*', 'accept-encoding': 'identity' },
+      }));
     },
   };
 }
