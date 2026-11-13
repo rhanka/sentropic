@@ -1,47 +1,56 @@
-# Fix: Daily live provider qualification wiring
+# Fix: OpenAI Chat Completions token limits and safe error observation
 
 ## Objective
-- [ ] Restore daily qualification without arming the operator-only native UAT harness or using an unregistered OAuth callback.
+- [ ] Correct incompatible token limits and expose safe provider failure metadata.
 
 ## Scope / Guardrails
-- [x] Worktree: tmp/worktrees/live-provider-qualify; branch: fix/live-provider-qualify; rebased base: 6cc155d58.
-- [x] Make-only, Docker-first; ENV=fix-live-qualif last; API_PORT=9405 UI_PORT=5397 MAILDEV_UI_PORT=1505 checked free.
-- [x] No paid dispatch, provider account workaround, timeout increase, or merge.
+- [x] Execute the approved openai-400-fix packet in `tmp/worktrees/openai-400-fix`.
+- [x] Use make targets and Docker slot wrapper; no live provider calls or workflow dispatch.
+- [x] Environment `fix-openai-400`; API 9490, UI 5690, Maildev 1590; verify ports before tests.
+- [x] Preserve root dev; no timeouts increased, no package changes, no merge.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `api/src/services/llm-runtime/**`
+  - `api/src/services/chat-service.ts`
+  - `api/src/services/providers/openai-provider.ts`
+  - `api/tests/**`
+  - `e2e/fixtures/provider-server.mjs`
+  - `e2e/fixtures/provider-server.test.mjs`
   - `BRANCH.md`
-  - `api/tests/ai/gw-native-qualification*.ts`
-  - `api/tests/unit/gw-native-qualification*.test.ts`
-  - `scripts/ci/**`
-  - `.github/workflows/llm-live-daily.yml`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `packages/**`
+  - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
+- **Exception process**:
+  - [x] No exceptions requested.
 
 ## Feedback Loop
-- [x] BRLP-EX1: update the live workflow UI port to seeded OAuth callback 5397; impact isolated daily stack only; rollback workflow and runner port together.
-- [x] BRLP-F1: downloaded run artifact additionally proves two S2S HTTP 400 failures (log 8964-9011); aligned daily API issuer/resource 9405 through a generated script-owned Compose overlay; regression failed before fix, then passed.
-- [ ] BRLP-F2: conductor owns diagnosis of 46 OpenAI HTTP 400 responses; no Gemini traffic. Cause is absent from retained wire observations. Acceptance: identify rejected request parameter/model from safe provider diagnostics and eliminate unexpected HTTP 400s; verify targeted tests then owner-authorized live qualification. Preserve the receipt gate.
-- [ ] Track import delegated to conductor (single writer); import this BRANCH.md and final report.
+- [x] Historical provider rejection parameter remains unknown; hermetic tests establish the corrected request contract.
+- [x] Track integration belongs to the conductor single writer; include deliverables in the lane report.
 
 ## AI Flaky tests
-- [x] No flaky acceptance requested; no live calls authorized.
+- [x] No live AI tests authorized; no flaky exceptions.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, single builder; independent code review per common packet rules.
+- [x] Mono-branch; implementation follows the supplied packet.
 
 ## UAT Management (in orchestration context)
-- [x] Preserve operator-only native UAT guards and its explicit selection path.
-- [ ] Owner/conductor may approve paid workflow_dispatch after merge; branch dispatch selects qualified main source.
+- [x] No UI changes; hermetic API and observer qualification only.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0: collect log evidence and mechanically check branch.
-- [x] Lot 1: regress daily suite selection and OAuth port alignment in scripts/ci/live-provider-receipt.test.mjs; fix runner and workflow (16 Docker tests passed; 2 failed before fix).
-- [x] Lot 2: safe underlying readiness/case/teardown diagnostics in api/tests/ai/gw-native-qualification.test.ts and helpers; regress secret suppression (2 Vitest tests passed under Docker).
-- [x] Lot 3: 16 runner regressions and 2 diagnostic tests passed under Docker, repeated after rebase; generated overlay passed real Compose merge; two independent Astra high code reviews APPROVE; mechanical scope check passed.
-- [ ] Final validation: push, PR from BRANCH.md, normal CI green; report and completion marker; no merge.
+- [x] Lot 0 — Read packet, diagnosis, rules and template; create isolated branch; mechanical branch check.
+- [ ] Lot 1 — Correct OpenAI Chat Completions limits using catalog reasoning capabilities and family guards.
+  - [ ] Add `api/tests/unit/llm-runtime-generation.test.ts` for the real title call and legacy model.
+- [ ] Lot 2 — Warn on title failure with safe structured provider metadata; retain null result.
+  - [ ] Add focused title failure tests under `api/tests/unit/`.
+- [ ] Lot 3 — Add bounded observer and hermetic sentinel tests in `e2e/fixtures/provider-server.test.mjs`.
+- [ ] Lot 4 — Final validation and delivery.
+  - [ ] Scoped make tests; API typecheck/lint; independent code review.
+  - [ ] Scope check before each atomic commit under 150 lines.
+  - [ ] Push and open PR using this file; verify CI on exact head without merging.
+  - [ ] Tear down test volumes; write report and completion marker.
