@@ -106,7 +106,9 @@ export function buildProbes(config) {
   if (endpoints.appMe) probes.push({ id: 'S-7', url: endpoints.appMe, expect: 401 });
   if (endpoints.idpMe) probes.push({ id: 'S-8', url: endpoints.idpMe, expect: 401 });
   for (const [id, url] of [['S-9a', endpoints.emailApp], ['S-9b', endpoints.emailIdp]]) {
-    if (url) probes.push({ id, url, expect: 200, options: { method: 'POST' } });
+    if (url) probes.push({ id, url, expect: 200, options: { method: 'POST',
+      headers: { ...config.emailProbe?.headers, 'content-type': 'application/json', origin: new URL(url).origin },
+      body: JSON.stringify({ email: config.emailProbe?.email }) } });
   }
   return { probes, externalProbes: config.externalProbes ?? [] };
 }
@@ -118,6 +120,12 @@ export function validateProbes(probes) {
     const p = probes.find(p => p.id === id);
     if (!p || p.expect !== status || !URL.canParse(p.url) || !['http:', 'https:'].includes(new URL(p.url).protocol)) {
       throw new Error(`mandatory_probes_missing: ${id}`);
+    }
+    if (id.startsWith('S-9')) {
+      let email;
+      try { email = JSON.parse(p.options?.body).email; } catch { /* invalid input */ }
+      if (p.options?.method !== 'POST' || new Headers(p.options?.headers).get('content-type') !== 'application/json'
+        || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`email_probe_input: ${id}`);
     }
   }
 }

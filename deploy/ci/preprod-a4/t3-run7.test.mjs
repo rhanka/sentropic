@@ -9,6 +9,7 @@ import { poll } from './t3-watchdog.mjs';
 import { buildProbes } from './t3-lib.mjs';
 import { drive } from './t3-window-driver.mjs';
 import { finishOpen } from './t3-finish-open.mjs';
+import { emailProbe } from './t3-probe-fixture.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
 const endpoints = Object.fromEntries(['appHealth', 'idpConfig', 'idpJwks', 's6Authorize', 'appMe', 'idpMe', 'emailApp', 'emailIdp']
@@ -28,7 +29,7 @@ for (const location of ['https://client.test/callback?error=invalid_scope',
   test(`RUN7 S-6 accepts only the error-free login redirect: ${location}`, async () => {
     const state = { namespace: 'sentropic-preprod', middlewareSpec: {} };
     const writes = [];
-    const ctx = { state, images: { candidate: 'c', ui: 'u' }, ...buildProbes({ endpoints }), save: () => {},
+    const ctx = { state, images: { candidate: 'c', ui: 'u' }, ...buildProbes({ endpoints, emailProbe }), save: () => {},
       call: args => {
         const cmd = args.join(' ');
         if (cmd.includes('get deployment')) {
