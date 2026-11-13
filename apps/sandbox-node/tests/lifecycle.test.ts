@@ -53,6 +53,18 @@ function compat(tenantId: 'sentropic' | 'immo' = 'sentropic'): ExecutionNodeClai
 }
 
 describe('lifecycle', () => {
+  it('should preserve an exit callback delivered before launch returns its runtime id', async () => {
+    class EarlyExitAdapter extends FakeRuntimeAdapter {
+      override async runSandbox(options: Parameters<FakeRuntimeAdapter['runSandbox']>[0]) {
+        options.onExit!(0); return super.runSandbox(options);
+      }
+    }
+    const { daemon } = createExecutionNode({ adapter: new EarlyExitAdapter() });
+    const box = await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'early-exit' });
+    await daemon.promoteToRunning('sentropic', box.id, { devScope: spec().devScope, commandId: 'run', uid: 1000, gid: 1000, quotaMiB: 704 });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(box).toMatchObject({ state: 'stopped-output-retained', allProcessesExited: true });
+  });
   it('should retain successful natural output until export and destruction', async () => {
     class ExitAdapter extends FakeRuntimeAdapter {
       exit?: (code: number | null) => void;
