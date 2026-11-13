@@ -94,8 +94,10 @@ export interface LivePorts {
     live(runtime: LiveRuntime): Promise<{ revision: string; routeEpoch: number }>;
     quiesce(runtime: LiveRuntime): Promise<void>;
     /** Removes ALL writable phase residue, including dependency overlays and old output. */
-    clean(runtime: LiveRuntime): Promise<void>;
+    clean(runtime: LiveRuntime): Promise<void | { uid: string }>;
     build(runtime: LiveRuntime, attempt: LiveAttempt): Promise<{ candidateDigest: string }>;
+    /** Optional durable retained-output continuation; it never starts a second build. */
+    pendingBuild?(runtime: LiveRuntime): Promise<boolean>;
     verify(runtime: LiveRuntime, attempt: LiveAttempt): Promise<void>;
     /** Liveness lease (A-LIVE Amendment 1 §3): one authenticated, fenced frame with no side effect. Without one for
      * 30 minutes the bootstrap kills the process tree and exits. */

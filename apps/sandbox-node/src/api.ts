@@ -15,10 +15,19 @@ export interface AgentRequest {
 export class AgentApi {
   constructor(private readonly node: Node, private readonly custody: CustodyGuard) {}
 
-  async dispatch(request: AgentRequest): Promise<{ status: number; body: unknown }> {
+  async dispatch(request: AgentRequest): Promise<{ status: number; body: unknown; provenance?: Record<string, unknown> }> {
     const { daemon } = this.node;
     const { path, method, tenantId, role, ticket } = request;
     if (role !== 'control-plane') throw new ExecutionNodeError('custody_revoked');
+    if (method === 'GET') {
+      const match = /^\/v1\/sandboxes\/([a-zA-Z0-9-]+)$/.exec(path);
+      if (!match) throw new ExecutionNodeError('command_id_payload_mismatch');
+      const sandbox = daemon.peekSandbox(tenantId, match[1]!);
+      if (!sandbox) return { status: 404, body: { error: 'sandbox_not_found' } };
+      return { status: 200, body: { tenantId, id: sandbox.id, physicalUid: sandbox.id,
+        state: sandbox.state, ownership: sandbox.ownership, allProcessesExited: sandbox.allProcessesExited,
+        nodeInstanceId: daemon.nodeInstanceId, nodeEpoch: daemon.nodeEpoch } };
+    }
     this.custody.requireHeartbeat();
     if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) throw new ExecutionNodeError('command_id_payload_mismatch');
     const body = request.body as Record<string, unknown>;
@@ -60,7 +69,11 @@ export class AgentApi {
     }
     if (operation === 'export') {
       const result = await daemon.exportArtifacts(tenantId, id, { ...body, commandId, ticket } as Parameters<typeof daemon.exportArtifacts>[2]);
-      return { status: 200, body: result.bytes };
+      return { status: 200, body: result.bytes, provenance: {
+        physicalUid: sandbox.id, attemptId: sandbox.ownership.attemptId,
+        buildId: (body.spec as { buildId: string }).buildId,
+        command: sandbox.command, source: sandbox.devScope.source,
+      } };
     }
     if (operation === 'renew') return { status: 200, body: daemon.renewSandbox(tenantId, id, { ...body, commandId, devScope, ticket }) };
     if (operation === 'write') {

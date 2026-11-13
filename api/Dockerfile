@@ -333,6 +333,7 @@ COPY packages/skills ./packages/skills
 COPY packages/ubo-contracts ./packages/ubo-contracts
 COPY apps/auth-idp ./apps/auth-idp
 COPY apps/artifact-content ./apps/artifact-content
+COPY apps/sandbox-node/src/contract.ts ./apps/sandbox-node/src/contract.ts
 COPY apps/llm-gateway ./apps/llm-gateway
 COPY e2e/package.json e2e/package-lock.json ./e2e/
 COPY e2e/tests/fixtures ./e2e/tests/fixtures
@@ -425,6 +426,7 @@ COPY --from=ci-tool-base /opt/ast-grep /opt/ast-grep
 
 # Thin source layer: workspace sources and their builds on top of the dependency image.
 FROM ${TOOL_DEPS_IMAGE} AS ci-tools
+COPY apps/sandbox-node ./apps/sandbox-node
 COPY --from=base /workspace/api /workspace/api
 COPY --from=base /workspace/packages /workspace/packages
 COPY --from=base /workspace/apps /workspace/apps

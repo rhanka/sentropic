@@ -1,7 +1,7 @@
 import type { LivePorts } from './ports';
 import { assertFence, automaticEligible, conflict, idleDeadline, LiveError, publicationBaseline, type LiveKey,
   type LiveRuntime, type LiveState } from './records';
-import { checkpoint, currentBinding, failed, observeHead, teardown, transition } from './transitions';
+import { checkpoint, cleanRuntime, currentBinding, failed, observeHead, teardown, transition } from './transitions';
 import { runPhase, withinPhase } from './deadline';
 import { buildEvidence } from './evidence';
 
@@ -40,7 +40,7 @@ export async function idleBuild(ports: LivePorts, key: LiveKey) {
         expectedReleaseId: binding.releaseId, progressSeq: state.progress.progressSeq,
         baselineSeq: state.progress.publicationBaselineSeq, initial: state.progress.initialUnpublishedBranchEligible };
     });
-    await ports.worker.clean(runtime);
+    runtime = await cleanRuntime(ports, key, runtime);
     // The phase closures capture the fenced post-transition runtime, not the pre-guard union.
     const installing = runtime;
     const cache = await runPhase(key, 'install', () => ports.cache.acquire(source, installing));

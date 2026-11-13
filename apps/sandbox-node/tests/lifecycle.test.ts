@@ -74,7 +74,7 @@ describe('lifecycle', () => {
       expect(box.state).toBe('stopped-output-retained');
       expect(admission.reservedMiB('sentropic')).toBe(1536);
       expect((await daemon.exportArtifacts('sentropic', box.id, { devScope: spec().devScope, commandId: 'export',
-        spec: { buildId: 'b', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1000 } })).bytes.length).toBeGreaterThan(0);
+        spec: { buildId: 'b', subPath: 'ui/dist', destination: 'https://s3.example/put', maxBytes: 1000 } })).bytes.length).toBeGreaterThan(0);
       await vi.advanceTimersByTimeAsync(239_999);
       expect(box.state).toBe('exported');
       await vi.advanceTimersByTimeAsync(1);
@@ -109,7 +109,7 @@ describe('lifecycle', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(box).toMatchObject({ state: 'stopped-output-retained', allProcessesExited: true });
     expect((await daemon.exportArtifacts('sentropic', box.id, { devScope: spec().devScope, commandId: 'export',
-      spec: { buildId: 'b', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1000 } })).bytes.length).toBeGreaterThan(0);
+      spec: { buildId: 'b', subPath: 'ui/dist', destination: 'https://s3.example/put', maxBytes: 1000 } })).bytes.length).toBeGreaterThan(0);
     await daemon.deleteSandbox('sentropic', box.id, { devScope: spec().devScope, commandId: 'delete' });
     expect(admission.reservedMiB('sentropic')).toBe(0);
   });
@@ -214,7 +214,7 @@ describe('lifecycle', () => {
     expect(first).toMatchObject({ state: 'stopping', allProcessesExited: false });
     expect(admission.reservedMiB('sentropic')).toBe(704);
     await expect(daemon.exportArtifacts('sentropic', created.id, { devScope: spec().devScope, commandId: 'early-export',
-      spec: { buildId: 'b', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1000 } }))
+      spec: { buildId: 'b', subPath: 'ui/dist', destination: 'https://s3.example/put', maxBytes: 1000 } }))
       .rejects.toMatchObject({ code: 'sandbox_not_quiesced' });
     adapter.exited = true;
     await daemon.stopSandbox('sentropic', created.id, { devScope: spec().devScope, commandId: 'pending-stop-again', stop: { retainOutput: true } });
@@ -253,7 +253,7 @@ describe('lifecycle', () => {
     expect(stopped.state).toBe('stopped-output-retained');
     const { bytes, sandbox: exported } = await daemon.exportArtifacts('sentropic', created.id, {
       devScope: spec().devScope, commandId: 'export-1',
-      spec: { buildId: 'build-1', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1_000_000 },
+      spec: { buildId: 'build-1', subPath: 'ui/dist', destination: 'https://s3.example/put', maxBytes: 1_000_000 },
     });
     expect(exported.state).toBe('exported');
     expect(bytes.length).toBeGreaterThan(0);
@@ -261,7 +261,7 @@ describe('lifecycle', () => {
     expect(destroyed.state).toBe('destroyed');
     await expect(daemon.exportArtifacts('sentropic', created.id, {
       devScope: spec().devScope, commandId: 'export-1',
-      spec: { buildId: 'build-1', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1_000_000 },
+      spec: { buildId: 'build-1', subPath: 'ui/dist', destination: 'https://s3.example/put', maxBytes: 1_000_000 },
     })).rejects.toMatchObject({ code: 'sandbox_not_quiesced' });
     for (const type of ['sandbox.created', 'sandbox.running', 'sandbox.stopped', 'sandbox.exported', 'sandbox.destroyed']) {
       expect(audit.list({ tenantId: 'sentropic' }).some(event => event.type === type)).toBe(true);
@@ -285,7 +285,7 @@ describe('lifecycle', () => {
     await expect(
       daemon.exportArtifacts('sentropic', warm.id, {
         devScope: spec().devScope, commandId: 'export-1',
-        spec: { buildId: 'build-1', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 10 },
+        spec: { buildId: 'build-1', subPath: 'ui/dist', destination: 'https://s3.example/put', maxBytes: 10 },
       }),
     ).rejects.toThrowError(/sandbox_not_quiesced/);
   });

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { createAgentServer, requestScope } from './transport.js';
+import { createAgentServer, requestScope, agentRole } from './transport.js';
 import { EXECUTION_NODE_CONTRACT_VERSION } from './contract.js';
 import { CustodyGuard } from './custody.js';
 import { ExecutionNodeError } from './errors.js';
@@ -14,6 +14,7 @@ import { NodeControl } from './node-control.js';
 import { nodeMetrics } from './metrics.js';
 import { createPrivateKey, createPublicKey, sign, createHash } from 'node:crypto';
 import { assertCleanStartup } from './restart.js';
+import { createDataPlane } from './data-plane.js';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -39,10 +40,18 @@ const control = new NodeControl(nodeInstanceId, nodeEpoch, custody, operator);
 const provenanceKey = createPrivateKey(readFileSync('/etc/execution-node/keys/node-provenance.ed25519'));
 if (provenanceKey.asymmetricKeyType !== 'ed25519') throw new Error('Ed25519 node provenance key required');
 const provenancePublicKey = createPublicKey(provenanceKey).export({ type: 'spki', format: 'pem' }).toString();
+const dataPlane = createDataPlane({ custody,
+  publicKey: createPublicKey(readFileSync(required('AGENT_TICKET_PUBLIC_KEY'))),
+  sandbox: (tenant, uid) => node.daemon.peekSandbox(tenant, uid),
+  target: async (sandbox, port) => {
+    if (!sandbox.runtimeId || !node.adapter.portTarget) throw new Error('sandbox_port_unavailable');
+    return node.adapter.portTarget(sandbox.runtimeId, port);
+  } });
 export const server = createAgentServer(tls, async (req, res, role) => {
   const reply = (status: number, body: unknown) => { res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body)); };
   try {
     const url = new URL(req.url ?? '/', 'https://agent');
+    if (url.pathname.startsWith('/v1/ports/')) { await dataPlane.http(req, res, role); return; }
     if (url.pathname === '/v1/node/heartbeat' && req.method === 'POST') {
       if (req.headers['x-tenant-id'] || url.searchParams.has('tenantId')) throw new ExecutionNodeError('custody_revoked');
       reply(200, control.heartbeat(role, await readJsonBody(req))); return;
@@ -71,6 +80,10 @@ export const server = createAgentServer(tls, async (req, res, role) => {
         `/builder.slice/builder-tenant.slice/builder-tenant-${scope.tenantId}.slice`)); return;
     }
     if (scope.scope !== 'tenant') { reply(404, { error: 'unknown_route' }); return; }
+    if (req.method === 'GET' && /^\/v1\/sandboxes\/[a-zA-Z0-9-]+$/.test(url.pathname)) {
+      const result = await api.dispatch({ path: url.pathname, method: 'GET', tenantId: scope.tenantId, role, body: {} });
+      reply(result.status, result.body); return;
+    }
     const encoded = req.headers['x-execution-ticket'];
     if (typeof encoded !== 'string') throw new ExecutionNodeError('custody_revoked', 'execution ticket required');
     const ticket = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as TicketEnvelope;
@@ -78,7 +91,7 @@ export const server = createAgentServer(tls, async (req, res, role) => {
       role, body: await readJsonBody(req), ticket });
     if (Buffer.isBuffer(result.body)) {
       const protectedHeader = Buffer.from(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' })).toString('base64url');
-      const claims = Buffer.from(JSON.stringify({ nodeInstanceId, nodeEpoch, tenantId: scope.tenantId,
+      const claims = Buffer.from(JSON.stringify({ ...result.provenance, nodeInstanceId, nodeEpoch, tenantId: scope.tenantId,
         archiveSha256: createHash('sha256').update(result.body).digest('hex'), exportedAt: new Date().toISOString() })).toString('base64url');
       const signingInput = `${protectedHeader}.${claims}`;
       const jws = `${signingInput}.${sign(null, Buffer.from(signingInput), provenanceKey).toString('base64url')}`;
@@ -90,6 +103,7 @@ export const server = createAgentServer(tls, async (req, res, role) => {
       { error: error instanceof ExecutionNodeError ? error.code : 'internal_error' });
   }
 });
+server.on('upgrade', (req, socket, head) => { void dataPlane.upgrade(req, socket, head, agentRole(req) ?? ''); });
 server.requestTimeout = 5000;
 server.maxHeadersCount = 64;
 server.listen(Number(process.env.AGENT_PORT ?? 8443), '0.0.0.0');

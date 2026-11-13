@@ -1,5 +1,6 @@
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import type { HostBuildEnv, HostIdentity } from './host-build-api';
+import { custodyRpcPath } from './execution-node-rpc';
 
 /** S2S scope a content host needs to call the builder (s-archi W7 builder mount, 07/11). */
 export const ARTIFACT_BUILDER_SCOPE = 'artifacts:builder';
@@ -44,7 +45,9 @@ export function createBuilderMount(options: {
   requireService: MiddlewareHandler; authenticate(c: Context): HostIdentity | null; api: Hono<HostBuildEnv> | null;
 }) {
   const app = new Hono();
-  app.use(`${ARTIFACT_BUILDER_BASE_PATH}/*`, options.requireService);
+  // Custody has its own body-bound internal service authenticator, using the existing edge key.
+  app.use(`${ARTIFACT_BUILDER_BASE_PATH}/*`, (c, next) => custodyRpcPath(c.req.path)
+    ? next() : options.requireService(c, next));
   if (options.api) app.route(ARTIFACT_BUILDER_BASE_PATH, options.api);
   else app.all(`${ARTIFACT_BUILDER_BASE_PATH}/*`, c => options.authenticate(c)
     ? c.json({ error: 'builder_unavailable' }, 503) : c.json({ error: 'host_not_bound' }, 403));

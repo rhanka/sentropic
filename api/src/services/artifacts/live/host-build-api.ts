@@ -47,6 +47,7 @@ export function createHostBuildApi(options: {
       await options.build(k, jobId);
       if ((await options.jobs.read(k, jobId))?.state !== 'published') await options.jobs.fail(k, jobId, token, 'git_live_conflict', 'superseded');
     } catch (error) {
+      if (error instanceof LiveError && error.reason === 'node_export_pending') return;
       await options.jobs.fail(k, jobId, token, error instanceof LiveError ? error.code : 'builder_unavailable',
         error instanceof LiveError ? error.reason : undefined);
     }
