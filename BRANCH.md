@@ -46,7 +46,7 @@
 - [ ] **Lot 2 — Bounded execution and cleanup**
   - [x] Validate deadline, SIGTERM, early sandbox exit, probe failure and successful finalization using the real qualification entry with fake host/runtime dependencies.
   - [x] Remove relay directories and refuse stale qualification resources; bases and bundles use private roots.
-  - [x] Apply private fixture handling and leftovers inventory to isolation qualification.
+  - [x] Apply private fixture handling and leftovers inventory to isolation qualification; all 13 isolation orchestration tests pass.
 - [ ] **Lot 3 — Custody keys**
   - [x] Validate separate `CUSTODY_PUBLIC_KEY` / `ARTIFACT_CUSTODY_ED25519_KEY_B64`; API tests prove cross-use refusal both ways.
   - [x] Update node/API custody tests and operator installation instructions; dossier §A.3 separates the three ticket/token keys.

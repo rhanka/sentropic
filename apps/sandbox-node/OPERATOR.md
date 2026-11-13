@@ -325,6 +325,41 @@ agent/rootfs digest when ready. No install/restart is performed by this lane.
 
 ## Verification key custody and operator tickets
 
+The custody verifier now requires its own Ed25519 pair. The conductor generates
+that pair and supplies the private PKCS#8 PEM, base64 encoded, to the API Secret
+as `ARTIFACT_CUSTODY_ED25519_KEY_B64`. k8s installs only its public SPKI PEM at
+`/etc/execution-node/keys/custody.ed25519.pub.pem` (root-owned, 0644) and sets
+`CUSTODY_PUBLIC_KEY` to that path using the shipped `agent.env`. Both sides
+refuse reuse of the execution-ticket key. Deploy the API signer and agent
+verifier together, drain existing sessions first, and reissue leases after
+rollout. Rotate on compromise and annually; revoke old leases before retiring
+the old public key. No private custody key belongs on the VM or in the archive.
+
+Data-plane qualification defaults to `QUALIFICATION_TIMEOUT_MS=120000`; only
+integer overrides in `1..300000` are accepted. Each request must produce its
+first bytes or upgrade within 1 second. The global deadline and SIGTERM abort
+probes; cleanup has a separate 10-second grace and failure exits nonzero.
+Sandbox state and systemd scope activity are checked before forwarding and
+throughout probes. A completed build may exit successfully; this server fixture
+must remain running until its probes finish.
+
+Both qualification lanes keep copied fixtures and sandbox bundles below their
+own `/run/execution-node/qd-*` or `qi-*` directory. They never publish fixtures
+into tenant bases. Startup refuses surviving qualification directories, relay
+directories, old isolation bases or the legacy copied fixture digest. It prints
+the exact paths requiring reconciliation and preserves the authorization marker.
+
+After an interrupted legacy qualification, stop the service and inspect only
+the reported sandbox UID: stop its `builder-sbx-<uid>.scope`, delete its runsc
+container with `runsc --root=/run/execution-node/runsc delete --force sandbox-<uid>`,
+then unmount its bundle mounts in reverse order. Confirm the scope/container
+and all mounts are gone before deleting that exact bundle, its
+`/run/execution-node/ports/<uid>` directory and its reported `qd-*`/`qi-*`
+directory. Delete a legacy tenant fixture only after its full SHA-256 matches
+the qualification image from the release that created it. Never recursively
+remove a tenant base directory. Restore the isolated marker only after this
+inventory is empty; issue a fresh marker for each run.
+
 | Key | Holder / VM path | Rotation |
 | --- | --- | --- |
 | Execution ticket Ed25519 | Sentropic control plane private key; VM public SPKI only at `/etc/execution-node/keys/execution-ticket.ed25519.pub.pem` (`AGENT_TICKET_PUBLIC_KEY`) | Control plane supplies the public key before installation; replace config and restart on rotation |
