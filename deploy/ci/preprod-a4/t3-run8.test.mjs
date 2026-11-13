@@ -4,7 +4,8 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildProbes, loadState, saveState, validateProbes } from './t3-lib.mjs';
+import { createServer } from 'node:http';
+import { buildProbes, loadState, monoMs, saveState, validateProbes } from './t3-lib.mjs';
 import { drive, recover } from './t3-window-driver.mjs';
 import { fence } from './t3-fence.mjs';
 import { digest } from './guards.mjs';
@@ -100,13 +101,15 @@ for (const refusal of ['rbac', 'annex']) {
     const original = ctx.call;
     ctx.stateDir = dir;
     ctx.print = () => {};
+    ctx.tier = 'preprod';
     ctx.config.tier = 'preprod';
     ctx.config.kubeconfigFile = join(dir, 'kube');
     ctx.config.authorizationFile = join(dir, 'authorization.json');
     ctx.config.executionFile = join(dir, 'annex.json');
     writeFileSync(ctx.config.kubeconfigFile, 'synthetic', { mode: 0o600 });
-    writeFileSync(ctx.config.authorizationFile, '{}', { mode: 0o600 });
+    writeFileSync(ctx.config.authorizationFile, JSON.stringify({ ...approvedRequest, format: 'preprod-a4-authorization/1' }), { mode: 0o600 });
     writeFileSync(ctx.config.executionFile, '{}', { mode: 0o600 });
+    ctx.config.executionSha256 = digest('{}');
     ctx.call = args => args[0] === 'auth' ? refusal === 'rbac' ? 'no' : 'yes' : original(args);
     // Preserve the observation even if a broken recovery itself fails later.
     try { await drive(ctx); } catch {}
@@ -140,4 +143,28 @@ test('RUN8 partially applied delivered fence persists intent and still recovers 
   assert.equal(await recover(ctx, state, 'partial-fence'), 3);
   assert.ok(writes.includes('scale deployment/ui --replicas=1'), 'rollback completes even with stale parent state');
   assert.equal(loadState(ctx.stateDir).step, 'DONE');
+});
+
+test('RUN8 JSON response consumption remains inside the shared HTTP deadline', async () => {
+  const { ctx, saved, writes } = acceptanceContext();
+  let requested = false;
+  const server = createServer((_req, res) => {
+    requested = true;
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.write('{"status":'); // headers succeed, functional proof never completes
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const normal = ctx.probe;
+  const url = `http://127.0.0.1:${server.address().port}/health`;
+  ctx.probes.find(p => p.id === 'S-3').url = url;
+  ctx.probe = (target, options) => target === url ? fetch(target, options) : normal(target, options);
+  ctx.deadlineMs = monoMs() + 300;
+  const started = performance.now();
+  try {
+    await assert.rejects(finishOpen(ctx), /probe_failed: S-3/);
+    assert.ok(requested, 'actual HTTP headers were received');
+    assert.ok(performance.now() - started < 1500, 'body cannot outlive the window');
+    assert.equal(saved.length, 0);
+    assert.equal(writes.length, 0);
+  } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 });
