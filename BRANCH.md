@@ -64,6 +64,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Native in-memory X.509 fixture and hermetic HTTPS server wrapping real agent dispatch/ticket/custody code.
   - [x] Contract tests cover heartbeat expiry, replay, ownership, lifecycle, tenant/scope refusal, admission and custody.
   - [x] Policy tests cover bounded alternation, fresh head coalescing, lazy rollback, BHS prefixes and heartbeat leadership.
+  - [x] Add regressions for natural build exit, retry after failed S3 upload, invalid ticket signatures, both tenants and failed lock acquisition.
 - [ ] Lot 5: targeted make tests, API typecheck/lint, independent review and fixes.
   - [x] 17 hermetic tests pass; full API typecheck and scoped lint pass with workspace declarations built in an ephemeral container.
   - [x] Document preprod Secret names, heartbeat leadership, S1-C1 issuer and explicit S1-B1/agent handoffs in execution-node.md.
