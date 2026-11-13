@@ -28,6 +28,7 @@ import {
 } from '../../../packages/chat-core/src/context-budget';
 import { createId } from '../utils/id';
 import { callLLM, callLLMStream } from './llm-runtime';
+import { titleErrorMetadata } from './llm-runtime/title-error';
 import {
   getModelCatalogPayload,
   inferProviderFromModelIdWithLegacy,
@@ -1676,7 +1677,8 @@ export class ChatService {
       const cleaned = String(content).trim().replace(/^["'`]+|["'`]+$/g, '');
       if (!cleaned) return null;
       return cleaned.slice(0, 80);
-    } catch {
+    } catch (error) {
+      console.warn('[chat] session_title_generation_failed', titleErrorMetadata(error));
       return null;
     }
   }

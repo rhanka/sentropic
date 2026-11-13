@@ -1349,6 +1349,14 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
     } as unknown as OpenAI.Chat.Completions.ChatCompletion;
   }
 
+  const catalogModel = providerRegistry.listModels().find(
+    entry => entry.providerId === selection.providerId && entry.modelId === selection.model,
+  );
+  const completionTokenLimit = selection.providerId === 'openai' && (
+    catalogModel?.supportsReasoning === true ||
+    (catalogModel != null && catalogModel.reasoningTier !== 'none') ||
+    /^(?:gpt-5(?:[.-]|$)|o\d(?:[.-]|$))/.test(selection.model)
+  );
   const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
     model: selection.model,
     messages,
@@ -1358,7 +1366,7 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
     ...(typeof maxOutputTokens === 'number' &&
     Number.isFinite(maxOutputTokens) &&
     maxOutputTokens > 0
-      ? { max_tokens: Math.floor(maxOutputTokens) }
+      ? { [completionTokenLimit ? 'max_completion_tokens' : 'max_tokens']: Math.floor(maxOutputTokens) }
       : {}),
   };
 

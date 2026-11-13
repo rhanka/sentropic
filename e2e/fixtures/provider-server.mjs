@@ -106,6 +106,12 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
       if (req.url !== '/v1/chat/completions') throw new Error('Unexpected provider endpoint');
       if (!body.model || !Array.isArray(body.messages) || body.messages.length === 0) throw new Error('Expected model and messages');
       if (!['mistral-small-2603', 'mistral-medium-3.5', 'gpt-5.4-nano'].includes(body.model)) throw new Error('Unexpected model route');
+      if (body.model === 'gpt-5.4-nano' && Object.hasOwn(body, 'max_tokens')) {
+        receipt.failedRequests++;
+        res.writeHead(400, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify({ error: { code: 'unsupported_parameter',
+          type: 'invalid_request_error', param: 'max_tokens' } }));
+      }
       const outcome = await respond(body);
       receipt.calls++;
       receipt.models[body.model] = (receipt.models[body.model] ?? 0) + 1;
@@ -315,6 +321,87 @@ export function journeyResponse(body) {
   return { content: terminalText() };
 }
 
+const observationPaths = ['/v1/chat/completions', '/v1/responses', '/v1/messages', '/search', '/extract'];
+const observationModels = ['gpt-5.4-nano', 'gpt-5.5', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna',
+  'gpt-6-sol', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-luna', 'gpt-4.1-nano', 'o1', 'o3', 'o3-mini', 'o4-mini',
+  'mistral-small-2603', 'mistral-medium-3.5', 'mistral-large-4', 'magistral-medium-2509', 'zai-glm-5-3',
+  'gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-4-argon', 'gemini-4-carbon', 'gemini-3.5-flash', 'gemini-3.1-flash-lite',
+  'claude-sonnet-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-fable-5', 'claude-fable-5-1', 'claude-fable-5-2'];
+const tokenLimitFields = ['max_tokens', 'max_completion_tokens', 'max_output_tokens'];
+const observationParams = ['model', 'messages', 'input', 'tools', 'tool_choice', 'response_format',
+  'text.format', 'reasoning', 'reasoning.effort', 'reasoning_effort', 'temperature', 'top_p', 'stream', ...tokenLimitFields];
+const closedValue = (value, allowed) => allowed.includes(value) ? value : 'unknown';
+
+// Cancel only the copy: the SDK retains the original response and its bytes.
+async function boundedObservationJson(message, deadlineMs) {
+  const reader = message.body?.getReader();
+  if (!reader) return null;
+  let timer;
+  const deadline = deadlineMs === undefined ? null : new Promise(resolve => {
+    timer = setTimeout(() => resolve({ expired: true }), deadlineMs);
+  });
+  try {
+    const chunks = [];
+    let size = 0;
+    for (;;) {
+      const { done, value, expired } = await (deadline ? Promise.race([reader.read(), deadline]) : reader.read());
+      if (expired) return null;
+      if (done) break;
+      size += value.byteLength;
+      if (size > 65_536) return null;
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch { return null; }
+  finally { clearTimeout(timer); void reader.cancel().catch(() => {}); }
+}
+
+export function createProviderObserver({ fetchImpl = globalThis.fetch, record }) {
+  return async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    const host = url.hostname;
+    if (!upstreams.has(host)) return fetchImpl(request);
+    const requestId = randomUUID();
+    const body = await boundedObservationJson(request.clone());
+    record({ type: 'request', requestId, host,
+      pathname: closedValue(url.pathname, observationPaths),
+      model: closedValue(body?.model, observationModels), stream: body === null ? 'unknown' : body?.stream === true,
+      toolsCount: body === null ? 'unknown' : Array.isArray(body?.tools) ? body.tools.length : 0,
+      formatType: closedValue(body?.response_format?.type ?? body?.text?.format?.type, ['text', 'json_object', 'json_schema']),
+      reasoning: closedValue(body?.reasoning_effort ?? body?.reasoning?.effort, ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']),
+      tokenLimits: body === null ? 'unknown' : Object.fromEntries(tokenLimitFields.filter(field => Object.hasOwn(body ?? {}, field))
+        .map(field => [field, typeof body[field] === 'number' && Number.isFinite(body[field]) ? body[field] : 'unknown'])),
+      temperaturePresent: body === null ? 'unknown' : Object.hasOwn(body ?? {}, 'temperature'),
+    });
+    try {
+      const response = await fetchImpl(request);
+      record({ type: 'response', requestId, host, status: response.status });
+      if (!response.ok) {
+        // Observe independently: neither body reads nor tee cancellation may delay the SDK.
+        void (async () => {
+          const body = await boundedObservationJson(response.clone(), 1000);
+          const error = body?.error;
+          record({ type: 'response-error', requestId, host, status: response.status, error: {
+            code: closedValue(error?.code, ['unsupported_parameter', 'unsupported_value', 'invalid_request_error',
+              'model_not_found', 'rate_limit_exceeded', 'insufficient_quota', 'invalid_api_key', 'context_length_exceeded']),
+            type: closedValue(error?.type, ['invalid_request_error', 'authentication_error', 'permission_error',
+              'rate_limit_error', 'server_error', 'api_error', 'overloaded_error']),
+            param: closedValue(error?.param, observationParams),
+          } });
+        })().catch(() => {});
+      }
+      return response;
+    } catch (error) {
+      record({ type: error?.name === 'AbortError' ? 'cancelled' : 'error', requestId, host });
+      throw error;
+    }
+  };
+}
+
 const overlayImport = import.meta.url === 'file:///run/ci-provider/provider-server.mjs';
 if (overlayImport && process.env.CI_PROVIDER_FIXTURE === '1') {
   if (readFileSync('/run/ci-provider/marker', 'utf8').trim() !== 'sentropic-ci-provider-v1') throw new Error('Missing fixture marker');
@@ -325,21 +412,7 @@ if (overlayImport && process.env.CI_PROVIDER_MODE === 'live') {
   if (!/^(test|e2e)-/.test(process.env.CI_PROVIDER_ENV ?? '')) throw new Error('Live observation requires a test environment');
   const transport = globalThis.fetch;
   const record = row => appendFileSync('/run/ci-live/calls.jsonl', `${JSON.stringify({ ...row, at: new Date().toISOString() })}\n`);
-  globalThis.fetch = async (input, init) => {
-    const request = new Request(input, init);
-    const host = new URL(request.url).hostname;
-    if (!upstreams.has(host)) return transport(request);
-    const requestId = randomUUID();
-    record({ type: 'request', requestId, host });
-    try {
-      const response = await transport(request);
-      record({ type: 'response', requestId, host, status: response.status });
-      return response;
-    } catch (error) {
-      record({ type: error?.name === 'AbortError' ? 'cancelled' : 'error', requestId, host });
-      throw error;
-    }
-  };
+  globalThis.fetch = createProviderObserver({ fetchImpl: transport, record });
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   createProviderServer().server.listen(Number(process.env.PORT ?? 7777), '0.0.0.0');

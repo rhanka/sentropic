@@ -2,7 +2,128 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { request } from 'node:http';
-import { createProviderServer, fixtureKey, installProviderBoundary, journeyResponse } from './provider-server.mjs';
+import { createProviderServer, createProviderObserver, fixtureKey, installProviderBoundary, journeyResponse } from './provider-server.mjs';
+
+test('should deliver an open error stream immediately and finish observation by its deadline', async () => {
+  const rows = [];
+  let cancelled = false;
+  let recorded;
+  const observed = new Promise(resolve => { recorded = resolve; });
+  const response = new Response(new ReadableStream({ start(controller) {
+    controller.enqueue(new TextEncoder().encode('{"error":{"code":"rate_limit_exceeded"}}'));
+  }, cancel() { cancelled = true; } }), { status: 429 });
+  const observe = createProviderObserver({ fetchImpl: async () => response, record: row => {
+    rows.push(row);
+    if (row.type === 'response-error') recorded(row);
+  } });
+  let timer;
+  try {
+    const delivered = await Promise.race([observe('https://api.openai.com/v1/responses'),
+      new Promise(resolve => { timer = setTimeout(() => resolve(null), 100); })]);
+    assert.equal(delivered, response);
+    assert.equal(response.bodyUsed, false);
+    assert.equal(rows[1].status, 429);
+    const row = await observed;
+    assert.equal(row.requestId, rows[1].requestId);
+    assert.equal(row.status, 429);
+    assert.deepEqual(row.error, { code: 'unknown', type: 'unknown', param: 'unknown' });
+    assert.equal(response.bodyUsed, false);
+    await response.body.cancel();
+    assert.equal(cancelled, true);
+  } finally { clearTimeout(timer); void response.body.cancel().catch(() => {}); }
+});
+
+test('should observe safe request and rejection metadata while preserving SDK bytes', async () => {
+  const secret = 'sensitive-sentinel-never-record';
+  const rows = [];
+  let recorded;
+  const observed = new Promise(resolve => { recorded = resolve; });
+  const body = { model: 'gpt-5.4-nano', messages: [{ role: 'system', content: secret }],
+    stream: false, max_tokens: 32, temperature: 0.5, reasoning_effort: 'low',
+    tools: [{ function: { name: secret, parameters: { secret } } }],
+    response_format: { type: 'json_schema', json_schema: { name: secret } } };
+  const wire = JSON.stringify({ error: { code: 'unsupported_parameter', type: 'invalid_request_error',
+    param: 'max_tokens', message: secret, details: { secret } } });
+  const observe = createProviderObserver({ record: row => {
+    rows.push(row);
+    if (row.type === 'response-error') recorded(row);
+  }, fetchImpl: async request => {
+    assert.deepEqual(await request.json(), body);
+    assert.equal(request.headers.get('authorization'), secret);
+    return new Response(wire, { status: 400 });
+  } });
+  const response = await observe(`https://api.openai.com/v1/chat/completions?secret=${secret}`, {
+    method: 'POST', headers: { authorization: secret }, body: JSON.stringify(body),
+  });
+  assert.equal(await response.text(), wire);
+  await observed;
+  assert.deepEqual(rows[0], { type: 'request', requestId: rows[0].requestId, host: 'api.openai.com',
+    pathname: '/v1/chat/completions', model: 'gpt-5.4-nano', stream: false, toolsCount: 1,
+    formatType: 'json_schema', reasoning: 'low', tokenLimits: { max_tokens: 32 }, temperaturePresent: true });
+  assert.deepEqual(rows[1], { type: 'response', requestId: rows[0].requestId, host: 'api.openai.com', status: 400,
+  });
+  assert.deepEqual(rows[2], { type: 'response-error', requestId: rows[0].requestId, host: 'api.openai.com', status: 400,
+    error: { code: 'unsupported_parameter', type: 'invalid_request_error', param: 'max_tokens' } });
+  assert.ok(!JSON.stringify(rows).includes(secret));
+});
+
+test('should fail closed for unknown metadata and bounded or invalid error bodies', async () => {
+  const secret = 'sensitive-sentinel-never-record';
+  for (const wire of [JSON.stringify({ error: { code: secret, type: secret, param: secret, message: secret } }),
+    secret, JSON.stringify({ padding: secret.repeat(5000), error: { code: 'unsupported_parameter' } })]) {
+    const rows = [];
+    let recorded;
+    const observed = new Promise(resolve => { recorded = resolve; });
+    const observe = createProviderObserver({ record: row => {
+      rows.push(row);
+      if (row.type === 'response-error') recorded(row);
+    },
+      fetchImpl: async () => new Response(wire, { status: 400 }) });
+    const response = await observe(`https://api.openai.com/${secret}?${secret}`, {
+      method: 'POST', body: JSON.stringify({ model: secret, reasoning: { effort: secret },
+        response_format: { type: secret }, max_completion_tokens: secret }),
+    });
+    assert.equal(await response.text(), wire);
+    await observed;
+    assert.equal(rows[0].pathname, 'unknown');
+    assert.equal(rows[0].model, 'unknown');
+    assert.equal(rows[0].reasoning, 'unknown');
+    assert.deepEqual(rows[0].tokenLimits, { max_completion_tokens: 'unknown' });
+    assert.deepEqual(rows[2].error, { code: 'unknown', type: 'unknown', param: 'unknown' });
+    assert.ok(!JSON.stringify(rows).includes(secret));
+  }
+});
+
+test('should mark an oversized request unknown without changing its original bytes', async () => {
+  const secret = 'sensitive-sentinel'.repeat(5000);
+  const wire = JSON.stringify({ model: 'gpt-5.4-nano', messages: [{ role: 'user', content: secret }] });
+  const rows = [];
+  const observe = createProviderObserver({ record: row => rows.push(row), fetchImpl: async request => {
+    assert.equal(await request.text(), wire);
+    return new Response('{}');
+  } });
+  await observe('https://api.openai.com/v1/chat/completions', { method: 'POST', body: wire });
+  for (const field of ['model', 'stream', 'toolsCount', 'tokenLimits', 'temperaturePresent']) {
+    assert.equal(rows[0][field], 'unknown');
+  }
+  assert.ok(!JSON.stringify(rows).includes('sensitive-sentinel'));
+});
+
+test('should leave a successful stream untouched and record cancellation without error text', async () => {
+  const rows = [];
+  const response = new Response('data: stream-bytes\n\n', { headers: { 'content-type': 'text/event-stream' } });
+  response.clone = () => { throw new Error('A successful stream must not be copied'); };
+  const observe = createProviderObserver({ record: row => rows.push(row), fetchImpl: async () => response });
+  assert.equal(await observe('https://api.openai.com/v1/responses'), response);
+  assert.equal(response.bodyUsed, false);
+  assert.equal(await response.text(), 'data: stream-bytes\n\n');
+  assert.equal(rows[1].error, undefined);
+  const failure = new DOMException('sensitive-sentinel', 'AbortError');
+  const cancel = createProviderObserver({ record: row => rows.push(row), fetchImpl: async () => { throw failure; } });
+  await assert.rejects(cancel('https://api.openai.com/v1/responses'), { name: 'AbortError' });
+  assert.equal(rows.at(-1).type, 'cancelled');
+  assert.ok(!JSON.stringify(rows).includes('sensitive-sentinel'));
+});
 
 async function fixture(t, respond) {
   const result = createProviderServer(respond ? { respond } : {});
@@ -29,6 +150,15 @@ test('should preserve streaming chunks, usage and model routing over HTTP', asyn
   assert.equal(packets.at(-1), '[DONE]');
   assert.ok(packets.slice(0, -1).map(packet => JSON.parse(packet)).some(chunk => chunk.choices[0].delta.content));
   assert.equal(receipt.calls, 1);
+});
+
+test('should reject the incompatible title token field and accept the supported limit', async t => {
+  const { post } = await fixture(t);
+  const rejected = await post({ model: 'gpt-5.4-nano', max_tokens: 32 });
+  assert.equal(rejected.status, 400);
+  assert.equal((await rejected.json()).error.param, 'max_tokens');
+  assert.equal((await post({ model: 'gpt-5.4-nano', max_completion_tokens: 32 })).status, 200);
+  assert.equal((await post({ model: 'mistral-small-2603', max_tokens: 32 })).status, 200);
 });
 
 test('should stream the real OpenAI Responses reasoning-evaluator protocol', async t => {
