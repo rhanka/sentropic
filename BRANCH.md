@@ -39,7 +39,7 @@
 ## Plan / Todo (lot-based)
 - [ ] Round 2: compact EdDSA fixture, real agent custody guard, authenticated RPC client and replica-wide watch; exact-head CI.
   - [x] Compact six-claim EdDSA JWS and real CustodyGuard WAL/stream lifecycle replace the two-segment fake and watcher-only revocation.
-  - [ ] RPC: reuse controller HMAC identity, bounded responses, watch-before/after-issue and fail-closed per-replica polling.
+  - [x] RPC: reuse controller HMAC identity, bounded responses, watch-before/after-issue and fail-closed per-replica polling.
   - [x] Published B0a Custody RPC contract consumed; standalone composition creates the authenticated issuer in execution-node mode.
 - [x] Lot 0: read binding packet/spec/agent code; mechanically check branch and record isolated ports.
 - [x] Lot 1: issuer interface, env validation, mTLS transport and bounded custody lifetime.

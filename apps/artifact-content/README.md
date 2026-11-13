@@ -81,14 +81,28 @@ Execution-node configuration (names only):
 - `SANDBOX_MTLS_DATA_PLANE_CERT_B64`: PEM client certificate, base64; CN `data-plane:artifact-content`.
 - `SANDBOX_MTLS_DATA_PLANE_KEY_B64`: its PEM private key, base64.
 - `SANDBOX_MTLS_CA_CERT_B64`: PEM CA certificate, base64.
+- `APP_ARTIFACT_CUSTODY_API_URL`: internal API HTTP(S) origin; no path, query, fragment or userinfo. HTTP is limited to the trusted service network by deployment policy.
+- `APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS` and `APP_ARTIFACT_LIVE_CONTROLLER_KEYS`: existing controller service identity, matching API `ARTIFACT_LIVE_CONTROLLER_KEY`; first configured ID signs RPC calls.
 
 Only the data-plane pair is loaded. TLS 1.3, server hostname/CA verification and client authentication are mandatory. No credential values or frame/token contents are logged. No signing key or control-plane credentials belong here.
 
-The composing host must supply `startContentServer({ custodyIssuer })` in execution-node mode. The standalone entry point deliberately refuses that mode until S1-B0a supplies this dependency. The exported `CustodyIssuer` interface in `src/data-plane.ts` is the integration contract:
+The standalone entry point composes the real API client from `src/custody-issuer.ts` in execution-node mode; missing API URL or controller identity refuses startup. `startContentServer({ custodyIssuer })` remains the test/composition seam. The exported `CustodyIssuer` interface in `src/data-plane.ts` is the integration contract:
 
 - `issue(subject, signal)` resolves an authenticated live route (`kind: live`, full `LiveRoute`) or a verified supervisor target (`kind: supervisor`, deterministic `podName`) to its current tenant, principal, physical UID, custody epoch and sandbox port. It must recheck host/session/resource authority; a pod name alone never grants authority. Resolve the subject against API-owned state, never browser headers. Observe the abort signal.
 - Return `{tenantId, principalId, physicalUid, custodyEpoch, port, token, issuedAt, deadlineAt}`. `token` is the exact agent-verifiable signed `X-Custody-Token`; the edge treats its encoding as opaque. Its signed claims must match that metadata, with `resourceId=physicalUid`, ISO timestamps and TTL at most 60 seconds. S1-B0a owns wire encoding/signature agreement with the agent; this lane adds no competing token codec.
 - `watch(subject, revoke)` subscribes before issuance and immediately notifies on revoked custody or any resolved binding/tenant/principal/physical-UID change. Return an unsubscribe function. Do not allow a renewal to authorize a subject revoked in the meantime.
+
+The client implements B0a's `Custody RPC` contract: authenticated POSTs to
+`/api/v1/artifacts/builder/v1/custody/{issue,watch}`, with the exact JSON body
+`{subject}`. `X-Custody-Rpc` carries `kid:timestamp:mac`; HMAC-SHA256 covers the
+version, method, full path, fresh millisecond timestamp and SHA-256 of those body
+bytes. Requests and responses are bounded at 16 KiB and 500 ms. Redirects refuse.
+Each attached subject on **every replica** polls watch after 250 ms, independently
+of other replicas. The watch fence must match before and after issuance; changes,
+refusals, invalid responses, timeouts or unavailable RPC close the local flows.
+Unsubscribing cancels its timer and in-flight watch. API-owned `port` is preserved
+(live 5173, supervisor 8792); no edge default overrides it. This bounded polling
+reaches all replicas without relying on a single process's subscription list.
 
 Every new HTTP hop and WS handshake obtains fresh custody. The edge sends only its allowlisted application headers plus `X-Tenant-Id`, `X-Expected-Physical-Uid`, `X-Custody-Token` to `/v1/ports/:port/<original path and query>`. Browser cookies, Authorization and caller-supplied custody headers are never forwarded. Supervisor frames still pass the existing signature/fence checks before any custody is issued.
 
