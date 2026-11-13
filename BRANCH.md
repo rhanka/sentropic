@@ -45,6 +45,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 - [ ] Lot 2: Ed25519 tickets, ownership/devScope, identity/provenance pin and idempotent lifecycle.
   - [x] Add mTLS configuration/transport, canonical Ed25519 tickets and pinned identity/export verification.
 - [ ] Lot 3: one-node heartbeat, bounded tenant WFQ, stateless sources and custody issuer/revocation.
+  - [x] Dedicated Postgres advisory-lock heartbeat leadership and S1-C1 EdDSA custody issuing/revocation functions.
 - [ ] Lot 4: hermetic fake agent tests in api/tests/unit/execution-node*.test.ts; backend rollback regression.
 - [ ] Lot 5: targeted make tests, API typecheck/lint, independent review and fixes.
 - [ ] Lot 6: push, PR body from BRANCH.md, green exact-head CI; write .tmp/rv/s1-b0a-adapter.md and .done.
