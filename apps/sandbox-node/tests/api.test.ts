@@ -33,6 +33,11 @@ describe('agent lifecycle transport', () => {
       await call(`${path}/write`, { commandId: 'write', devScope, path: '/workspace/ui/a.ts', contentBase64: Buffer.from('hello').toString('base64') });
       await call(`${path}/stop`, { commandId: 'stop', devScope, stop: { retainOutput: true } });
       expect((await call(`${path}/export`, { commandId: 'export', devScope, spec: { subPath: 'ui/dist', buildId: 'b', maxBytes: 10000 } })).status).toBe(200);
+      const revoked = await call(`${path}/revoke-custody`, { commandId: 'revoke', devScope, minCustodyEpoch: 2, reason: 'owner transfer' });
+      expect(revoked.body).toMatchObject({ activeCustodyEpoch: 2 });
+      await expect(call(`${path}/renew`, { commandId: 'stale-renew', devScope })).rejects.toThrow();
+      ownership.custodyEpoch = 2;
+      await call(`${path}/renew`, { commandId: 'fresh-renew', devScope });
       await call(path, { commandId: 'delete', devScope }, 'DELETE');
     } finally { rmSync(dir, { recursive: true }); }
   });
