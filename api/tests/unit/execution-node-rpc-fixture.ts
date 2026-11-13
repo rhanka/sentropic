@@ -6,6 +6,8 @@ import { createCustodyAuthority, createCustodyRpc, CUSTODY_RPC_BASE, signCustody
 import { createBuilderMount } from '../../src/services/artifacts/live/builder-mount';
 import { createExecutionNodeBackend, type ExecutionNodeInputs } from '../../src/services/artifacts/live/execution-node-backend';
 import type { LiveRuntime } from '../../src/services/artifacts/live/records';
+import { authorizeLive, type LiveActor } from '../../src/services/artifacts/live/authorize';
+import type { LivePorts } from '../../src/services/artifacts/live/ports';
 import { fakeExecutionNode, sandboxSpec, session } from './execution-node-fake';
 
 export async function custodyRpcFixture() {
@@ -23,7 +25,7 @@ export async function custodyRpcFixture() {
   const key = { storageScopeId: 'workspace', artifactId: 'artifact' };
   let runtime = { ...key, phase: 'LIVE', ownerId: 'principal', sessionId: 'session', generation: 1,
     leaseEpoch: 1, rowVersion: 1, routeEpoch: 1, podName: 'subject', sourceRevision: 'revision',
-    podUid: null } as unknown as LiveRuntime;
+    appliedRevision: 'revision', podUid: null } as unknown as LiveRuntime;
   const values = new Map<string, unknown>();
   const backend = createExecutionNodeBackend(fake.adapter, {
     async read<T>(id: string) { return structuredClone(values.get(id)) as T | undefined; },
@@ -39,10 +41,14 @@ export async function custodyRpcFixture() {
   const route = { ...key, sessionId: runtime.sessionId, generation: 1, routeEpoch: 1,
     podName: runtime.podName, podUid: runtime.podUid!, sourceRevision: 'revision', principalId: 'principal', expiresAt: Date.now() + 60_000 };
   const rpcKey = { kid: 'synthetic', key: Buffer.alloc(32, 7) };
+  let invitationEpoch = 1;
+  const invitationExpiry = Date.now() + 60_000;
+  const invitations = { current: async () => ({ epoch: invitationEpoch, expiresAt: invitationExpiry }) };
+  const store = { async read() { return { runtime: structuredClone(runtime) } as never; },
+    async active() { return [{ key, ownerId: runtime.ownerId, phase: runtime.phase }]; } };
+  const binding = async () => ({ generation: 1, ownerId: 'principal', healthy: true });
   const rpc = createCustodyRpc({ key: rpcKey, node: fake.adapter, now: fake.now,
-    resolve: createCustodyAuthority({ store: { async read() { return { runtime: structuredClone(runtime) } as never; },
-      async active() { return [{ key, ownerId: runtime.ownerId, phase: runtime.phase }]; } },
-    binding: async () => ({ generation: 1, ownerId: 'principal' }), session: r => backend.custody(r) }) });
+    resolve: createCustodyAuthority({ store, invitations, binding, session: r => backend.custody(r) }) });
   const mount = createBuilderMount({ api: rpc as never, authenticate: () => null,
     requireService: async () => { throw new Error('custody_must_authenticate_itself'); } });
   const api = createServer(async (req, res) => {
@@ -64,6 +70,12 @@ export async function custodyRpcFixture() {
     headers: { 'x-tenant-id': 'sentropic', 'x-expected-physical-uid': route.podUid, 'x-custody-token': token, ...headers },
   });
   return { fake, route, subject, backend, call, open,
+    async grant(actor: LiveActor) {
+      return { kind: 'live' as const, route: { ...await authorizeLive({ store, binding, invitations, now: Date.now } as unknown as LivePorts,
+        key, actor, 'read'), expiresAt: route.expiresAt } };
+    },
+    revokeGuest() { invitationEpoch++; },
+    activity() { runtime = { ...runtime, rowVersion: runtime.rowVersion + 1, lastAccessAt: Date.now() }; },
     stop() { runtime = { ...runtime, phase: 'QUIESCING', routeEpoch: runtime.routeEpoch + 1 }; },
     async close() {
       for (const socket of sockets) socket.destroy(); api.closeAllConnections();

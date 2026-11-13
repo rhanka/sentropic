@@ -79,6 +79,13 @@ and returns the acknowledged ownership; persist it before issuing another token.
 
 ## Custody RPC
 
+Live subjects use the controller's owner/invitee read policy, including the current
+invitation fence and expiry on every issue/watch and again after node I/O.
+The custody `principalId` identifies the sandbox owner, including for an authorized
+guest: it is an API-delegated resource capability, not the viewer identity. The agent
+retains its strict owner check. Watch versions contain authority fields only;
+access timestamps and row counters never revoke streams.
+
 Internal API endpoint: `POST /api/v1/artifacts/builder/v1/custody/{issue,watch}`.
 Reuse the environment's API/controller ↔ artifact-content HMAC service key:
 `ARTIFACT_LIVE_CONTROLLER_KEY` in API, the matching

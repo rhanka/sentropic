@@ -163,7 +163,7 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   let running: { stop(): void } | null = null;
   const api = custodyNode && custodyBackend ? new Hono<HostBuildEnv>().route('/', createCustodyRpc({ key: fenceKey, node: custodyNode, now,
     resolve: createCustodyAuthority({ store: createPostgresLiveStore(deps.pool),
-      binding, session: runtime => custodyBackend!.custody(runtime), now }) })).route('/', service.api) : service.api;
+      binding, invitations: service.remote.invitations, session: runtime => custodyBackend!.custody(runtime), now }) })).route('/', service.api) : service.api;
   return {
     api, controller: service.controller,
     /** Idempotent: one scheduler per process, renewing leases and reconciling every 30 s; `stop` clears it. */
