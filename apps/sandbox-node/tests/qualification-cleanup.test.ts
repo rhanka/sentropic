@@ -12,7 +12,7 @@ import { networkProbeCount, networkTargets } from '../src/qualification-network.
 
 vi.mock('../src/node-lock.js', () => ({ acquireNodeLock: vi.fn() }));
 vi.mock('../src/qualification-prerequisites.js', () => ({ qualificationPrerequisites: vi.fn() }));
-vi.mock('../src/qualification-switch.js', () => ({ qualifyPortsSwitch: vi.fn() }));
+vi.mock('../src/qualification-switch.js', () => ({ qualifyPortsSwitch: vi.fn(async () => {}) }));
 vi.mock('../src/qualification-peer.js', () => ({ qualificationPeer: () => ({ start: async () => {}, close: async () => {} }) }));
 vi.mock('../src/qualification-processes.js', () => ({ qualificationProcesses: () => ({}), assertQualificationProcessesGone: vi.fn() }));
 vi.mock('../src/qualification-network.js', async original => ({ ...await original<typeof import('../src/qualification-network.js')>(),
