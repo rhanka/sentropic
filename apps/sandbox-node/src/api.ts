@@ -24,7 +24,7 @@ export class AgentApi {
     const body = request.body as Record<string, unknown>;
     const commandId = body.commandId;
     if (typeof commandId !== 'string' || !commandId) throw new ExecutionNodeError('command_id_payload_mismatch', 'commandId required');
-    if (path === '/v1/bases/ensure' && method === 'POST') {
+    if (path === `/v1/tenants/${tenantId}/bases` && method === 'PUT') {
       daemon.authorizeCommand(ticket, tenantId, commandId, body, method, path, body.ownership as ExecutionNodeOwnership);
       const base = body.base as TenantBase;
       if (base?.tenantId !== tenantId) throw new ExecutionNodeError('cross_tenant_base_forbidden');
@@ -39,6 +39,7 @@ export class AgentApi {
     const match = /^\/v1\/sandboxes\/([a-zA-Z0-9-]+)(?:\/(start|claim|stop|export|renew|revoke-custody|write))?$/.exec(path);
     if (!match) throw new ExecutionNodeError('command_id_payload_mismatch', 'unknown lifecycle route');
     const id = match[1]!, operation = match[2];
+    if (operation === 'start' || operation === 'claim') this.node.admission.requireAccepting();
     const sandbox = daemon.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance');
     const devScope = body.devScope as ExecutionNodeDevScope | undefined;
