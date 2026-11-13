@@ -23,8 +23,11 @@ RUN /tools/node_modules/.bin/esbuild apps/sandbox-node/src/entry.ts --bundle --p
  && cp /usr/local/bin/node execution-node \
  && /tools/node_modules/.bin/postject execution-node NODE_SEA_BLOB sea.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
  && ./execution-node --self-test
-RUN apt-get update && apt-get install -y --no-install-recommends erofs-utils && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends erofs-utils gcc libc6-dev && rm -rf /var/lib/apt/lists/*
+COPY apps/sandbox-node/k8s/network-probe.c /workspace/network-probe.c
+RUN gcc -Wall -Wextra -Werror -O2 network-probe.c -o network-probe
 COPY --from=rootfs / /sandbox-rootfs/
+RUN cp network-probe /sandbox-rootfs/usr/local/bin/network-probe
 RUN mkfs.erofs --quiet -T 1767225600 --all-root rootfs.erofs /sandbox-rootfs
 RUN mkdir -p /qualification/node_modules \
  && printf 'isolation fixture' > /qualification/isolation-marker \
@@ -34,4 +37,5 @@ RUN mkdir -p /qualification/node_modules \
 FROM scratch AS runtime
 WORKDIR /srv/sandbox-node
 COPY --from=build /workspace/execution-node /workspace/rootfs.erofs /workspace/qualification.erofs ./
+COPY --from=build /workspace/network-probe ./
 ENTRYPOINT ["/srv/sandbox-node/execution-node"]
