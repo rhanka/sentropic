@@ -11,8 +11,7 @@ for (const {path, directory} of ${JSON.stringify(paths)}) {
   check('zero read ' + path, denied);
   denied = false;
   try {
-    const fd = fs.openSync(directory ? path + '/isolation-write' : path, 'r+');
-    fs.closeSync(fd);
+    fs.accessSync(path, fs.constants.W_OK);
   } catch (e) { denied = ['ENOENT', 'EACCES', 'ENOTDIR'].includes(e.code); }
   check('zero write ' + path, denied);
 }
