@@ -74,6 +74,7 @@ test.describe('Chat composer image paste send', () => {
     const seeded = await userApi.post(`/api/v1/chat/sessions?workspace_id=${workspaceId}`, { data: {} });
     expect(seeded.ok()).toBeTruthy();
     const previousSessionId = (await seeded.json()).sessionId;
+    let historyDelivered = false;
     let releaseHistory!: () => void;
     const heldHistory = new Promise<void>(resolve => { releaseHistory = resolve; });
     let historyStarted!: () => void;
@@ -83,6 +84,7 @@ test.describe('Chat composer image paste send', () => {
       historyStarted();
       await heldHistory;
       await route.fulfill({ response });
+      historyDelivered = true;
     });
 
     const pageErrors: string[] = [];
@@ -107,9 +109,9 @@ test.describe('Chat composer image paste send', () => {
       await expect(attachmentBand.locator('img')).toBeVisible({ timeout: 2_000 });
       // Upload completes: chip shows the ready-state mime type label.
       await expect(attachmentBand).toContainText('image/png', { timeout: 10_000 });
-      const obsoleteHistory = page.waitForResponse(response => response.url().includes(`/chat/sessions/${previousSessionId}/history`));
       releaseHistory();
-      await (await obsoleteHistory).finished();
+      // Observe our held delivery even if the obsolete browser request was cancelled.
+      await expect.poll(() => historyDelivered, { timeout: 2_000 }).toBe(true);
       await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
       await expect(attachmentBand).toContainText('image/png', { timeout: 2_000 });
 
