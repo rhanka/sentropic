@@ -11,7 +11,7 @@ export function freezeDecisionData<T>(value: T): T {
   }
   return value;
 }
-const PROTOCOLS = new Set(['jev-native', 'openai-decisions', 'systemone-local', 'structured-llm']);
+const PROTOCOLS = new Set(['jev-native', 'openai-decisions', 'gemini-decisions', 'systemone-local', 'structured-llm']);
 export function parseDecisionEvaluatorDescriptor(candidate: unknown): DecisionEvaluatorDescriptor | null {
   const snapshot = snapshotBoundedJson(candidate);
   if (!snapshot.ok || !isRecord(snapshot.value)) return null;

@@ -1,17 +1,16 @@
-# Feature: Muse Ember model catalog
+# Feature: Opt-in Gemini Decisions capability
 
 ## Objective
-- [ ] Expose Muse Ember with its canonical ID, vision, 1M context and xhigh/max efforts.
+- [ ] Integrate gemini-decision-1 through the existing host decision service without default egress.
 
 ## Scope / Guardrails
-- [x] Isolated worktree: tmp/worktrees/muse-ember; branch feat/llm-mesh-muse-ember.
-- [x] Make-only, Docker-first; ENV=test-muse-ember last; no secrets or AI trailers.
-- [x] Ports reserved only if needed: API 9700, UI 5900, Maildev 1800; no services required.
+- [x] Branch feat/llm-mesh-gemini-decisions, isolated worktree tmp/worktrees/gemini-decisions.
+- [x] Make-only, Docker-first; ENV=test-gemini-decisions last; no live calls or secrets in evidence.
+- [x] No services needed; reserved API 9702, UI 5902, Maildev 1802.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `packages/llm-mesh/**`
-  - `api/tests/**`
   - `BRANCH.md`
   - `package-lock.json`
   - `packages/cluster-mesh/package.json`
@@ -21,50 +20,63 @@
   - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
   - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
   - `packages/llm-gateway/package.json`
-  - `scripts/llm-model-equivalences/council.source.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `packages/cluster-mesh/tests/fixtures/train.ts`
   - `packages/cluster-mesh/tests/speech-peer.spec.ts`
   - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
   - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `api/tests/unit/gateway-package-version.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
-  - `.cursor/rules/**`
+  - `.github/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/src/services/llm-account-transports.ts`
+  - `api/**`
 
 ## Feedback Loop
-- [x] BREM-EX4: necessary RUN 3 CI alignment. Rationale: equivalence-council rejects the new unclassified Ember model, packaging tries to fetch obsolete dev.24, and speech/train assertions retain the old tuple. Impact: classify Ember as excluded from automatic equivalence without benchmark evidence; regenerate its council; synchronize selected packaging tuple versions, dependency maps, verified archive evidence, and speech/train test literals. Rollback: revert the alignment commits together with EX3. Assertions, gates and workflows stay intact.
-- [x] BREM-EX3: owner-approved RUN 3 minimal release/runtime extension. Rationale: published gateway dependency-map guard and cluster runtime ceiling block CI. Impact: gateway 0.23.1, cluster 0.26.0-dev.25, matching root lock workspace versions, text/speech ceilings <0.38.0, and the four range regression tests listed above. Rollback: revert the RUN 3 extension commits; no gate or workflow change.
-- [x] RUN 3 local evidence: 99 module tests and 7 equivalence-council tests pass; strict root lock dry-run passes; all 12 candidate archives pass the unchanged manifest guard. Packaging fixture archive integrity comes from those guarded candidate bytes.
-- [x] RUN 3 API alignment: preserve the exact model projection assertion in lexical order and expect the approved gateway 0.23.1 release tuple; CI exposed both stale expectations.
-- [x] BREM-EX4 follow-through: packed skew qualification correctly refuses the old tuple, but its independent exact-message helper retained <0.37.0. Align only that helper and its synthetic fixture to <0.38.0; preserve every refusal invariant. Rollback with EX3/EX4.
-- [ ] RUN 3: verify full CI on the final exact head; first run 43329947429 completed with stale council, tuple, fixture and API assertions failing. No gates relaxed.
-- [x] BREM-EX2: owner-approved consumer range exception (RUN 2). Rationale: the llm-mesh minor version bump requires compatible consumer ranges. Impact: only the cluster-mesh peer field, llm-gateway dependency field and root lock. Rollback: revert this commit.
+- [x] RUN 4 local qualification: Decisions suite passes 39 files / 656 tests; public consumer declarations and README examples pass. The rebuilt guarded mesh archive requires one selected-lock sha512 update; gateway bytes and all other fixture entries are unchanged. Full CI must complete on the pushed head; fresh review consensus is unavailable because h2a_run MCP is not exposed (root .tmp/rv/models-run4-review.md).
+- [x] RUN 4 omitted-answer coverage: normalize an absent answers field to null when projecting independent evidence; all 31 Gemini tests pass, and the public-surface regression passes 4/4 without timeout changes. Strict root lock dry-run passes.
+- [x] RUN 4 Astra MAJOR 2: six failing-first stream tests cover HTTP errors, status/observed redirects, non-JSON content and invalid/oversized declared lengths. Every unread-body refusal now cancels the stream without awaiting provider cleanup; transport regression suite passes 15 tests. Adapter remains opt-in, API-key only, never a default.
+- [x] RUN 4 Astra MAJOR 1: reproduced three verdict-only failures before the fix; retain independently validated usage, served identity and request ID. The host now settles 100 microUSD for 1000 input tokens even when the verdict is invalid; Gemini routing regression suite passes 15 tests.
+- [x] BRGD-EX5: owner-approved RUN 4 rebase onto merged #1013 at origin/main bc8770982. Rationale: derive the smallest Gemini release delta from merged Ember. Impact: retain mesh 0.37.0 -> 0.38.0, gateway 0.23.1 -> 0.23.2, cluster dev.25 -> dev.26, and only text/speech mesh ceilings <0.38.0 -> <0.39.0 with matching locks/fixtures/assertions. Registry after rebase: mesh 0.37.0, gateway 0.23.1, cluster 0.25.0, all below candidates. Rollback: revert the Gemini release/range delta; do not alter inherited Ember or gates.
+- [x] BRGD-EX4: carry the CI alignment proven on green #1013 forward to the approved Gemini tuple. Rationale: source and packed tests independently assert exact versions/ranges and verified fixture archives. Impact: train/speech/skew test literals, selected fixture tuple maps and archive integrity, API gateway expectation 0.23.2. Rollback: revert the RUN 3 alignment and EX3 commits. Assertions, gates and workflows stay intact.
+- [x] RUN 3 sequencing: rebased onto #1013 exact green head d83b08139 after run 43335882870 completed success (103 jobs). Ember catalog, council exclusion and CI alignment are inherited. Published versions after rebase: mesh 0.36.0, gateway 0.23.0, cluster 0.25.0, all below the proposed tuple.
+- [x] BRGD-EX3: owner-approved RUN 3 minimal release/runtime extension. Rationale: published gateway dependency-map guard and cluster runtime ceiling block CI. Impact: gateway 0.23.2, cluster 0.26.0-dev.26, matching root lock workspace versions, text/speech ceilings <0.39.0, and the four range regression tests listed above. Rollback: revert the RUN 3 extension commits; no gate or workflow change.
+- [x] RUN 3 local evidence: 101 module tests pass with no type errors; strict root lock dry-run passes; selected fixture versions/maps and train sha512 values synchronized from guarded archives for mesh 0.38.0, gateway 0.23.2 and cluster dev.26.
+- [x] RUN 3 candidate guard: all 12 archives pass without npm force or legacy-peer-deps. PR base stays main because the unchanged CI pull_request branch filter excludes the Ember topic; the dependency on green #1013 is preserved by ancestry.
+- [ ] RUN 3: verify candidate qualification and full CI on the exact final head after sequential rebase.
+- [x] BRGD-EX2: owner-approved consumer range exception (RUN 2). Rationale: the llm-mesh minor version bump requires compatible consumer ranges. Impact: only the cluster-mesh peer field, llm-gateway dependency field and root lock. Rollback: revert this commit.
 - [x] RUN 2: rebase onto origin/main required no replay; published llm-mesh remains 0.36.0, below this branch version. Candidate lock changes exactly two consumer range cells; strict npm ci --ignore-scripts --dry-run passed without force or legacy-peer-deps.
-- [x] Local Muse provider catalog confirms muse-ember-1.0; transport model IDs are not enumerated.
-- [x] Track import reserved for designated conductor; source artifact is this plan.
-- [x] BREM-EX1: synchronize only the root lock's llm-mesh workspace version; CI changes rejects the mandatory package bump without it. No dependency graph change; rollback is restoring that version cell.
-- [x] Muse review found API model count 37 must become 38; corrected alongside its expected ID list.
+- [x] RUN 2: README confirms API keys only, no consumer OAuth/agy, no default or fallback, and immo preprod/production remains disabled; routing tests pass 12/12, including four OAuth credential rejection cases before egress.
+- [x] Official announcement: https://blog.google/innovation-and-ai/technology/developers-tools/gemini-decisions-api/
+- [x] Official REST request/response reference: https://aistudio.google.com/docs/decisions-api#request
+- [x] ai.google.dev/api/decisions is unavailable; the announcement links to AI Studio documentation.
+- [x] Google AI Studio has no Canadian residency guarantee; opt-in by exact evaluator only.
+- [x] Documented responses omit served model identity. Preserve the existing identity gate and ship unqualified; never infer served identity from the request.
+- [x] Track import reserved for the designated conductor; this plan is the source artifact.
+- [x] BRGD-EX1: synchronize only the root lock's llm-mesh workspace version; required by the CI changes gate after a mandatory package bump. No dependency graph change; rollback restores the previous version cell.
 
 ## AI Flaky tests
-- [x] No live provider calls.
+- [x] Mocked transport only.
 
 ## Orchestration Mode
-- [x] Mono-branch; independent Gemini capability uses a separate branch because combined scope exceeds 15 files.
+- [x] Mono-branch; separate from Muse because total scope exceeds 15 files.
 
 ## UAT Management (in orchestration context)
-- [x] Catalog-only change; no browser UAT surface.
+- [x] No UI surface; host routing tests qualify behavior.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0: read rules, verify branch and local canonical model ID.
-- [x] Lot 1: update providers, catalog, reasoning metadata and package version (0.37.0 > published 0.36.0).
-- [x] Lot 2: extend muse.test.ts, models.test.ts and llm-runtime-stream.test.ts.
-- [ ] Lot 3: run scoped tests, typecheck, scope check and independent review.
-  - [x] make test-llm-mesh SCOPE=tests/muse.test.ts ENV=test-muse-ember: 8 tests passed.
-  - [x] make typecheck-llm-mesh ENV=test-muse-ember: passed.
+- [x] Lot 0: inspect official schema and existing native decision contracts.
+- [x] Lot 1: descriptor, codec and bounded transport; one question per existing DecisionRequest.
+  - [x] Bounded v1beta transport, API-key header, deadlines and redirects refused.
+  - [x] Native question and usage mapping; binary confidence validated then projected to P(true).
+- [x] Lot 2: adapter, host exports, credential restriction, pricing and reconstruction.
+- [x] Lot 3: mocked routing, schema/error/deadline tests and residency documentation.
+- [ ] Lot 4: version 0.38.0, scoped checks, independent review and PR CI green.
+  - [x] Published npm version checked: 0.36.0; candidate 0.38.0 is greater.
+  - [x] make test-llm-mesh SCOPE=tests/decision- ENV=test-gemini-decisions: 39 files, 642 tests passed.
+  - [x] make typecheck-llm-mesh ENV=test-gemini-decisions: passed.
+  - [x] make lint-llm-mesh ENV=test-gemini-decisions: passed.
   - [x] make scope-check ENV=test-llm-judge: PASS C2.
-  - [ ] Argon review failed with account PERMISSION_DENIED; Muse review dispatched.
-- [ ] Lot 4: open PR, verify CI on exact head and report evidence.
+  - [ ] Independent Muse review dispatched after Argon account failure.
