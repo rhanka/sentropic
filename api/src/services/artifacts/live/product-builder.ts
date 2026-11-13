@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import type { Context } from 'hono';
+import { Hono, type Context } from 'hono';
 import { createBuilderService } from './service';
 import { builderPlacement, type BuilderPlacement } from './placement';
 import { BUILDER_KEY_ENV, builderKeys, SUPERVISOR_KEY_ENV, supervisorKey } from './builder-keys';
@@ -24,6 +24,8 @@ import { selectSandboxBackend, sandboxBackendKind, SANDBOX_BACKEND_ENV } from '.
 import { createExecutionNodeBackend, type ExecutionNodeInputs } from './execution-node-backend';
 import { executionNodeHeartbeat } from './execution-node-heartbeat';
 import { executionNodeForge } from './execution-node-forge';
+import { createCustodyAuthority, createCustodyRpc } from './execution-node-rpc';
+import type { ExecutionNodeAdapter } from './execution-node-adapter';
 
 type Env = Readonly<Record<string, string | undefined>>;
 /** Flag of the composed builder service (cm/api); anything but `1` keeps the 503 builder_unavailable mount. */
@@ -99,13 +101,17 @@ export function createProductBuilder(env: Env, deps: ProductBuilderDeps) {
 function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   const now = deps.now ?? Date.now; const id = deps.id ?? randomUUID;
   let heartbeat: ReturnType<typeof executionNodeHeartbeat> | undefined;
+  let custodyNode: ExecutionNodeAdapter | undefined;
+  let custodyBackend: ReturnType<typeof createExecutionNodeBackend> | undefined;
   const kind = read(SANDBOX_BACKEND_ENV, () => sandboxBackendKind(env));
   const sandboxBackend = kind === 'execution-node' ? read(SANDBOX_BACKEND_ENV, () => selectSandboxBackend(env, {
     kubernetes: () => undefined,
     executionNode: node => {
+      custodyNode = node;
       heartbeat = executionNodeHeartbeat(deps.pool, node,
         code => deps.log(code, new LiveError('builder_unavailable', code)));
-      return createExecutionNodeBackend(node, createPostgresRemoteLiveRows(deps.pool), deps.executionNodeInputs);
+      custodyBackend = createExecutionNodeBackend(node, createPostgresRemoteLiveRows(deps.pool), deps.executionNodeInputs);
+      return custodyBackend;
     },
   })) : undefined;
   const placement = read(LABEL.test(env.ARTIFACT_BUILDER_NAMESPACE ?? '') ? 'ARTIFACT_BUILDER_SERVICE_DOMAIN'
@@ -155,8 +161,11 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
     routes: createLiveFenceRoutes({ baseUrl: edgeUrl, key: fenceKey, now, fetch: deps.fetch }),
     heavy: { node, ...PRODUCT_HEAVY }, admission: PRODUCT_ADMISSION, cache: { signingKey: () => signingKey } });
   let running: { stop(): void } | null = null;
+  const api = custodyNode && custodyBackend ? new Hono().route('/', createCustodyRpc({ key: fenceKey, node: custodyNode, now,
+    resolve: createCustodyAuthority({ store: createPostgresLiveStore(deps.pool),
+      binding, session: runtime => custodyBackend!.custody(runtime), now }) })).route('/', service.api) : service.api;
   return {
-    api: service.api, controller: service.controller,
+    api, controller: service.controller,
     /** Idempotent: one scheduler per process, renewing leases and reconciling every 30 s; `stop` clears it. */
     start() {
       if (!running) {
