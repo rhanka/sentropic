@@ -64,7 +64,16 @@ export class CustodyGuard {
     const key = `${tenantId}:${resourceId}`;
     const epoch = Math.max(this.epochs.get(key) ?? 0, received);
     const fd = openSync(this.walPath, 'a', 0o600);
-    try { writeSync(fd, `${JSON.stringify({ key, epoch })}\n`); fsyncSync(fd); }
+    try {
+      const bytes = Buffer.from(`${JSON.stringify({ key, epoch })}\n`);
+      let offset = 0;
+      while (offset < bytes.length) {
+        const written = writeSync(fd, bytes, offset, bytes.length - offset);
+        if (written === 0) throw new Error('custody WAL write interrupted');
+        offset += written;
+      }
+      fsyncSync(fd);
+    }
     finally { closeSync(fd); }
     const directory = openSync(dirname(this.walPath), 'r');
     try { fsyncSync(directory); } finally { closeSync(directory); }
