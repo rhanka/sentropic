@@ -126,7 +126,8 @@ export function validateProbes(probes) {
       let email;
       try { email = JSON.parse(p.options?.body).email; } catch { /* invalid input */ }
       if (p.options?.method !== 'POST' || new Headers(p.options?.headers).get('content-type') !== 'application/json'
-        || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`email_probe_input: ${id}`);
+        || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+        || Buffer.byteLength(email.split('@')[0]) > 36 || Buffer.byteLength(email) > 226) throw new Error(`email_probe_input: ${id}`);
     }
   }
   if (!probes.find(p => p.id === 'S-5')?.signingKid) throw new Error('signing_kid_missing');

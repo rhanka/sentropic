@@ -26,10 +26,17 @@ export function probeReply(url, options = {}) {
     headers: { 'content-type': 'application/json', location: '/auth/login?continue=qualified' } });
 }
 if (import.meta.url === `file://${process.argv[1]}`) {
+  const issued = new Map(); // Shared across app and IdP, as in PostgreSQL custody.
   const server = createServer(async (req, res) => {
     let body = '';
     for await (const chunk of req) body += chunk;
     const reply = probeReply(new URL(req.url, `http://${req.headers.host}`).href, { method: req.method, headers: req.headers, body });
+    if (/email(App|Idp)$/.test(req.url) && reply.status === 200) {
+      const email = JSON.parse(body).email.trim().toLowerCase();
+      const recent = (issued.get(email) ?? []).filter(at => at > Date.now() - 600_000);
+      if (recent.length >= 3) { res.writeHead(429); res.end(); return; }
+      issued.set(email, [...recent, Date.now()]);
+    }
     res.writeHead(reply.status, { ...Object.fromEntries(reply.headers), connection: 'close' });
     res.end(await reply.text());
   });
