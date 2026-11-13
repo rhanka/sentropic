@@ -39,6 +39,14 @@ k8s owns that execution, qualification receipts, installation and activation.
 
 ## Round 2 data plane and export
 
+AMD-28 is PROPOSED, pending k8s co-signature and qualification. This archive
+ships `EXECUTION_NODE_PORTS_ENABLED=false` in agent.env. Absent, false or
+unrecognized values refuse ports creation and runtime launch with HTTP 409
+`ports_disabled`; only literal `true` enables it. After co-signature and both
+real-host gates PASS, k8s may set true and restart the service. Set false and
+restart to refuse new ports sandboxes without a new release; existing scopes
+require explicit stop/reconciliation. Other network policies continue as none.
+
 The updated archive adds authenticated `ANY /v1/ports/5173/*` and WebSocket
 upgrades. Only mTLS CN `data-plane:artifact-content` may use these routes.
 `X-Tenant-Id`, `X-Expected-Physical-Uid` and API-signed `X-Custody-Token` are
