@@ -71,6 +71,22 @@ test.describe('Chat composer image paste send', () => {
 
     const { context, page } = await createScopedPage(browser, workspaceId);
 
+    const seeded = await userApi.post(`/api/v1/chat/sessions?workspace_id=${workspaceId}`, { data: {} });
+    expect(seeded.ok()).toBeTruthy();
+    const previousSessionId = (await seeded.json()).sessionId;
+    let historyDelivered = false;
+    let releaseHistory!: () => void;
+    const heldHistory = new Promise<void>(resolve => { releaseHistory = resolve; });
+    let historyStarted!: () => void;
+    const waitingHistory = new Promise<void>(resolve => { historyStarted = resolve; });
+    await page.route(`**/api/v1/chat/sessions/${previousSessionId}/history*`, async route => {
+      const response = await route.fetch();
+      historyStarted();
+      await heldHistory;
+      await route.fulfill({ response });
+      historyDelivered = true;
+    });
+
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => {
       pageErrors.push(`${err.name}: ${err.message}\n${err.stack ?? ''}`);
@@ -80,6 +96,7 @@ test.describe('Chat composer image paste send', () => {
       await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
       await openChat(page);
+      await waitingHistory;
 
       const fileName = `pasted-image-${Date.now()}.png`;
       await pasteImageIntoComposer(page, fileName);
@@ -92,6 +109,11 @@ test.describe('Chat composer image paste send', () => {
       await expect(attachmentBand.locator('img')).toBeVisible({ timeout: 2_000 });
       // Upload completes: chip shows the ready-state mime type label.
       await expect(attachmentBand).toContainText('image/png', { timeout: 10_000 });
+      releaseHistory();
+      // Observe our held delivery even if the obsolete browser request was cancelled.
+      await expect.poll(() => historyDelivered, { timeout: 2_000 }).toBe(true);
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+      await expect(attachmentBand).toContainText('image/png', { timeout: 2_000 });
 
       // Send button becomes enabled (ready attachment, no text needed).
       const sendBtn = page.getByTestId('chat-composer-send-button');

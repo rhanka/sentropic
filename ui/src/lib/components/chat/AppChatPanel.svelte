@@ -1320,17 +1320,22 @@
 
   const ensureSessionDocumentTarget = async (): Promise<string> => {
     if (sessionId) return sessionId;
-
+    // An earlier auto-selection must not clear a new attachment's draft.
+    sessionHydrationGeneration += 1;
+    suppressSessionAutoSelect = true;
+    try {
     const context = detectContextFromRoute();
     const res = await apiPost<{ sessionId: string }>(
       chatSessionsUrl(),
       createChatSessionCreatePayload(context),
     );
-    suppressSessionAutoSelect = false;
     sessionId = res.sessionId;
     await loadSessions();
     await loadMessages(res.sessionId, { scrollToBottom: true });
     return res.sessionId;
+    } finally {
+      suppressSessionAutoSelect = false;
+    }
   };
 
   // Document host adapter — wraps REST upload/delete and docx download.
@@ -2317,10 +2322,12 @@
   };
 
   const loadSessions = async () => {
+    const requestedSessionId = sessionId;
     loadingSessions = true;
     errorMsg = null;
     try {
       const res = await chatCoreHost.fetchSessions();
+      if (sessionId !== requestedSessionId) return;
       sessions = (res.sessions ?? []) as ChatSession[];
       // If the current sessionId is stale (e.g. from a different workspace), clear it
       if (sessionId && !sessions.some((s) => s.id === sessionId) && messages.length === 0) {

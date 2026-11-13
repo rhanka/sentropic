@@ -1,0 +1,161 @@
+import { describe, expect, it, vi } from 'vitest';
+import { spawn, execFileSync } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { FakeRuntimeAdapter, RunscRuntimeAdapter, createExecutionNode, ExecutionNodeDaemon } from '../src/index.js';
+vi.mock('node:child_process', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, spawn: vi.fn(actual.spawn), execFileSync: vi.fn(actual.execFileSync) };
+});
+
+describe('runtime adapters', () => {
+  it.each(['delete', 'expiry'])('should release capacity after exit and collected scope cleanup (%s)', async mode => {
+    vi.useFakeTimers();
+    const destroy = vi.fn();
+    let scopeState = 'inactive';
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    vi.spyOn(adapter, 'exportOutput').mockResolvedValue(Buffer.from('archive'));
+    vi.mocked(execFileSync).mockImplementation((file, args) => {
+      if (file === 'runsc') return '[]';
+      if (args?.[0] === 'stop') throw new Error('Unit not loaded');
+      if (args?.includes('--property=ControlGroup')) return scopeState === 'active' ? '/live-scope' : '';
+      if (args?.includes('--property=ActiveState')) {
+        if (scopeState === 'unknown') throw new Error('systemd unavailable');
+        return scopeState;
+      }
+      throw new Error('unexpected system call');
+    });
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter();
+      queueMicrotask(() => { child.emit('spawn'); child.emit('exit', 0, null); });
+      return child as ReturnType<typeof spawn>;
+    });
+    const node = createExecutionNode();
+    const daemon = new ExecutionNodeDaemon({ ...node, adapter, nodeId: 'node', nodeInstanceId: 'instance', nodeEpoch: 1 });
+    const devScope = { kind: 'ui' as const, writable: ['ui/**'], refused: [], source: { repo: 'test', path: 'registry.ts', commit: 'abc' } };
+    const input = { commandId: 'create', ownership: { tenantId: 'immo' as const, poolOwned: false as const,
+      workspaceId: 'w', principalId: 'u', attemptId: 'a', purpose: 'build', generation: 1, custodyEpoch: 1 },
+      spec: { tenantId: 'immo' as const, profile: 'artifact-build', devScope, command: ['/bin/true'], baseMounts: [], quotaMiB: 512, quotaInodes: 1000, uid: 1000, gid: 1000,
+        physicalUid: 'collected', runtimeClass: 'gvisor' as const, network: 'none' as const, allowExec: true, allowPty: false, allowSnapshots: false } };
+    try {
+      const box = await daemon.createSandbox(input);
+      await daemon.promoteToRunning('immo', box.id, { commandId: 'start', devScope, uid: 1000, gid: 1000, quotaMiB: 1536 });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(box.state).toBe('stopped-output-retained');
+      expect(node.admission.reservedMiB('immo')).toBe(1536);
+      await daemon.exportArtifacts('immo', box.id, { commandId: 'export', devScope, spec: { subPath: 'ui/dist', buildId: 'b', maxBytes: 1000, presignedPutUrl: 'https://example.test' } });
+      if (mode === 'delete') for (scopeState of ['active', 'unknown']) {
+        await expect(daemon.deleteSandbox('immo', box.id, { commandId: `unsafe-${scopeState}`, devScope })).rejects.toThrow();
+        expect(destroy).not.toHaveBeenCalled();
+        expect(node.admission.reservedMiB('immo')).toBe(1536);
+      }
+      scopeState = 'inactive';
+      if (mode === 'delete') await daemon.deleteSandbox('immo', box.id, { commandId: 'delete', devScope });
+      else await vi.advanceTimersByTimeAsync(300_000);
+      expect(box.state).toBe('destroyed');
+      expect(destroy).toHaveBeenCalledOnce();
+      expect(node.admission.reservedMiB('immo')).toBe(0);
+      await expect(daemon.createSandbox({ ...input, commandId: 'next' })).resolves.toBeDefined();
+    } finally { vi.restoreAllMocks(); vi.useRealTimers(); }
+  });
+  it('should retain a successful exit before the first runsc running observation', async () => {
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy: () => {} });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    const onExit = vi.fn();
+    vi.mocked(execFileSync).mockImplementation(() => { throw new Error('no running state observed'); });
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter();
+      queueMicrotask(() => { child.emit('spawn'); child.emit('exit', 0, null); });
+      return child as ReturnType<typeof spawn>;
+    });
+    try {
+      await expect(adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'fast-success', mounts: [],
+        overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB: 1536, uid: 1000, gid: 1000, onExit }))
+        .resolves.toEqual({ runtimeId: 'runsc-immo-fast-success' });
+      expect(onExit).toHaveBeenCalledExactlyOnceWith(0);
+      // Successful termination still requires an independent scope-quiescence confirmation.
+      await expect(adapter.exportOutput('runsc-immo-fast-success', 'ui/dist')).rejects.toThrow('sandbox_not_quiesced');
+    } finally { vi.restoreAllMocks(); }
+  });
+  it('should reject a launcher failure after spawn instead of reporting running', async () => {
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/workspace', output: '/tmp/output', mounted: [] }), destroy: () => {} });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    const child = new EventEmitter();
+    vi.mocked(spawn).mockImplementation(() => {
+      queueMicrotask(() => { child.emit('spawn'); queueMicrotask(() => child.emit('exit', 1, null)); });
+      return child as ReturnType<typeof spawn>;
+    });
+    try {
+      await expect(adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'bad-start', mounts: [],
+        overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 }))
+        .rejects.toThrow();
+    } finally { vi.restoreAllMocks(); }
+  });
+  it('should start transient tenant scopes with protected warm memory and bounded build resources', async () => {
+    const adapter = new RunscRuntimeAdapter('runsc', { prepare: () => ({ path: '/tmp', workspace: '/tmp/w', output: '/tmp/o', mounted: [] }), destroy: () => {} });
+    vi.spyOn(adapter, 'hasRunsc').mockReturnValue(true);
+    const calls: string[][] = [];
+    vi.mocked(spawn).mockImplementation((_file, args) => {
+      calls.push(args as string[]); const child = new EventEmitter();
+      queueMicrotask(() => child.emit('error', new Error('fixture launch failure')));
+      return child as ReturnType<typeof spawn>;
+    });
+    try {
+      for (const quotaMiB of [704, 1536]) await expect(adapter.runSandbox({ tenantId: 'immo', sandboxUid: 'limits',
+        mounts: [], overlayUpper: '/tmp/upper', overlayWork: '/tmp/work', quotaMiB, uid: 1000, gid: 1000 })).rejects.toThrow();
+      expect(calls[0]).toEqual(expect.arrayContaining(['--scope', '--slice=builder-tenant-immo.slice',
+        '--property=MemoryLow=704M', '--property=CPUWeight=200', '--property=OOMPolicy=kill', '--property=TasksMax=512']));
+      expect(calls[1]).toEqual(expect.arrayContaining(['--property=MemoryHigh=1408M', '--property=CPUWeight=100', '--property=MemoryLow=0', '--property=TasksMax=1024']));
+      expect(calls.flat()).not.toContain('--property=MemoryOOMGroup=yes');
+      expect(calls.flat()).toContain('--root=/run/execution-node/runsc');
+    } finally { vi.restoreAllMocks(); }
+  });
+  it('runs, stops, exports and destroys with the fake adapter', async () => {
+    const adapter = new FakeRuntimeAdapter();
+    expect(adapter.hasRunsc()).toBe(false);
+    const { runtimeId } = await adapter.runSandbox({
+      tenantId: 'sentropic',
+      sandboxUid: 'u1',
+      mounts: [],
+      overlayUpper: '/upper',
+      overlayWork: '/work',
+      quotaMiB: 512,
+      uid: 1000,
+      gid: 1000,
+    });
+    expect(adapter.isLive(runtimeId)).toBe(true);
+    await adapter.stopSandbox(runtimeId);
+    expect(adapter.isLive(runtimeId)).toBe(false);
+    const bytes = await adapter.exportOutput(runtimeId, 'ui/dist');
+    expect(bytes.length).toBeGreaterThan(0);
+    await adapter.destroySandbox(runtimeId);
+  });
+
+  it('compiles the real runsc adapter but exercises it only where runsc exists', async () => {
+    const adapter = new RunscRuntimeAdapter('/nonexistent-runsc-binary');
+    expect(adapter.kind).toBe('runsc-systrap');
+    expect(adapter.hasRunsc()).toBe(false);
+    const args = adapter.runscArgs({
+      tenantId: 'immo',
+      sandboxUid: 'u2',
+      mounts: [{ source: '/bases/rootfs/x.erofs', target: '/bases/rootfs/base', readOnly: true }],
+      overlayUpper: '/upper',
+      overlayWork: '/work',
+      quotaMiB: 512,
+      uid: 1000,
+      gid: 1000,
+    });
+    expect(args).toContain('--network=none');
+    expect(args).toContain('--platform=systrap');
+    await expect(adapter.runSandbox({
+      tenantId: 'immo',
+      sandboxUid: 'u2',
+      mounts: [],
+      overlayUpper: '/upper',
+      overlayWork: '/work',
+      quotaMiB: 512,
+      uid: 1000,
+      gid: 1000,
+    })).rejects.toThrowError(/runsc/);
+  });
+});

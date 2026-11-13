@@ -801,7 +801,7 @@ jobs:
                 const run = concluded.get(chosen.id);
                 evidence.run = keep(run);
                 evidence.jobs = (await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, { ...context.repo,
-                  run_id: run.id, attempt_number: run.run_attempt, per_page: 100 })).map(job => ({ id: job.id, name: job.name,
+                  run_id: run.id, attempt_number: run.run_attempt, per_page: 30 })).map(job => ({ id: job.id, name: job.name,
                   status: job.status, conclusion: job.conclusion, run_id: job.run_id, run_attempt: job.run_attempt, html_url: job.html_url }));
                 const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
                   { ...context.repo, run_id: run.id, per_page: 100 });
@@ -1005,6 +1005,8 @@ jobs:
     if: always() && !cancelled() && needs.changes.outputs.tested_tree != 'true'
     steps:
       - uses: actions/checkout@v6
+      - name: Qualify standalone sandbox-node amendments
+        run: make -f Makefile -f apps/sandbox-node/checks.mk check-sandbox-node ENV=test-ci-sandbox-node
       - name: Require every selected API static program
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make ci-static-join CI_TYPECHECK_RESULT=${{ needs.api-static.result }} CI_LINT_RESULT=${{ needs.api-static.result }} CI_IDP_WEB_RESULT=${{ needs.idp-web-static.result }} ENV=test-ci-static
@@ -3915,7 +3917,7 @@ jobs:
               attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT) };
             const { data: run } = await github.rest.actions.getWorkflowRunAttempt(params);
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
-              { ...params, per_page: 100 });
+              { ...params, per_page: 30 });
             fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs,
               sourceSha: run.head_sha, workflowSha: process.env.GITHUB_WORKFLOW_SHA ?? null }, null, 2));
       - name: Check required CI results
@@ -3941,7 +3943,7 @@ jobs:
           script: |
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
               { ...context.repo, run_id: context.runId,
-                attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 100 });
+                attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 30 });
             if (jobs.filter(job => job.name !== 'delete-transport-artifacts')
               .some(job => job.status !== 'completed' || !['success', 'skipped'].includes(job.conclusion))) {
               core.info('Preserving transport artifacts for selective reruns after failure or cancellation.');
@@ -3995,7 +3997,7 @@ jobs:
             const { data: run } = await github.rest.actions.getWorkflowRunAttempt(
               { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT) });
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
-              { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 100 });
+              { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 30 });
             const manifest = JSON.parse(fs.readFileSync('tmp/ci-capacity/expected.json'));
             const expected = manifest.expected;
             const packages = expected.filter(row => row.job.startsWith('publish-') && !row.job.endsWith('-image'));
