@@ -17,6 +17,16 @@ async function open(f: Awaited<ReturnType<typeof fixture>>, path: string, websoc
   });
 }
 describe('fake agent routing and real custody stream guard', () => {
+  it.each(['ticket', 'principal', 'epoch', 'port'] as const)('should refuse %s even with a valid signed token', async kind => {
+    const f = await fixture();
+    if (kind === 'principal') f.setOwner('other-owner', 1);
+    if (kind === 'epoch') f.setOwner('principal', 2);
+    if (kind === 'port') f.setPort(8792);
+    const req = await open(f, `/v1/ports/${kind === 'port' ? 8792 : 5173}/src/main.ts`);
+    if (kind === 'ticket') req.setHeader('x-execution-ticket', 'forbidden');
+    const response = once(req, 'response'); req.end();
+    const [res] = await response; expect(res.statusCode).toBe(403); res.resume();
+  });
   it.each(['/src/main.ts', '/v1/ports/5000/src/main.ts', '/v1/ports/5173'])('should refuse an unbound data-plane route %s', async path => {
     const f = await fixture(); const req = await open(f, path);
     const response = once(req, 'response'); req.end();
