@@ -460,8 +460,12 @@ export class ExecutionNodeDaemon {
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/write`, sandbox.ownership);
     if (JSON.stringify(input.devScope) !== JSON.stringify(sandbox.devScope) || !sandbox.runtimeId) throw new ExecutionNodeError('command_id_payload_mismatch');
-    await this.adapter.writeFile(sandbox.runtimeId, path, Buffer.from(input.contentBase64, 'base64'), sandbox.devScope);
-    this.audit.record('sandbox.write', tenantId, id, path);
+    const runtimeId = sandbox.runtimeId;
+    return this.idempotent(tenantId, input.commandId, { method: 'POST', path: `/v1/sandboxes/${id}/write`,
+      bodySha256: sha256Hex(JSON.stringify(body)) }, async () => {
+      await this.adapter.writeFile(runtimeId, path, Buffer.from(input.contentBase64, 'base64'), sandbox.devScope);
+      this.audit.record('sandbox.write', tenantId, id, path);
+    });
   }
 
   async exportArtifacts(tenantId: ExecutionNodeTenantId, id: string, input: {

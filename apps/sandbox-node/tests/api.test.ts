@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createExecutionNode, generateTicketKeyPair, issueTicket, sha256Hex } from '../src/index.js';
 import { CustodyGuard } from '../src/custody.js';
 import { AgentApi } from '../src/api.js';
@@ -16,12 +16,15 @@ describe('agent lifecycle transport', () => {
       const custody = new CustodyGuard(join(dir, 'wal')); custody.heartbeat();
       const api = new AgentApi(node, custody);
       const ownership = { tenantId: 'immo' as const, poolOwned: false as const, workspaceId: 'ws', principalId: 'u', attemptId: 'a', purpose: 'build', generation: 1, custodyEpoch: 1 };
+      const tickets = new Map<string, ReturnType<typeof issueTicket>>();
       const call = (path: string, body: Record<string, unknown>, method = 'POST') => {
         const issuedAt = Date.now();
-        const ticket = issueTicket({ v: 1, tenantId: 'immo', commandId: String(body.commandId), method, path,
+        const requestKey = JSON.stringify({ method, path, body });
+        const ticket = tickets.get(requestKey) ?? issueTicket({ v: 1, tenantId: 'immo', commandId: String(body.commandId), method, path,
           bodySha256: sha256Hex(JSON.stringify(body)), targetNodeId: node.daemon.nodeId,
           expectedNodeInstanceId: 'instance', expectedNodeEpoch: 1, ownership,
           issuedAt: new Date(issuedAt).toISOString(), deadlineAt: new Date(issuedAt + 30_000).toISOString() }, keys.privateKeyPem);
+        tickets.set(requestKey, ticket);
         return api.dispatch({ path, body, method, tenantId: 'immo', role: 'control-plane', ticket });
       };
       const created = await call('/v1/sandboxes', { commandId: 'c', ownership, spec: { tenantId: 'immo', devScope,
@@ -30,7 +33,17 @@ describe('agent lifecycle transport', () => {
       await expect(call(`${path}/start`, { commandId: 'missing' })).rejects.toThrow(/devScope/);
       await expect(call(`${path}/start`, { commandId: 'changed', devScope: { ...devScope, writable: ['**'] } })).rejects.toThrow(/devScope/);
       await call(`${path}/start`, { commandId: 'run', devScope, uid: 1000, gid: 1000 });
-      await call(`${path}/write`, { commandId: 'write', devScope, path: '/workspace/ui/a.ts', contentBase64: Buffer.from('hello').toString('base64') });
+      const writes = vi.spyOn(node.adapter, 'writeFile');
+      const first = { commandId: 'write', devScope, path: '/workspace/ui/a.ts', contentBase64: Buffer.from('A').toString('base64') };
+      await call(`${path}/write`, first);
+      await call(`${path}/write`, { ...first, commandId: 'write-b', contentBase64: Buffer.from('B').toString('base64') });
+      await call(`${path}/write`, first);
+      expect(writes.mock.calls.map(args => args[2].toString())).toEqual(['A', 'B']);
+      for (const changed of [{ ...first, contentBase64: 'Qw==' }, { ...first, path: '/workspace/ui/b.ts' }]) {
+        await expect(call(`${path}/write`, changed)).rejects.toMatchObject({ code: 'command_id_payload_mismatch', status: 409 });
+      }
+      await expect(call(`${path}/stop`, { commandId: first.commandId, devScope, stop: { retainOutput: true } })).rejects.toMatchObject({ status: 409 });
+      expect(writes).toHaveBeenCalledTimes(2);
       await call(`${path}/stop`, { commandId: 'stop', devScope, stop: { retainOutput: true } });
       expect((await call(`${path}/export`, { commandId: 'export', devScope, spec: { subPath: 'ui/dist', buildId: 'b', maxBytes: 10000 } })).status).toBe(200);
       const revoked = await call(`${path}/revoke-custody`, { commandId: 'revoke', devScope, minCustodyEpoch: 2, reason: 'owner transfer' });
