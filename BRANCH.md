@@ -54,6 +54,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Compose the concrete node backend by default; missing B1 hydration inputs refuse allocation without disabling the authenticated route mount.
   - [x] Connect stateless forge/head coalescing and verified retained export into the selected backend; node mode never uses the codeload staging provider.
   - [x] Preserve existing Kubernetes clean semantics while allowing a node clean to return a fresh physical UID, persisted with a new route fence before build/wake.
+  - [x] Persist create intent before dispatch and replay it to reconcile uncertain creation; missing allocation rows are safe to remove. Replace stopped physical sandboxes on clean.
   - [x] Refuse provisioning whose tenant/principal/generation/session does not match authenticated runtime inputs.
 - [ ] Lot 2: Ed25519 tickets, ownership/devScope, identity/provenance pin and idempotent lifecycle.
   - [x] Add mTLS configuration/transport, canonical Ed25519 tickets and pinned identity/export verification.

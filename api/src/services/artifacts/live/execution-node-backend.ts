@@ -26,7 +26,8 @@ export interface ExecutionNodeInputs {
   forge: LivePorts['forge'];
   source: SupervisorSources['source'];
 }
-type Stored = { session: NodeSession; key: LiveKey; nodeInstanceId: string; nodeEpoch: number };
+type Stored = { session: NodeSession; key: LiveKey; nodeInstanceId: string; nodeEpoch: number;
+  pendingSpec?: ExecutionNodeSandboxSpec; createCommandId: string; revoking?: { epoch: number; commandId: string } };
 const unavailable = (): never => { throw new ExecutionNodeRefusal('node_base_hydration_unconfigured'); };
 const row = (runtime: LiveRuntime) => JSON.stringify(['execution-node', runtime.sessionId, runtime.generation, runtime.leaseEpoch]);
 
@@ -36,11 +37,18 @@ const row = (runtime: LiveRuntime) => JSON.stringify(['execution-node', runtime.
 export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: RemoteRows,
   inputs?: ExecutionNodeInputs): SandboxBackend {
   const queue = executionNodeQueue(); const subjects = new Map<string, NodeSession>();
-  const command = (runtime: LiveRuntime, op: string) => `${runtime.sessionId}:${runtime.leaseEpoch}:${op}`;
+  const command = (runtime: LiveRuntime, op: string) => `${runtime.sessionId}:${runtime.leaseEpoch}:${runtime.routeEpoch}:${op}`;
   async function stored(runtime: LiveRuntime) {
-    const value = await rows.read<Stored>(row(runtime));
+    let value = await rows.read<Stored>(row(runtime));
     if (!value || value.nodeInstanceId !== node.config.nodeInstanceId || value.nodeEpoch !== node.config.nodeEpoch) {
       throw new ExecutionNodeRefusal('node_runtime_unreconciled');
+    }
+    if (value.pendingSpec) {
+      const created = await node.create(value.session, value.pendingSpec, value.createCommandId);
+      if (typeof created.id !== 'string') throw new ExecutionNodeRefusal('invalid_node_response');
+      value = { ...value, session: { ...value.session, physicalUid: created.id }, pendingSpec: undefined };
+      const next = value;
+      await rows.update<Stored, void>(row(runtime), () => ({ next, result: undefined }));
     }
     subjects.set(runtime.podName, value.session); return value;
   }
@@ -49,7 +57,7 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
     if (status?.state === 'creating') await node.mutate(session, 'start', command(runtime, 'start'), { uid: 1000, gid: 1000 });
     else if (status?.state !== 'running') throw new ExecutionNodeRefusal('node_runtime_not_running');
   }
-  return {
+  const backend: SandboxBackend = {
     pods: {
       async ensure(key, runtime) {
         let value = await rows.read<Stored>(row(runtime)); const adopted = !!value;
@@ -59,9 +67,7 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
             || prepared.session.ownership.principalId !== runtime.ownerId
             || prepared.session.ownership.generation !== runtime.generation
             || prepared.session.ownership.sessionId !== runtime.sessionId) throw new ExecutionNodeRefusal('invalid_node_session');
-          const created = await node.create(prepared.session, prepared.spec, command(runtime, 'create'));
-          if (typeof created.id !== 'string') throw new ExecutionNodeRefusal('invalid_node_response');
-          value = { key, session: { ...prepared.session, physicalUid: created.id },
+          value = { key, session: prepared.session, pendingSpec: prepared.spec, createCommandId: command(runtime, 'create'),
             nodeInstanceId: node.config.nodeInstanceId, nodeEpoch: node.config.nodeEpoch };
           const next = value;
           await rows.update<Stored, void>(row(runtime), current => {
@@ -69,7 +75,8 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
             return { next, result: undefined };
           });
         }
-        const status = await node.status((await stored(runtime)).session);
+        value = await stored(runtime);
+        const status = await node.status(value.session);
         if (!status || status.state === 'destroyed') throw new ExecutionNodeRefusal('node_runtime_not_running');
         return { uid: value.session.physicalUid, adopted };
       },
@@ -79,6 +86,7 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
       },
       async describe() { return undefined; },
       async remove(_key, runtime) {
+        if (!await rows.read<Stored>(row(runtime))) return;
         const value = await stored(runtime); let session = value.session; const status = await node.status(session);
         if (!status || status.state === 'destroyed') return;
         session = await revokeNodeCustody(node, session, session.ownership.custodyEpoch + 1, 'runtime_removed', command(runtime, 'revoke'));
@@ -92,7 +100,17 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
     },
     cache: { acquire: (source, runtime) => inputs?.cache.acquire(source, runtime) ?? unavailable() },
     worker: {
-      clean: runtime => inputs?.worker.clean(runtime) ?? unavailable(),
+      async clean(runtime) {
+        const value = await stored(runtime); const status = await node.status(value.session);
+        let uid: string | undefined;
+        if (!status || status.state !== 'creating') {
+          await backend.pods.remove(value.key, runtime);
+          await rows.update<Stored, void>(row(runtime), () => ({ next: undefined, result: undefined }));
+          uid = (await backend.pods.ensure(value.key, runtime)).uid;
+        }
+        const cleaned = await (inputs?.worker.clean(runtime) ?? unavailable());
+        return uid ? { uid } : cleaned;
+      },
       prepare: (runtime, source, cache) => inputs?.worker.prepare(runtime, source, cache) ?? unavailable(),
       restore: (runtime, draft) => inputs?.worker.restore(runtime, draft) ?? unavailable(),
       prebundle: runtime => inputs?.worker.prebundle(runtime) ?? unavailable(),
@@ -124,4 +142,5 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
       async hold() {}, async cancel() {}, async status() { return []; },
     },
   };
+  return backend;
 }
