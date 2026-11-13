@@ -17,20 +17,19 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - `api/src/config*`
   - `api/Dockerfile` (BRB0A-EX1)
   - `Makefile` (BRB0A-EX4: API_VERSION inputs only)
-  - `apps/sandbox-node/src/api.ts` (BRB0A-EX2)
-  - `apps/sandbox-node/src/service.ts` (BRB0A-EX2)
-  - `apps/sandbox-node/src/daemon.ts` (BRB0A-EX3)
+  - `apps/sandbox-node/**` (BRB0A-EX5)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `apps/**`
+  - `apps/artifact-content/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 - **Exception process**:
   - [x] Record BRB0A-EXn rationale, impact and rollback before an exception.
 
 ## Feedback Loop
+- [x] BRB0A-EX5: Round 2 explicitly authorizes agent data-plane, provenance and tests. Impact: new agent archive requires operator qualification/install before G-A. Rollback: keep execution-node disabled and use Kubernetes.
 - [x] BRB0A-EX4: hash the sandbox-node source copied by BRB0A-EX1 into API_VERSION. CI run 43435868900 caught the omitted input. Impact: source changes now invalidate the API image tag; no workflow or runtime change. Rollback: remove this input together with the EX1 COPY.
 - [x] BRB0A-EX1: copy sandbox-node into the API tooling source stage so API type imports and hermetic contract tests use the actual normative agent code. Impact: one source COPY, no runtime activation or dependency change. Rollback: remove this COPY with the adapter tests/types.
 - [x] BRB0A-EX2: deliver the already-frozen sandbox GET needed to resume natural-stop/export/upload failures without mutating state blindly. Impact: authenticated control-plane tenant status only; k8s must deploy a new agent artifact before use. Rollback: revert these two agent-file changes and keep node backend disabled.
@@ -49,6 +48,9 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 - [x] Hermetic qualification only; Focus live/publish is S1-B1 and warm claim/L4 is S1-B2.
 
 ## Plan / Todo (lot-based)
+- [ ] Round 2: publish Custody RPC contract, implement authoritative authenticated issue/watch-poll and agent HTTP/WS custody enforcement.
+- [ ] Round 2: fix review findings 2-7 with persisted controller export recovery and bounded heartbeat leadership.
+- [ ] Round 2: hermetic real-agent/RPC E2E, archive SHA256SUMS, exact-head green CI and report.
 - [x] Lot 0: read packet/addendum/rules/frozen contract; check existing branch, disk and ports.
 - [x] Lot 1: SandboxBackend seam, execution-node configuration and authenticated HTTPS transport.
   - [x] Select backend explicitly, preserve default Kubernetes composition, inject selected ports into existing controller.
