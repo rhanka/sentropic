@@ -25,6 +25,8 @@ export function nodeCertificates() {
   const ca = certificate('test-ca', root.publicKey, 'test-ca', root.privateKey, 1, true);
   return { ca, server: { cert: certificate('localhost', server.publicKey, 'test-ca', root.privateKey, 2),
     key: server.privateKey.export({ type: 'pkcs8', format: 'pem' }) },
+    dataPlane: { cert: certificate('data-plane:artifact-content', client.publicKey, 'test-ca', root.privateKey, 4),
+      key: client.privateKey.export({ type: 'pkcs8', format: 'pem' }) },
     client: { cert: certificate('control-plane:sentropic-api', client.publicKey, 'test-ca', root.privateKey, 3),
       key: client.privateKey.export({ type: 'pkcs8', format: 'pem' }) } };
 }
