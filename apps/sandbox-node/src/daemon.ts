@@ -228,7 +228,10 @@ export class ExecutionNodeDaemon {
   async disablePorts(): Promise<void> {
     await Promise.all([...this.sandboxes.values()].filter(box => box.network === 'ports' && box.state !== 'destroyed')
       .map(box => this.transition(box.id, async () => {
-        if (box.runtimeId) await this.adapter.destroySandbox(box.runtimeId);
+        if (box.runtimeId) {
+          box.state = 'stopping'; box.allProcessesExited = await this.adapter.stopSandbox(box.runtimeId);
+          await this.adapter.destroySandbox(box.runtimeId);
+        }
         box.runtimeId = undefined; box.state = 'destroyed'; box.allProcessesExited = true;
         this.releaseSlot(box); this.audit.record('sandbox.ports_disabled', box.tenantId, box.id);
       })));
@@ -370,15 +373,16 @@ export class ExecutionNodeDaemon {
         uid: input.uid,
         gid: input.gid,
       }).catch(async error => {
+        sandbox.runtimeId = (error as { runtimeId?: string }).runtimeId;
+        sandbox.state = 'failed';
         if (error instanceof ExecutionNodeError && error.code === 'network_isolation_violation') {
           this.audit.record('sandbox.network_isolation_violation', tenantId, id);
-          const runtimeId = (error as { runtimeId?: string }).runtimeId;
-          if (runtimeId) await this.adapter.destroySandbox(runtimeId);
+          if ((error as { cleanupFailed?: boolean }).cleanupFailed) throw error;
+          if (sandbox.runtimeId) await this.adapter.destroySandbox(sandbox.runtimeId);
           sandbox.runtimeId = undefined; sandbox.state = 'destroyed'; sandbox.allProcessesExited = true;
           this.releaseSlot(sandbox); throw error;
         }
-        sandbox.runtimeId = (error as { runtimeId?: string }).runtimeId;
-        sandbox.state = 'failed'; throw error;
+        throw error;
       });
       sandbox.runtimeId = runtimeId;
       sandbox.state = 'running';

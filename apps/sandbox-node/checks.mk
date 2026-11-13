@@ -1,6 +1,11 @@
 # Standalone qualification: no stack, no host dependencies, no deployment.
 SANDBOX_NODE_IMAGE := node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2
 SANDBOX_NODE_NPM_CACHE ?= $(HOME)/.cache/sentropic-sandbox-node/npm
+.PHONY: scope-check
+# Same host-harness C2 producer as the root target, without starting Docker.
+scope-check:
+	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
+	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
 .PHONY: check-sandbox-node
 qualify-sandbox-node-disk:
 	@case "$(ENV)" in test-*) ;; *) echo 'isolated test ENV required'; exit 1;; esac

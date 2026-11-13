@@ -44,12 +44,14 @@ int main(int argc, char **argv) {
     puts("READY kernel TCP/UDP witnesses IPv4/IPv6"); fflush(stdout);
     for (;;) pause();
   }
-  if (argc != 4 || strcmp(argv[1], "udp")) return 2;
+  if (argc != 4 || (strcmp(argv[1], "udp") && strcmp(argv[1], "udp-egress"))) return 2;
   struct sockaddr_storage a; int n = address(argv[2], atoi(argv[3]), &a);
   if (!n) return 2;
   int fd = socket(a.ss_family, SOCK_DGRAM, 0);
   if (fd < 0) return 2;
   if (connect(fd, (void *)&a, n) || send(fd, "qualification", 13, 0) < 0) return denied(errno) ? 0 : 1;
+  /* A remote ICMP port-unreachable proves delivery, not egress isolation. */
+  if (!strcmp(argv[1], "udp-egress")) return 1;
   struct pollfd pollfd = { .fd = fd, .events = POLLIN | POLLERR };
   if (poll(&pollfd, 1, 500) <= 0) return 1;
   char bytes[32]; int result = recv(fd, bytes, sizeof(bytes), MSG_DONTWAIT);

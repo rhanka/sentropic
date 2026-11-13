@@ -65,6 +65,10 @@
 - [x] Archive smoke regression: isolation worker reports failure through its supervisor once, preserving the authorization-refusal smoke contract.
 - [x] Native probe verification: unprivileged Docker controls prove raw/packet denial, TCP witnesses and UDP positive/negative behavior on IPv4/IPv6.
 - [x] Saturation protocol: preserve 429 ports_saturated on WebSocket handshakes as well as HTTP; included in the burst gate.
+- [x] Revocation diagnostics include measured cut latency without changing the 250ms contract.
+- [x] Security review fixes: check ss exit status; retain cleanup identity/reservations after failure; close relays and stop cgroups before requiring a working runsc binary.
+- [x] UDP evidence: external targets require local refusal before successful send; remote ICMP port-unreachable cannot qualify isolation.
+- [x] Standalone scope-check uses the installed host harness C2 producer with the same staged/unstaged inventory, avoiding Docker for mechanical checks.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.

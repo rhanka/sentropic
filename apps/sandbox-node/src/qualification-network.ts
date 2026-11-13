@@ -77,7 +77,8 @@ function refused(host,port){return new Promise(resolve=>{
  const names=Object.keys(os.networkInterfaces());check('only lo exists',names.length===1&&names[0]==='lo');
  for(const [host,port] of ${JSON.stringify(targets)})check('refused '+host+':'+port,await refused(host,port));
  for(const [host,port] of ${JSON.stringify([...targets, ['1.1.1.1', 53], ['2606:4700:4700::1111', 53]])}){
-  let ok=false;try{cp.execFileSync('/usr/local/bin/network-probe',['udp',host,String(port)],{timeout:1000,stdio:'pipe'});ok=true}catch{}
+  const mode=host.startsWith('127.')||host==='::1'?'udp':'udp-egress';
+  let ok=false;try{cp.execFileSync('/usr/local/bin/network-probe',[mode,host,String(port)],{timeout:1000,stdio:'pipe'});ok=true}catch{}
   check('UDP refused '+host+':'+port,ok);
  }
  for(const result of JSON.parse(cp.execFileSync('/usr/local/bin/network-probe',['raw'],{timeout:1000,encoding:'utf8'})))check(result.name,result.ok);
