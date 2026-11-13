@@ -60,7 +60,9 @@ export function executionNodeTransport(config: ExecutionNodeConfig): NodeTranspo
     });
     // Four outstanding jobs, max 120s each: a create may wait behind three services.
     // This is an admission transport deadline, independent of test/UI timeouts.
-    req.setTimeout(method === 'POST' && path === '/v1/sandboxes' ? 365_000 : 5000, () => req.destroy());
+    const timeout = method === 'POST' && path === '/v1/sandboxes' ? 365_000
+      : method === 'PUT' && path.endsWith('/bases') ? 125_000 : path === '/v1/node/heartbeat' ? 5000 : 6500;
+    req.setTimeout(timeout, () => req.destroy());
     req.on('error', () => reject(new ExecutionNodeRefusal('node_transport_failure')));
     req.end(body);
   }).catch(() => { throw new ExecutionNodeRefusal('node_transport_failure'); });
