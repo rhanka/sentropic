@@ -15,8 +15,11 @@ export function createDataPlane(options: {
   sandbox(tenant: ExecutionNodeSignedCustodyToken['tenantId'], uid: string): SandboxRecord | undefined;
   target(sandbox: SandboxRecord, port: number): Promise<RequestOptions>;
   diagnostic?: RuntimeDiagnostic;
+  portsEnabled?: () => boolean;
 }) {
+  const streams = new Set<() => void>();
   function authorize(req: IncomingMessage, role: string) {
+    if (options.portsEnabled && !options.portsEnabled()) throw new ExecutionNodeError('ports_disabled');
     if (role !== 'data-plane' || req.headers['x-execution-ticket'] !== undefined) throw new ExecutionNodeError('custody_revoked');
     const match = /^\/v1\/ports\/(\d+)(\/[^#]*)$/.exec(req.url ?? '');
     const tenant = req.headers['x-tenant-id'], uid = req.headers['x-expected-physical-uid'];
@@ -46,6 +49,7 @@ export function createDataPlane(options: {
     !['x-custody-token', 'x-tenant-id', 'x-expected-physical-uid', 'x-execution-ticket',
       'authorization', 'cookie', 'proxy-authorization', 'forwarded'].includes(name) && !name.startsWith('x-forwarded-')));
   return {
+    cutPorts() { for (const close of streams) close(); streams.clear(); },
     async http(req: IncomingMessage, res: ServerResponse, role: string) {
       let outgoing: ReturnType<typeof request> | undefined;
       let detach = () => {};
@@ -59,19 +63,22 @@ export function createDataPlane(options: {
           upstream.on('error', () => res.destroy());
         });
         outgoing.on('error', () => { options.diagnostic?.('upstream HTTP failure', 'UDS/port-forward/5173 request failed'); res.destroy(); });
-        detach = options.custody.attach(admitted.claims, () => { outgoing?.destroy(); res.destroy(); });
-        res.once('close', () => { detach(); outgoing?.destroy(); });
+        const close = () => { outgoing?.destroy(); res.destroy(); };
+        streams.add(close);
+        detach = options.custody.attach(admitted.claims, close);
+        res.once('close', () => { streams.delete(close); detach(); outgoing?.destroy(); });
         req.pipe(outgoing);
       } catch (error) {
         options.diagnostic?.('HTTP authorization/target failure', error instanceof ExecutionNodeError ? error.code : 'target unavailable');
-        detach(); outgoing?.destroy(); res.writeHead(error instanceof ExecutionNodeError ? error.status : 502).end();
+        detach(); outgoing?.destroy(); res.writeHead(error instanceof ExecutionNodeError ? error.status : 502)
+          .end(JSON.stringify({ error: error instanceof ExecutionNodeError ? error.code : 'target_unavailable' }));
       }
     },
     async upgrade(req: IncomingMessage, socket: Duplex, head: Buffer, role: string) {
       let outgoing: ReturnType<typeof request> | undefined;
       let upstreamSocket: Duplex | undefined; let detach = () => {}; let closing = false;
       const close = () => {
-        if (closing) return; closing = true; detach();
+        if (closing) return; closing = true; detach(); streams.delete(close);
         // Unmasked server close frame, status 1008. End before destroying the tunnel.
         if (upstreamSocket) socket.end(Buffer.from([0x88, 0x02, 0x03, 0xf0]));
         else socket.destroy();
@@ -83,8 +90,9 @@ export function createDataPlane(options: {
         const target = await options.target(admitted.sandbox, admitted.port);
         authorize(req, role);
         outgoing = request({ ...target, path: admitted.path, method: 'GET', headers: headers(req), agent: false });
+        streams.add(close);
         detach = options.custody.attach(admitted.claims, close);
-        socket.once('close', () => { detach(); upstreamSocket?.destroy(); outgoing?.destroy(); });
+        socket.once('close', () => { streams.delete(close); detach(); upstreamSocket?.destroy(); outgoing?.destroy(); });
         outgoing.once('upgrade', (response, upstream, upstreamHead) => {
           options.diagnostic?.('upstream WS upgrade', String(response.statusCode));
           try { authorize(req, role); } catch { upstream.destroy(); close(); return; }
