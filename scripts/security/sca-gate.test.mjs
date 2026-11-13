@@ -112,7 +112,7 @@ test('should surface fetch failures and paginate full pages', async () => {
 });
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const EXPECTED_COVERED = ['.', 'api', 'apps/auth-idp/web', 'e2e', 'e2e/npm-toolchain', 'packages/llm-mesh/seat-tools',
+const EXPECTED_COVERED = ['.', 'api', 'apps/auth-idp/web', 'apps/sandbox-node/k8s/build-tools', 'e2e', 'e2e/npm-toolchain', 'packages/llm-mesh/seat-tools',
   'spec/ci-cd-ten-minutes/dossier', 'tools/scw-tem-mock', 'ui'];
 
 test('should pin the real covered lock set and have no manifest-less covered lock', () => {
