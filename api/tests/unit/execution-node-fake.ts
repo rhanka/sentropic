@@ -26,13 +26,14 @@ export const sandboxSpec = (s: NodeSession) => ({ tenantId: s.ownership.tenantId
 export async function fakeExecutionNode(target?: (port: number) => Promise<RequestOptions>) {
   const directory = mkdtempSync(join(tmpdir(), 'api-node-contract-'));
   const keys = generateKeyPairSync('ed25519'); const provenance = generateKeyPairSync('ed25519');
+  const custodyKeys = generateKeyPairSync('ed25519');
   let clock = Date.now(); const now = () => clock;
   const node = createExecutionNode({ ticketPublicKeyPem: keys.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
     nodeInstanceId: 'instance', nodeEpoch: 2, now });
   const custody = new CustodyGuard(join(directory, 'wal'), now); const api = new AgentApi(node, custody);
   const control = new NodeControl('instance', 2, custody, { authorize() {} }, now);
   const tls = nodeCertificates(); const calls: Array<{ path: string; tenant?: string; body?: unknown }> = [];
-  const data = createDataPlane({ publicKey: keys.publicKey, custody,
+  const data = createDataPlane({ publicKey: custodyKeys.publicKey, custody,
     sandbox: (tenant, uid) => node.daemon.peekSandbox(tenant, uid),
     target: async (_sandbox, port) => { if (!target) throw new Error('unconfigured'); return target(port); } });
   const server = createAgentServer({ ca: tls.ca, ...tls.server }, async (req, res, role) => {
@@ -66,7 +67,7 @@ export async function fakeExecutionNode(target?: (port: number) => Promise<Reque
   await new Promise<void>(resolve => server.listen(0, resolve));
   const address = server.address() as { port: number };
   const config: ExecutionNodeConfig = { url: new URL(`https://localhost:${address.port}`), nodeId: node.daemon.nodeId,
-    nodeInstanceId: 'instance', nodeEpoch: 2, provenanceKey: provenance.publicKey, ticketKey: keys.privateKey,
+    nodeInstanceId: 'instance', nodeEpoch: 2, provenanceKey: provenance.publicKey, ticketKey: keys.privateKey, custodyKey: custodyKeys.privateKey,
     tls: { ca: Buffer.from(tls.ca), cert: Buffer.from(tls.client.cert), key: Buffer.from(tls.client.key) } };
   const transport = executionNodeTransport(config); const adapter = new ExecutionNodeAdapter(config, transport, now);
   return { adapter, config, node, custody, calls, now, tls, keys, server, advance(ms: number) { clock += ms; },

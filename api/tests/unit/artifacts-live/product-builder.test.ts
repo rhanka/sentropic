@@ -71,6 +71,7 @@ describe('product builder composition (ARTIFACT_BUILDER_ENABLED)', () => {
       ARTIFACT_EXECUTION_NODE_INSTANCE_ID: 'instance', ARTIFACT_EXECUTION_NODE_EPOCH: '2',
       ARTIFACT_EXECUTION_NODE_PROVENANCE_PUBLIC_KEY_B64: Buffer.from(keys.publicKey.export({ type: 'spki', format: 'pem' })).toString('base64'),
       ARTIFACT_EXECUTION_TICKET_ED25519_KEY_B64: Buffer.from(keys.privateKey.export({ type: 'pkcs8', format: 'pem' })).toString('base64'),
+      ARTIFACT_CUSTODY_ED25519_KEY_B64: Buffer.from(generateKeyPairSync('ed25519').privateKey.export({ type: 'pkcs8', format: 'pem' })).toString('base64'),
       SANDBOX_MTLS_CA_CERT_B64: Buffer.from('synthetic').toString('base64'),
       SANDBOX_MTLS_CONTROL_PLANE_CERT_B64: Buffer.from('synthetic').toString('base64'),
       SANDBOX_MTLS_CONTROL_PLANE_KEY_B64: Buffer.from('synthetic').toString('base64') }, d);

@@ -6,7 +6,7 @@ export type NodeTransport = (method: string, path: string, body?: Buffer,
   headers?: Record<string, string>, signal?: AbortSignal) => Promise<NodeReply>;
 export interface ExecutionNodeConfig {
   url: URL; nodeId: string; nodeInstanceId: string; nodeEpoch: number;
-  provenanceKey: KeyObject; ticketKey: KeyObject;
+  provenanceKey: KeyObject; ticketKey: KeyObject; custodyKey: KeyObject;
   tls: { ca: Buffer; cert: Buffer; key: Buffer };
 }
 export class ExecutionNodeRefusal extends Error {
@@ -38,14 +38,19 @@ export function executionNodeConfig(env: Env): ExecutionNodeConfig {
       !== '74b5cd02287bead58bf4e27948dc7e2150d80ca5a20924d289325b95f6bc4aaa') {
     throw new ExecutionNodeRefusal('invalid_config:ARTIFACT_EXECUTION_NODE_PROVENANCE_PUBLIC_KEY_B64');
   }
+  const ticketKey = parse('ARTIFACT_EXECUTION_TICKET_ED25519_KEY_B64', value => ed25519(createPrivateKey(Buffer.from(value, 'base64'))));
+  const custodyKey = parse('ARTIFACT_CUSTODY_ED25519_KEY_B64', value => {
+    const key = ed25519(createPrivateKey(Buffer.from(value, 'base64')));
+    if (createPublicKey(key).export({ type: 'spki', format: 'der' }).equals(createPublicKey(ticketKey).export({ type: 'spki', format: 'der' }))) throw new Error();
+    return key;
+  });
   return { url, nodeId: required('ARTIFACT_EXECUTION_NODE_ID'),
     nodeInstanceId,
     nodeEpoch: parse('ARTIFACT_EXECUTION_NODE_EPOCH', value => {
       const epoch = Number(value); if (!Number.isSafeInteger(epoch) || epoch < 1) throw new Error(); return epoch;
     }),
     provenanceKey,
-    ticketKey: parse('ARTIFACT_EXECUTION_TICKET_ED25519_KEY_B64', value =>
-      ed25519(createPrivateKey(Buffer.from(value, 'base64')))),
+    ticketKey, custodyKey,
     tls: { ca: Buffer.from(required('SANDBOX_MTLS_CA_CERT_B64'), 'base64'),
       cert: Buffer.from(required('SANDBOX_MTLS_CONTROL_PLANE_CERT_B64'), 'base64'),
       key: Buffer.from(required('SANDBOX_MTLS_CONTROL_PLANE_KEY_B64'), 'base64') } };

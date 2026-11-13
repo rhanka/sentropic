@@ -327,7 +327,8 @@ agent/rootfs digest when ready. No install/restart is performed by this lane.
 
 | Key | Holder / VM path | Rotation |
 | --- | --- | --- |
-| Execution ticket/token Ed25519 | Sentropic control plane private key; VM public SPKI only at `/etc/execution-node/keys/execution-ticket.ed25519.pub.pem` (`AGENT_TICKET_PUBLIC_KEY`) | Control plane supplies the public key before installation; replace config and restart on rotation |
+| Execution ticket Ed25519 | Sentropic control plane private key; VM public SPKI only at `/etc/execution-node/keys/execution-ticket.ed25519.pub.pem` (`AGENT_TICKET_PUBLIC_KEY`) | Control plane supplies the public key before installation; replace config and restart on rotation |
+| Custody token Ed25519 | Separate API private key, base64 PKCS#8 PEM in `ARTIFACT_CUSTODY_ED25519_KEY_B64`; VM public SPKI only at `/etc/execution-node/keys/custody.ed25519.pub.pem` (`CUSTODY_PUBLIC_KEY`) | Conductor provisions a new pair; k8s installs public PEM, root-owned 0644; coordinate API/agent rollout and rotations |
 | Operator ticket Ed25519 | k8s private key; shipped SPKI `/etc/execution-node/keys/operator-ticket.ed25519.pub.pem` | 365 days; `AGENT_OPERATOR_PUBLIC_KEYS` accepts one or two comma-separated public-key paths for overlap; restart config, then retire old key after 60 s |
 | Node provenance Ed25519 | k8s generates at install; PKCS#8 PEM `/etc/execution-node/keys/node-provenance.ed25519`, root 0400 | Rotate annually and on every rebuild, with public revocation and rebuild on compromise; k8s coordinates control-plane pin registration; never copied to an `.env` or release |
 
