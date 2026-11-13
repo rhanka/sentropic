@@ -45,4 +45,5 @@
 - [x] Lot 4a: produce .tmp/rv/ecosystem-compare/compare.html before any PR; stop for conductor/owner review.
 - [x] Reproducible preflight uses published DS static card/zone renderers and the embedded font metrics.
 - [x] Export, validate and deliver refuse the diagnostic candidate; portable build and four portability tests pass.
+- [x] Diagnostic JSON reads the installed DS version for the future dependency-only bump.
 - [ ] Lot 4b: after accepted comparison and passing local gates, push, open PR and verify exact-head CI; conductor merges.
