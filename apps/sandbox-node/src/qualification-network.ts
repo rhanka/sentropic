@@ -3,6 +3,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:net';
 import { isIP } from 'node:net';
+import { createSocket } from 'node:dgram';
 
 export type NetworkTarget = readonly [host: string, port: number];
 export const hostListeners = () => execFileSync('ss', ['-H', '-ltnup'],
@@ -45,6 +46,7 @@ export function qualificationHostAddresses(): string[] {
 /** Positive controls on the HOST; binding failure invalidates the gate. */
 export async function hostNetworkWitnesses() {
   const servers: Server[] = [];
+  const datagrams: ReturnType<typeof createSocket>[] = [];
   try {
     for (const host of ['127.0.0.1', '::1']) {
       const server = createServer(socket => socket.end('HOST-WITNESS'));
@@ -52,10 +54,12 @@ export async function hostNetworkWitnesses() {
       await new Promise<void>((resolve, reject) => {
         server.once('error', reject); server.listen({ host, port: 8443, ipv6Only: true }, resolve);
       });
+      const udp = createSocket({ type: host === '::1' ? 'udp6' : 'udp4', ipv6Only: true }); datagrams.push(udp);
+      await new Promise<void>((resolve, reject) => { udp.once('error', reject); udp.bind(8443, host, resolve); });
     }
-    return { close: () => Promise.all(servers.map(server => new Promise<void>((resolve, reject) =>
-      server.close(error => error ? reject(error) : resolve())))) };
-  } catch (error) { for (const server of servers) server.close(); throw error; }
+    return { close: () => Promise.all([...servers.map(server => new Promise<void>((resolve, reject) =>
+      server.close(error => error ? reject(error) : resolve()))), ...datagrams.map(udp => new Promise<void>(resolve => udp.close(resolve)))]) };
+  } catch (error) { for (const server of servers) server.close(); for (const udp of datagrams) { try { udp.close(); } catch {} } throw error; }
 }
 
 export function networkTargets(hosts: string[], otherTenantHost: string): NetworkTarget[] {
@@ -95,6 +99,27 @@ function refused(host,port){return new Promise(resolve=>{
 export const tenantWitnessHost = (tenant: string) => tenant === 'sentropic' ? '127.77.0.2' : '127.77.0.3';
 export const networkProbeCount = (targets: NetworkTarget[]) => targets.length * 2 + 8;
 export function tenantWitnessScript(tenant: string): string {
-  return `const n=require('node:net');for(const host of ['127.0.0.1','${tenantWitnessHost(tenant)}'])
-    n.createServer(s=>s.end('${tenant}')).listen(5173,host);`;
+  return `const n=require('node:net'),d=require('node:dgram');let deliveries=0,ready=0;
+    function listening(){if(++ready===4)console.log('READY tenant TCP/UDP')}
+    for(const host of ['127.0.0.1','${tenantWitnessHost(tenant)}']){
+      n.createServer(s=>s.end('${tenant}:'+deliveries)).listen(5173,host,listening);
+      const u=d.createSocket('udp4');u.on('message',(bytes,peer)=>{
+        if(bytes.toString()!=='self-control')deliveries++;
+        u.send('${tenant}:'+deliveries,peer.port,peer.address);
+      });u.bind(5173,host,listening);
+    }`;
+}
+
+/** Positive self-controls bracket cross-tenant probes; any delivered datagram fails. */
+export function tenantWitnessCheck(tenant: string): string {
+  return `const assert=require('node:assert/strict'),n=require('node:net'),d=require('node:dgram');
+    const timer=setTimeout(()=>process.exit(1),750),host='${tenantWitnessHost(tenant)}';
+    let done=0;function check(bytes){assert.equal(bytes.toString(),'${tenant}:0');if(++done===2)clearTimeout(timer)}
+    const tcp=n.connect(5173,host);tcp.on('error',()=>process.exit(1));tcp.on('data',check);
+    const udp=d.createSocket('udp4');udp.on('error',()=>process.exit(1));
+    udp.on('message',bytes=>{check(bytes);udp.close()});udp.send('self-control',5173,host);`;
+}
+export function verifyTenantWitness(uid: string, tenant: string): void {
+  execFileSync('runsc', ['--root=/run/execution-node/runsc', 'exec', `sandbox-${uid}`,
+    '/usr/local/bin/node', '-e', tenantWitnessCheck(tenant)], { timeout: 1000, killSignal: 'SIGKILL', stdio: 'pipe' });
 }

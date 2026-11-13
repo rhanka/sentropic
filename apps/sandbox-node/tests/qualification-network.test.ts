@@ -1,10 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runInNewContext } from 'node:vm';
 import { EventEmitter } from 'node:events';
-import { networkIsolationProbe, networkProbeCount, networkTargets, tenantWitnessHost } from '../src/qualification-network.js';
+import { networkIsolationProbe, networkProbeCount, networkTargets, tenantWitnessHost, tenantWitnessScript, tenantWitnessCheck } from '../src/qualification-network.js';
+import { spawn, spawnSync } from 'node:child_process';
+import { createSocket } from 'node:dgram';
+import { once } from 'node:events';
 import { requireIsolationResults } from '../src/isolation-probe.js';
 
 describe('real-host network probes', () => {
+  it('should positively control TCP/UDP witnesses and reject a delivered cross-tenant datagram', async () => {
+    const child = spawn(process.execPath, ['-e', tenantWitnessScript('immo')], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const exited = once(child, 'exit');
+    const timer = setTimeout(() => child.kill('SIGKILL'), 3000);
+    try {
+      await Promise.race([once(child.stdout, 'data'), exited.then(() => { throw new Error('witness exited'); })]);
+      const check = () => spawnSync(process.execPath, ['-e', tenantWitnessCheck('immo')], { timeout: 1000 });
+      expect(check().status).toBe(0);
+      const udp = createSocket('udp4');
+      try { const response = once(udp, 'message'); udp.send('qualification', 5173, tenantWitnessHost('immo')); await response; }
+      finally { udp.close(); }
+      expect(check().status).not.toBe(0);
+    } finally { clearTimeout(timer); child.kill('SIGKILL'); await exited; }
+  });
   it.each(['refused', 'connected', 'timeout', 'dns', 'interface', 'udp', 'raw', 'packet'])('should reject a network escape or unproven refusal (%s)', async mode => {
     let output = '';
     const modules = {

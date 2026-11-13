@@ -10,7 +10,7 @@ import { assertCleanStartup } from './restart.js';
 import { assertNoQualificationLeftovers } from './qualification-leftovers.js';
 import { createQualificationDirectory, qualificationDiskMiB, qualificationInodes } from './qualification-storage.js';
 import { qualificationPrerequisites } from './qualification-prerequisites.js';
-import { hostListeners, kernelNetworkWitness, networkProbeCount, hostNetworkWitnesses, qualificationHostAddresses, networkIsolationProbe, networkTargets, tenantWitnessHost, tenantWitnessScript } from './qualification-network.js';
+import { hostListeners, kernelNetworkWitness, networkProbeCount, hostNetworkWitnesses, qualificationHostAddresses, networkIsolationProbe, networkTargets, tenantWitnessHost, tenantWitnessScript, verifyTenantWitness } from './qualification-network.js';
 import { waitForQualificationPort } from './qualification-runtime.js';
 import { qualificationProcesses, assertQualificationProcessesGone } from './qualification-processes.js';
 import { qualifyCrashAndFailure } from './qualification-crash.js';
@@ -70,6 +70,7 @@ export async function qualifyIsolation(): Promise<void> {
       if (network === 'ports') assert.ok(boxes[boxes.length - 1]!.processes!.namespaces.length, 'private netns missing');
       if (network === 'ports') kernels.push(await kernelNetworkWitness(uid, release));
       await waitForQualificationPort(uid, AbortSignal.timeout(5000), () => {});
+      verifyTenantWitness(uid, tenant);
       for (const directory of [path, base]) {
         const sentinel = join(directory, 'isolation-marker');
         writeFileSync(sentinel, 'foreign tenant sentinel', { mode: 0o666 });
@@ -99,6 +100,7 @@ export async function qualifyIsolation(): Promise<void> {
       const group = run('systemctl', ['show', scope, '--property=ControlGroup', '--value']);
       report(`${box.tenant} cgroup ancestry`, group.startsWith(`/builder.slice/builder-tenant.slice/builder-tenant-${box.tenant}.slice/`) && group.endsWith(`/${scope}`));
     }
+    for (const box of boxes) verifyTenantWitness(box.uid, box.tenant);
   } catch (error) { console.error(error instanceof Error ? error.message : 'isolation execution failed'); report('real-host isolation execution', false); }
   finally {
     for (const kernel of kernels) await kernel.close();

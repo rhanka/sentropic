@@ -2,7 +2,7 @@ import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { RunscRuntimeAdapter } from './runtime-adapter.js';
-import { tenantWitnessScript } from './qualification-network.js';
+import { tenantWitnessScript, verifyTenantWitness } from './qualification-network.js';
 import { qualificationProcesses, assertQualificationProcessesGone } from './qualification-processes.js';
 import { waitForQualificationPort } from './qualification-runtime.js';
 import { qualificationDiskMiB, qualificationInodes } from './qualification-storage.js';
@@ -24,7 +24,9 @@ export function qualificationPeer(directory: string, release: string) {
           { source: join(base, 'source.erofs'), target: '/bases/source/qualification', readOnly: true }] });
       processes = qualificationProcesses(uid);
       await waitForQualificationPort(uid, signal, () => {});
+      verifyTenantWitness(uid, 'immo');
     },
+    verify() { verifyTenantWitness(uid, 'immo'); },
     async close() {
       await adapter.destroySandbox(`runsc-immo-${uid}`);
       if (processes) assertQualificationProcessesGone(processes);
