@@ -452,18 +452,17 @@ export class ExecutionNodeDaemon {
   }): Promise<void> {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
-    if (sandbox.state !== 'running') {
-      throw new ExecutionNodeError('already_claimed', `sandbox ${id} is ${sandbox.state}, writes require running`);
-    }
     const path = input.path;
     checkWritePath(path, sandbox.devScope);
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/write`, sandbox.ownership);
-    if (JSON.stringify(input.devScope) !== JSON.stringify(sandbox.devScope) || !sandbox.runtimeId) throw new ExecutionNodeError('command_id_payload_mismatch');
-    const runtimeId = sandbox.runtimeId;
+    this.requireScope(sandbox, input.devScope);
     return this.idempotent(tenantId, input.commandId, { method: 'POST', path: `/v1/sandboxes/${id}/write`,
       bodySha256: sha256Hex(JSON.stringify(body)) }, async () => {
-      await this.adapter.writeFile(runtimeId, path, Buffer.from(input.contentBase64, 'base64'), sandbox.devScope);
+      if (sandbox.state !== 'running' || !sandbox.runtimeId) {
+        throw new ExecutionNodeError('already_claimed', `sandbox ${id} is ${sandbox.state}, writes require running`);
+      }
+      await this.adapter.writeFile(sandbox.runtimeId, path, Buffer.from(input.contentBase64, 'base64'), sandbox.devScope);
       this.audit.record('sandbox.write', tenantId, id, path);
     });
   }
