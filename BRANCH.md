@@ -32,6 +32,7 @@
 ## Feedback Loop
 - [x] Historical provider rejection parameter remains unknown; hermetic tests establish the corrected request contract.
 - [x] Track integration belongs to the conductor single writer; include deliverables in the lane report.
+- [x] Review: explicitly mark unreadable request summaries unknown; never report absent fields from an unparsed body.
 
 ## AI Flaky tests
 - [x] No live AI tests authorized; no flaky exceptions.
@@ -50,7 +51,8 @@
   - [x] Add focused title failure tests under `api/tests/unit/`.
 - [x] Lot 3 — Add bounded observer and hermetic sentinel tests in `e2e/fixtures/provider-server.test.mjs`.
 - [ ] Lot 4 — Final validation and delivery.
-  - [ ] Scoped make tests; API typecheck/lint; independent code review.
+  - [x] Scoped make tests: 174 API passed, one existing stream skip; 38 provider fixture tests passed.
+  - [x] API typecheck and lint passed; independent Astra review approved with documented diagnostic limits.
   - [ ] Scope check before each atomic commit under 150 lines.
   - [ ] Push and open PR using this file; verify CI on exact head without merging.
   - [ ] Tear down test volumes; write report and completion marker.
