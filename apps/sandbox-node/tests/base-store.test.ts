@@ -20,15 +20,25 @@ describe('immutable base import', () => {
     rmSync(root, { recursive: true });
     expect(fetchBase).not.toHaveBeenCalled();
   });
+  it('should reject a different bucket or environment before touching the network', async () => {
+    const fetchBase = vi.fn(async () => new Response('bytes'));
+    const base = { tenantId: 'immo' as const, baseId: 'b', kind: 'source' as const, identityDigest: '0'.repeat(64) };
+    for (const url of ['https://other.s3.bhs.io.cloud.ovh.net/tenants/immo/preprod/base',
+      'https://s3.bhs.io.cloud.ovh.net/other/tenants/immo/preprod/base',
+      'https://sentropic-execution-bhs.s3.bhs.io.cloud.ovh.net/tenants/immo/prod/base']) {
+      await expect(ensureBase(base, url, { fetchBase })).rejects.toThrow(/BHS/);
+    }
+    expect(fetchBase).not.toHaveBeenCalled();
+  });
   it('should publish only digest-verified bases and reject corrupt or unsafe imports', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'base-'));
     const bytes = Buffer.from('erofs fixture');
     const fetchBase = async () => new Response(bytes);
     const base = { tenantId: 'immo' as const, baseId: 'root', kind: 'rootfs' as const, identityDigest: sha256Hex(bytes) };
     try {
-      const path = await ensureBase(base, 'https://s3.bhs.io.cloud.ovh.net/bucket/tenants/immo/base', { root: dir, fetchBase });
+      const path = await ensureBase(base, 'https://s3.bhs.io.cloud.ovh.net/sentropic-execution-bhs/tenants/immo/preprod/base', { root: dir, fetchBase });
       expect(readFileSync(path)).toEqual(bytes);
-      await expect(ensureBase({ ...base, identityDigest: '0'.repeat(64) }, 'https://s3.bhs.io.cloud.ovh.net/bucket/tenants/immo/base', { root: dir, fetchBase })).rejects.toThrow(/digest/);
+      await expect(ensureBase({ ...base, identityDigest: '0'.repeat(64) }, 'https://s3.bhs.io.cloud.ovh.net/sentropic-execution-bhs/tenants/immo/preprod/base', { root: dir, fetchBase })).rejects.toThrow(/digest/);
       await expect(ensureBase(base, 'http://s3.example/base', { root: dir, fetchBase })).rejects.toThrow();
       await expect(ensureBase({ ...base, baseId: '../other' }, 'https://s3.example/base', { root: dir, fetchBase })).rejects.toThrow();
     } finally { rmSync(dir, { recursive: true }); }
