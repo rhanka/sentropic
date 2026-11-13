@@ -34,7 +34,20 @@ describe('execution-node data plane', () => {
     expect(await response.json()).toEqual({ error: 'custody_revoked' });
   });
   it('should obtain a fresh token for each new HTTP hop', async () => {
-    const f = await fixture(); await get(f); await get(f); expect(f.issues).toBe(2);
+    const f = await fixture(); await (await get(f)).text(); await (await get(f)).text(); expect(f.issues).toBe(2);
+  });
+  it('should contain an invalid upstream status and continue serving subsequent requests', async () => {
+    const f = await fixture(); f.answer((_req, res) => { res.writeHead(600).end('invalid'); });
+    expect((await get(f)).status).toBe(502); expect(f.watchers).toBe(0);
+    f.answer((_req, res) => { res.end('valid'); });
+    expect(await (await get(f)).text()).toBe('valid');
+  });
+  it.each(['expiry', 'revocation'] as const)('should cut a slow HTTP consumer on %s after upstream completion', async kind => {
+    const f = await fixture(); f.setTtl(200);
+    const response = await get(f); expect(response.status).toBe(200); expect(f.watchers).toBe(1);
+    if (kind === 'revocation') f.revoke();
+    else await new Promise(resolve => setTimeout(resolve, 220));
+    await expect(response.text()).rejects.toThrow('custody_revoked'); expect(f.watchers).toBe(0);
   });
   it.each([0, 60_001])('should refuse invalid token lifetime %s before any node call', async ttl => {
     const f = await fixture(); f.setTtl(ttl);

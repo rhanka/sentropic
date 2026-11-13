@@ -4,11 +4,16 @@ import { CustodyRevoked, custodyRefused, type DataPlaneHop } from './data-plane'
 export async function custodyResponse(hop: DataPlaneHop, response: Response, signal: AbortSignal,
   consume: (response: Response) => Promise<Response> = async value => value) {
   let unguard = () => {};
-  const revoked = new Promise<Response>(resolve => { unguard = hop.guard(() => resolve(custodyRefused())); });
+  let onAbort = () => {};
+  const revoked = new Promise<Response>(resolve => {
+    onAbort = () => resolve(custodyRefused());
+    unguard = hop.guard(onAbort); signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
   let output: Response;
   try { output = await Promise.race([consume(response), revoked]); }
   catch { hop.dispose(); throw new CustodyRevoked(); }
-  finally { unguard(); }
+  finally { unguard(); signal.removeEventListener('abort', onAbort); }
   if (!hop.valid() || output.status === 403) { hop.dispose(); return custodyRefused(); }
   if (!output.body) { hop.dispose(); return output; }
   const reader = output.body.getReader();

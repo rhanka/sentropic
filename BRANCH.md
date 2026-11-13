@@ -50,6 +50,7 @@
   - [x] Vite worker entry query verified against installed Vite source; opt-in admission preserves the default profile.
   - [x] Revocation during asynchronous WS route recheck has a regression test.
   - [x] Review: retain HTTP custody through transformation and backpressure; validate upstream status before Response construction.
+  - [x] Review regressions: status 600 and HTTP consumers paused after upstream completion.
 - [ ] Lot 5: README contract/env documentation, independent code review, scoped validation.
   - [x] README documents env names, opaque issuer contract, WS renewal and agent prerequisite.
 - [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.
