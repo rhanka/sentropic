@@ -25,6 +25,7 @@
 
 ## Feedback Loop
 - [x] Packet references merged #1022; fetched `origin/main` is `87485f912` (#1020). Use the actual origin/main ancestry.
+- [x] Track import is reserved for the conductor, the designated single writer; deliver the updated branch checklist for import.
 
 ## AI Flaky tests
 - [x] No AI tests apply.
@@ -40,10 +41,10 @@
   - [x] Read mandatory rules, packet, template and qualification implementation; mechanical branch check passed.
 - [ ] **Lot 1 — Workload and runtime readiness**
   - [x] Reproduce missing source parent permissions in `tests/bundle.test.ts`; failed before fix (0700), corrected to 0755.
-  - [ ] Test actual generated qualification spec and long-lived HTTP/WS fixture.
+  - [x] Test actual generated qualification spec and execute its HTTP/WS server command in the mTLS harness.
   - [x] Detect early workload/scope exit and refuse unavailable port targets; preserve legitimate short build completion.
 - [ ] **Lot 2 — Bounded execution and cleanup**
-  - [ ] Validate deadline, signal interruption, scope/sandbox exit, hanging probes and finalization; shared cancellation implemented.
+  - [x] Validate deadline, SIGTERM, early sandbox exit, probe failure and successful finalization using the real qualification entry with fake host/runtime dependencies.
   - [x] Remove relay directories and refuse stale qualification resources; bases and bundles use private roots.
   - [x] Apply private fixture handling and leftovers inventory to isolation qualification.
 - [ ] **Lot 3 — Custody keys**
