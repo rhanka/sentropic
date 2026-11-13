@@ -61,7 +61,7 @@
   - [x] Measure real module workers in Chromium, Firefox and WebKit.
   - [ ] Assert worker-relative imports, import-map control and opaque-frame control.
 - [ ] **Lot 2 — Compiler and isolate (Q1–5, Q8, Q11–14)**
-  - [ ] Commit F-LIVE-S/M/L and block dependency edit matrix.
+  - [x] Commit F-LIVE-S/M/L and block dependency edit matrix.
   - [ ] Exercise pinned bootstrap via SandboxRuntime and isolated-vm adapter.
   - [ ] Compare bytes, imported types, CSS passes, syntax and closure sizes.
   - [ ] Measure cold/fresh/retained contexts, pod limits, memory and cancellation.
