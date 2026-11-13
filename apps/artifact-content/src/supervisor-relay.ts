@@ -6,6 +6,7 @@ import { MAX_FRAME_BYTES, MAX_REPLY_BYTES, openFrame, SIGNATURE_BYTES } from '..
 import { DEFAULT_BUILDER_NAMESPACE } from './live';
 import type { DataPlaneTransport } from './data-plane';
 import { dataPlaneFetch } from './data-plane-http';
+import { combineAbortSignals } from './abort-signals';
 
 /** Pod hop bound: above the API's 320 s command bound, so the API side always gives up first. */
 export const RELAY_UPSTREAM_TIMEOUT_MS = 330_000;
@@ -103,7 +104,7 @@ export function createSupervisorRelay(options: SupervisorRelayOptions) {
       if (options.dataPlane) {
         const response = await dataPlaneFetch(options.dataPlane, { kind: 'supervisor', podName }, SUPERVISOR_PATH, {
           method: 'POST', headers: { 'content-type': 'application/octet-stream', 'content-length': String(frame.length) }, body: frame,
-          signal: AbortSignal.any([request.signal, AbortSignal.timeout(RELAY_UPSTREAM_TIMEOUT_MS)]), maxBytes: MAX_REPLY_BYTES,
+          signal: combineAbortSignals([request.signal, AbortSignal.timeout(RELAY_UPSTREAM_TIMEOUT_MS)]), maxBytes: MAX_REPLY_BYTES,
         });
         return response.status === 200 || response.status === 403 ? response : empty(502);
       }

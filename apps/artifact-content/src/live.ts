@@ -5,6 +5,7 @@ import { podName } from '../../../api/src/services/artifacts/live/pods';
 import type { LiveKey } from '../../../api/src/services/artifacts/live/records';
 import type { DataPlaneTransport } from './data-plane';
 import { dataPlaneFetch } from './data-plane-http';
+import { combineAbortSignals } from './abort-signals';
 
 export interface LiveRoute extends LiveKey {
   sessionId: string; generation: number; routeEpoch: number; podUid: string; podName: string;
@@ -109,7 +110,7 @@ export function createLiveProxy(ports: LiveProxyPorts, options: {
       };
       if (options.dataPlane) return dataPlaneFetch(options.dataPlane, { kind: 'live', route }, path, {
         method: request.method, headers: { accept: request.headers.get('accept') ?? '*/*', 'accept-encoding': 'identity' },
-        signal: AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]), maxBytes: 16 * 1024 * 1024,
+        signal: combineAbortSignals([request.signal, AbortSignal.timeout(10_000)]), maxBytes: 16 * 1024 * 1024,
         consume: serveResponse,
       });
       return serveResponse(await (ports.fetch ?? fetch)(new URL(path, upstream), {
