@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import { RunscRuntimeAdapter, type RunSandboxOptions } from '../src/runtime-adapter.js';
 import { qualifyIsolation } from '../src/isolation-qualification.js';
 import { acquireNodeLock } from '../src/node-lock.js';
+import { networkProbeCount, networkTargets } from '../src/qualification-network.js';
 
 vi.mock('../src/node-lock.js', () => ({ acquireNodeLock: vi.fn() }));
 vi.mock('../src/qualification-prerequisites.js', () => ({ qualificationPrerequisites: vi.fn() }));
@@ -11,6 +12,7 @@ vi.mock('../src/qualification-processes.js', () => ({ qualificationProcesses: ()
 vi.mock('../src/qualification-crash.js', () => ({ qualifyCrashAndFailure: vi.fn() }));
 vi.mock('../src/qualification-runtime.js', () => ({ waitForQualificationPort: vi.fn() }));
 vi.mock('../src/qualification-network.js', async original => ({ ...await original<typeof import('../src/qualification-network.js')>(),
+  hostListeners: () => '', kernelNetworkWitness: async () => ({ close: async () => {} }),
   qualificationHostAddresses: () => ['15.235.44.193'], hostNetworkWitnesses: async () => ({ close: async () => {} }) }));
 vi.mock('../src/qualification-storage.js', async original => ({ ...await original<typeof import('../src/qualification-storage.js')>(),
   createQualificationDirectory: () => fs.mkdtempSync('/var/lib/builder/qualification/qi-') }));
@@ -56,7 +58,8 @@ describe('real-host qualification orchestration', () => {
         if (file === 'losetup') return '/var/lib/builder/tenant.ext4';
         if (file === 'systemctl' && args?.[1] === 'execution-node.service') return 'inactive';
         if (file === 'runsc' && args?.[1] === 'list') return 'null';
-        if (file === 'runsc') return JSON.stringify(Array.from({ length: String(args?.at(-1)).includes('no default DNS') ? 13 : 23 }, (_, i) => ({ name: `probe-${i}`, ok: mode !== 'probe-failure' })));
+        if (file === 'runsc') return JSON.stringify(Array.from({ length: String(args?.at(-1)).includes('no default DNS')
+          ? networkProbeCount(networkTargets(['15.235.44.193'], '127.77.0.3')) : 23 }, (_, i) => ({ name: `probe-${i}`, ok: mode !== 'probe-failure' })));
         if (file === 'systemctl' && args?.[0] === 'list-units') return '';
         if (file === 'systemctl') {
           const tenant = launched.find(box => String(args?.[1]).includes(box.sandboxUid))!.tenantId;

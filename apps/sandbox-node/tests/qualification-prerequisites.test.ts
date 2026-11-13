@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { qualificationPrerequisites } from '../src/qualification-prerequisites.js';
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }));
 vi.mock('node:fs', () => ({ readFileSync: vi.fn() }));
+vi.mock('../src/file-digest.js', () => ({ fileDigest: () => 'a'.repeat(64) }));
 afterEach(() => vi.restoreAllMocks());
 
 describe('qualification receipt and hardened prerequisites', () => {

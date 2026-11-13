@@ -1,13 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runInNewContext } from 'node:vm';
 import { EventEmitter } from 'node:events';
-import { networkIsolationProbe, networkTargets, tenantWitnessHost } from '../src/qualification-network.js';
+import { networkIsolationProbe, networkProbeCount, networkTargets, tenantWitnessHost } from '../src/qualification-network.js';
 import { requireIsolationResults } from '../src/isolation-probe.js';
 
 describe('real-host network probes', () => {
-  it.each(['refused', 'connected', 'timeout', 'dns', 'interface'])('should reject a network escape or unproven refusal (%s)', async mode => {
+  it.each(['refused', 'connected', 'timeout', 'dns', 'interface', 'udp', 'raw', 'packet'])('should reject a network escape or unproven refusal (%s)', async mode => {
     let output = '';
     const modules = {
+      'node:child_process': { execFileSync: (_path: string, args: string[]) => {
+        if (args[0] === 'udp') { if (mode === 'udp') throw new Error('send accepted'); return ''; }
+        return JSON.stringify([{ name: 'raw socket refused', ok: mode !== 'raw' }, { name: 'packet socket refused', ok: mode !== 'packet' }]);
+      } },
       'node:net': { connect: () => {
         const socket = Object.assign(new EventEmitter(), { destroy() {}, setTimeout(_ms: number, fn: () => void) {
           if (mode === 'timeout') queueMicrotask(fn);
@@ -30,7 +34,7 @@ describe('real-host network probes', () => {
     await runInNewContext(networkIsolationProbe(targets), { require: (name: keyof typeof modules) => modules[name],
       process: { stdout: { write: (value: string) => { output = value; } } } });
     const report = vi.fn();
-    requireIsolationResults(output, report, targets.length + 4);
+    requireIsolationResults(output, report, networkProbeCount(targets));
     expect(report.mock.calls.every(([, ok]) => ok)).toBe(mode === 'refused');
   });
 });

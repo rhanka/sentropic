@@ -46,7 +46,7 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
       if (name === 'http') return { createServer: (handler: RequestListener) => {
         upstream = createServer(handler); const listen = upstream.listen.bind(upstream);
         upstream.listen = ((port: number, host: string) => {
-          expect([port, host]).toEqual([5173, '0.0.0.0']); return listen(join(directory, 'upstream'));
+          expect([port, host]).toEqual([5173, '127.0.0.1']); return listen(join(directory, 'upstream'));
         }) as typeof upstream.listen;
         upstream.on('connection', track); return upstream;
       } };
@@ -65,7 +65,6 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
     server.on('upgrade', (req, socket, head) => { void data.upgrade(req, socket, head, agentRole(req) ?? ''); });
     try {
       if (!upstream.listening) await once(upstream, 'listening');
-      expect(readFileSync(join(directory, 'index.html'), 'utf8')).toBe('qualification');
       const socketPath = join(directory, 'tls');
       await new Promise<void>(resolve => server.listen(socketPath, resolve));
       const results: string[] = [];

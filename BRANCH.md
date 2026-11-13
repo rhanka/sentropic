@@ -57,6 +57,8 @@
 - [x] AMD-28 audit regressions: every forbidden flag, UDS/FIFO requirements, OCI annotations/capabilities/devices, sentry inode/host/peer/listener failures and profile/digest refusals.
 - [x] AMD-28 switch gate: real HTTP/WS cuts within 250ms, 409 admission and sandbox destruction for closed-switch and digest-mismatch scenarios.
 - [x] AMD-28 burst gate: hold the configured connection cap, saturate with twelve mTLS requests, verify typed refusals, slot drainage and actual 192M/128-task cgroup limits; hash files with bounded scratch memory.
+- [x] AMD-28 fixture alignment: ports exercise the live 704M profile, export lifecycle validates a stopped output archive, and supervision regressions cover both OOM variants.
+- [x] AMD-28 finalization: early ports exit fails the audit; namespace/spec failures destroy physical and logical sandboxes and release capacity.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.

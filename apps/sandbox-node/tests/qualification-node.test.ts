@@ -53,10 +53,10 @@ describe('qualification session spec', () => {
       finally { capacity.mockRestore(); }
       expect(commands).toContainEqual(['truncate', ['-s', '81M', join(bundle.path, 'writable.ext4')]]);
       try {
-        expect(chownSync).toHaveBeenCalledExactlyOnceWith(bundle.output, 1000, 1000);
+        expect(chownSync).not.toHaveBeenCalled();
         expect(statSync(bundle.path).mode & 0o777).toBe(0o700);
         expect(statSync(join(bundle.path, 'writable/upper')).mode & 0o777).toBe(0o755);
-        expect(statSync(join(bundle.workspace, 'ui')).mode & 0o777).toBe(0o755);
+        expect(options!.profile).toBe('live'); expect(options!.quotaMiB).toBe(704);
         expect(statSync(bundle.output).mode & 0o777).toBe(0o700);
         const spec = JSON.parse(readFileSync(join(bundle.path, 'config.json'), 'utf8'));
         expect(spec.process).toMatchObject({ args: box.command, cwd: '/workspace', user: { uid: 1000, gid: 1000 } });

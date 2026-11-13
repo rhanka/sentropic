@@ -7,6 +7,11 @@ import { qualifyCrashAndFailure } from '../src/qualification-crash.js';
 import { assertCleanStartup } from '../src/restart.js';
 vi.mock('../src/restart.js', () => ({ assertCleanStartup: vi.fn() }));
 vi.mock('../src/qualification-processes.js', () => ({ assertQualificationProcessesGone: vi.fn() }));
+vi.mock('node:fs', async original => {
+  const actual = await original<typeof import('node:fs')>(); let kills = 0;
+  return { ...actual, readFileSync: (path: string, ...args: any[]) => path.endsWith('/memory.events')
+    ? `oom_kill ${kills++}` : (actual.readFileSync as any)(path, ...args) };
+});
 vi.mock('node:child_process', async original => {
   const actual = await original<typeof import('node:child_process')>();
   return { ...actual, execFileSync: vi.fn(), spawn: vi.fn(actual.spawn) };
@@ -26,7 +31,7 @@ describe('crash gate parent supervision', () => {
         const f=require('fs'),p=${JSON.stringify(path)};
         const options=JSON.parse(f.readFileSync(p+'/options.json'));
         f.writeFileSync(p+'/ready.json',JSON.stringify({pids:[],namespaces:[]}));
-        if(options.command[2].includes('process.exit(1)'))setTimeout(()=>process.exit(7),50);
+        if(options.command[2].includes('process.exit(1)')||options.command[2].includes('buffers'))setTimeout(()=>process.exit(7),50);
         else setInterval(()=>{},1000);
       `]);
       launched.push({ path, network: existsSync(join(path, 'options.json')) ? 'recorded' : 'missing' });
@@ -39,7 +44,7 @@ describe('crash gate parent supervision', () => {
     });
     try {
       await qualifyCrashAndFailure(directory, directory);
-      expect(launched).toHaveLength(4);
+      expect(launched).toHaveLength(6);
       expect(launched.every(item => item.network === 'recorded')).toBe(true);
       expect(readdirSync(directory)).toEqual(['qualification.erofs']);
       expect(execFileSync).toHaveBeenCalledWith('runsc', expect.arrayContaining(['list']), expect.anything());
