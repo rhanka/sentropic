@@ -23,6 +23,8 @@
   - [x] BRDPF-EX1: align co-signed AMD-28 network contract (k8s 3b042fd) in spec; documentation only; rollback the spec line with the network implementation.
 
 ## Feedback Loop
+- [x] R2 qualification-2: real-host switch scenarios now use the production asynchronous file observer on private gate files, atomic switch/binary replacement and the shared GET-node capability builder.
+- [x] R2 qualification-3/5/7: gates verify the manifest and canonical PATH/pinned runsc version, pass the configured cap/timeout, start the burst concurrently from idle and receipt actual helper peaks/cgroup memory/tasks/OOM.
 - [x] R2 qualification-8/9/10: compare stable protocol/address listener sets, reserve disk for four/two sandboxes, require exact systrap/capability/network-namespace OCI shapes.
 - [x] R2 qualification-1: preserve the node-22 wire profile and thread the daemon-derived live/standby slot into the runtime; heavy/browser/unknown profiles remain refused.
 - [x] R2c-4: controlled TCP/UDP tenant witnesses self-connect before/after cross-tenant probes and fail on any delivered probe datagram; host UDP witnesses bind alongside TCP controls.

@@ -16,7 +16,7 @@ import { createPrivateKey, createPublicKey, sign, createHash } from 'node:crypto
 import { assertCleanStartup } from './restart.js';
 import { createDataPlane } from './data-plane.js';
 import { custodyVerificationKey } from './custody-key.js';
-import { portsEnabled, usePortsAvailability } from './network-policy.js';
+import { portsEnabled, usePortsAvailability, nodeCapabilities } from './network-policy.js';
 import { monitorPorts } from './ports-monitor.js';
 import { PortsActivation } from './ports-activation.js';
 import { ThreadRuntimeAdapter } from './thread-runtime.js';
@@ -90,7 +90,7 @@ export const server = createAgentServer(tls, async (req, res, role) => {
         intermediateSlice: { name: 'builder-tenant.slice', memoryLowMiB: 1408 }, hostMemory,
         metrics: nodeMetrics(node), tenantSlices: Object.fromEntries((['sentropic', 'immo'] as const).map(id =>
           [id, node.admission.quotaSnapshot(id, `/builder.slice/builder-tenant.slice/builder-tenant-${id}.slice`)])),
-        capabilities: { supportedOps: ['node', 'quotas', 'bases', 'create', 'start', 'claim', 'stop', 'export', 'delete', 'renew', 'revoke-custody', 'write', ...(portsEnabled() ? ['ports'] : [])] } }); return;
+        capabilities: nodeCapabilities() }); return;
     }
     if (scope.scope === 'tenant' && url.pathname === `/v1/tenants/${scope.tenantId}/quotas` && req.method === 'GET') {
       reply(200, node.admission.quotaSnapshot(scope.tenantId,

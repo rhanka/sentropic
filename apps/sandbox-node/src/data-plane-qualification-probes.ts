@@ -88,7 +88,12 @@ export async function probeDataPlane(options: {
   if (!options.switchMode) {
   const held: IncomingMessage[] = [];
   try {
-    for (let i = 0; i < forwardBudget.limit; i++) held.push(await http(token()));
+    const idleDeadline = Date.now() + 1000;
+    while ((options.forwardUsage ? await options.forwardUsage() : forwardBudget).inUse) {
+      assert.ok(Date.now() < idleDeadline, 'warmup forwarding slots did not drain');
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    held.push(...await Promise.all(Array.from({ length: forwardBudget.limit }, () => http(token()))));
     const responses = await Promise.all(Array.from({ length: 12 }, () => new Promise<number>((resolve, reject) => {
       const req = open(token()); req.once('error', reject);
       req.once('response', res => { res.resume(); resolve(res.statusCode!); }); req.end();
