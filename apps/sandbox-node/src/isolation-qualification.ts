@@ -5,6 +5,8 @@ import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { RunscRuntimeAdapter } from './runtime-adapter.js';
 import { isolationProbe, requireIsolationResults } from './isolation-probe.js';
+import { acquireNodeLock } from './node-lock.js';
+import { assertCleanStartup } from './restart.js';
 
 export async function qualifyIsolation(): Promise<void> {
   assert.equal(process.env.QUALIFICATION_ONLY, 'isolated', 'isolated qualification host required');
@@ -19,7 +21,12 @@ export async function qualifyIsolation(): Promise<void> {
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   const adapter = new RunscRuntimeAdapter();
   const boxes: Array<{ tenant: string; uid: string; path: string; base: string; image: string; loop: string; runtimeId?: string }> = [];
+  const releaseLock = await acquireNodeLock();
   try {
+    assert.equal(run('systemctl', ['show', 'execution-node.service', '--property=ActiveState', '--value']), 'inactive', 'service must be stopped');
+    assertCleanStartup();
+    // Consume the operator's authorization once, under the shared lock.
+    rmSync('/etc/execution-node/isolated-qualification');
     for (const tenant of ['sentropic', 'immo']) {
       assert.ok(!interrupted, 'qualification interrupted');
       // Require the installed tenant loop mounts; never create or modify them.
@@ -79,6 +86,7 @@ export async function qualifyIsolation(): Promise<void> {
       } catch { report(`${box.tenant} cleanup`, false); }
     }
     process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
+    releaseLock();
   }
   if (failed) throw new Error('isolation qualification failed');
 }

@@ -1,6 +1,7 @@
 import { isSea } from 'node:sea';
 import { qualifyDisk, quotaWriter } from './qualification.js';
 import { qualifyIsolation } from './isolation-qualification.js';
+import { acquireNodeLock } from './node-lock.js';
 
 if (process.argv.includes('--self-test')) {
   if (!isSea()) throw new Error('single executable application required');
@@ -12,5 +13,8 @@ if (process.argv.includes('--self-test')) {
 } else if (process.argv.includes('--quota-writer')) {
   quotaWriter();
 } else {
-  void import('./service.js').catch(error => { console.error(error); process.exitCode = 1; });
+  void acquireNodeLock().then(async release => {
+    try { const { server } = await import('./service.js'); server.once('close', release); }
+    catch (error) { release(); throw error; }
+  }).catch(error => { console.error(error); process.exitCode = 1; });
 }

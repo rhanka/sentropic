@@ -29,6 +29,7 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
   - [x] No scope exception required.
 
 ## Feedback Loop
+- [x] RUN 9c finding 2 implementation: agent and qualification hold the same kernel lock; qualification requires inactive systemd service, clean inventory and consumes its marker. Regression coverage follows in the next atomic commit.
 - [x] RUN 9c finding 1: build and ship qualification.erofs with SHA256SUMS; artifact verification requires its EROFS magic and checksum entry. No runtime mkfs.erofs dependency.
 - [x] BRK1-EX1 authorized by conductor on 2026-11-13 05:50: add only `- 'apps/sandbox-node/**'` to the global filter in `.github/workflows/ci.yml`. Rationale: consumer-contracts requires every changed path to be classified; sandbox-node changes were unclassified. Impact: every sandbox-node change runs the full suite. Rollback: revert this single filter line.
 - [x] K1 qualification prerequisite: production bundle upper root was 0700, inherited by overlay cwd, excluding sandbox uid 1000. Set only upper root to 0755; host bundle remains 0700 and workspace bind remains read-only. bundle.test.ts asserts both modes for session/build.
