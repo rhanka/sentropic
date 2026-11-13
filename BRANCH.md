@@ -75,6 +75,8 @@
 - [x] Worker qualification integration: real data-plane gate uses the production runtime worker, forwards bounded diagnostics and measures its helper budget asynchronously.
 - [x] SEA worker self-test validates embedded worker startup, bounded forwarding usage and contractual error propagation in root/non-root smoke checks.
 - [x] Revocation-under-load regression: a real runtime worker blocks in a host command while existing HTTP/WS streams are cut within 250ms on the independent TLS loop.
+- [x] Cleanup and ss regressions: actual failing/positive ss executables, audit emission and retained runtime identity/capacity across failed destruction and retry.
+- [x] Missing-binary regression: cgroup stop succeeds independently of runsc availability; metadata cleanup retains its retry identity.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.

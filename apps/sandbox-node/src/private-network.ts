@@ -25,3 +25,7 @@ if ! ( set -e; ${privateNetworkInventory} ); then echo network_isolation_violati
 stat -Lc %i /proc/self/ns/net > "$1"
 shift
 exec "$@"`;
+
+export const privateNetworkPostStart = `${privateNetworkInventory}
+listeners=$(ss -H -ltnup) || exit 1
+test -z "$listeners"`;

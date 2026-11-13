@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
-import { privateNetworkInventory } from './private-network.js';
+import { privateNetworkPostStart } from './private-network.js';
 import { ExecutionNodeError } from './errors.js';
 
 export function auditNetworkSpec(args: string[], spec: Record<string, any>, ports: boolean): void {
@@ -24,6 +24,6 @@ export function auditStartedNetwork(pid: number, receipt: string, others: Iterab
   if (inode !== readFileSync(receipt, 'utf8').trim() || inode === String(statSync('/proc/1/ns/net').ino)
     || [...others].includes(inode)) throw new ExecutionNodeError('network_isolation_violation');
   execFileSync('nsenter', ['-t', String(pid), '-n', '--', 'sh', '-ec',
-    `${privateNetworkInventory}\nlisteners=$(ss -H -ltnup) || exit 1\ntest -z "$listeners"`], { timeout: 1000, killSignal: 'SIGKILL', stdio: 'pipe' });
+    privateNetworkPostStart], { timeout: 1000, killSignal: 'SIGKILL', stdio: 'pipe' });
   return inode;
 }
