@@ -24,6 +24,8 @@ verify-sandbox-node-artifact:
 	tar -xf "$$out/$$digest.tar" -C "$$release"; \
 	test "$$(stat -c %a "$$release")" = 755; \
 	(cd "$$release"; sha256sum -c SHA256SUMS); \
+	test "$$(od -An -tx4 -j1024 -N4 "$$release/qualification.erofs" | tr -d ' ')" = e0f5e1e2; \
+	(cd "$$release"; grep -Eq '^[a-f0-9]{64}  ./qualification.erofs$$' SHA256SUMS); \
 	cmp "$$release/OPERATOR.md" apps/sandbox-node/OPERATOR.md; \
 	for name in agent.env execution-node.service operator-ticket.ed25519.pub.pem qualify-restart-mounts.sh qualify-isolation.sh start.sh; do \
 	  cmp "$$release/$$name" "apps/sandbox-node/k8s/$$name"; done; \
