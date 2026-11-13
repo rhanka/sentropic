@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseRunscList } from './runsc-inventory.js';
 
 type InventoryCommand = (command: string, args: string[]) => string;
 const host: InventoryCommand = (command, args) => execFileSync(command, args, { encoding: 'utf8', timeout: 5000 });
@@ -10,8 +11,8 @@ export function assertCleanStartup(root = '/var/lib/builder', run: InventoryComm
   mountInfoPath = '/proc/self/mountinfo'): void {
   const blocked = () => { throw new Error('startup blocked: surviving sandbox resources require operator reconciliation'); };
   if (run('systemctl', ['list-units', '--all', '--plain', '--no-legend', 'builder-sbx-*.scope']).trim()) blocked();
-  const runtimes: unknown = JSON.parse(run('runsc', ['--root=/run/execution-node/runsc', 'list', '--format=json']));
-  if (!Array.isArray(runtimes) || runtimes.length) blocked();
+  const runtimes = parseRunscList(run('runsc', ['--root=/run/execution-node/runsc', 'list', '--format=json']));
+  if (runtimes.length) blocked();
   for (const tenant of ['sentropic', 'immo']) {
     const sandboxes = join(root, 'tenants', tenant, 'sandboxes');
     try { if (readdirSync(sandboxes).length) blocked(); }
