@@ -2,6 +2,10 @@
 SANDBOX_NODE_IMAGE := node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2
 SANDBOX_NODE_NPM_CACHE ?= $(HOME)/.cache/sentropic-sandbox-node/npm
 .PHONY: check-sandbox-node
+qualify-sandbox-node-disk:
+	@case "$(ENV)" in test-*) ;; *) echo 'isolated test ENV required'; exit 1;; esac
+	@node apps/sandbox-node/k8s/qualify-disk.mjs
+
 build-sandbox-node-artifact:
 	@sh apps/sandbox-node/k8s/build-artifact.sh
 
@@ -13,5 +17,6 @@ check-sandbox-node:
 	  node /source/scripts/ci/locked-tools.mjs --prefix /tmp/qualification --ignore-scripts --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; \
 	  cd /tmp/qualification/apps/sandbox-node; \
 	  sh -n k8s/start.sh k8s/build-artifact.sh; \
+	  node --check k8s/qualify-disk.mjs; \
 	  ../../node_modules/.bin/tsc --project tsconfig.json; \
 	  ../../node_modules/.bin/vitest run --config vitest.config.ts'
