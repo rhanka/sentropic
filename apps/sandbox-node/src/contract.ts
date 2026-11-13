@@ -104,18 +104,18 @@ export const EXECUTION_NODE_TENANT_SLICE_DEFAULTS: Record<
   sentropic: {
     memorySwapMaxMiB: 256, maxWarmTotal: 1,
     memoryLowMiB: 704,
-    memoryHighMiB: 2048,
+    memoryHighMiB: 2304,
     memoryMaxMiB: 2304,
     cpuWeight: 100,
-    tasksMax: 4096,
+    tasksMax: 2048,
   },
   immo: {
     memorySwapMaxMiB: 256, maxWarmTotal: 1,
     memoryLowMiB: 704,
-    memoryHighMiB: 2048,
+    memoryHighMiB: 2304,
     memoryMaxMiB: 2304,
     cpuWeight: 100,
-    tasksMax: 4096,
+    tasksMax: 2048,
   },
 };
 
@@ -214,7 +214,7 @@ export interface ExecutionNodeInfo {
   readonly classes: readonly ['sandbox'];
   readonly parentSlice: { readonly name: 'builder.slice'; readonly memoryMaxMiB: number; readonly memorySwapMaxMiB: 512 };
   readonly hostMemory: { readonly memTotalBytes: number; readonly memTotalFloorMiB: number;
-    readonly hostBaseMiB: 512; readonly agentMemoryMaxMiB: 192; readonly unallocatedMarginMiB: 172; readonly zramNominalMiB: 1024 };
+    readonly hostBaseMiB: 512; readonly agentMemoryMaxMiB: 192; readonly unallocatedMarginMiB: 171; readonly zramNominalMiB: 1024; readonly zramMemLimitMiB: 128 };
   readonly capabilities: { readonly supportedOps: readonly string[] };
 }
 
