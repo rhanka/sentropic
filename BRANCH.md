@@ -29,6 +29,7 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
   - [x] No scope exception required.
 
 ## Feedback Loop
+- [x] RUN 9c finding 4: plant foreign tenant sentinel files and attempt readFileSync/openSync(r+) on known paths, including traversal of the foreign tenant mount; non-listable directory regression detects accessible files.
 - [x] RUN 9c finding 3: statfs block/inode capacity checks before and after truncate/mkfs.ext4; preserve unrelated command errors. Base import maps filesystem quota errors including mkdir/open/write, with regressions.
 - [x] RUN 9c finding 2 regressions: refuse active service, held lock, surviving scope, sandbox directory, runsc container and malformed inventory before creation; real flock exclusion/release test. Operator guide documents single-use marker and service exclusion.
 - [x] RUN 9c finding 2 implementation: agent and qualification hold the same kernel lock; qualification requires inactive systemd service, clean inventory and consumes its marker. Regression coverage follows in the next atomic commit.
