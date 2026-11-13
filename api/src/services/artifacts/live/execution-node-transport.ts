@@ -58,7 +58,9 @@ export function executionNodeTransport(config: ExecutionNodeConfig): NodeTranspo
       res.on('error', () => reject(new ExecutionNodeRefusal('node_transport_failure')));
       res.on('end', () => resolve({ status: res.statusCode ?? 503, headers: res.headers, bytes: Buffer.concat(chunks) }));
     });
-    req.setTimeout(5000, () => req.destroy());
+    // Four outstanding jobs, max 120s each: a create may wait behind three services.
+    // This is an admission transport deadline, independent of test/UI timeouts.
+    req.setTimeout(method === 'POST' && path === '/v1/sandboxes' ? 365_000 : 5000, () => req.destroy());
     req.on('error', () => reject(new ExecutionNodeRefusal('node_transport_failure')));
     req.end(body);
   }).catch(() => { throw new ExecutionNodeRefusal('node_transport_failure'); });

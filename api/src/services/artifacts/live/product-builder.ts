@@ -20,8 +20,8 @@ import type { HostIdentity } from './host-build-api';
 import { readWorkerSizing, type KubernetesCore } from './pods';
 import { installEnvironment, readInstallHeapMb } from './recipes';
 import type { LivePorts } from './ports';
-import { selectSandboxBackend, sandboxBackendKind, SANDBOX_BACKEND_ENV, type SandboxBackend } from './sandbox-backend';
-import type { ExecutionNodeAdapter } from './execution-node-adapter';
+import { selectSandboxBackend, sandboxBackendKind, SANDBOX_BACKEND_ENV } from './sandbox-backend';
+import { createExecutionNodeBackend, type ExecutionNodeInputs } from './execution-node-backend';
 import { executionNodeHeartbeat } from './execution-node-heartbeat';
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -73,7 +73,7 @@ export interface ProductBuilderDeps {
   gitHubApp: ForgeLeaseHost | null; log(event: string, error: unknown): void;
   now?: () => number; id?: () => string; fetch?: typeof fetch;
   /** S1-B1: authenticated tenant/session registry, sealed-base hydration and candidate handoff. */
-  executionNodeBackend?(node: ExecutionNodeAdapter): SandboxBackend;
+  executionNodeInputs?: ExecutionNodeInputs;
 }
 
 /**
@@ -102,10 +102,9 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   const sandboxBackend = kind === 'execution-node' ? read(SANDBOX_BACKEND_ENV, () => selectSandboxBackend(env, {
     kubernetes: () => undefined,
     executionNode: node => {
-      if (!deps.executionNodeBackend) return refuse('ARTIFACT_EXECUTION_NODE_SESSION_REGISTRY');
       heartbeat = executionNodeHeartbeat(deps.pool, node,
         code => deps.log(code, new LiveError('builder_unavailable', code)));
-      return deps.executionNodeBackend(node);
+      return createExecutionNodeBackend(node, createPostgresRemoteLiveRows(deps.pool), deps.executionNodeInputs);
     },
   })) : undefined;
   const placement = read(LABEL.test(env.ARTIFACT_BUILDER_NAMESPACE ?? '') ? 'ARTIFACT_BUILDER_SERVICE_DOMAIN'

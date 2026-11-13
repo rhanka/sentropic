@@ -51,6 +51,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Select backend explicitly, preserve default Kubernetes composition, inject selected ports into existing controller.
   - [x] Do not initialize the Kubernetes client when execution-node is selected.
   - [x] Concrete node backend implements lifecycle pods/renew/quiesce, persisted identities and deterministic command ids; B1 supplies sealed-base/W3 inputs.
+  - [x] Compose the concrete node backend by default; missing B1 hydration inputs refuse allocation without disabling the authenticated route mount.
 - [ ] Lot 2: Ed25519 tickets, ownership/devScope, identity/provenance pin and idempotent lifecycle.
   - [x] Add mTLS configuration/transport, canonical Ed25519 tickets and pinned identity/export verification.
   - [x] Refuse incomplete ownership and verify configured node identity before the first heartbeat or tenant command.

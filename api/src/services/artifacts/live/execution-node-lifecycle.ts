@@ -8,7 +8,7 @@ import { ExecutionNodeRefusal } from './execution-node-transport';
 export async function exportRetainedBuild(node: ExecutionNodeAdapter, session: NodeSession, intent: {
   buildId: string; stopCommandId: string; exportCommandId: string; deleteCommandId: string;
   presignedPutUrl: string; maxBytes: number;
-}, options: { validateUrl(url: string, tenantId: string): void; upload?: typeof fetch; wait?: (ms: number) => Promise<void> }) {
+}, options: { validateUrl(url: string, tenantId: string): void; upload?: typeof fetch }) {
   options.validateUrl(intent.presignedPutUrl, session.ownership.tenantId);
   if (!intent.buildId || !Number.isSafeInteger(intent.maxBytes) || intent.maxBytes < 1 || intent.maxBytes > 64 * 1024 * 1024) {
     throw new ExecutionNodeRefusal('invalid_export_intent');
