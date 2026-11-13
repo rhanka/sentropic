@@ -41,7 +41,7 @@
 - [x] Lot 1: issuer interface, env validation, mTLS transport and bounded custody lifetime.
 - [x] Lot 2: wire live HTTP/HMR and supervisor relay; retain k8s selection.
 - [x] Lot 3: D7-A opt-in CSP and worker query admission.
-- [ ] Lot 4: hermetic `data-plane.test.ts`, `data-plane-upgrade.test.ts`, `data-plane-config.test.ts`; existing live/relay/config regressions; typecheck and lint.
+- [x] Lot 4: hermetic `data-plane.test.ts`, `data-plane-upgrade.test.ts`, `data-plane-config.test.ts`, `data-plane-relay.test.ts`; existing live/relay/config regressions; typecheck and lint.
   - [x] Ephemeral certificates and fake signed-token issuer/server; no external service or credentials.
   - [x] HMR 1008/reconnect and handshake refusal; config and both CSP profiles.
   - [x] Scoped data-plane checks: 15 passing tests; TLS fixture time encoding corrected with a focused regression.
@@ -52,6 +52,7 @@
   - [x] Review: retain HTTP custody through transformation and backpressure; validate upstream status before Response construction.
   - [x] Review regressions: status 600 and HTTP consumers paused after upstream completion.
   - [x] Review P1 regression: expiry/revocation during a post-fetch live-route check refuses buffered bytes.
+  - [x] Local result: 191 tests across 13 files, scoped TypeScript passed; lint zero errors (one existing console warning).
 - [ ] Lot 5: README contract/env documentation, independent code review, scoped validation.
   - [x] README documents env names, opaque issuer contract, WS renewal and agent prerequisite.
 - [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.
