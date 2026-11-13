@@ -51,6 +51,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 - [ ] Round 2: publish Custody RPC contract, implement authoritative authenticated issue/watch-poll and agent HTTP/WS custody enforcement.
   - [x] Agent HTTP/WS proxy authenticates custody JWS, tenant, UID, principal, epoch and port; attaches revocable streams.
   - [x] Wire real listener and sandbox-private runsc UDS forwarding, preserving network=none confinement.
+  - [x] Verify upstream runsc port-forward protocol; use one --stream UDS donation per connection with bounded setup and short /run paths.
   - [x] Implement body-bound HMAC RPC and authoritative durable runtime/allocation resolution on issue and watch.
   - [x] Mount RPC in selected-node API composition and reject allocations with pending creation, revocation or removal.
   - [x] Preserve the builder Hono host context type on the custody wrapper.
