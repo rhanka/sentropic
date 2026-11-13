@@ -3,6 +3,7 @@ import { createServer, type Socket } from 'node:net';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { boundedRuntimeOutput, type RuntimeDiagnostic } from './qualification-diagnostics.js';
+import { forwardBudget, type ForwardBudget } from './forward-budget.js';
 
 /** runsc --stream connects once to a listening UDS and donates that connection
  * to the sentry. A private local relay creates one donation per HTTP/WS socket.
@@ -10,19 +11,30 @@ import { boundedRuntimeOutput, type RuntimeDiagnostic } from './qualification-di
  */
 export function forwardSandboxPort(binary: string, rootArg: string, uid: string, port: number, socketPath: string,
   launch: (binary: string, args: string[]) => ChildProcess = (command, args) => spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] }),
-  diagnostic?: RuntimeDiagnostic) {
+  diagnostic?: RuntimeDiagnostic, budget: ForwardBudget = forwardBudget) {
+  if (port !== 5173) throw new Error('sandbox_port_unavailable');
   const sockets = new Set<Socket>(); const children = new Set<ChildProcess>();
   const bridges = new Set<ReturnType<typeof createServer>>();
   let stopped = false; let sequence = 0;
   mkdirSync(dirname(socketPath), { recursive: true, mode: 0o700 });
-  const server = createServer(local => {
+  const server = createServer(local => { void (async () => {
     diagnostic?.('UDS connect', `accepted port=${port}`);
     sockets.add(local); local.pause();
+    local.on('error', () => local.destroy());
+    let release: () => void;
+    try { release = await budget.acquire(); }
+    catch {
+      sockets.delete(local);
+      local.end('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: 27\r\n\r\n{"error":"ports_saturated"}');
+      const timer = setTimeout(() => local.destroy(), 100); timer.unref(); return;
+    }
+    if (stopped || local.destroyed) { sockets.delete(local); release(); local.destroy(); return; }
     const stream = ++sequence, streamPath = `${socketPath}.${stream}`;
     let child: ChildProcess | undefined; let timer: ReturnType<typeof setTimeout>; let closed = false;
     const close = () => {
       if (closed) return; closed = true;
       clearTimeout(timer); local.destroy(); child?.kill('SIGKILL'); if (bridge.listening) bridge.close(); bridges.delete(bridge);
+      if (child && children.has(child)) child.once('exit', release); else release();
     };
     const bridge = createServer(remote => {
       diagnostic?.('port-forward donation', `connected stream=${stream}`);
@@ -49,7 +61,7 @@ export function forwardSandboxPort(binary: string, rootArg: string, uid: string,
         timer = setTimeout(() => { diagnostic?.('port-forward donation timeout', `stream=${stream}`); close(); }, 1000); timer.unref();
       } catch { close(); }
     });
-  });
+  })().catch(() => local.destroy()); });
   const ready = new Promise<{ socketPath: string }>((resolve, reject) => {
     server.once('error', () => reject(new Error('sandbox_port_unavailable')));
     server.listen(socketPath, () => resolve({ socketPath }));
