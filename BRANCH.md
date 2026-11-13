@@ -41,6 +41,7 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
 - [x] K1 Fix 1: normalize literal null runsc lists only; restart/lost+found/garbage regressions in restart.test.ts and runtime cleanup coverage.
 - [x] K1 Fixes 4–5: shared code-or-errno recognition; qualification/source/runtime/export regressions. Audit: no EROFS/EXDEV/ELOOP/ENOTEMPTY branches exist; preserve their fail-closed failures.
 - [ ] K1 Fix 2: real-adapter two-tenant isolation qualification, standalone SEA command, shipped shell wrapper and cleanup checks.
+  - [x] Real-adapter runner and in-sandbox probes; guards refuse non-isolated/non-root execution.
 - [ ] K1 Fix 3: archive root 0755, verification and operator custody modes.
 - [ ] K1 final: check-sandbox-node, build/verify artifact, code review, push PR and wait for green CI; RUN 9 and done marker.
 - [x] RUN 2 CI fixes: user-owned cache qualifies 31/31; exact Responses session-title regression reproduced red, then fixture amended without relaxing unknown-traffic rejection.
