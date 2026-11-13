@@ -62,7 +62,7 @@ describe('lifecycle', () => {
     await daemon.promoteToRunning('sentropic', created.id, { commandId: 'pending-run', quotaMiB: 512, uid: 1000, gid: 1000 });
     const first = await daemon.stopSandbox('sentropic', created.id, { commandId: 'pending-stop', stop: { retainOutput: true } });
     expect(first).toMatchObject({ state: 'stopping', allProcessesExited: false });
-    expect(admission.reservedMiB('sentropic')).toBe(768);
+    expect(admission.reservedMiB('sentropic')).toBe(704);
     await expect(daemon.exportArtifacts('sentropic', created.id, { commandId: 'early-export',
       spec: { buildId: 'b', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1000 } }))
       .rejects.toMatchObject({ code: 'sandbox_not_quiesced' });

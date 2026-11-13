@@ -11,12 +11,12 @@ Rollback pool `artifact-builders` stays min/desired 0, max 2.
 
 | systemd resource | Required value |
 | --- | --- |
-| `builder.slice` | MemoryMax=3456M, MemorySwapMax=0, CPUQuota=180% |
+| `builder.slice` | MemoryMax=2944M, MemorySwapMax=0, CPUQuota=180% |
 | `builder-tenant.slice` | Intermediate parent required by systemd naming |
-| `builder-tenant-{sentropic,immo}.slice` | MemoryMax=2560M, MemoryHigh=2304M, MemoryLow=768M, CPUWeight=100, TasksMax=4096 |
-| `builder-sbx-<physicalUid>.scope` | 768M warm OR 1664M build, MemorySwapMax=0, MemoryOOMGroup=yes |
+| `builder-tenant-{sentropic,immo}.slice` | MemoryMax=2304M, MemoryHigh=2304M, MemoryLow=704M, CPUWeight=100, TasksMax=4096 |
+| `builder-sbx-<physicalUid>.scope` | 704M warm OR 1536M build, MemorySwapMax=0, MemoryOOMGroup=yes |
 
-Admission reserves at most 3200 MiB including runsc sentry, cache, slab
+Admission reserves at most 2944 MiB including runsc sentry, cache, slab
 and overlays: one warm live OR standby per tenant plus one global build.
 A bounded non-preemptible queue alternates tenants strictly; full queues
 or capacity return 429 before allocation. Claim transfers the standby

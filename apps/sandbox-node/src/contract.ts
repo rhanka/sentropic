@@ -88,6 +88,8 @@ export interface ExecutionNodeBaseRef {
 }
 
 export interface ExecutionNodeQuota {
+  readonly memorySwapMaxMiB: number;
+  readonly maxWarmTotal: 1;
   readonly memoryLowMiB: number;
   readonly memoryHighMiB: number;
   readonly memoryMaxMiB: number;
@@ -100,16 +102,18 @@ export const EXECUTION_NODE_TENANT_SLICE_DEFAULTS: Record<
   ExecutionNodeQuota
 > = {
   sentropic: {
-    memoryLowMiB: 768,
-    memoryHighMiB: 2304,
-    memoryMaxMiB: 2560,
+    memorySwapMaxMiB: 256, maxWarmTotal: 1,
+    memoryLowMiB: 704,
+    memoryHighMiB: 2048,
+    memoryMaxMiB: 2304,
     cpuWeight: 100,
     tasksMax: 4096,
   },
   immo: {
-    memoryLowMiB: 768,
-    memoryHighMiB: 2304,
-    memoryMaxMiB: 2560,
+    memorySwapMaxMiB: 256, maxWarmTotal: 1,
+    memoryLowMiB: 704,
+    memoryHighMiB: 2048,
+    memoryMaxMiB: 2304,
     cpuWeight: 100,
     tasksMax: 4096,
   },
@@ -199,13 +203,13 @@ export interface ExecutionNodeInfo {
   readonly nodeInstanceId: string;
   readonly nodeEpoch: number;
   readonly classes: readonly ['sandbox'];
-  readonly parentSlice: { readonly name: 'builder.slice'; readonly memoryMaxMiB: 3456 };
+  readonly parentSlice: { readonly name: 'builder.slice'; readonly memoryMaxMiB: 2944 };
   readonly capabilities: { readonly supportedOps: readonly string[] };
 }
 
 export const EXECUTION_NODE_CAPACITY = {
-  parentMemoryMaxMiB: 3456, parentCpuQuotaPct: 180, reservableMiB: 3200,
-  sessionMiB: 768, buildMiB: 1664, diskMiBPerTenant: 16384,
+  parentMemoryMaxMiB: 2944, parentCpuQuotaPct: 180, reservableMiB: 2944,
+  sessionMiB: 704, buildMiB: 1536, diskMiBPerTenant: 16384,
   maxWarmPerTenant: 1, maxConcurrentBuildsGlobal: 1,
 } as const;
 
