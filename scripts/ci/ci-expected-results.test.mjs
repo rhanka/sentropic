@@ -243,13 +243,14 @@ test('should authenticate current-attempt receipts and fail closed on API errors
   };
   const github = { rest: { actions }, paginate: async (endpoint, input) => {
     assert.equal(endpoint, actions.listJobsForWorkflowRunAttempt);
+    if (input.per_page > 30) throw new Error('HTTP 502 oversized job page');
     requests.push(input);
     // Octokit's paginator returns the flattened members of all pages.
     return [1, 2].map(id => ({ id, run_id: 7, run_attempt: 3 }));
   } };
   const process = { env: { GITHUB_RUN_ATTEMPT: '3', GITHUB_WORKFLOW_SHA: 'workflow' } };
   await execute(() => files, context, github, process);
-  assert.deepEqual(requests, [params, { ...params, per_page: 100 }]);
+  assert.deepEqual(requests, [params, { ...params, per_page: 30 }]);
   assert.deepEqual(captured.jobs.map(job => job.id), [1, 2]);
   assert.equal(captured.run.run_attempt, 3);
   assert.equal(captured.sourceSha, 'abc');
@@ -265,6 +266,25 @@ test('should authenticate current-attempt receipts and fail closed on API errors
       assert.equal(captured, undefined, 'an API error must never produce a receipt');
     }
   }
+});
+
+test('should capture every capacity receipt using bounded job pages', async () => {
+  const script = workflow.jobs['ci-capacity-receipts'].steps
+    .find(step => step.name === 'Capture identified run and expanded job receipts').with.script;
+  const execute = new (Object.getPrototypeOf(async function () {}).constructor)('require', 'context', 'github', 'process', script);
+  const jobs = Array.from({ length: 61 }, (_, id) => ({ id }));
+  let captured;
+  const actions = { getWorkflowRunAttempt: async () => ({ data: { head_sha: 'abc' } }),
+    listJobsForWorkflowRunAttempt: Symbol('jobs') };
+  const github = { rest: { actions }, paginate: async (endpoint, input) => {
+    assert.equal(endpoint, actions.listJobsForWorkflowRunAttempt);
+    assert.equal(input.per_page, 30);
+    return jobs;
+  } };
+  await execute(() => ({ readFileSync: () => JSON.stringify({ expected: [] }),
+    writeFileSync: (_path, value) => { captured = JSON.parse(value); } }),
+  { repo: {}, runId: 7, eventName: 'pull_request' }, github, { env: { GITHUB_RUN_ATTEMPT: '3' } });
+  assert.deepEqual(captured.jobs, jobs);
 });
 
 test('should delete only current-run transport artifacts after success and retain them after any failure or cancellation', async () => {
@@ -320,7 +340,7 @@ test('should delete only current-run transport artifacts after success and retai
     deleteArtifact: async input => deleted.push(input) } }, paginate: async (endpoint, input) => {
       if (endpoint === jobsList) {
         jobReads++;
-        assert.deepEqual(input, { ...context.repo, run_id: 7, attempt_number: 3, per_page: 100 });
+        assert.deepEqual(input, { ...context.repo, run_id: 7, attempt_number: 3, per_page: 30 });
         return jobs;
       }
       assert.equal(endpoint, list);
