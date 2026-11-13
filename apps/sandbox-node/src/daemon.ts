@@ -86,6 +86,7 @@ export class ExecutionNodeDaemon {
   private readonly now: () => number;
   private readonly sandboxes = new Map<string, SandboxRecord>();
   private readonly launches = new Map<string, Promise<SandboxRecord>>();
+  private readonly transitions = new Map<string, Promise<unknown>>();
   private readonly idempotence = new Map<string, { bodyHash: string; result: unknown }>();
 
   constructor(options: DaemonOptions) {
@@ -102,6 +103,17 @@ export class ExecutionNodeDaemon {
 
   private key(tenantId: ExecutionNodeTenantId, id: string): string {
     return `${tenantId}:${id}`;
+  }
+
+  private transition<T>(id: string, produce: () => Promise<T>): Promise<T> {
+    const previous = this.transitions.get(id);
+    const result = (async () => {
+      await previous?.catch(() => {});
+      await this.launches.get(id)?.catch(() => {});
+      return produce();
+    })().finally(() => { if (this.transitions.get(id) === result) this.transitions.delete(id); });
+    this.transitions.set(id, result);
+    return result;
   }
   private requireScope(sandbox: SandboxRecord, scope: ExecutionNodeDevScope): void {
     validateDevScope(scope);
@@ -274,6 +286,8 @@ export class ExecutionNodeDaemon {
     await this.launches.get(sandbox.id);
     if (sandbox.state !== 'running') return;
     if (code !== 0) { await this.failSandbox(sandbox.tenantId, sandbox.id, `runtime exited: ${code}`); return; }
+    await this.transition(sandbox.id, async () => {
+    if (sandbox.state !== 'running') return;
     sandbox.state = 'stopping';
     sandbox.allProcessesExited = await this.adapter.stopSandbox(sandbox.runtimeId!);
     if (sandbox.allProcessesExited) {
@@ -281,6 +295,7 @@ export class ExecutionNodeDaemon {
       sandbox.outputSubPath = 'ui/dist';
       this.audit.record('sandbox.stopped', sandbox.tenantId, sandbox.id, sandbox.state);
     }
+    });
   }
 
   private async launchRuntime(sandbox: SandboxRecord, input: { uid: number; gid: number }): Promise<SandboxRecord> {
@@ -382,7 +397,7 @@ export class ExecutionNodeDaemon {
     if (input.stop.retentionTtlMs !== undefined && input.stop.retentionTtlMs > 300_000) {
       throw new ExecutionNodeError('command_id_payload_mismatch', 'retentionTtlMs exceeds 300s');
     }
-    return this.idempotent(tenantId, input.commandId, { id, stop: input.stop }, async () => {
+    return this.idempotent(tenantId, input.commandId, { id, stop: input.stop }, () => this.transition(id, async () => {
       if (sandbox.state !== 'running' && sandbox.state !== 'stopping') {
         throw new ExecutionNodeError('already_claimed', `sandbox ${id} in state ${sandbox.state}`);
       }
@@ -401,7 +416,7 @@ export class ExecutionNodeDaemon {
       }
       this.audit.record('sandbox.stopped', tenantId, id, sandbox.state);
       return sandbox;
-    });
+    }));
   }
 
   async writeFile(tenantId: ExecutionNodeTenantId, id: string, input: {
@@ -435,7 +450,7 @@ export class ExecutionNodeDaemon {
     if (input.spec.maxBytes <= 0) {
       throw new ExecutionNodeError('command_id_payload_mismatch', 'maxBytes must be positive');
     }
-    return this.idempotent(tenantId, input.commandId, { id, spec: input.spec }, async () => {
+    return this.idempotent(tenantId, input.commandId, { id, spec: input.spec }, () => this.transition(id, async () => {
       if (sandbox.state !== 'stopped-output-retained' && sandbox.state !== 'exported') {
         throw new ExecutionNodeError('sandbox_not_quiesced', `sandbox ${id} is ${sandbox.state}`);
       }
@@ -453,7 +468,7 @@ export class ExecutionNodeDaemon {
       sandbox.exportedBytes = bytes.length;
       this.audit.record('sandbox.exported', tenantId, id, `${bytes.length}B`);
       return { bytes, sandbox };
-    }, false);
+    }), false);
   }
 
   async deleteSandbox(tenantId: ExecutionNodeTenantId, id: string, input: {
@@ -466,8 +481,7 @@ export class ExecutionNodeDaemon {
     this.requireScope(sandbox, input.devScope);
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, tenantId, input.commandId, body, 'DELETE', `/v1/sandboxes/${id}`, sandbox.ownership);
-    return this.idempotent(tenantId, input.commandId, { id }, async () => {
-      await this.launches.get(id)?.catch(() => {});
+    return this.idempotent(tenantId, input.commandId, { id }, () => this.transition(id, async () => {
       if (sandbox.state === 'running') {
         throw new ExecutionNodeError('sandbox_still_running', `sandbox ${id} is running`);
       }
@@ -477,17 +491,19 @@ export class ExecutionNodeDaemon {
       this.releaseSlot(sandbox);
       this.audit.record('sandbox.destroyed', tenantId, id);
       return sandbox;
-    });
+    }));
   }
 
   async failSandbox(tenantId: ExecutionNodeTenantId, id: string, detail?: string): Promise<SandboxRecord> {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
+    return this.transition(id, async () => {
     if (!TERMINAL.has(sandbox.state)) {
       sandbox.state = 'failed';
       sandbox.allProcessesExited = sandbox.runtimeId ? await this.adapter.stopSandbox(sandbox.runtimeId) : true;
       this.audit.record('sandbox.failed', tenantId, id, detail);
     }
     return sandbox;
+    });
   }
 }
