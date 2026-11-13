@@ -56,6 +56,8 @@ Status: FROZEN for S1-A1a / S1-K1 / S1-B1. Open points are listed in §8 and are
 
 ## 6. Endpoints (frozen surface)
 
+- AMD-28 profile mapping: live/standby denote the daemon-derived session slots. The existing `node-22` wire profile remains valid only in those slots, threaded explicitly to the runtime; heavy, browser-harness and unknown profiles cannot select ports.
+
 - OperatorScope: `GET /v1/node` has no tenantId; reports parentSlice `{ name: 'builder.slice', memoryMaxMiB: 2944 }` and capabilities.supportedOps for actually delivered operations. All TenantScope calls require tenantId or 400 missing_tenant_id. QuotaSnapshot contains limits, effective controlGroup, usage.memoryCurrentBytes/reservedMemoryBytes and globalBuildSlot `{ maxConcurrentBuildsGlobal: 1, holderTenantId?, queueDepth }`; no burst fields.
 - `GET`/`PUT /v1/tenants/:tenantId/quotas`, `GET /v1/tenants/:tenantId/bases/:baseId` (`kind`: `rootfs | dependencies | source | prebundle | vendor-esm...`; cross-tenant base read -> `403 cross_tenant_base_forbidden`).
 - `PUT /v1/tenants/:tenantId/bases`: signed `{commandId,ownership,base:{tenantId,baseId,kind,identityDigest},url}`; stream HTTPS without redirects, verify SHA-256, fsync/publish immutable EROFS and register tenant base. Shared rootfs is sentropic-built and deployed with the agent by k8s; PUT cannot replace it. GET node advertises its digest and `shared-rootfs` baseId.

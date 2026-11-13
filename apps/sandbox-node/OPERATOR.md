@@ -60,11 +60,16 @@ unreadable settings, false, or a different runsc digest remove `ports` from
 `GET /v1/node` supportedOps, refuse creation/start with `409 ports_disabled`,
 cut open HTTP/WS within 250ms, and destroy ports sandboxes. Cleanup failures are
 retried. Any runsc upgrade requires a new qualification before k8s reopens it.
-The gate opens only its own in-memory switch, pinning the binary after hardened
-prerequisites succeed; it never edits the production file.
+The gate opens only private qualification settings, pinning the binary after
+hardened prerequisites succeed; it never edits the production file. Switch
+scenarios use the production observer with a private config and a copy of the
+qualified binary, then atomically replace those gate files. Discovery uses the
+same capability builder as GET node.
 
 The stream owner observes configuration/stat/hash asynchronously, and closes
 activation immediately when the runsc identity changes, before rehashing it.
+Affirmative observations expire after 150ms on a monotonic clock, including
+when subsequent config/stat I/O hangs; late reads cannot extend that lease.
 Blocking runsc, mounts, file writes and export commands run in a dedicated
 worker thread embedded in the SEA (not an operator-supplied script). Both
 threads and forwarding helpers share the agent's 192M/128-task cgroup. Fixed
@@ -73,6 +78,11 @@ execute systemctl while streams are open. Custody closes locally before
 asynchronous WAL persistence; acknowledgement still waits for file and directory
 sync. Hermetic regressions hold HTTP/WS streams open while a real worker blocks
 in a host command, then measure cuts.
+Worker death closes admission and reconciles parent-retained launch identities
+in a cleanup-only worker, including interrupted launches and agent-side helpers.
+Reservations remain held until destruction succeeds. A failed custody WAL write
+does not roll back the local epoch: GET exposes it, and the control plane retries
+revocation or stop/delete with a fresh signed ticket at that epoch.
 
 The updated archive adds authenticated `ANY /v1/ports/5173/*` and WebSocket
 upgrades. Only mTLS CN `data-plane:artifact-content` may use these routes.
@@ -82,7 +92,9 @@ are checked against the active sandbox owner/epoch, WAL revocation floor and
 60-second TTL. Expiry/revocation cuts HTTP and sends WS close 1008.
 
 Only profiles `live` and `standby` may opt into `network: ports` on fixed port
-5173. Artifact-build, prebundle, cold-materialize, browser-harness and all other
+5173. These are daemon session slots; the existing `node-22` wire profile is
+accepted only with an explicit derived live/standby slot at the runtime boundary.
+Artifact-build, prebundle, cold-materialize, browser-harness and all other
 profiles remain `none`. gVisor uses `--network=sandbox --platform=systrap`
 inside a fresh `unshare --net` namespace with only `lo` brought up. The OCI
 network namespace references `/proc/self/ns/net` of that private launcher.
@@ -101,8 +113,12 @@ pcap, packet writes, flag overrides, dev.gvisor.* annotations and network
 devices; capabilities are empty and host UDS/FIFO are explicitly `none`.
 Any violation returns `500 network_isolation_violation`, destroys the sandbox
 and writes an audit record; there is no fallback.
-Gates print the digest-named verified archive identity and SHA-256 of the
-resolved runsc binary. Verify SHA256SUMS before invoking the gate.
+Gate scripts verify SHA256SUMS and load PATH and the helper cap from the shipped
+agent.env. They require and print the resolved runsc path, release-20261102.0
+version and SHA-256 alongside the digest-named verified archive identity.
+Both scripts forward QUALIFICATION_TIMEOUT_MS (default 120000, maximum 300000).
+The expanded VM budget has not been measured by this source-only lane; k8s must
+record its elapsed time and cleanup outcome in the real-host receipt.
 `--network=none` rejects gVisor's port-forward RPC and remains for other workloads.
 The data-plane qualification first verifies loopback-only interfaces and a TCP
 accept on 5173 from inside the sandbox (5-second bound). Its numbered `STEP`
@@ -125,14 +141,18 @@ donated live connections conservatively until close. Eight additional requests
 may queue for at most 100ms; saturation returns `429 ports_saturated`.
 Helpers inherit the agent's 192M/128-task cgroup, never a tenant scope.
 Qualification holds that cap, bursts twelve more mTLS connections and verifies
-refusals, slot drainage and effective cgroup limits. It also probes TCP/UDP
+refusals, slot drainage and effective cgroup limits. Initial connections start
+concurrently from idle; receipts record observed live-helper peak, memory.peak,
+sampled task peak and zero OOM-kill delta. It also probes TCP/UDP
 public IPv4 (22/8443), metadata IPv4/IPv6, global IPv6, DNS, host loopback,
 the other tenant's 5173 and a positive witness on the private kernel lo.
 The shipped native `network-probe` uses direct raw/packet/UDP socket syscalls;
 timeouts never count as UDP/TCP refusal. For off-sandbox UDP targets, a successful
 send fails qualification even if a remote ICMP rejection subsequently arrives;
 only local connect/send refusal proves egress denial. Gates compare host `ss -ltnup` before
-and after, and reconcile scopes/processes/netns references after stop, failure,
+and after as protocol/local-address sets, ignoring volatile queues/PIDs/FDs.
+Tenant TCP/UDP self-controls bracket cross-tenant probes and require zero
+delivered probe datagrams. Gates reconcile scopes/processes/netns references after stop, failure,
 kernel-confirmed OOM and a real SIGKILL of the gate's disposable agent worker.
 The existing worker bootstrap multiplexes live and supervisor traffic on 5173.
 Operator qualification must cover concurrent HTTP/HMR, revocation and expiry
