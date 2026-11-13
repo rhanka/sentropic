@@ -27,6 +27,7 @@ import { createHostLiveApi } from './host-live-api';
 import { createRemoteLive } from './remote-live';
 import { createRemoteDrafts } from './remote-drafts';
 import type { ForgeBindings } from './forge-binding';
+import type { SandboxBackend } from './sandbox-backend';
 
 /** Live sessions admitted per environment (four builder pod slots shared by live and build pods:
  * 1 warm + 2 live/build + 1 prewarm; a 5th admitted session only waits for a pod slot before a `queued` failure). */
@@ -45,6 +46,8 @@ export function createArtifactLiveService(options: Pick<LivePorts,
   'binding' | 'jobBinding' | 'seedBinding' | 'seedSession' | 'forge' | 'drafts' | 'routes' | 'publication' | 'now' | 'id'
   | 'invitations'> & {
     pool: Pool; cacheBlobs: PrivateCacheBlobs; placement: BuilderPlacement;
+    /** Selected by product configuration; Kubernetes composition remains the default rollback. */
+    sandboxBackend?: SandboxBackend;
     /** Namespace-only client of the builder namespace (`createInClusterKubernetes(placement)` in the product). */
     kubernetes: KubernetesCore;
     supervisorKey: SigningKey; relayUrl: string;
@@ -63,6 +66,8 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     sizing?: WorkerSizing;
     installEnv?: Record<string, string>;
   }) {
+  if (options.sandboxBackend) return createLiveController({ ...options, store: createPostgresLiveStore(options.pool),
+    ...options.sandboxBackend });
   const channel = createRelaySupervisorChannel({ baseUrl: options.relayUrl });
   const store = createPostgresLiveStore(options.pool);
   const { node, maxWaitMs, pollMs, budget } = options.heavy;
