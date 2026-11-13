@@ -88,15 +88,7 @@ export function createLiveProxy(ports: LiveProxyPorts, options: {
       const admitted = await this.authorize(request, artifactId);
       if (!admitted) return new URL(request.url).pathname.startsWith('/_live/') ? refused() : undefined;
       const { route, upstream, path } = admitted;
-      const response = options.dataPlane ? await dataPlaneFetch(options.dataPlane, { kind: 'live', route }, path, {
-        method: request.method, headers: { accept: request.headers.get('accept') ?? '*/*', 'accept-encoding': 'identity' },
-        signal: AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]), maxBytes: 16 * 1024 * 1024,
-      }) : await (ports.fetch ?? fetch)(new URL(path, upstream), {
-        method: request.method, redirect: 'error', signal: AbortSignal.timeout(10_000),
-        // Build a new allowlist. Cookies, tokens, Authorization, Origin and forwarding credentials never reach Vite.
-        headers: { accept: request.headers.get('accept') ?? '*/*', 'accept-encoding': 'identity' },
-      });
-      if (options.dataPlane && response.status === 403) return response;
+      const serveResponse = async (response: Response) => {
       if (response.status !== 200 || !await valid(route)) { await response.body?.cancel(); return refused(); }
       const reader = response.body?.getReader(); const chunks: Uint8Array[] = []; let size = 0;
       if (reader) for (;;) {
@@ -114,6 +106,17 @@ export function createLiveProxy(ports: LiveProxyPorts, options: {
       return new Response(request.method === 'HEAD' ? null : bytes, {
         status: 200, headers: liveHeaders(mime, size, new URL(request.url).origin, route.sessionId, hashes, options.cspProfile),
       });
+      };
+      if (options.dataPlane) return dataPlaneFetch(options.dataPlane, { kind: 'live', route }, path, {
+        method: request.method, headers: { accept: request.headers.get('accept') ?? '*/*', 'accept-encoding': 'identity' },
+        signal: AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]), maxBytes: 16 * 1024 * 1024,
+        consume: serveResponse,
+      });
+      return serveResponse(await (ports.fetch ?? fetch)(new URL(path, upstream), {
+        method: request.method, redirect: 'error', signal: AbortSignal.timeout(10_000),
+        // Build a new allowlist. Cookies, tokens, Authorization, Origin and forwarding credentials never reach Vite.
+        headers: { accept: request.headers.get('accept') ?? '*/*', 'accept-encoding': 'identity' },
+      }));
     },
   };
 }
