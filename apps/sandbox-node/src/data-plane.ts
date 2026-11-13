@@ -104,7 +104,13 @@ export function createDataPlane(options: {
           upstream.once('close', () => { if (!closing) socket.destroy(); });
           socket.pipe(upstream).pipe(socket);
         });
-        outgoing.once('response', response => { response.destroy(); close(); });
+        outgoing.once('response', response => {
+          response.resume();
+          if (response.statusCode === 429) {
+            closing = true; detach(); streams.delete(close);
+            socket.end('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: 27\r\n\r\n{"error":"ports_saturated"}');
+          } else close();
+        });
         outgoing.once('error', close); outgoing.end();
       } catch { detach(); outgoing?.destroy(); socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'); }
     },
