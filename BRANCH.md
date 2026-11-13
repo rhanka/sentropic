@@ -16,11 +16,12 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
 - **Allowed Paths (implementation scope)**:
   - `apps/sandbox-node/**`
   - `scripts/security/sca-gate.test.mjs` (BR-SN1-EX11: expected covered lock inventory only)
+  - `scripts/ci/ci-expected-results.test.mjs` (BR-SN1-EX12: receipt pagination regression only)
   - `packages/contracts/**` (ExecutionNodeV1 types only: `src/execution-node-v1.ts` + its re-export in `src/index.ts`)
   - `spec/SPEC_EVOL_SANDBOX_NODE.md`
   - `BRANCH.md`
   - `package-lock.json` (restore published contracts version only)
-  - `.github/workflows/ci.yml` (BR-SN1-EX7: sandbox qualification step only)
+  - `.github/workflows/ci.yml` (BR-SN1-EX7: sandbox qualification; BR-SN1-EX12: bounded job-receipt pagination only)
   - `e2e/fixtures/provider-server.mjs` (BR-SN1-EX8: Responses session-title fixture only)
   - `e2e/fixtures/provider-server.test.mjs` (BR-SN1-EX8 regression)
   - `ui/src/routes/folder/new/+page.svelte` (BR-SN1-EX9: CI-blocking draft-creation race only)
@@ -41,6 +42,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] BR-SN1-EX12: CI 43380543080 attempt 2 passed the API suite but receipt capture failed on GitHub HTTP 502 for per_page=100; independent reads reproduced 502 while pages of 30 succeeded. Bound all current-attempt job-list requests to 30, keeping Octokit full pagination and fail-closed errors. Impact: request size only, no skipped receipts/checks/retries/timeout change; rollback: restore page size 100 after provider repair.
 - [x] RUN 5 CI 43379755991 lock-policy failure: removed the one-shot lock-generation make target after the guard flagged its npm install --package-lock-only path. SEA build continues to use committed exact lock + npm ci; no policy relaxation, no runtime/archive change.
 - [x] RUN 5 final artifact: 2206040078562ddf4c32d0d9d34825fc1dee3abba7cc76ef45ce8b6bee3eed6e (Node SEA + shared rootfs + public config/unit/README/B-test). Archive and all file checksums verified, extracted SEA self-test passes. 75 standalone regressions and 14 SCA inventory regressions pass; scoped lint has zero errors.
 - [x] BR-SN1-EX11: CI 43379243080 security-sca-gate failed because its expected lock inventory omitted the new SEA build-tools lock. Add that exact covered directory to its expectation; scanner coverage already includes it automatically. Impact: inventory assertion only, no policy exclusion/suppression; rollback: remove the directory from the expectation if the SEA tool lock is removed.
