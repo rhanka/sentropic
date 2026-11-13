@@ -97,11 +97,14 @@ The client implements B0a's `Custody RPC` contract: authenticated POSTs to
 `{subject}`. `X-Custody-Rpc` carries `kid:timestamp:mac`; HMAC-SHA256 covers the
 version, method, full path, fresh millisecond timestamp and SHA-256 of those body
 bytes. Requests and responses are bounded at 16 KiB and 500 ms. Redirects refuse.
-Each attached subject on **every replica** polls watch after 250 ms, independently
-of other replicas. The watch fence must match before and after issuance; changes,
+Each attached subject on **every replica** polls watch every 250 ms, independently
+of response latency and other replicas. An independent watchdog cuts flows when
+the last authoritative OK's request-send time reaches 900 ms (100 ms margin
+below the one-second revocation bound). Late replies never extend that window
+from their arrival time. The watch fence must match before and after issuance; changes,
 refusals, invalid responses, timeouts or unavailable RPC close the local flows.
 Unsubscribing cancels its timer and in-flight watch. API-owned `port` is preserved
-(live 5173, supervisor 8792); no edge default overrides it. This bounded polling
+(live and supervisor both 5173); no edge default overrides it. This bounded polling
 reaches all replicas without relying on a single process's subscription list.
 
 Every new HTTP hop and WS handshake obtains fresh custody. The edge sends only its allowlisted application headers plus `X-Tenant-Id`, `X-Expected-Physical-Uid`, `X-Custody-Token` to `/v1/ports/:port/<original path and query>`. Browser cookies, Authorization and caller-supplied custody headers are never forwarded. Supervisor frames still pass the existing signature/fence checks before any custody is issued.

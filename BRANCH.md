@@ -38,6 +38,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Round 3: fixed 250 ms polling and independent 900 ms request-send freshness bound; delayed stale OK regressions across two replicas.
+- [x] Round 3: fake agent rejects execution tickets, mismatched active principal/epoch and ports other than 5173; compact JWS verification mirrors B0a.
 - [x] Round 2: compact EdDSA fixture, faithful agent custody guard, authenticated RPC client and replica-wide watch.
   - [x] Compact six-claim EdDSA JWS and real CustodyGuard WAL/stream lifecycle replace the two-segment fake and watcher-only revocation.
   - [x] RPC: reuse controller HMAC identity, bounded responses, watch-before/after-issue and fail-closed per-replica polling.
