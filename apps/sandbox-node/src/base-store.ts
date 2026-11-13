@@ -3,6 +3,7 @@ import { mkdir, open, rename, rm, chmod } from 'node:fs/promises';
 import { createReadStream, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { NODE_ROOT, type TenantBase } from './mounts.js';
+export const baseCacheHits = { sentropic: 0, immo: 0 };
 
 export async function ensureBase(base: TenantBase, url: string,
   options: { root?: string; fetchBase?: typeof fetch; environment?: string } = {}): Promise<string> {
@@ -25,7 +26,7 @@ export async function ensureBase(base: TenantBase, url: string,
     for await (const chunk of createReadStream(path)) hash.update(chunk);
     if (hash.digest('hex') !== base.identityDigest) throw new Error('base digest mismatch');
   };
-  if (existsSync(path)) { await verify(); return path; }
+  if (existsSync(path)) { await verify(); baseCacheHits[base.tenantId]++; return path; }
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = `${path}.${randomUUID()}.part`;
   const file = await open(temporary, 'wx', 0o600);

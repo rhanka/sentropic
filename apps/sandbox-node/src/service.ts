@@ -11,6 +11,7 @@ import { totalmem } from 'node:os';
 import { nextNodeEpoch, hostBudget } from './node-state.js';
 import { OperatorGuard } from './operator.js';
 import { NodeControl } from './node-control.js';
+import { nodeMetrics } from './metrics.js';
 import { createPrivateKey, createPublicKey, sign, createHash } from 'node:crypto';
 
 function required(name: string): string {
@@ -57,6 +58,8 @@ const server = createAgentServer(tls, async (req, res, role) => {
         nodeInstanceId, nodeEpoch, provenancePublicKey, draining: control.draining, classes: ['sandbox'],
         parentSlice: { name: 'builder.slice', memoryMaxMiB: reservableMiB, memoryLowMiB: 1408, memorySwapMaxMiB: 512 },
         intermediateSlice: { name: 'builder-tenant.slice', memoryLowMiB: 1408 }, hostMemory,
+        metrics: nodeMetrics(node), tenantSlices: Object.fromEntries((['sentropic', 'immo'] as const).map(id =>
+          [id, node.admission.quotaSnapshot(id, `/builder.slice/builder-tenant.slice/builder-tenant-${id}.slice`)])),
         capabilities: { supportedOps: ['node', 'quotas', 'bases', 'create', 'start', 'claim', 'stop', 'export', 'delete', 'renew', 'revoke-custody', 'write'] } }); return;
     }
     if (scope.scope === 'tenant' && url.pathname === `/v1/tenants/${scope.tenantId}/quotas` && req.method === 'GET') {
