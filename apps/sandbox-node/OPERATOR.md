@@ -45,6 +45,10 @@ tenant ancestry before writing scope-only `cgroup.kill`. Require
   Sandboxes use runsc `--network=none`; crun is benchmark witness only.
 - EROFS/overlay support; `/var/lib/builder/tenants/<tenantId>` mode 0700.
   Enforce 16 GiB project quota and inode quota per tenant at S1-A1a.
+- Install `e2fsprogs`, `quota` and loop-device support. Before launch the agent
+  formats a private ext4 volume with project quotas and applies the session's
+  `quotaMiB`/`quotaInodes` hard limits to its upper/work/output project.
+  Missing quota support fails launch; memory remains a separate 704/1536 MiB limit.
 - BHS public S3 endpoint, prefix-limited tenant keys or presigned URLs.
 - No Python: Node/static probes only. Enable unattended-upgrades with
   an agreed reboot window. Rebuild from cloud-init, without snapshots.
@@ -94,7 +98,24 @@ must be refused by the host's source policy.
 Each session request includes devScope; creation carries it in spec.
 `POST /v1/bases/ensure` takes `{commandId,ownership,base,url}` (HTTPS, SHA-256);
 creation requires rootfs/source bases and an absolute argv command, with no shell.
+Imports accept only `s3.bhs.io.cloud.ovh.net/<bucket>/tenants/<tenantId>/...`
+or `<bucket>.s3.bhs.io.cloud.ovh.net/tenants/<tenantId>/...`; redirects,
+encoded paths, credentials and alternate ports are rejected before download.
 `POST /v1/sandboxes/:id/start` starts a created record. `/write` takes
 `{commandId,devScope,path,contentBase64}`. `/stop` takes `stop`; `/export` takes
 `spec` and returns gzip bytes after quiescence; DELETE releases capacity only
 after runtime state, scope, mounts and private directories are removed.
+
+Authentication occurs before enqueueing a heavy request. The agent keeps an
+immutable, node-epoch-bound queue entry; the original ticket's 30-second expiry
+does not invalidate an already accepted wait. Service deadlines start on grant.
+Each later mutation still requires a fresh ticket. Export retries reread stopped
+output with the same body binding; completed promises retain no archive buffer.
+
+On the isolated qualification host, after verifying the extracted release,
+set `QUAL_RELEASE_DIR` to that release and `QUALIFICATION_ONLY=isolated`, then run
+`make -f Makefile -f apps/sandbox-node/checks.mk qualify-sandbox-node-disk ENV=test-sandbox-host`.
+This executes real non-root writes exceeding block and inode hard limits and
+requires `EDQUOT` in both cases; it unmounts/removes only its private test volumes.
+It requires root for mount/quota setup. It is not a substitute for the full
+runsc/EROFS lifecycle qualification and does not deploy the agent.
