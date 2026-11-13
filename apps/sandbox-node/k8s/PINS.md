@@ -29,7 +29,7 @@ values below:
 ## Verify
 
 - RUN 4 compiled agent release (local build, not published/deployed):
-  `sha256:01ffb345448177c33b6ecd7fe76a463026496c7817c8793ffbf71b29e1450bdb`.
+  `sha256:6438720be250517de1613b570c8df42c5e6f318fb03bfdf74b5a839af87e6969`.
 
 - `sha256sum -c apps/sandbox-node/k8s/out/SHA256SUMS` (source tarball).
 - Verify the archive against `out/SHA256SUMS` before extraction; install
