@@ -26,6 +26,8 @@
 ## Feedback Loop
 - [x] Astra review: guard delayed launcher exit after scope-map teardown; add regression before archive rebuild.
 - [x] Astra review: reject empty/premature HTTP responses before first bytes; bound runsc version detection with SIGKILL.
+- [x] Enforce the wall-clock deadline in a separate supervisor event loop: SIGTERM the worker alone to preserve flock during cleanup, then process-group SIGKILL after 10 seconds for a blocked worker.
+- [x] Astra closure review APPROVE after signal-routing regression; report `.tmp/rv/dpq-review-astra-closure.md`.
 - [x] Packet references merged #1022; fetched `origin/main` is `87485f912` (#1020). Use the actual origin/main ancestry.
 - [x] Track import is reserved for the conductor, the designated single writer; deliver the updated branch checklist for import.
 
