@@ -162,6 +162,7 @@ async function runAttempt(ports: LivePorts, key: LiveKey, runtime: LiveRuntime, 
     runtime = await cleanRuntime(ports, key, runtime);
     const cache = await runPhase(key, 'install', () => ports.cache.acquire(source, runtime));
     await runPhase(key, 'prepare', () => ports.worker.prepare(runtime, source, cache));
+    runtime = await transition(ports, key, runtime, state => { state.runtime.attempt!.evidence = buildEvidence(source, cache); });
     const building = runtime;
     const candidate = await ports.heavy.run(building.podName, 'build', () => runPhase(key, 'build',
       () => withinPhase(ports.worker.build(building, building.attempt!))));

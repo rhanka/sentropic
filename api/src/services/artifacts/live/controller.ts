@@ -11,6 +11,7 @@ import { fenceInvitations } from './invitations';
 import { projectRevision } from './project';
 import { authorizeLive, liveRole, type LiveActor } from './authorize';
 import { currentBinding, currentRuntime, failed, teardown, transition } from './transitions';
+import { resumeRetainedExport } from './resume-export';
 
 export function createLiveController(ports: LivePorts) {
   /** Finishes an interrupted teardown without clearing its recorded cause; the scheduler tick drives it until the
@@ -52,6 +53,8 @@ export function createLiveController(ports: LivePorts) {
         return idleBuild(ports, key);
       }
       if (runtime.phase === 'BUILD_QUEUED') return queuedBuild(ports, key);
+      if (runtime.phase === 'BUILDING' || runtime.phase === 'VERIFYING') return resumeRetainedExport(ports, key, runtime);
+      if (runtime.phase === 'SAVING' || runtime.phase === 'DECOMMISSIONING') return teardown(ports, key, runtime);
       // An interrupted teardown keeps progressing on the scheduler tick until the pod is gone (DORMANT).
       if (runtime.phase === 'RECOVERING') return recover(key);
       // An interrupted start whose pod is gone or failed is retried no more: the tick retires it to
