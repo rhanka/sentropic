@@ -18,10 +18,11 @@ describe('d2-4 memory admission', () => {
     expect(admission.reservedMiB('immo')).toBe(704);
   });
 
-  it('should reject on full memory.current including cache and sentry before OOM', async () => {
+  it('should admit on reservations despite cache left by destroyed scopes', async () => {
     const admission = new ExecutionNodeAdmission(quotas, { memoryCurrentMiB: () => 1800 });
-    expect(() => admission.admit('sentropic', 'live', 'a')).toThrowError(/memory reservation/);
-    await expect(admission.admitBuild('sentropic')).rejects.toMatchObject({ status: 429 });
-    expect(admission.builds.snapshot().holderTenantId).toBeUndefined();
+    admission.admit('sentropic', 'live', 'a');
+    await admission.admitBuild('sentropic');
+    expect(admission.reservedMiB('sentropic')).toBe(2240);
+    expect(admission.quotaSnapshot('sentropic', '/test').usage.memoryCurrentBytes).toBe(1800 * 1048576);
   });
 });
