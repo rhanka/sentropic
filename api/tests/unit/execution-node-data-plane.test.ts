@@ -7,6 +7,31 @@ describe('real custody RPC to real agent data plane', () => {
   const fixtures: Awaited<ReturnType<typeof custodyRpcFixture>>[] = [];
   const setup = async () => { const fixture = await custodyRpcFixture(); fixtures.push(fixture); return fixture; };
   afterEach(async () => { await Promise.all(fixtures.splice(0).map(f => f.close())); });
+  it('should preserve owner and guest grants from authorizeLive and refuse a revoked guest', async () => {
+    const f = await setup();
+    const owner = await f.grant({ principalId: 'principal' });
+    const guest = await f.grant({ principalId: 'guest', invitation: { id: 'invite', epoch: 1, expiresAt: Date.now() + 30_000 } });
+    for (const subject of [owner, guest]) {
+      const response = await f.call('issue', subject); expect(response.status).toBe(200);
+      const lease = await response.json(); expect(lease.principalId).toBe('principal');
+      const req = f.open(lease.token); req.on('error', () => {});
+      const res = await new Promise<import('node:http').IncomingMessage>(resolve => { req.once('response', resolve); req.end(); });
+      expect(res.statusCode).toBe(200); res.destroy();
+    }
+    f.revokeGuest();
+    expect((await f.call('issue', guest)).status).toBe(403);
+    expect((await f.call('watch', guest)).status).toBe(403);
+    expect((await f.call('issue', owner)).status).toBe(200);
+  });
+  it('should keep watch authority stable across access updates and distinguish changed grants', async () => {
+    const f = await setup(); const initial = await (await f.call('watch')).json();
+    f.activity();
+    expect(await (await f.call('watch')).json()).toEqual(initial);
+    expect((await f.call('issue')).status).toBe(200);
+    const changed = { ...f.subject, route: { ...f.route, expiresAt: f.route.expiresAt - 1000 } };
+    expect((await (await f.call('watch', changed)).json()).version).not.toBe(initial.version);
+    f.stop(); expect((await f.call('watch')).status).toBe(403);
+  });
   it('should issue a usable compact token over HTTP and cut attached HTTP and HMR on persisted revocation', async () => {
     const f = await setup(); const issued = await f.call('issue'); expect(issued.status).toBe(200);
     const lease = await issued.json(); expect(lease.token.split('.')).toHaveLength(3); expect(lease.port).toBe(5173);
