@@ -44,8 +44,8 @@
   - [x] Detect early workload/scope exit and refuse unavailable port targets; preserve legitimate short build completion.
 - [ ] **Lot 2 — Bounded execution and cleanup**
   - [ ] Validate deadline, signal interruption, scope/sandbox exit, hanging probes and finalization; shared cancellation implemented.
-  - [ ] Remove relay directories and refuse stale qualification resources; bases and bundles now use private roots.
-  - [ ] Apply private fixture handling to isolation qualification and its tests.
+  - [x] Remove relay directories and refuse stale qualification resources; bases and bundles use private roots.
+  - [x] Apply private fixture handling and leftovers inventory to isolation qualification.
 - [ ] **Lot 3 — Custody keys**
   - [ ] Separate custody verification/signing configuration and enforce cross-use refusal both ways.
   - [ ] Update node/API custody tests and operator installation instructions.

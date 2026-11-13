@@ -7,6 +7,7 @@ import { RunscRuntimeAdapter } from './runtime-adapter.js';
 import { isolationProbe, requireIsolationResults } from './isolation-probe.js';
 import { acquireNodeLock } from './node-lock.js';
 import { assertCleanStartup } from './restart.js';
+import { assertNoQualificationLeftovers } from './qualification-leftovers.js';
 
 export async function qualifyIsolation(): Promise<void> {
   assert.equal(process.env.QUALIFICATION_ONLY, 'isolated', 'isolated qualification host required');
@@ -22,10 +23,11 @@ export async function qualifyIsolation(): Promise<void> {
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   const adapter = new RunscRuntimeAdapter();
   const boxes: Array<{ tenant: string; uid: string; path: string; base: string; image: string; loop: string; runtimeId?: string }> = [];
-  let directory: string | undefined;
+  let directory: string | undefined, cleanupFailed = false;
   try {
     assert.equal(run('systemctl', ['show', 'execution-node.service', '--property=ActiveState', '--value']), 'inactive', 'service must be stopped');
     assertCleanStartup();
+    assertNoQualificationLeftovers(release);
     directory = mkdtempSync('/run/execution-node/qi-');
     // Consume the operator's authorization once, under the shared lock.
     rmSync('/etc/execution-node/isolated-qualification');
@@ -91,10 +93,10 @@ export async function qualifyIsolation(): Promise<void> {
         assert.ok(noMounts && !existsSync(box.path));
         rmSync(box.base, { recursive: true });
         report(`${box.tenant} test bases removed`, !existsSync(box.base));
-      } catch { report(`${box.tenant} cleanup`, false); }
+      } catch { cleanupFailed = true; report(`${box.tenant} cleanup`, false); }
     }
     process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
-    if (directory && !failed) rmSync(directory, { recursive: true, force: true });
+    if (directory && !cleanupFailed) rmSync(directory, { recursive: true, force: true });
     releaseLock();
   }
   if (failed) throw new Error('isolation qualification failed');
