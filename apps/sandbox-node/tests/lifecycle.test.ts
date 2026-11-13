@@ -53,6 +53,45 @@ function compat(tenantId: 'sentropic' | 'immo' = 'sentropic'): ExecutionNodeClai
 }
 
 describe('lifecycle', () => {
+  it('should retain successful natural output until export and destruction', async () => {
+    class ExitAdapter extends FakeRuntimeAdapter {
+      exit?: (code: number | null) => void;
+      override async runSandbox(options: Parameters<FakeRuntimeAdapter['runSandbox']>[0]) {
+        this.exit = options.onExit; return super.runSandbox(options);
+      }
+    }
+    const adapter = new ExitAdapter();
+    const { daemon, admission } = createExecutionNode({ adapter });
+    const box = await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'natural' });
+    await daemon.promoteToRunning('sentropic', box.id, { devScope: spec().devScope, commandId: 'run', uid: 1000, gid: 1000, quotaMiB: 704 });
+    adapter.exit!(0);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(box).toMatchObject({ state: 'stopped-output-retained', allProcessesExited: true });
+    expect((await daemon.exportArtifacts('sentropic', box.id, { devScope: spec().devScope, commandId: 'export',
+      spec: { buildId: 'b', subPath: 'ui/dist', presignedPutUrl: 'https://s3.example/put', maxBytes: 1000 } })).bytes.length).toBeGreaterThan(0);
+    await daemon.deleteSandbox('sentropic', box.id, { devScope: spec().devScope, commandId: 'delete' });
+    expect(admission.reservedMiB('sentropic')).toBe(0);
+  });
+  it('should keep the reservation during a suspended launch and concurrent DELETE', async () => {
+    let resume!: () => void;
+    class SuspendedAdapter extends FakeRuntimeAdapter {
+      override async runSandbox(options: Parameters<FakeRuntimeAdapter['runSandbox']>[0]) {
+        await new Promise<void>(resolve => { resume = resolve; });
+        return super.runSandbox(options);
+      }
+    }
+    const { daemon, admission } = createExecutionNode({ adapter: new SuspendedAdapter() });
+    const box = await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'suspended' });
+    const starting = daemon.promoteToRunning('sentropic', box.id, { devScope: spec().devScope, commandId: 'run', uid: 1000, gid: 1000, quotaMiB: 704 });
+    const deleting = daemon.deleteSandbox('sentropic', box.id, { devScope: spec().devScope, commandId: 'delete' });
+    const outcome = deleting.catch(error => error);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(admission.reservedMiB('sentropic')).toBe(704);
+    await expect(daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'replace' })).rejects.toMatchObject({ status: 429 });
+    resume(); await starting;
+    expect(await outcome).toMatchObject({ code: 'sandbox_still_running' });
+    expect(box.state).toBe('running');
+  });
   it('should reject a queued mutation whose ticket expires before admission', async () => {
     let now = 100_000;
     const keys = generateTicketKeyPair();
