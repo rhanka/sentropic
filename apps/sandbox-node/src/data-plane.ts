@@ -15,9 +15,10 @@ export function createDataPlane(options: {
   target(sandbox: SandboxRecord, port: number): Promise<RequestOptions>;
 }) {
   function authorize(req: IncomingMessage, role: string) {
-    if (role !== 'data-plane' || req.headers['x-execution-ticket']) throw new ExecutionNodeError('custody_revoked');
+    if (role !== 'data-plane' || req.headers['x-execution-ticket'] !== undefined) throw new ExecutionNodeError('custody_revoked');
     const match = /^\/v1\/ports\/(\d+)(\/[^#]*)$/.exec(req.url ?? '');
     const tenant = req.headers['x-tenant-id'], uid = req.headers['x-expected-physical-uid'];
+    if (tenant === undefined) throw new ExecutionNodeError('missing_tenant_id');
     const token = req.headers['x-custody-token'];
     if (!match || !DATA_PLANE_PORTS.has(Number(match[1])) || typeof uid !== 'string'
       || !['sentropic', 'immo'].includes(String(tenant)) || typeof token !== 'string') throw new ExecutionNodeError('custody_revoked');
@@ -57,7 +58,7 @@ export function createDataPlane(options: {
         detach = options.custody.attach(admitted.claims, () => { outgoing?.destroy(); res.destroy(); });
         res.once('close', () => { detach(); outgoing?.destroy(); });
         req.pipe(outgoing);
-      } catch { detach(); outgoing?.destroy(); res.writeHead(403).end(); }
+      } catch (error) { detach(); outgoing?.destroy(); res.writeHead(error instanceof ExecutionNodeError ? error.status : 502).end(); }
     },
     async upgrade(req: IncomingMessage, socket: Duplex, head: Buffer, role: string) {
       let outgoing: ReturnType<typeof request> | undefined;
