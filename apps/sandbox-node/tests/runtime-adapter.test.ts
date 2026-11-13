@@ -8,6 +8,16 @@ vi.mock('node:child_process', async importOriginal => {
 });
 
 describe('runtime adapters', () => {
+  it('should enable the gVisor forwarding API only for an explicit ports workload', () => {
+    const adapter = new RunscRuntimeAdapter();
+    const input = { tenantId: 'immo', sandboxUid: 'network', mounts: [], overlayUpper: '/tmp/upper',
+      overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 };
+    // release-20261102.0 Loader.portForward rejects NetworkNone; NetworkSandbox
+    // uses the OCI private network namespace (loopback only, no supplied path).
+    expect(adapter.runscArgs({ ...input, network: 'ports' })).toContain('--network=sandbox');
+    expect(adapter.runscArgs({ ...input, network: 'none' })).toContain('--network=none');
+    expect(adapter.runscArgs(input)).toContain('--network=none');
+  });
   it('should hard-bound the runtime version subprocess', () => {
     vi.mocked(execFileSync).mockImplementation(() => { throw new Error('version timeout'); });
     try {

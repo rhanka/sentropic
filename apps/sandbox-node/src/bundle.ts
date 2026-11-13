@@ -60,7 +60,8 @@ export function prepareBundle(options: RunSandboxOptions, run: HostCommand = hos
         env: ['PATH=/usr/local/bin:/usr/bin:/bin', 'HOME=/tmp', 'TMPDIR=/tmp'], cwd: '/workspace', noNewPrivileges: true,
         capabilities: { bounding: [], effective: [], inheritable: [], permitted: [], ambient: [] },
         rlimits: [{ type: 'RLIMIT_NOFILE', hard: 4096, soft: 4096 }] },
-      linux: { namespaces: ['pid', 'ipc', 'uts', 'mount', 'network'].map(type => ({ type })),
+      linux: { namespaces: ['pid', 'ipc', 'uts', 'mount', 'network'].map(type =>
+        type === 'network' && options.network === 'ports' ? { type, path: '/proc/self/ns/net' } : { type }),
         resources: { memory: { limit: options.quotaMiB * 1048576 }, pids: { limit: options.quotaMiB > 704 ? 1024 : 512 } },
         devices: [{ path: '/dev/null', type: 'c', major: 1, minor: 3, fileMode: 438, uid: 0, gid: 0 },
           { path: '/dev/urandom', type: 'c', major: 1, minor: 9, fileMode: 438, uid: 0, gid: 0 }] },

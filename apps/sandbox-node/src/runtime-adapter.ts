@@ -18,6 +18,7 @@ export interface SandboxMount {
 }
 
 export interface RunSandboxOptions {
+  readonly network?: 'none' | 'ports';
   readonly diskQuotaMiB?: number;
   readonly quotaInodes?: number;
   readonly onExit?: (code: number | null) => void;
@@ -143,7 +144,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   runscArgs(options: RunSandboxOptions): string[] {
-    const args = [this.rootArg, '--network=none', '--platform=systrap', 'run', '--bundle', options.overlayUpper.replace(/\/upper$/, '')];
+    const args = [this.rootArg, `--network=${options.network === 'ports' ? 'sandbox' : 'none'}`, '--platform=systrap', 'run', '--bundle', options.overlayUpper.replace(/\/upper$/, '')];
     args.push(`sandbox-${options.sandboxUid}`);
     return args;
   }
@@ -154,6 +155,11 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     const scope = `builder-sbx-${options.sandboxUid}.scope`;
     const runtimeId = `runsc-${options.tenantId}-${options.sandboxUid}`;
     this.scopes.set(runtimeId, { scope, tenantId: options.tenantId, uid: options.sandboxUid, bundle, stopped: false });
+    // NetworkSandbox is required by gVisor's forwarding API. Start in a fresh,
+    // loopback-only namespace; never import the host's interfaces or routes.
+    const command = options.network === 'ports'
+      ? ['unshare', '--net', '--', 'sh', '-ec', 'ip link set lo up; exec "$@"', 'sandbox-network', this.binary]
+      : [this.binary];
     // systemd-run uses PID 1's StartTransientUnit D-Bus method; Slice is explicit.
     const child = spawn('systemd-run', ['--scope', `--unit=${scope}`,
       `--slice=builder-tenant-${options.tenantId}.slice`,
@@ -161,7 +167,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       `--property=MemoryHigh=${options.quotaMiB > 704 ? '1408M' : '704M'}`,
       `--property=MemoryLow=${options.quotaMiB > 704 ? '0' : '704M'}`,
       `--property=CPUWeight=${options.quotaMiB > 704 ? 100 : 200}`,
-      '--property=OOMPolicy=kill', `--property=TasksMax=${options.quotaMiB > 704 ? 1024 : 512}`, this.binary, ...this.runscArgs(options)],
+      '--property=OOMPolicy=kill', `--property=TasksMax=${options.quotaMiB > 704 ? 1024 : 512}`, ...command, ...this.runscArgs(options)],
     { stdio: this.diagnostic ? ['ignore', 'pipe', 'pipe'] : 'ignore' });
     boundedRuntimeOutput(child.stdout, 'fixture stdout', this.diagnostic);
     boundedRuntimeOutput(child.stderr, 'fixture/runsc stderr', this.diagnostic);

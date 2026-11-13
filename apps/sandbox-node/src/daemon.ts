@@ -343,6 +343,7 @@ export class ExecutionNodeDaemon {
         sandboxUid: id,
         mounts: sandbox.mounts,
         command: sandbox.command,
+        network: sandbox.network,
         onExit: code => {
           void Promise.resolve().then(() => this.runtimeExited(sandbox, code)).catch(error => {
             this.audit.record('sandbox.stop_failed', tenantId, id, String(error));
