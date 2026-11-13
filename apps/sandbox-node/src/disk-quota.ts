@@ -14,7 +14,7 @@ export function mountQuotaVolume(bundle: Bundle, mib: number | undefined, inodes
   mkdirSync(volume, { recursive: true, mode: 0o700 });
   const overheadMiB = 64 + Math.ceil(inodes! * 256 / 1048576);
   run('truncate', ['-s', `${mib! + overheadMiB}M`, image]);
-  run('mkfs.ext4', ['-F', '-q', '-m', '0', '-O', 'quota,project', '-E', 'quotatype=prjquota', image]);
+  run('mkfs.ext4', ['-F', '-q', '-m', '0', '-N', String(inodes! + 1024), '-O', 'quota,project', '-E', 'quotatype=prjquota', image]);
   run('mount', ['-t', 'ext4', '-o', 'loop,prjquota,nosuid,nodev', image, volume]);
   bundle.mounted.push(volume);
   run('chattr', ['-p', '1', '+P', volume]);

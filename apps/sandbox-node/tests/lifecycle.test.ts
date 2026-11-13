@@ -111,6 +111,24 @@ describe('lifecycle', () => {
     expect(admission.builds.snapshot().holderTenantId).toBe('immo');
     admission.builds.release('immo');
   });
+  it('should wait for launch before timeout cleanup can confirm quiescence', async () => {
+    let resume!: () => void;
+    class SuspendedAdapter extends FakeRuntimeAdapter {
+      override async runSandbox(options: Parameters<FakeRuntimeAdapter['runSandbox']>[0]) {
+        await new Promise<void>(resolve => { resume = resolve; }); return super.runSandbox(options);
+      }
+    }
+    const adapter = new SuspendedAdapter();
+    const { daemon } = createExecutionNode({ adapter });
+    const box = await daemon.createSandbox({ spec: spec(), ownership: ownership(), commandId: 'timeout-launch' });
+    const start = daemon.promoteToRunning('sentropic', box.id, { devScope: spec().devScope, commandId: 'run', uid: 1000, gid: 1000, quotaMiB: 704 });
+    const failure = daemon.failSandbox('sentropic', box.id, 'service timeout');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(box.allProcessesExited).toBe(false);
+    resume(); await start; await failure;
+    expect(box.state).toBe('failed');
+    expect(adapter.isLive(box.runtimeId!)).toBe(false);
+  });
   it('should pass validated base mounts and session command to the runtime', async () => {
     class CaptureAdapter extends FakeRuntimeAdapter {
       options?: Parameters<FakeRuntimeAdapter['runSandbox']>[0];
