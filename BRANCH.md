@@ -13,6 +13,7 @@
   - `apps/sandbox-node/**`
   - `BRANCH.md`
   - `spec/SPEC_EVOL_SANDBOX_NODE.md`
+  - `api/tests/unit/execution-node-rpc-fixture.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -21,8 +22,10 @@
   - `.github/workflows/**`
 - **Exception process**:
   - [x] BRDPF-EX1: align co-signed AMD-28 network contract (k8s 3b042fd) in spec; documentation only; rollback the spec line with the network implementation.
+  - [x] BRDPF-EX2: explicitly activate ports only in the synthetic API RPC fixture after CI proved nine ports_disabled refusals; test-only compatibility, no production default change; rollback with the AMD-28 switch.
 
 ## Feedback Loop
+- [x] CI 43519010410: API RPC fixture now explicitly opens synthetic ports availability and closes it on disposal; preserves production closed defaults and digest checks.
 - [x] Recovery ordering regression: register lost-worker scopes without host I/O and terminate them before fallible helper/mount/metadata inventories.
 - [x] R2 qualification-11 / recovery: OOM receipts include scope memory events and systemd result; worker recovery also kills exact-UID stream helpers outside tenant scopes before reconstructing mounted bundles.
 - [x] R2 qualification-2: real-host switch scenarios now use the production asynchronous file observer on private gate files, atomic switch/binary replacement and the shared GET-node capability builder.
