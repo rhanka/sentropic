@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 4 launch timeout: failing suspended-launch timeout regression demonstrated false quiescence; stop/export/delete/failure transitions now serialize per sandbox and await pending runtime launch.
 - [x] RUN 4 M7: quota-command ordering failed first; every writable upper/work/output now inherits exact block/inode hard limits on a private ext4 project-quota volume before launch. Missing/invalid limits fail closed; real EDQUOT qualification remains part of the isolated-host gate.
 - [x] RUN 4 M6: five forbidden URLs reached fetch before correction; imports now validate exact BHS endpoint, tenant prefix and canonical paths before storage/network access, including cached bases.
 - [x] RUN 4 M5/M8: destroyed-export replay failed first; export promises now discard archive values after completion. Generic scope fixture uses synthetic packages/provenance instead of copying the tenant registry.
