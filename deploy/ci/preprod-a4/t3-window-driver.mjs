@@ -373,6 +373,15 @@ function baseEnv(ctx, extra = {}) {
 // W0..W9 with hard per-step cutoffs measured from t0 (fence start). Any throw
 // or cutoff breach routes to recover(); the watchdog covers driver death.
 export async function drive(ctx) {
+  const state = ctx.initialState ?? initializeState(ctx);
+  try {
+    return await driveInner(ctx, state);
+  } catch (err) {
+    return recover(ctx, state, `throw:${err.message}`);
+  }
+}
+
+function initializeState(ctx) {
   assertPreviewSafe(ctx);
   validateProbes(buildProbes(ctx.config).probes);
   const state = { version: 1, step: 'W0', startedAtUtc: utcNow(), driverPid: process.pid,
@@ -380,11 +389,7 @@ export async function drive(ctx) {
     childPid: process.pid, namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null,
     stepDeadlineMonoMs: monoMs() + 600_000 };
   saveState(ctx.stateDir, state);
-  try {
-    return await driveInner(ctx, state);
-  } catch (err) {
-    return recover(ctx, state, `throw:${err.message}`);
-  }
+  return state;
 }
 
 function assertPreviewSafe(ctx) {
@@ -517,15 +522,32 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     dryRun, probeReadOnly, execIsReadOnly: probeReadOnly, timeoutRef, print: console.log, stateDir });
   const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
     postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch, print: console.log };
-  assertPreviewSafe(ctx);
-  validateProbes(buildProbes(config).probes);
-  const watchdog = spawn('node', [join(HERE, 't3-watchdog.mjs'),
-    '--state-dir', stateDir, '--config', configPath,
-    ...(dryRun ? ['--dry-run'] : []), ...(probeReadOnly ? ['--probe-readonly'] : [])],
-    { detached: true, stdio: 'ignore' });
-  watchdog.unref();
-  ctx.watchdogPid = watchdog.pid;
   try {
+    ctx.initialState = initializeState(ctx);
+    const watchdog = spawn(process.execPath, [join(HERE, 't3-watchdog.mjs'),
+      '--state-dir', stateDir, '--config', configPath,
+      ...(dryRun ? ['--dry-run'] : []), ...(probeReadOnly ? ['--probe-readonly'] : [])],
+      { detached: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+    try {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('watchdog_arm_timeout')), 2000);
+        const finish = fn => value => { clearTimeout(timer); fn(value); };
+        watchdog.once('error', finish(reject));
+        watchdog.once('exit', finish(() => reject(new Error('watchdog_start_failed'))));
+        watchdog.once('message', finish(message => message?.armed === watchdog.pid
+          ? resolve() : reject(new Error('watchdog_not_armed'))));
+      });
+      process.kill(watchdog.pid, 0);
+      ctx.initialState.watchdogPid = watchdog.pid;
+      ctx.initialState.watchdogArmed = true;
+      saveState(stateDir, ctx.initialState);
+    } catch (err) {
+      watchdog.kill('SIGKILL');
+      throw err;
+    } finally {
+      if (watchdog.connected) watchdog.disconnect();
+      watchdog.unref();
+    }
     process.exitCode = await drive(ctx);
   } catch (err) {
     console.error(`driver_fatal: ${err.message}`);
