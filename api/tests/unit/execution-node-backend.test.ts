@@ -77,7 +77,7 @@ describe('concrete execution node backend', () => {
         dropped = true; throw new ExecutionNodeRefusal('node_transport_failure');
       }
       return response;
-    });
+    }, fake.now);
     const inputs = { tenant: () => 'sentropic', provision: async () => ({ session: s, spec: sandboxSpec(s) }) } as unknown as ExecutionNodeInputs;
     const backend = createExecutionNodeBackend(adapter, memoryRows(), inputs);
     if (lost === 'create') await expect(backend.pods.ensure(key, runtime)).rejects.toThrow(/node_transport_failure/);
