@@ -61,8 +61,9 @@ export function createDataPlane(options: {
     },
     async upgrade(req: IncomingMessage, socket: Duplex, head: Buffer, role: string) {
       let outgoing: ReturnType<typeof request> | undefined;
-      let upstreamSocket: Duplex | undefined; let detach = () => {};
+      let upstreamSocket: Duplex | undefined; let detach = () => {}; let closing = false;
       const close = () => {
+        if (closing) return; closing = true; detach();
         // Unmasked server close frame, status 1008. End before destroying the tunnel.
         if (upstreamSocket) socket.end(Buffer.from([0x88, 0x02, 0x03, 0xf0]));
         else socket.destroy();
@@ -83,7 +84,7 @@ export function createDataPlane(options: {
           if (upstreamHead.length) socket.write(upstreamHead);
           if (head.length) upstream.write(head);
           upstream.on('error', close); socket.on('error', close);
-          upstream.once('close', () => socket.destroy());
+          upstream.once('close', () => { if (!closing) socket.destroy(); });
           socket.pipe(upstream).pipe(socket);
         });
         outgoing.once('response', response => { response.destroy(); close(); });

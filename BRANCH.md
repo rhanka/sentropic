@@ -58,6 +58,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Regress advancing ticket clock and valid signed-envelope substitution across resource/attempt/command/source/build/hash.
   - [x] Bound heartbeat pool acquisition/queries/node calls; destroy failed leadership connections and abort outstanding HTTPS requests on lock loss.
   - [x] Add two-replica stalled-leader takeover, saturated-pool late-connect disposal and in-flight heartbeat cancellation regressions.
+  - [x] Preserve WS close-frame flushing and reject stale identity completion after leadership loss.
   - [x] Separate durable export destination from fresh upload authorization; checkpoint upload and reconcile lost DELETE responses.
   - [x] Persist export intent/progress/candidate in the backend; retain output and pending host job when export transport fails.
   - [x] Resume retained exports through controller reconcile after process replacement, preserving publication and source fences.
