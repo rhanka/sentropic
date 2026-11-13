@@ -276,8 +276,8 @@ export class ExecutionNodeDaemon {
     if (input.claim.tenantId !== input.claim.ownership.tenantId) {
       throw new ExecutionNodeError('cross_tenant_base_forbidden', 'claim/ownership tenant mismatch');
     }
-    const { ticket, ...body } = input;
-    this.authorizeCommand(ticket, input.claim.tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${input.standbyId}/claim`, input.claim.ownership);
+    const { ticket, standbyId, ...body } = input;
+    this.authorizeCommand(ticket, input.claim.tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${standbyId}/claim`, input.claim.ownership);
     const sandbox = this.getSandbox(input.claim.tenantId, input.standbyId);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${input.standbyId}`);
     return this.idempotent(input.claim.tenantId, input.commandId, body, async () => {
@@ -346,13 +346,20 @@ export class ExecutionNodeDaemon {
     });
   }
 
-  writeFile(tenantId: ExecutionNodeTenantId, id: string, path: string): void {
+  async writeFile(tenantId: ExecutionNodeTenantId, id: string, input: {
+    path: string; commandId: string; devScope: ExecutionNodeDevScope; contentBase64: string; ticket?: TicketEnvelope;
+  }): Promise<void> {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
     if (sandbox.state !== 'running') {
       throw new ExecutionNodeError('already_claimed', `sandbox ${id} is ${sandbox.state}, writes require running`);
     }
+    const path = input.path;
     checkWritePath(path, sandbox.devScope);
+    const { ticket, ...body } = input;
+    this.authorizeCommand(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/write`, sandbox.ownership);
+    if (JSON.stringify(input.devScope) !== JSON.stringify(sandbox.devScope) || !sandbox.runtimeId) throw new ExecutionNodeError('command_id_payload_mismatch');
+    await this.adapter.writeFile(sandbox.runtimeId, path, Buffer.from(input.contentBase64, 'base64'), sandbox.devScope);
     this.audit.record('sandbox.write', tenantId, id, path);
   }
 
