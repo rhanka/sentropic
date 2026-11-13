@@ -45,6 +45,11 @@ const node = createExecutionNode({ useRunsc: true, adapter: runtime, nodeInstanc
   reservableMiB,
   ticketPublicKeyPem: readFileSync(required('AGENT_TICKET_PUBLIC_KEY'), 'utf8') });
 const api = new AgentApi(node, custody);
+// Validate immutable tenant-slice paths before accepting TLS streams; subsequent
+// admission/metrics read counters directly without synchronous systemctl calls.
+for (const tenant of ['sentropic', 'immo'] as const) {
+  node.admission.quotaSnapshot(tenant, `/builder.slice/builder-tenant.slice/builder-tenant-${tenant}.slice`);
+}
 const operator = new OperatorGuard(required('AGENT_OPERATOR_PUBLIC_KEYS').split(',').map(path => readFileSync(path, 'utf8')), nodeInstanceId, nodeEpoch);
 const control = new NodeControl(nodeInstanceId, nodeEpoch, custody, operator);
 const provenanceKey = createPrivateKey(readFileSync('/etc/execution-node/keys/node-provenance.ed25519'));
