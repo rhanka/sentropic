@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import type { ContentOrigin } from '@sentropic/artifacts/content/routing';
 import { podName } from '../../../api/src/services/artifacts/live/pods';
 import type { LiveKey } from '../../../api/src/services/artifacts/live/records';
+import type { DataPlaneTransport } from './data-plane';
+import { dataPlaneFetch } from './data-plane-http';
 
 export interface LiveRoute extends LiveKey {
   sessionId: string; generation: number; routeEpoch: number; podUid: string; podName: string;
@@ -54,7 +56,7 @@ function safePath(url: URL) {
       || /\.(?:pem|key|p12|pfx)$/.test(part));
 }
 /** `builderNamespace` is the per-environment worker namespace that serves the live pods' Vite port. */
-export function createLiveProxy(ports: LiveProxyPorts, options: { builderNamespace?: string } = {}) {
+export function createLiveProxy(ports: LiveProxyPorts, options: { builderNamespace?: string; dataPlane?: DataPlaneTransport } = {}) {
   const now = ports.now ?? Date.now;
   const namespace = options.builderNamespace ?? DEFAULT_BUILDER_NAMESPACE;
   if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(namespace)) throw new Error('Invalid live builder namespace');
@@ -75,18 +77,22 @@ export function createLiveProxy(ports: LiveProxyPorts, options: { builderNamespa
       return { route, upstream: `http://${route.podName}.${namespace}.svc.cluster.local:5173`,
         path: url.pathname + url.search };
     },
-    valid, watch: ports.watch, origin: (host: string) => ports.origin?.(host),
+    valid, watch: ports.watch, dataPlane: options.dataPlane, origin: (host: string) => ports.origin?.(host),
     control: async (request: Request, artifactId: string) => ports.control?.(request, artifactId),
     fence: async (request: Request) => ports.fence?.(request),
     async fetch(request: Request, artifactId: string): Promise<Response | undefined> {
       const admitted = await this.authorize(request, artifactId);
       if (!admitted) return new URL(request.url).pathname.startsWith('/_live/') ? refused() : undefined;
       const { route, upstream, path } = admitted;
-      const response = await (ports.fetch ?? fetch)(new URL(path, upstream), {
+      const response = options.dataPlane ? await dataPlaneFetch(options.dataPlane, { kind: 'live', route }, path, {
+        method: request.method, headers: { accept: request.headers.get('accept') ?? '*/*', 'accept-encoding': 'identity' },
+        signal: AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]), maxBytes: 16 * 1024 * 1024,
+      }) : await (ports.fetch ?? fetch)(new URL(path, upstream), {
         method: request.method, redirect: 'error', signal: AbortSignal.timeout(10_000),
         // Build a new allowlist. Cookies, tokens, Authorization, Origin and forwarding credentials never reach Vite.
         headers: { accept: request.headers.get('accept') ?? '*/*', 'accept-encoding': 'identity' },
       });
+      if (options.dataPlane && response.status === 403) return response;
       if (response.status !== 200 || !await valid(route)) { await response.body?.cancel(); return refused(); }
       const reader = response.body?.getReader(); const chunks: Uint8Array[] = []; let size = 0;
       if (reader) for (;;) {
