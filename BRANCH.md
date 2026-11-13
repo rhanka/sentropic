@@ -40,6 +40,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 5 AMD-25 SEA: interpreter-free startup assertion failed first. Pinned glibc Node is bundled/injected into one executable with an executable self-test; sentropic produces shared EROFS rootfs from the pinned runtime. k8s installs digests only, not Node or tenant content.
 - [x] RUN 5 node metrics: missing-export regression failed first; GET node includes six measured counters per tenant (purpose=all aggregate), tenant slices, CPU/PSI kernel counters, queue wait and verified base-cache hits. Probe archival belongs to cluster Fluent Bit, with no VM S3 writer.
 - [x] RUN 5 SEA build inputs: isolated build-only esbuild/postject exact manifest and lock; no agent runtime dependencies and no host npm installation.
 - [x] RUN 5 routes/config: drain admission regression failed first; canonical node heartbeat/drain/undrain/status and tenant PUT bases are wired. The VM reads only ticket public keys; its k8s-installed Ed25519 provenance key signs archive attestations and publishes the SPKI key for control-plane registration.
