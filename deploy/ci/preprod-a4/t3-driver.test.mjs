@@ -9,7 +9,7 @@ import { COMMIT_CUTOFF_MS, FINISH_CUTOFF_MS, RBAC_COUNT, TOTAL_BUDGET_MS,
 import { loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
 import { preCommitRollback } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
-import { emailProbe, probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
 
 const CANDIDATE = 'ghcr.io/rhanka/sentropic-api@sha256:candidate';
 const UI_IMAGE = 'ghcr.io/rhanka/sentropic-ui@sha256:ui';
@@ -154,6 +154,7 @@ export function makeCtx(overrides = {}) {
         images: { candidate: CANDIDATE, ui: UI_IMAGE },
         endpoints: probeEndpoints(),
         emailProbe,
+        expectedSigningKid,
         request: { format: 'x', operationId: 'test' },
         rotationKeyFiles: defaultKeys,
         ...(overrides.config ?? {}),
@@ -798,7 +799,7 @@ esac
   assert.ok(existsSync(join(dir, 'port')), 'local probe server starts');
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
-    endpoints: probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`), emailProbe,
+    endpoints: probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`), emailProbe, expectedSigningKid,
     revisions: { api: '12', 'auth-idp': '9', ui: '4' }, candidateImage: 'candidate-img',
     middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } },
     images: { candidate: 'candidate-img', ui: 'ui-img' } }));

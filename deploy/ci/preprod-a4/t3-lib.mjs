@@ -100,8 +100,9 @@ export function buildProbes(config) {
   const endpoints = config.endpoints ?? {};
   const probes = [];
   if (endpoints.appHealth) probes.push({ id: 'S-3', url: endpoints.appHealth, expect: 200 });
-  if (endpoints.idpConfig) probes.push({ id: 'S-4', url: endpoints.idpConfig, expect: 200 });
-  if (endpoints.idpJwks) probes.push({ id: 'S-5', url: endpoints.idpJwks, expect: 200 });
+  if (endpoints.idpConfig) probes.push({ id: 'S-4', url: endpoints.idpConfig, expect: 200,
+    issuer: config.expectedIssuer ?? new URL(endpoints.idpConfig).origin });
+  if (endpoints.idpJwks) probes.push({ id: 'S-5', url: endpoints.idpJwks, expect: 200, signingKid: config.expectedSigningKid });
   if (endpoints.s6Authorize) probes.push({ id: 'S-6', url: endpoints.s6Authorize, expect: 302, options: { redirect: 'manual' } });
   if (endpoints.appMe) probes.push({ id: 'S-7', url: endpoints.appMe, expect: 401 });
   if (endpoints.idpMe) probes.push({ id: 'S-8', url: endpoints.idpMe, expect: 401 });
@@ -128,6 +129,7 @@ export function validateProbes(probes) {
         || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`email_probe_input: ${id}`);
     }
   }
+  if (!probes.find(p => p.id === 'S-5')?.signingKid) throw new Error('signing_kid_missing');
 }
 
 function dryRunLine(line, hasInput) {
