@@ -4,7 +4,7 @@ import type {
   ExecutionNodeOwnership,
   ExecutionNodeSandboxSpec,
 } from '../src/index.js';
-import { createExecutionNode, ExecutionNodeError, FakeRuntimeAdapter } from '../src/index.js';
+import { createExecutionNode, ExecutionNodeError, FakeRuntimeAdapter, generateTicketKeyPair, issueTicket, sha256Hex } from '../src/index.js';
 
 function ownership(tenantId: 'sentropic' | 'immo' = 'sentropic'): ExecutionNodeOwnership {
   return {
@@ -52,6 +52,22 @@ function compat(tenantId: 'sentropic' | 'immo' = 'sentropic'): ExecutionNodeClai
 }
 
 describe('lifecycle', () => {
+  it('should require signed tickets bound to executed spec, owner, command and node', async () => {
+    const keys = generateTicketKeyPair();
+    const { daemon } = createExecutionNode({ ticketPublicKeyPem: keys.publicKeyPem, nodeInstanceId: 'instance', now: () => 100_000 });
+    const input = { spec: spec(), ownership: ownership(), commandId: 'signed-create' };
+    await expect(daemon.createSandbox(input)).rejects.toThrow();
+    const ticket = issueTicket({ v: 1, tenantId: 'sentropic', commandId: input.commandId,
+      method: 'POST', path: '/v1/sandboxes', bodySha256: sha256Hex(JSON.stringify(input)),
+      targetNodeId: daemon.nodeId, expectedNodeInstanceId: 'instance', expectedNodeEpoch: 1,
+      ownership: input.ownership, issuedAt: new Date(100_000).toISOString(), deadlineAt: new Date(120_000).toISOString() }, keys.privateKeyPem);
+    const envelope = { ...ticket, body: input, method: 'POST', path: '/v1/sandboxes' };
+    for (const changed of [{ ...input, spec: { ...spec(), uid: 0 } },
+      { ...input, commandId: 'substituted' }, { ...input, ownership: { ...ownership(), principalId: 'attacker' } }]) {
+      await expect(daemon.createSandbox({ ...changed, ticket: envelope })).rejects.toThrow();
+    }
+    await expect(daemon.createSandbox({ ...input, ticket: envelope })).resolves.toBeDefined();
+  });
   it('should retain reservations and refuse export until a pending stop becomes quiescent', async () => {
     class PendingAdapter extends FakeRuntimeAdapter {
       exited = false;

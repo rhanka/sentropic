@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 3 B4: unsigned create reproduced; mutation gates now require tickets bound to the executed body, command, node, tenant, route and ownership; substitution regressions included.
 - [x] RUN 3 B5/M6: failing hung-build and retained-stop regressions prove reservation loss; failed runtime is stopped and reservations survive until confirmed destruction.
 - [x] RUN 3 B2: traversal, refused-file and symlink regressions reproduced; mandatory host-resolved devScope is persisted with provenance and enforced by normalized glob checks.
 - [x] RUN 3 M8/M10: reproduced missing deadline close and torn-tail restart crash; timers close streams and WAL recovery truncates uncommitted tail, syncs file and parent before ack.

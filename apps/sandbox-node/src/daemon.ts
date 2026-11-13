@@ -100,20 +100,24 @@ export class ExecutionNodeDaemon {
     return `${tenantId}:${id}`;
   }
 
-  private requireTicket(envelope: TicketEnvelope, tenantId: ExecutionNodeTenantId): void {
+  private requireTicket(envelope: TicketEnvelope | undefined, tenantId: ExecutionNodeTenantId,
+    commandId: string, body: unknown, method: string, path: string, ownership: ExecutionNodeOwnership): void {
     if (!this.ticketPublicKeyPem) return;
+    if (!envelope) throw new ExecutionNodeError('custody_revoked', 'execution ticket required');
     if (!verifyTicketSignature(envelope.ticket, envelope.signature, this.ticketPublicKeyPem)) {
       throw new ExecutionNodeError('command_id_payload_mismatch', 'ticket signature invalid');
     }
     checkTicket(envelope.ticket, {
-      method: envelope.method,
-      path: envelope.path,
-      bodySha256: sha256Hex(JSON.stringify(envelope.body ?? null)),
+      method,
+      path,
+      bodySha256: sha256Hex(JSON.stringify(body)),
       nodeInstanceId: this.nodeInstanceId,
       nodeEpoch: this.nodeEpoch,
       now: this.now(),
     });
-    if (envelope.ticket.ownership.tenantId !== tenantId) {
+    if (envelope.ticket.tenantId !== tenantId || envelope.ticket.ownership.tenantId !== tenantId
+      || envelope.ticket.targetNodeId !== this.nodeId || envelope.ticket.commandId !== commandId
+      || JSON.stringify(envelope.ticket.ownership) !== JSON.stringify(ownership)) {
       throw new ExecutionNodeError('cross_tenant_base_forbidden', 'ticket tenant mismatch');
     }
   }
@@ -179,9 +183,10 @@ export class ExecutionNodeDaemon {
     if (input.spec.tenantId !== input.ownership.tenantId) {
       throw new ExecutionNodeError('cross_tenant_base_forbidden', 'spec/ownership tenant mismatch');
     }
-    if (input.ticket) this.requireTicket(input.ticket, input.spec.tenantId);
+    const { ticket, ...body } = input;
+    this.requireTicket(ticket, input.spec.tenantId, input.commandId, body, 'POST', '/v1/sandboxes', input.ownership);
     const mounts = resolveMounts(input.spec.tenantId, input.spec.baseMounts, this.bases);
-    return this.idempotent(input.spec.tenantId, input.commandId, input.spec, async () => {
+    return this.idempotent(input.spec.tenantId, input.commandId, body, async () => {
       const slot = input.spec.profile === 'artifact-build' ? 'build'
         : input.warmStandby === true ? 'standby' : 'live';
       if (slot === 'build') await this.admission.admitBuild(input.spec.tenantId);
@@ -220,8 +225,13 @@ export class ExecutionNodeDaemon {
   }): Promise<SandboxRecord> {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
-    if (input.ticket) this.requireTicket(input.ticket, tenantId);
-    return this.idempotent(tenantId, input.commandId, { id, quotaMiB: input.quotaMiB }, async () => {
+    const { ticket, ...body } = input;
+    this.requireTicket(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/start`, sandbox.ownership);
+    return this.idempotent(tenantId, input.commandId, body, () => this.startRuntime(sandbox, input));
+  }
+
+  private async startRuntime(sandbox: SandboxRecord, input: { uid: number; gid: number }): Promise<SandboxRecord> {
+      const { id, tenantId } = sandbox;
       if (sandbox.state !== 'creating' && sandbox.state !== 'standby') {
         throw new ExecutionNodeError('already_claimed', `sandbox ${id} in state ${sandbox.state}`);
       }
@@ -240,7 +250,6 @@ export class ExecutionNodeDaemon {
       sandbox.state = 'running';
       this.audit.record('sandbox.running', tenantId, id, runtimeId);
       return sandbox;
-    });
   }
 
   async claimSandbox(input: {
@@ -255,10 +264,11 @@ export class ExecutionNodeDaemon {
     if (input.claim.tenantId !== input.claim.ownership.tenantId) {
       throw new ExecutionNodeError('cross_tenant_base_forbidden', 'claim/ownership tenant mismatch');
     }
-    if (input.ticket) this.requireTicket(input.ticket, input.claim.tenantId);
+    const { ticket, ...body } = input;
+    this.requireTicket(ticket, input.claim.tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${input.standbyId}/claim`, input.claim.ownership);
     const sandbox = this.getSandbox(input.claim.tenantId, input.standbyId);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${input.standbyId}`);
-    return this.idempotent(input.claim.tenantId, input.commandId, input.claim, async () => {
+    return this.idempotent(input.claim.tenantId, input.commandId, body, async () => {
       if (sandbox.state !== 'standby') {
         throw new ExecutionNodeError('already_claimed', `sandbox ${sandbox.id} in state ${sandbox.state}`);
       }
@@ -267,9 +277,7 @@ export class ExecutionNodeDaemon {
       }
       sandbox.state = 'creating'; // Lock the standby before the first asynchronous runtime call.
       let promoted: SandboxRecord;
-      try { promoted = await this.promoteToRunning(input.claim.tenantId, sandbox.id, {
-        commandId: `claim-promote:${input.commandId}`,
-        quotaMiB: input.quotaMiB,
+      try { promoted = await this.startRuntime(sandbox, {
         uid: input.uid,
         gid: input.gid,
       }); } catch (error) { sandbox.state = 'standby'; throw error; }
@@ -299,7 +307,8 @@ export class ExecutionNodeDaemon {
   }): Promise<SandboxRecord> {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
-    if (input.ticket) this.requireTicket(input.ticket, tenantId);
+    const { ticket, ...body } = input;
+    this.requireTicket(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/stop`, sandbox.ownership);
     if (input.stop.retentionTtlMs !== undefined && input.stop.retentionTtlMs > 300_000) {
       throw new ExecutionNodeError('command_id_payload_mismatch', 'retentionTtlMs exceeds 300s');
     }
@@ -342,7 +351,8 @@ export class ExecutionNodeDaemon {
   }): Promise<{ bytes: Buffer; sandbox: SandboxRecord }> {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
-    if (input.ticket) this.requireTicket(input.ticket, tenantId);
+    const { ticket, ...body } = input;
+    this.requireTicket(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/export`, sandbox.ownership);
     if (input.spec.maxBytes <= 0) {
       throw new ExecutionNodeError('command_id_payload_mismatch', 'maxBytes must be positive');
     }
@@ -372,7 +382,8 @@ export class ExecutionNodeDaemon {
   }): Promise<SandboxRecord> {
     const sandbox = this.getSandbox(tenantId, id);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${id}`);
-    if (input.ticket) this.requireTicket(input.ticket, tenantId);
+    const { ticket, ...body } = input;
+    this.requireTicket(ticket, tenantId, input.commandId, body, 'DELETE', `/v1/sandboxes/${id}`, sandbox.ownership);
     return this.idempotent(tenantId, input.commandId, { id }, async () => {
       if (sandbox.state === 'running') {
         throw new ExecutionNodeError('sandbox_still_running', `sandbox ${id} is running`);
