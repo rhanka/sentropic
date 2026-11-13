@@ -8,6 +8,10 @@ qualify-sandbox-node-disk:
 	@case "$(ENV)" in test-*) ;; *) echo 'isolated test ENV required'; exit 1;; esac
 	@"$${QUAL_RELEASE_DIR:?verified qualification release required}/execution-node" --qualify-disk
 
+qualify-sandbox-node-restart-mounts:
+	@case "$(ENV)" in test-*) ;; *) echo 'isolated test ENV required'; exit 1;; esac
+	@sh apps/sandbox-node/k8s/qualify-restart-mounts.sh
+
 build-sandbox-node-artifact:
 	@sh apps/sandbox-node/k8s/build-artifact.sh
 
@@ -18,7 +22,7 @@ check-sandbox-node:
 	  mkdir -p /tmp/qualification/apps; cp -R /source/apps/sandbox-node /tmp/qualification/apps/; \
 	  node /source/scripts/ci/locked-tools.mjs --prefix /tmp/qualification --ignore-scripts --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; \
 	  cd /tmp/qualification/apps/sandbox-node; \
-	  sh -n k8s/start.sh k8s/build-artifact.sh; \
+	  sh -n k8s/start.sh k8s/build-artifact.sh k8s/qualify-restart-mounts.sh; \
 	  ../../node_modules/.bin/tsc --project tsconfig.json; \
 	  ../../node_modules/.bin/tsc --project tsconfig.build.json; \
 	  node --expose-gc tests/export-memory.mjs; \
