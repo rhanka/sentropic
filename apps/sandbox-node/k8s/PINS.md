@@ -37,11 +37,13 @@ values below:
 
 ## RUN 9 delivery (supersedes prior compiled releases)
 
-- Archive SHA-256: `f4cac77d73b130d770dd012a2196899b3fe1e51cc041a9c41d568485dc527818`.
-- SEA executable SHA-256: `28fc88ebaf1e283e76e52f645291718a300190c923f97f62efc84369da0e9744`.
-- Shared EROFS rootfs SHA-256: `0a4e7e2c38a2d2ac5dee3973af091a3f8e10076c86d338d1f271982ea0c16999`.
+- RUN 9c archive SHA-256: `84fd2b12a9562a569103975e98b02017f9a1eea81d980fcda89c0354fc0680f7`.
+- SEA executable SHA-256: `87dc380f278905417c1fc5fd7761f15a9fbfc67765db04d0b1d3c4631b2b3a74`.
+- Shared EROFS rootfs SHA-256: `8aa0f66822cadfab0fc101d63402d4c83284a596d3c9dd9f6e54669ed4837078`.
+- Prebuilt qualification EROFS SHA-256: `dab14a8756deb07d440cd872b0bfede3b0342f4f6eed737f26906e073cb5d84a`.
+- Supersedes RUN 9 archive `f4cac77d73b130d770dd012a2196899b3fe1e51cc041a9c41d568485dc527818`.
 - Supersedes RUN 8 archive `9789357855f9a377c77fdb9fd9a451b13a21c83bf8e342dcdc62c2ad8da0b036` and all earlier releases.
-- Configuration/unit/operator key/startup/README/restart B-test/isolation qualification are covered by the archive's SHA256SUMS.
+- Configuration/unit/operator key/startup/operator guide/restart B-test/isolation qualification and fixture are covered by the archive's ten-entry SHA256SUMS.
 - Archive root mode 0755 and extracted SEA execution as uid 65534 are verified.
 - Built and verified locally 2026-11-13, SEA self-test passed from extracted release. No publication/deployment.
 - Full runsc/EROFS/EDQUOT and live-mount restart qualification: k8s S1-K1 on an isolated host; not claimed here.

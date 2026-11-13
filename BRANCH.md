@@ -29,7 +29,7 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
   - [x] No scope exception required.
 
 ## Feedback Loop
-- [x] RUN 9c local verification: 28 files / 129 tests pass, both TypeScript projects, shell syntax and export GC pass. Added mount-inventory and consumed-marker assertions; final artifact and CI evidence follow in RUN 9c.
+- [x] RUN 9c local verification: 28 files / 130 tests pass, both TypeScript projects, shell syntax and export GC pass. Artifact verification passes with ten internal checksums and qualification.erofs; final CI evidence follows in RUN 9c.
 - [x] RUN 9c finding 4: plant foreign tenant sentinel files and attempt readFileSync/openSync(r+) on known paths, including traversal of the foreign tenant mount; non-listable directory regression detects accessible files.
 - [x] RUN 9c finding 3: statfs block/inode capacity checks before and after truncate/mkfs.ext4; preserve unrelated command errors. Base import maps filesystem quota errors including mkdir/open/write, with regressions.
 - [x] RUN 9c finding 2 regressions: refuse active service, held lock, surviving scope, sandbox directory, runsc container and malformed inventory before creation; real flock exclusion/release test. Operator guide documents single-use marker and service exclusion.
@@ -57,6 +57,6 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
 - [x] K1 Fix 2: real-adapter two-tenant isolation qualification, standalone SEA command, shipped shell wrapper and cleanup checks. Tests cover refusal guard and observable read/write/network failures; execution on VM remains the k8s-owned gate.
   - [x] Real-adapter runner and in-sandbox probes; guards refuse non-isolated/non-root execution.
 - [x] K1 Fix 3: archive root 0755, verification and operator custody modes.
-- [x] K1 build/verify: archive f4cac77d73b130d770dd012a2196899b3fe1e51cc041a9c41d568485dc527818; nine internal checksums, extracted root 0755, SEA guard and uid 65534 self-test pass.
+- [x] K1 build/verify RUN 9c: archive 84fd2b12a9562a569103975e98b02017f9a1eea81d980fcda89c0354fc0680f7; ten internal checksums, prebuilt fixture, extracted root 0755, SEA guard and uid 65534 self-test pass.
 - [x] K1 handoff preparation: local gates and review correction complete; exact-head PR/CI final outcome is maintained in .tmp/rv/s1-agent-core.md RUN 9 and the s1-agent-k1.done marker after push. No merge or deployment.
 - [ ] K1 Track handoff: designated conductor writer imports this BRANCH.md and RUN 9 evidence; this lane does not write the shared append-only journal.

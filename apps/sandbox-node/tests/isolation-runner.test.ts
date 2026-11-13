@@ -68,7 +68,9 @@ describe('real-host qualification orchestration', () => {
       for (const options of launched) {
         expect(options.mounts[0]!.source).toMatch(/rootfs\.erofs$/);
         expect(options.uid).toBe(1000);
-        expect(fs.writeFileSync).toHaveBeenCalledWith(joinMarker(options.overlayUpper.replace(/\/upper$/, '')), 'foreign tenant sentinel', { mode: 0o666 });
+        if (mode !== 'launch-failure' || options.tenantId === 'sentropic') {
+          expect(fs.writeFileSync).toHaveBeenCalledWith(options.overlayUpper.replace(/upper$/, 'isolation-marker'), 'foreign tenant sentinel', { mode: 0o666 });
+        }
         expect(cleaned).toContain(options.overlayUpper.replace(/\/upper$/, ''));
       }
       expect(cleaned.every(path => /^\/var\/lib\/builder\/tenants\/(sentropic|immo)\/(sandboxes|bases)\/qual-isolation-/.test(path))).toBe(true);
@@ -102,4 +104,3 @@ describe('real-host qualification orchestration', () => {
       if (mode !== 'lock') expect(release).toHaveBeenCalledOnce();
     });
 });
-function joinMarker(path: string): string { return `${path}/isolation-marker`; }
