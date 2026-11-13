@@ -127,17 +127,21 @@ export class ExecutionNodeDaemon {
     }
   }
 
-  private idempotent<T>(tenantId: ExecutionNodeTenantId, commandId: string, body: unknown, produce: () => T): T {
+  private idempotent<T>(tenantId: ExecutionNodeTenantId, commandId: string, body: unknown, produce: () => T, retainValue = true): T {
     const slot = this.idempotence.get(`${tenantId}:${commandId}`);
     const bodyHash = sha256Hex(JSON.stringify(body ?? null));
     if (slot) {
       if (slot.bodyHash !== bodyHash) {
         throw new ExecutionNodeError('command_id_payload_mismatch', `command ${commandId} replayed with a different body`);
       }
-      return slot.result as T;
+      if (slot.result !== undefined) return slot.result as T;
     }
     const result = produce();
     this.idempotence.set(`${tenantId}:${commandId}`, { bodyHash, result });
+    if (!retainValue && result instanceof Promise) void result.then(() => {
+      const entry = this.idempotence.get(`${tenantId}:${commandId}`);
+      if (entry?.result === result) entry.result = undefined;
+    }, () => {});
     if (result instanceof Promise) void result.catch(() => {
       if (this.idempotence.get(`${tenantId}:${commandId}`)?.result === result) {
         this.idempotence.delete(`${tenantId}:${commandId}`);
@@ -443,7 +447,7 @@ export class ExecutionNodeDaemon {
       sandbox.exportedBytes = bytes.length;
       this.audit.record('sandbox.exported', tenantId, id, `${bytes.length}B`);
       return { bytes, sandbox };
-    });
+    }, false);
   }
 
   async deleteSandbox(tenantId: ExecutionNodeTenantId, id: string, input: {
