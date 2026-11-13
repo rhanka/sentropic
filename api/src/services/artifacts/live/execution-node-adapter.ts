@@ -1,5 +1,5 @@
 import { createHash, createPublicKey, sign, verify } from 'node:crypto';
-import type { ExecutionNodeDevScope, ExecutionNodeOwnership, ExecutionNodeSandboxSpec,
+import type { ExecutionNodeBaseRef, ExecutionNodeDevScope, ExecutionNodeOwnership, ExecutionNodeSandboxSpec,
   ExecutionNodeTicket } from '../../../../../apps/sandbox-node/src/contract';
 import { ExecutionNodeRefusal, executionNodeTransport, type ExecutionNodeConfig,
   type NodeReply, type NodeTransport } from './execution-node-transport';
@@ -106,6 +106,13 @@ export class ExecutionNodeAdapter {
     if (status.tenantId !== session.ownership.tenantId || status.physicalUid !== session.physicalUid
       || JSON.stringify(status.ownership) !== JSON.stringify(session.ownership)) throw new ExecutionNodeRefusal('invalid_node_session');
     return status;
+  }
+  async putBase(session: NodeSession, base: ExecutionNodeBaseRef & { tenantId: 'sentropic' | 'immo' },
+    presignedGetUrl: string, commandId: string, validateUrl: (url: string, tenant: string) => void) {
+    if (base.tenantId !== session.ownership.tenantId || base.kind === 'rootfs') throw new ExecutionNodeRefusal('cross_tenant_base_forbidden', 403);
+    validateUrl(presignedGetUrl, base.tenantId);
+    return nodeJson(await this.command(session, 'PUT', `/v1/tenants/${base.tenantId}/bases`, commandId,
+      { ownership: session.ownership, base, url: presignedGetUrl }));
   }
   async mutate(session: NodeSession, operation: string, commandId: string, fields: Record<string, unknown> = {}) {
     if (!/^[a-zA-Z0-9-]+$/.test(session.physicalUid)
