@@ -45,7 +45,7 @@ export async function dispatchDecision(execution: DecisionExecution, selection: 
   }
   closeDecisionReceipt(execution, error);
   // Invalid native usage cannot release the admitted hold through settlement.
-  const retainHold = selection.descriptor.protocol === 'openai-decisions' && !result.ok && result.error.code === 'USAGE_INVALID';
+  const retainHold = ['openai-decisions', 'gemini-decisions'].includes(selection.descriptor.protocol ?? '') && !result.ok && result.error.code === 'USAGE_INVALID';
   try { if (!retainHold) await options.budget.settle({ holdId: admitted.holdId, receipt: copyDecisionReceipt(receipt), boundViolated: priced.overrun }); }
   catch {
     receipt.budget.state = 'pending-reconciliation';

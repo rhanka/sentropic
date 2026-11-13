@@ -101,7 +101,8 @@ export async function resolveDecisionAuth(descriptor: DecisionEvaluatorDescripto
       || !material.token.trim() || material.token !== material.token.trim() || /[\r\n]/.test(material.token)
       || typeof material.envVar !== 'string' || !material.envVar.trim()
       || (isJev && material.envVar !== 'JEV_API_KEY')
-      || (descriptor.protocol === 'openai-decisions' && material.envVar !== 'OPENAI_API_KEY')) {
+      || (descriptor.protocol === 'openai-decisions' && material.envVar !== 'OPENAI_API_KEY')
+      || (descriptor.protocol === 'gemini-decisions' && !['GEMINI_API_KEY', 'GOOGLE_API_KEY'].includes(material.envVar))) {
       return { ok: false, code: 'CREDENTIAL_MISSING' };
     }
     return { ok: true, auth: freezeDecisionData(snapshot.value as unknown as AuthResolution) };
