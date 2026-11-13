@@ -35,12 +35,13 @@ values below:
   under `/opt/execution-node/releases/<release.digest>`. Startup verifies
   the extracted file manifest. Image tags are build handles only.
 
-## RUN 8 delivery (supersedes prior compiled releases)
+## RUN 9 delivery (supersedes prior compiled releases)
 
-- Archive SHA-256: `9789357855f9a377c77fdb9fd9a451b13a21c83bf8e342dcdc62c2ad8da0b036`.
-- SEA executable SHA-256: `d68a862c1e1d069fad2436eb6408f1500d582e8108c39966ea717972d1eb0685`.
-- Shared EROFS rootfs SHA-256: `c0aa2a499692becbdc9017fc74aaf8423224a5de031537de188e999373b9a3b1`.
-- Supersedes RUN 7 archive `54138547b34c35a6c8cd3610cc7b02df1db948be60ed013e4221190dad72f9d8` and all earlier releases.
-- Configuration/unit/operator key/startup/README/restart B-test are covered by the archive's SHA256SUMS.
+- Archive SHA-256: `0b1288e2a10bc5d2e61249997370cbd183a2593ad48cfa194b56127b9363bd54`.
+- SEA executable SHA-256: `631f92fb018738f082e78bc396e045947a34b50c3674cddaba45a32491c3a5cc`.
+- Shared EROFS rootfs SHA-256: `b9dc75522f328541d0e6627f5df01dfb68a4c1653945e9df63a9bb40ef4799eb`.
+- Supersedes RUN 8 archive `9789357855f9a377c77fdb9fd9a451b13a21c83bf8e342dcdc62c2ad8da0b036` and all earlier releases.
+- Configuration/unit/operator key/startup/README/restart B-test/isolation qualification are covered by the archive's SHA256SUMS.
+- Archive root mode 0755 and extracted SEA execution as uid 65534 are verified.
 - Built and verified locally 2026-11-13, SEA self-test passed from extracted release. No publication/deployment.
 - Full runsc/EROFS/EDQUOT and live-mount restart qualification: k8s S1-K1 on an isolated host; not claimed here.
