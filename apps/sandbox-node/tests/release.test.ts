@@ -4,6 +4,15 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 describe('pinned VM release startup', () => {
+  it('should preserve host-visible mounts and require both tenant filesystems', () => {
+    const unit = readFileSync(new URL('../k8s/execution-node.service', import.meta.url), 'utf8');
+    for (const directive of ['ProtectSystem', 'ProtectHome', 'PrivateTmp', 'ReadWritePaths', 'MountFlags', 'ProtectControlGroups', 'PrivateDevices', 'Delegate']) {
+      expect(unit).not.toMatch(new RegExp(`^${directive}=`, 'm'));
+    }
+    for (const line of ['User=root', 'CPUWeight=100', 'RuntimeDirectoryPreserve=yes',
+      'RequiresMountsFor=/var/lib/builder/tenants/sentropic /var/lib/builder/tenants/immo',
+      'RuntimeDirectory=execution-node', 'MemoryMax=192M', 'MemoryMin=64M', 'OOMPolicy=kill']) expect(unit).toContain(line);
+  });
   it('should align the default listener and operator instructions on TCP 8443', () => {
     expect(readFileSync(new URL('../src/service.ts', import.meta.url), 'utf8')).toContain('AGENT_PORT ?? 8443');
     const guide = readFileSync(new URL('../OPERATOR.md', import.meta.url), 'utf8');
