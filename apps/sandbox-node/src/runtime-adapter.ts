@@ -7,6 +7,7 @@ import { checkWritePath } from './mounts.js';
 import { parseRunscList } from './runsc-inventory.js';
 import { throwFilesystemError } from './filesystem-errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
+import { forwardSandboxPort } from './port-forward.js';
 
 export interface SandboxMount {
   readonly source: string;
@@ -30,6 +31,7 @@ export interface RunSandboxOptions {
 }
 
 export interface RuntimeAdapter {
+  portTarget?(runtimeId: string, port: number): Promise<{ socketPath: string }>;
   writeFile(runtimeId: string, path: string, bytes: Buffer, scope: ExecutionNodeDevScope): Promise<void>;
   readonly kind: string;
   hasRunsc(): boolean;
@@ -91,6 +93,7 @@ export class FakeRuntimeAdapter implements RuntimeAdapter {
  * where the `runsc` binary is absent — callers gate on `hasRunsc()`.
  */
 export class RunscRuntimeAdapter implements RuntimeAdapter {
+  private readonly forwards = new Map<string, Map<number, ReturnType<typeof forwardSandboxPort>>>();
   readonly kind = 'runsc-systrap';
   private readonly binary: string;
   private readonly rootArg = '--root=/run/execution-node/runsc';
@@ -112,6 +115,18 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
     const entry = this.scopes.get(runtimeId);
     if (!entry || entry.stopped) throw new Error('sandbox not running');
     writeSource(entry.bundle.workspace, path, bytes, scope);
+  }
+
+  async portTarget(runtimeId: string, port: number): Promise<{ socketPath: string }> {
+    const entry = this.scopes.get(runtimeId);
+    if (!entry || entry.stopped || port !== 5173) throw new Error('sandbox_port_unavailable');
+    const ports = this.forwards.get(runtimeId) ?? new Map(); this.forwards.set(runtimeId, ports);
+    let forward = ports.get(port);
+    if (!forward) {
+      forward = forwardSandboxPort(this.binary, this.rootArg, entry.uid, port, `/run/execution-node/ports/${entry.uid}/${port}.sock`);
+      ports.set(port, forward);
+    }
+    try { return await forward.ready; } catch { ports.delete(port); throw new Error('sandbox_port_unavailable'); }
   }
 
   runscArgs(options: RunSandboxOptions): string[] {
@@ -191,6 +206,8 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   async destroySandbox(runtimeId: string): Promise<void> {
     if (!this.hasRunsc()) failNoBinary();
     if (!await this.stopSandbox(runtimeId)) throw new Error('sandbox_not_quiesced');
+    for (const forward of this.forwards.get(runtimeId)?.values() ?? []) forward.stop();
+    this.forwards.delete(runtimeId);
     const entry = this.scopes.get(runtimeId)!;
     const runtimes = parseRunscList(execFileSync(this.binary, [this.rootArg, 'list', '--format=json'], { encoding: 'utf8', timeout: 1000 }));
     if (runtimes.some(runtime => runtime.id === `sandbox-${entry.uid}`)) execFileSync(this.binary, [this.rootArg, 'delete', '--force', `sandbox-${entry.uid}`], { timeout: 5000 });

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import type { Context } from 'hono';
+import { Hono, type Context } from 'hono';
 import { createBuilderService } from './service';
 import { builderPlacement, type BuilderPlacement } from './placement';
 import { BUILDER_KEY_ENV, builderKeys, SUPERVISOR_KEY_ENV, supervisorKey } from './builder-keys';
@@ -16,10 +16,16 @@ import { createLiveScheduler } from './scheduler';
 import { readBuilderCacheStorage, type BuilderCacheStorage, type PrivateCacheBlobs } from './cache-storage';
 import { readInstallBudget } from './deadline';
 import { LiveError } from './records';
-import type { HostIdentity } from './host-build-api';
+import type { HostIdentity, HostBuildEnv } from './host-build-api';
 import { readWorkerSizing, type KubernetesCore } from './pods';
 import { installEnvironment, readInstallHeapMb } from './recipes';
 import type { LivePorts } from './ports';
+import { selectSandboxBackend, sandboxBackendKind, SANDBOX_BACKEND_ENV } from './sandbox-backend';
+import { createExecutionNodeBackend, type ExecutionNodeInputs } from './execution-node-backend';
+import { executionNodeHeartbeat } from './execution-node-heartbeat';
+import { executionNodeForge } from './execution-node-forge';
+import { createCustodyAuthority, createCustodyRpc } from './execution-node-rpc';
+import type { ExecutionNodeAdapter } from './execution-node-adapter';
 
 type Env = Readonly<Record<string, string | undefined>>;
 /** Flag of the composed builder service (cm/api); anything but `1` keeps the 503 builder_unavailable mount. */
@@ -69,6 +75,8 @@ export interface ProductBuilderDeps {
    * then every forge read refuses `forge_unconfigured`. */
   gitHubApp: ForgeLeaseHost | null; log(event: string, error: unknown): void;
   now?: () => number; id?: () => string; fetch?: typeof fetch;
+  /** S1-B1: authenticated tenant/session registry, sealed-base hydration and candidate handoff. */
+  executionNodeInputs?: ExecutionNodeInputs;
 }
 
 /**
@@ -92,6 +100,20 @@ export function createProductBuilder(env: Env, deps: ProductBuilderDeps) {
 
 function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   const now = deps.now ?? Date.now; const id = deps.id ?? randomUUID;
+  let heartbeat: ReturnType<typeof executionNodeHeartbeat> | undefined;
+  let custodyNode: ExecutionNodeAdapter | undefined;
+  let custodyBackend: ReturnType<typeof createExecutionNodeBackend> | undefined;
+  const kind = read(SANDBOX_BACKEND_ENV, () => sandboxBackendKind(env));
+  const sandboxBackend = kind === 'execution-node' ? read(SANDBOX_BACKEND_ENV, () => selectSandboxBackend(env, {
+    kubernetes: () => undefined,
+    executionNode: node => {
+      custodyNode = node;
+      heartbeat = executionNodeHeartbeat(deps.pool, node,
+        code => deps.log(code, new LiveError('builder_unavailable', code)));
+      custodyBackend = createExecutionNodeBackend(node, createPostgresRemoteLiveRows(deps.pool), deps.executionNodeInputs);
+      return custodyBackend;
+    },
+  })) : undefined;
   const placement = read(LABEL.test(env.ARTIFACT_BUILDER_NAMESPACE ?? '') ? 'ARTIFACT_BUILDER_SERVICE_DOMAIN'
     : 'ARTIFACT_BUILDER_NAMESPACE', () => builderPlacement(env));
   const signer = read(SUPERVISOR_KEY_ENV, () => supervisorKey(env));
@@ -116,28 +138,42 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   const forgeBindings = createForgeBindings(createPostgresRemoteLiveRows(deps.pool), config);
   const reads = createLeaseForgeReads({ config, bindings: forgeBindings, fetch: deps.fetch, now, id,
     generation: runtimeGeneration(createPostgresLiveStore(deps.pool), key => service.remote.session(key)) });
+  const forge = kind === 'execution-node' ? executionNodeForge(deps.executionNodeInputs,
+    runtimeGeneration(createPostgresLiveStore(deps.pool), key => service.remote.session(key))) : remoteHostForge(reads);
   // D0 binding view: generation and owner of the host's last reconcile; publication stays explicit (R4, no autoPublish).
   const binding: LivePorts['binding'] = async key => {
     const { generation, ownerId } = await service.remote.session(key);
-    return { generation, ownerId, headSha: await reads.head(key), healthy: true, autoPublish: false,
+    return { generation, ownerId, headSha: await forge.head(key), healthy: true, autoPublish: false,
       automaticAuthorized: false, releaseId: null, releaseCommit: null, initialUnpublishedBranchEligible: false };
   };
   const schedule = (work: () => Promise<void>) => { void work().catch(error => deps.log('artifact_builder_job_failed', error)); };
   service = createBuilderService({ pool: deps.pool, cacheBlobs: deps.cacheBlobs(cacheStorage), placement, supervisorKey: signer,
-    relayUrl, kubernetes: deps.kubernetes(placement), host, signingKey: keys.signingKey, hostKeys: keys.hostKeys,
+    sandboxBackend,
+    relayUrl, kubernetes: kind === 'kubernetes' ? deps.kubernetes(placement) : undefined,
+    host, signingKey: keys.signingKey, hostKeys: keys.hostKeys,
     authenticate: deps.authenticate, schedule, liveWaitMs: PRODUCT_LIVE_WAIT_MS, now, id, binding,
     installBudget: readInstallBudget(env), sizing: readWorkerSizing(env),
     installEnv: installEnvironment(readInstallHeapMb(env)),
-    forge: remoteHostForge(reads), sources: { source: reads.source }, forgeBindings,
+    forge, sources: { source: kind === 'execution-node' ? async (...args) => {
+      if (!deps.executionNodeInputs) throw new LiveError('builder_unavailable', 'node_base_hydration_unconfigured');
+      return deps.executionNodeInputs.source(...args);
+    } : reads.source }, forgeBindings,
     routes: createLiveFenceRoutes({ baseUrl: edgeUrl, key: fenceKey, now, fetch: deps.fetch }),
     heavy: { node, ...PRODUCT_HEAVY }, admission: PRODUCT_ADMISSION, cache: { signingKey: () => signingKey } });
   let running: { stop(): void } | null = null;
+  const api = custodyNode && custodyBackend ? new Hono<HostBuildEnv>().route('/', createCustodyRpc({ key: fenceKey, node: custodyNode, now,
+    resolve: createCustodyAuthority({ store: createPostgresLiveStore(deps.pool),
+      binding, invitations: service.remote.invitations, session: runtime => custodyBackend!.custody(runtime), now }) })).route('/', service.api) : service.api;
   return {
-    api: service.api, controller: service.controller,
+    api, controller: service.controller,
     /** Idempotent: one scheduler per process, renewing leases and reconciling every 30 s; `stop` clears it. */
     start() {
-      running ??= createLiveScheduler({ controller: service.controller, intervalMs: SCHEDULER_INTERVAL_MS,
-        onError: (_key, error) => deps.log('artifact_live_tick_failed', error) }).start();
+      if (!running) {
+        heartbeat?.start();
+        const scheduler = createLiveScheduler({ controller: service.controller, intervalMs: SCHEDULER_INTERVAL_MS,
+          onError: (_key, error) => deps.log('artifact_live_tick_failed', error) }).start();
+        running = { stop() { scheduler.stop(); void heartbeat?.stop(); running = null; } };
+      }
       return running;
     },
   };

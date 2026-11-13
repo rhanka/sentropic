@@ -64,6 +64,18 @@ function mounted(api: Hono<never> | null, d = deps()) {
 afterEach(() => { vi.useRealTimers(); });
 
 describe('product builder composition (ARTIFACT_BUILDER_ENABLED)', () => {
+  it('should compose the configured node backend without initializing Kubernetes or requiring B1 hydration at boot', () => {
+    const d = deps(); const keys = generateKeyPairSync('ed25519');
+    const product = createProductBuilder({ ...ENV, ARTIFACT_SANDBOX_BACKEND: 'execution-node',
+      ARTIFACT_EXECUTION_NODE_URL: 'https://node.example.test:8443', ARTIFACT_EXECUTION_NODE_ID: 'node',
+      ARTIFACT_EXECUTION_NODE_INSTANCE_ID: 'instance', ARTIFACT_EXECUTION_NODE_EPOCH: '2',
+      ARTIFACT_EXECUTION_NODE_PROVENANCE_PUBLIC_KEY_B64: Buffer.from(keys.publicKey.export({ type: 'spki', format: 'pem' })).toString('base64'),
+      ARTIFACT_EXECUTION_TICKET_ED25519_KEY_B64: Buffer.from(keys.privateKey.export({ type: 'pkcs8', format: 'pem' })).toString('base64'),
+      SANDBOX_MTLS_CA_CERT_B64: Buffer.from('synthetic').toString('base64'),
+      SANDBOX_MTLS_CONTROL_PLANE_CERT_B64: Buffer.from('synthetic').toString('base64'),
+      SANDBOX_MTLS_CONTROL_PLANE_KEY_B64: Buffer.from('synthetic').toString('base64') }, d);
+    expect(product).not.toBeNull(); expect(d.kubernetes).not.toHaveBeenCalled(); expect(d.query).not.toHaveBeenCalled();
+  });
   it('should compose nothing and keep the 503 builder_unavailable mount when the flag is absent or not 1', async () => {
     for (const flag of [undefined, '', '0', 'true']) {
       const d = deps();
