@@ -17,6 +17,7 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
   - `apps/sandbox-node/**`
   - `spec/SPEC_EVOL_SANDBOX_NODE.md`
   - `BRANCH.md`
+  - `.github/workflows/ci.yml` (BRK1-EX1: only add `apps/sandbox-node/**` to the global filter).
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -28,6 +29,7 @@ Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/s
   - [x] No scope exception required.
 
 ## Feedback Loop
+- [x] BRK1-EX1 authorized by conductor on 2026-11-13 05:50: add only `- 'apps/sandbox-node/**'` to the global filter in `.github/workflows/ci.yml`. Rationale: consumer-contracts requires every changed path to be classified; sandbox-node changes were unclassified. Impact: every sandbox-node change runs the full suite. Rollback: revert this single filter line.
 - [x] K1 qualification prerequisite: production bundle upper root was 0700, inherited by overlay cwd, excluding sandbox uid 1000. Set only upper root to 0755; host bundle remains 0700 and workspace bind remains read-only. bundle.test.ts asserts both modes for session/build.
 - [x] K1 final local verification: 27 files / 118 tests pass; both TypeScript projects, shell syntax and export GC pass on ENV=test-sandbox-node-k1. No API/UI stack started.
 - [x] K1 cleanup regressions: isolation-runner.test.ts covers success, partial launch failure, failed probe, wrong scope policy, leaked mount and SIGTERM; cleanup is restricted to generated paths and preserves bases after a mount leak.
