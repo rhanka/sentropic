@@ -1,7 +1,7 @@
-# Feature: Fix retained live-draft outage qualification
+# Feature: Sandbox Node K1 — clean startup, quota errors and isolation qualification
 
 ## Objective
-- [x] Make the retained encrypted draft outage conformance deterministic across calendar dates while preserving the specified unavailable and expiry outcomes.
+Deliver packet s1-agent-k1 Fixes 1–5 on fix/sandbox-node-k1 in tmp/worktrees/sandbox-node-k1. Preserve the inherited delivery history below; no merge, deployment or VM access.
 
 ## Scope / Guardrails
 - [x] Isolated worktree `tmp/worktrees/artifacts-live-drafts`, branch `fix/artifacts-live-drafts-outcome`, base `12af1431a2b4b6e80b08ae3f997bd51b34da612a`.
@@ -11,7 +11,8 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/artifacts/**`
+  - `apps/sandbox-node/**`
+  - `spec/SPEC_EVOL_SANDBOX_NODE.md`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -36,21 +37,55 @@
 - [x] No UI surface changes; memory and Postgres conformance qualify the behavior.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Reproduce and establish contract**
-  - [x] Read master, workflow, testing, common packet, draft source, conformance fixture and live-tools contract.
-  - [x] Mechanical `harness check branch` passes.
-  - [x] Reproduced memory (8 pass, 1 fail) and Postgres (10 pass, 1 fail) on origin/main through scoped make targets.
-  - [x] `391c2fa76cdc9b55c29e71465ae3393979e28fc0` introduced the key-outage vault without the fixture clock; its real clock expires the November 6 draft on November 13 at 12:00 UTC before key access.
-  - [x] `docs/live-tools.md:51` specifies seven-day retention and prior revision preservation on save failure; production expiry precedence is correct.
-- [x] **Lot 1 — Minimal deterministic qualification fix**
-  - [x] Share the injected fixture clock with the key-outage vault in `packages/artifacts/tests/fixtures/live-draft-conformance.ts`.
-  - [x] Preserve exact unavailable assertion and revision rollback checks; keep expiry conformance unchanged.
-  - [x] `make test-artifacts -o build-artifacts SCOPE=tests/live-drafts.test.ts API_PORT=9685 UI_PORT=5885 MAILDEV_UI_PORT=1785 ENV=test-artifacts-drafts`: 9 passed; reused unchanged build produced during baseline reproduction.
-  - [x] `make test-artifacts-integration -o build-artifacts SCOPE=tests/live-drafts.integration.test.ts API_PORT=9685 UI_PORT=5885 MAILDEV_UI_PORT=1785 ENV=test-artifacts-drafts`: 11 passed.
-- [ ] **Lot 2 — Final validation and handoff**
-  - [x] Two independent Astra high code reviews (contract/root cause and regression/minimality): APPROVE, no blocking findings; assertions and production behavior unchanged.
-  - [x] Package source unchanged; version bump not applicable.
-  - [x] Mechanical `make scope-check` passes C2; `git diff --check` passes before atomic `make commit`.
-  - [ ] Push and open PR with this file as body; CI green on exact head; do not merge.
-  - [x] `make down-volumes API_PORT=9685 UI_PORT=5885 MAILDEV_UI_PORT=1785 ENV=test-artifacts-drafts`; `make ps` confirms no remaining services.
-  - [ ] Write French report and completion marker under `.tmp/rv/artifacts-live-drafts-fix`.
+- [x] K1 Lot 0: verified existing branch with harness; ENV=test-sandbox-node-k1; no stack or ports started.
+- [x] K1 Fix 1: normalize literal null runsc lists only; restart/lost+found/garbage regressions in restart.test.ts and runtime cleanup coverage.
+- [ ] K1 Fixes 4–5: shared code-or-errno recognition; qualification/source/runtime/export regressions; audit all requested error codes.
+- [ ] K1 Fix 2: real-adapter two-tenant isolation qualification, standalone SEA command, shipped shell wrapper and cleanup checks.
+- [ ] K1 Fix 3: archive root 0755, verification and operator custody modes.
+- [ ] K1 final: check-sandbox-node, build/verify artifact, code review, push PR and wait for green CI; RUN 9 and done marker.
+- [x] RUN 2 CI fixes: user-owned cache qualifies 31/31; exact Responses session-title regression reproduced red, then fixture amended without relaxing unknown-traffic rejection.
+- [x] RUN 2 build: compiled digest-addressed archive produced locally; reuse locked dependency download cache after observed registry ETIMEDOUT, without host node_modules.
+- [x] RUN 2: real adapter reads complete memory.current via validated systemd tenant slice; update local exports and standalone qualification instructions.
+- [x] RUN 2 AMD-3/6/7: compile-time incomplete provenance rejection, truthful stop union, strict isolate policy and canonical recipe digest/path collision regressions.
+- [x] RUN 2: CI executes standalone regression suite; spec adds provenance/S2 recipe and staged d2-4 qualification gates.
+- [x] RUN 2 spec: apply normative AMD-1/2/4/5/7/8/9/10/11/12 tenant, scope, admission, transport and lifecycle amendments.
+- [x] RUN 2 regression checks: pending stop retains reservation, export refuses until quiescence, concurrent claims serialize and rejected admissions can retry.
+- [x] RUN 2: build digest-addressed compiled Node release with immutable archive/file manifests; no package or image publication required.
+- [x] RUN 2 AMD-12: operator guide targets poc-k8s cloud-init/systemd, public mTLS, no Python, job-alerts, digest rollback and d2-4 resources.
+- [x] RUN 2: runnable mTLS bootstrap service and real job-alerts scheduling; supportedOps honestly limited to node/quotas pending S1 host lifecycle qualification.
+- [x] RUN 2 AMD-5/12: mTLS listener, explicit operator/tenant scope boundary and verified HTTPS job-alerts heartbeat; authentication regression tests.
+- [x] RUN 2 AMD-12: remove inapplicable DaemonSet; standalone systemd agent unit and digest-only verified release startup for k8s cloud-init ownership.
+- [x] RUN 2 AMD-3/6/7/11: provenance payload and S2 recipe/isolation contract; epoch 2 then late epoch 1, restart, stream closure and heartbeat regression tests.
+- [x] RUN 2 AMD-4/11: monotone custody WAL fsync before acknowledgement, active stream closure, stale reconnection/invocation refusal and heartbeat fail-closed gate.
+- [x] RUN 2 AMD-2: wire scope stop results and quiescence export guard; real export fails closed until its reader is installed.
+- [x] RUN 2 AMD-2/9: resolve systemd ControlGroup, validate tenant ancestry before writes, kill only scope and poll populated; mismatch/timeout regression tests.
+- [x] RUN 2 AMD-1/8: account complete memory.current and fixed 768/1664 MiB reservations, reject memory pressure before OOM; capacity regression tests.
+- [x] RUN 2: wire publish admission into daemon, warm claim transfer, canonical builder storage; standalone container qualification target.
+- [x] RUN 2 AMD-8/10: warm live OR standby admission, rejection before allocation and reservation transfer tests.
+- [x] RUN 2 AMD-10: bounded single global publish queue with strict tenant alternation and queue-full rejection tests.
+- [x] RUN 2 AMD-8: freeze d2-4 capacity, per-tenant limits, quota snapshots and stop/scope response types locally.
+- [x] RUN 2: verify feat/sandbox-node-step1 mechanically; restore registry-compatible contracts and consume new types locally.
+- [x] RUN 2: apply AMD-1..12, d2-4 admission, custody, scope resolution, VM operator contract and regression tests (30 passing before release-start tests).
+- [ ] RUN 2: push atomic commits, verify CI green, append evidence to s1-agent-core.md; do not merge or deploy.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Verify branch `feat/sandbox-node-step1` tracks `origin/main` (`5be8e34f3`) in worktree `tmp/worktrees/sandbox-node` before any edit.
+  - [x] Confirm scope and guardrails (Allowed/Forbidden above; `Makefile` and `deploy/**` untouched).
+- [x] **Lot 1 — Spec freeze**
+  - [x] Write `spec/SPEC_EVOL_SANDBOX_NODE.md` (English): ExecutionNodeV1 + tenant model frozen; open points (D2/D3/D4/D5/D6/D7/D14) explicitly marked non-frozen.
+- [x] **Lot 2 — Contract module**
+  - [x] Consume unreleased contract in `apps/sandbox-node/src/contract.ts`; leave published contracts untouched.
+  - [x] Lot gate: `tsc --noEmit` on `packages/contracts` passes; `git status` shows no `Makefile`, `docker-compose*.yml`, `api/**`, `ui/**`, `deploy/**` changes.
+- [x] **Lot S1-A1a — Sandbox-node daemon (apps/sandbox-node, Node/TS, zero Python)**
+  - [x] Daemon against injectable runtime adapter (`src/runtime-adapter.ts`: fake for tests, real `runsc --network=none` systrap compile-safe).
+  - [x] Per-tenant read-only base mounts + `/workspace`-only writes (`src/mounts.ts`).
+  - [x] Lifecycle automaton + idempotence + ticket verification (`src/daemon.ts`, `src/tickets.ts`).
+  - [x] Per-tenant admission/quotas + WFQ 1:1 drain + audit events (`src/admission.ts`, `src/audit.ts`).
+  - [x] Unit tests written: tenant isolation, lifecycle incl. stop->export->destroy, tickets, admission fairness, adapters.
+  - [x] Typecheck `apps/sandbox-node` via `exec-api` on `ENV=test-sandbox-node` (green).
+  - [x] Unit tests green via `test-api-endpoints SCOPE=apps/sandbox-node/tests` on `ENV=test-sandbox-node` (5 files, 16 tests).
+- [ ] **Lot N — Final validation**
+  - [x] Typecheck & lint for the touched package (`make typecheck-api` exit 0 on 2026-11-12; scoped vitest 16/16; eslint clean on identical `.ts` per S1-A1a).
+  - [x] Keep published contracts 0.3.0 and its lock/index unchanged from base; no publication.
+  - [ ] Final gate step 1: create/update PR using this `BRANCH.md` text as PR body.
+  - [ ] Final gate step 2: run/verify branch CI on that PR.
+  - [x] Owner constraint: preserve BRANCH.md for follow-up, do not merge or deploy.
