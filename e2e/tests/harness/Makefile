@@ -3,7 +3,7 @@ ENV ?= feat-v8-spike
 API_PORT ?= 9360
 UI_PORT ?= 5560
 MAILDEV_UI_PORT ?= 1460
-IMAGE := mcr.microsoft.com/playwright:v1.60.0-noble
+IMAGE := mcr.microsoft.com/playwright:v1.60.0-noble@sha256:9bd26ad900bb5e0f4dee75839e957a89ae89c2b7ab1e76050e559790e946b948
 TOOLS := $(ENV)-v8-tools
 RESULTS := $(CURDIR)/results
 
