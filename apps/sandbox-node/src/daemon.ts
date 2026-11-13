@@ -257,6 +257,9 @@ export class ExecutionNodeDaemon {
         quotaMiB: sandbox.slot === 'build' ? 1536 : 704,
         uid: input.uid,
         gid: input.gid,
+      }).catch(error => {
+        sandbox.runtimeId = (error as { runtimeId?: string }).runtimeId;
+        sandbox.state = 'failed'; throw error;
       });
       sandbox.runtimeId = runtimeId;
       sandbox.state = 'running';
@@ -292,7 +295,7 @@ export class ExecutionNodeDaemon {
       try { promoted = await this.startRuntime(sandbox, {
         uid: input.uid,
         gid: input.gid,
-      }); } catch (error) { sandbox.state = 'standby'; throw error; }
+      }); } catch (error) { sandbox.state = 'failed'; throw error; }
       promoted.poolOwned = false;
       promoted.ownership = input.claim.ownership;
       this.admission.claim(input.claim.tenantId);
@@ -377,7 +380,8 @@ export class ExecutionNodeDaemon {
       if (!sandbox.runtimeId) {
         throw new ExecutionNodeError('unknown_node_instance', `sandbox ${id} has no runtime output`);
       }
-      const bytes = await this.adapter.exportOutput(sandbox.runtimeId, input.spec.subPath);
+      if (input.spec.subPath !== sandbox.outputSubPath) throw new ExecutionNodeError('command_id_payload_mismatch', 'retained output path mismatch');
+      const bytes = await this.adapter.exportOutput(sandbox.runtimeId, input.spec.subPath, input.spec.maxBytes);
       if (bytes.length > input.spec.maxBytes) {
         throw new ExecutionNodeError('command_id_payload_mismatch', 'export exceeds maxBytes');
       }
