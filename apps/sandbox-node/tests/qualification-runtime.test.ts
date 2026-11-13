@@ -26,17 +26,21 @@ describe('qualification runtime observation', () => {
     if (['abort', 'timeout'].includes(mode)) expect(child.kill).toHaveBeenCalledExactlyOnceWith('SIGKILL');
     expect(vi.getTimerCount()).toBe(0);
   });
-  it('should retry refused accepts inside the sandbox and stop at its fixed deadline', () => {
+  it.each(['success', 'deadline'])('should retry refused accepts inside the sandbox until %s', mode => {
     vi.useFakeTimers();
     const sockets: EventEmitter[] = [], exits: number[] = [];
     const connect = vi.fn(() => { const socket = Object.assign(new EventEmitter(), { setTimeout() {}, destroy() {} }); sockets.push(socket); return socket; });
     runInNewContext(qualificationReadyScript, { require: (name: string) => name === 'os' ? { networkInterfaces: () => ({ lo: [] }) } : { connect },
-      Date, setTimeout, console: { log() {} }, process: { exit: (code: number) => exits.push(code) } });
+      Date, setTimeout, console: { log() {} }, process: { exit: (code: number) => { exits.push(code); throw new Error(`exit ${code}`); } } });
     expect(connect).toHaveBeenCalledWith(5173, '127.0.0.1');
     sockets[0]!.emit('error', new Error('refused')); sockets[0]!.emit('close');
     vi.advanceTimersByTime(25); expect(connect).toHaveBeenCalledTimes(2);
-    sockets[1]!.emit('connect'); expect(exits).toEqual([0]);
-    vi.advanceTimersByTime(4500); sockets[1]!.emit('close'); expect(exits).toEqual([0, 1]);
+    if (mode === 'success') expect(() => sockets[1]!.emit('connect')).toThrow('exit 0');
+    else {
+      vi.advanceTimersByTime(4500);
+      expect(() => sockets[1]!.emit('close')).toThrow('exit 1');
+    }
+    expect(exits).toEqual([mode === 'success' ? 0 : 1]);
   });
   it('should cap output bytes and select safe state fields before cleanup', () => {
     const output: string[] = [], diagnostic = qualificationDiagnostics(line => output.push(line));

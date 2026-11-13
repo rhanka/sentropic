@@ -38,7 +38,7 @@
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.
 - [x] Lot 2b: reproduce `socket hang up` with a NetworkNone helper and prove HTTP/WS with an actual cross-process socket donation surviving helper exit; add bounded internal readiness.
-- [ ] Lot 3: run `check-sandbox-node`, TypeScript and memory checks; review the final diff.
-  - [x] Full check: 206 tests pass, two TypeScript projects and memory reclamation pass; add final external-interface regression and independent review.
-- [ ] Lot 4: build and verify archive via docker-slot after confirming at least 30 GB free; record SHA256SUMS.
+- [x] Lot 3: full check 207 tests, TypeScript and memory pass; independent Astra high review APPROVE at 8d8941f89, with two optional test precision improvements applied afterward.
+- [x] Lot 4: archive 97bb367427f0c9389547c86bbf199b2775680047669deee5cc399b9721002407 built and verified via docker-slot, 42 GiB free before build; 11 internal sums and SEA root/non-root pass.
+- [x] Test-stack cleanup: `make down-volumes` completed for test-sandbox-dpf.
 - [ ] Lot 5: PR using this file, CI green on exact head, cleanup test volumes, French report and done marker; do not merge.
