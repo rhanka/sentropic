@@ -7,6 +7,14 @@ const input = { tenantId: 'immo', sandboxUid: 'network', mounts: [], overlayUppe
   overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 };
 
 describe('AMD-28 admission', () => {
+  it.each(['artifact-build', 'prebundle', 'cold-materialize', 'browser-harness', 'other', undefined])('should refuse ports for profile %s', profile => {
+    expect(() => requireNetworkPolicy('ports', profile)).toThrow('live or standby');
+  });
+  it.each(['', 'a'.repeat(64), undefined])('should refuse ports when the qualified digest is missing or differs (%s)', digest => {
+    vi.stubEnv('EXECUTION_NODE_PORTS_RUNSC_SHA256', digest);
+    expect(() => requireNetworkPolicy('ports', 'live')).toThrow(expect.objectContaining({ code: 'ports_disabled', status: 409 }));
+    expect(() => requireNetworkPolicy('none', 'artifact-build')).not.toThrow();
+  });
   it.each(['host', 'sandbox', '--host-uds', 'all', '', null, 1])('should reject forbidden network %s at spec and adapter boundaries', async network => {
     const node = createExecutionNode();
     await expect(node.daemon.createSandbox({ spec: { network } } as never)).rejects.toThrow('network must be none or ports');
