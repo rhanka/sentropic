@@ -57,6 +57,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 - [ ] Lot 2: Ed25519 tickets, ownership/devScope, identity/provenance pin and idempotent lifecycle.
   - [x] Add mTLS configuration/transport, canonical Ed25519 tickets and pinned identity/export verification.
   - [x] Refuse incomplete ownership and verify configured node identity before the first heartbeat or tenant command.
+  - [x] Add tenant-checked presigned base import; transport deadlines cover frozen base/stop/admission operations without changing test timeouts.
 - [ ] Lot 3: one-node heartbeat, bounded tenant WFQ, stateless sources and custody issuer/revocation.
   - [x] Dedicated Postgres advisory-lock heartbeat leadership and S1-C1 EdDSA custody issuing/revocation functions.
   - [x] Product scheduler starts/stops selected-node leadership; identity mismatch latches an alarm and stops the loop.

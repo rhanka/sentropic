@@ -11,6 +11,7 @@ export function executionNodeHeartbeat(pool: Pool, node: ExecutionNodeAdapter, a
   const lock = `execution-node-heartbeat:${node.config.nodeId}`;
   function discard() {
     const previous = client; client = undefined; verified = false;
+    previous?.removeListener('error', discard);
     previous?.release(true);
   }
   async function tick() {
