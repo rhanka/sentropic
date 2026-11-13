@@ -202,6 +202,12 @@ export class ExecutionNodeDaemon {
         }
       });
       else this.admission.admit(input.spec.tenantId, slot, input.commandId);
+      try { this.authorizeCommand(ticket, input.spec.tenantId, input.commandId, body, 'POST', '/v1/sandboxes', input.ownership); }
+      catch (error) {
+        if (slot === 'build') this.admission.builds.release(input.spec.tenantId);
+        else this.admission.release(input.spec.tenantId, slot);
+        throw error;
+      }
       const paths = sandboxPaths(input.spec.tenantId, id);
       const record: SandboxRecord = {
         devScope: structuredClone(input.spec.devScope),

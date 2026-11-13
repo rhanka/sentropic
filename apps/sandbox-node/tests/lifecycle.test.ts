@@ -53,6 +53,25 @@ function compat(tenantId: 'sentropic' | 'immo' = 'sentropic'): ExecutionNodeClai
 }
 
 describe('lifecycle', () => {
+  it('should reject a queued mutation whose ticket expires before admission', async () => {
+    let now = 100_000;
+    const keys = generateTicketKeyPair();
+    const { daemon, admission } = createExecutionNode({ ticketPublicKeyPem: keys.publicKeyPem, nodeInstanceId: 'i', now: () => now });
+    const create = (tenantId: 'sentropic' | 'immo') => {
+      const body = { spec: { ...spec(), tenantId, profile: 'artifact-build' }, ownership: ownership(tenantId), commandId: tenantId };
+      const ticket = issueTicket({ v: 1, tenantId, commandId: tenantId, method: 'POST', path: '/v1/sandboxes',
+        bodySha256: sha256Hex(JSON.stringify(body)), targetNodeId: daemon.nodeId, expectedNodeInstanceId: 'i', expectedNodeEpoch: 1,
+        ownership: body.ownership, issuedAt: new Date(now).toISOString(), deadlineAt: new Date(now + 30_000).toISOString() }, keys.privateKeyPem);
+      return daemon.createSandbox({ ...body, ticket });
+    };
+    await create('sentropic');
+    const waiting = create('immo');
+    const outcome = expect(waiting).rejects.toThrow(/expired/);
+    now += 30_001;
+    admission.builds.release('sentropic');
+    await outcome;
+    expect(admission.builds.snapshot().holderTenantId).toBeUndefined();
+  });
   it('should pass validated base mounts and session command to the runtime', async () => {
     class CaptureAdapter extends FakeRuntimeAdapter {
       options?: Parameters<FakeRuntimeAdapter['runSandbox']>[0];
