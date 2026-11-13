@@ -75,6 +75,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN7 SIGSTOP recovery proof explicitly observes API stopped before suspension and all three workloads restored to one replica after takeover.
 - [x] RUN7 local gates: 145/145 operator tests and 6/6 classifier tests on separately migrated PostgreSQL databases; scope PASS C2. Preprod read-only probe refuses absent postgres pod; latency receipt in owner report.
 - [x] RUN7 process matrix supplies actual HTTP authentication responses through a local server, including pre-commit health verification; preview matrices start with an unused directory.
 - [x] RUN7 M2: require all S-3..S-9 probes before fence and acceptance; S-6 requires same-origin login Location without OAuth error. Six negative regressions failed first.
