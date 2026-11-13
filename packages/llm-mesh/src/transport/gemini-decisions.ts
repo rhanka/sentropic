@@ -43,19 +43,23 @@ export function createGeminiDecisionsTransport(options: GeminiDecisionsTransport
         body: bodyJson, signal: controller.signal });
       if (controller.signal.aborted) { void response.body?.cancel().catch(() => {}); return await aborted; }
       if (response.redirected || (response.status >= 300 && response.status < 400)) {
+        void response.body?.cancel().catch(() => {});
         return { ok: false, error: createDecisionError('PROVIDER_REJECTED', 'dispatch') };
       }
       if (response.status !== 200) {
+        void response.body?.cancel().catch(() => {});
         const code = response.status === 401 || response.status === 403 ? 'AUTHENTICATION_FAILED' : response.status === 422 ? 'PROVIDER_REJECTED'
           : response.status === 429 ? 'RATE_LIMITED' : response.status === 529 ? 'PROVIDER_OVERLOADED'
           : response.status >= 500 ? 'PROVIDER_UNAVAILABLE' : 'PROVIDER_REJECTED';
         return { ok: false, error: createDecisionError(code, 'dispatch') };
       }
       if (!/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')) {
+        void response.body?.cancel().catch(() => {});
         return { ok: false, error: createDecisionError('VERDICT_INVALID', 'parse') };
       }
       const declared = response.headers.get('content-length');
       if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > cap)) {
+        void response.body?.cancel().catch(() => {});
         return { ok: false, error: createDecisionError('RESPONSE_TOO_LARGE', 'parse') };
       }
       reader = response.body?.getReader();
