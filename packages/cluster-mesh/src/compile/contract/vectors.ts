@@ -12,6 +12,7 @@ export const COMPILE_CONFORMANCE_RECIPE: CompileRecipeV1 = {
     urlRewriteMode: 'import-map-external', sourcemap: false },
   policyVersion: 'compile-policy.v1', trustLane: 'isolate-untrusted', accessPartition: 'public-v1',
 };
+export const COMPILE_CONFORMANCE_RECIPE_KEY = '9adeebcf28e5ecba4ec1adda963095ddb05b95588086e39f5d7a1ed7724a5b8f';
 export const COMPILE_CONFORMANCE_VECTORS = {
   jcs: [
     { input: { z: 1, a: { '\u20ac': 2, '\r': 3 } }, expected: '{"a":{"\\r":3,"€":2},"z":1}' },

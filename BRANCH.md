@@ -51,6 +51,7 @@
   - [x] Implement semantic recipe and manifest validation, exact output verification and distinct recipe/manifest identities.
 - [ ] Lot 3: packages/cluster-mesh/tests/compile/contract.spec.ts covers shared golden vectors, changes of identity, invalid paths/options, diagnostic codes, manifest/SRI identity and legacy preservation.
   - [x] Publish reusable JCS/SHA-256/path/base64/JSON conformance corpus and canonical-profile checks.
+  - [x] Pin recipe-key golden vector independently checked with Node crypto; add identity mutation and closed-option tests.
 - [ ] Lot 4: run scoped make test-cluster-mesh, typecheck-cluster-mesh and independent code review; resolve findings.
 - [ ] Lot 5: bump/export cluster-mesh after registry check; make scope-check before every commit.
 - [ ] Lot 6: push, open PR with this plan, wait for exact-head green CI; do not merge.
