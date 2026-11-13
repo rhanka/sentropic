@@ -23,6 +23,7 @@
   - [x] BRDPF-EX1: align co-signed AMD-28 network contract (k8s 3b042fd) in spec; documentation only; rollback the spec line with the network implementation.
 
 ## Feedback Loop
+- [x] R2c-1: expire affirmative switch observations after 150ms on the monotonic clock; hanging config/stat and late results cannot keep streams authorized.
 - [x] Request source: `.tmp/packets/s1-dataplane-qual-fix2.md`; Track import reserved for the conductor's single writer, as in PR #1023.
 
 ## AI Flaky tests
