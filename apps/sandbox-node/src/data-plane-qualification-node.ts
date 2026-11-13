@@ -10,6 +10,7 @@ import { basePath } from './mounts.js';
 import type { ExecutionNodeOwnership } from './contract.js';
 import type { SandboxRecord } from './daemon.js';
 import type { RuntimeAdapter } from './runtime-adapter.js';
+import { qualificationDiskMiB, qualificationInodes } from './qualification-storage.js';
 
 function fileHash(path: string) {
   const fd = openSync(path, 'r'), hash = createHash('sha256'), buffer = Buffer.alloc(1024 * 1024);
@@ -67,7 +68,7 @@ export function qualificationNode(directory: string, release: string, adapter?: 
         s.listen(5173,'0.0.0.0');`;
       const created = await call('/v1/sandboxes', { commandId: 'qualification-create', ownership,
         spec: { tenantId: 'sentropic', devScope, profile: 'artifact-build', network: 'ports',
-          command: ['/usr/local/bin/node', '-e', script], uid: 1000, gid: 1000, quotaMiB: 1408, quotaInodes: 4096,
+          command: ['/usr/local/bin/node', '-e', script], uid: 1000, gid: 1000, quotaMiB: qualificationDiskMiB, quotaInodes: qualificationInodes,
           baseMounts: [{ baseId: 'shared-rootfs', kind: 'rootfs', identityDigest: rootDigest }, base] } });
       assert.equal(created.status, 201);
       sandbox = created.body as SandboxRecord;
@@ -101,11 +102,12 @@ export function qualificationNode(directory: string, release: string, adapter?: 
     },
     async close() {
       // Also recover bundles registered by a partially failed launcher, without touching foreign resources.
-      if (sandbox && sandbox.state !== 'destroyed') {
+      try { if (sandbox && sandbox.state !== 'destroyed') {
         const runtimeId = sandbox.runtimeId ?? `runsc-sentropic-${sandbox.id}`;
         await node.adapter.destroySandbox(runtimeId);
+      } } finally {
+        for (const path of createdBases) rmSync(path, { force: true });
       }
-      for (const path of createdBases) rmSync(path);
     },
   };
 }

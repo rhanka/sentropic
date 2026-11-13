@@ -24,6 +24,7 @@
   - [x] No exceptions declared.
 
 ## Feedback Loop
+- [x] Round 3: move qualification images/bundles to disk-backed `/var/lib/builder/qualification`; preflight both gates, use 16 MiB/1024-inode fixtures, and make unregistered runtime cleanup idempotent.
 - [x] Round 2: reproduce CI EPERM under UID/GID 1001:1001; stub only test chown, assert 1000:1000 ownership and real modes under umask 077; all 185 tests pass unprivileged. Production chown and archive bytes are unchanged.
 - [x] Astra review: guard delayed launcher exit after scope-map teardown; add regression before archive rebuild.
 - [x] Astra review: reject empty/premature HTTP responses before first bytes; bound runsc version detection with SIGKILL.
