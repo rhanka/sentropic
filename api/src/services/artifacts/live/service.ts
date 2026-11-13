@@ -49,7 +49,7 @@ export function createArtifactLiveService(options: Pick<LivePorts,
     /** Selected by product configuration; Kubernetes composition remains the default rollback. */
     sandboxBackend?: SandboxBackend;
     /** Namespace-only client of the builder namespace (`createInClusterKubernetes(placement)` in the product). */
-    kubernetes: KubernetesCore;
+    kubernetes?: KubernetesCore;
     supervisorKey: SigningKey; relayUrl: string;
     /** Staged source, AL-D draft and candidate sink; the dependency stream is this service's cache. */
     sources: Omit<SupervisorSources, 'dependencies'>;
@@ -68,6 +68,7 @@ export function createArtifactLiveService(options: Pick<LivePorts,
   }) {
   if (options.sandboxBackend) return createLiveController({ ...options, store: createPostgresLiveStore(options.pool),
     ...options.sandboxBackend });
+  if (!options.kubernetes) throw new Error('kubernetes_backend_unconfigured');
   const channel = createRelaySupervisorChannel({ baseUrl: options.relayUrl });
   const store = createPostgresLiveStore(options.pool);
   const { node, maxWaitMs, pollMs, budget } = options.heavy;

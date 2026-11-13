@@ -46,6 +46,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
 - [x] Lot 0: read packet/addendum/rules/frozen contract; check existing branch, disk and ports.
 - [ ] Lot 1: SandboxBackend seam, execution-node configuration and authenticated HTTPS transport.
   - [x] Select backend explicitly, preserve default Kubernetes composition, inject selected ports into existing controller.
+  - [x] Do not initialize the Kubernetes client when execution-node is selected.
 - [ ] Lot 2: Ed25519 tickets, ownership/devScope, identity/provenance pin and idempotent lifecycle.
   - [x] Add mTLS configuration/transport, canonical Ed25519 tickets and pinned identity/export verification.
   - [x] Refuse incomplete ownership and verify configured node identity before the first heartbeat or tenant command.
