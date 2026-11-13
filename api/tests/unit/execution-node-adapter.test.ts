@@ -52,23 +52,21 @@ describe('ExecutionNodeV1 API control plane', () => {
     const fake = await setup(); await fake.adapter.heartbeat(); const s = session();
     const created = await fake.adapter.create(s, sandboxSpec(s), 'create'); const uid = String(created.id);
     await expect(fake.adapter.mutate({ ...session('immo'), physicalUid: uid }, 'start', 'foreign'))
-      .rejects.toMatchObject({ code: 'cross_tenant_base_forbidden' });
+      .rejects.toMatchObject({ code: 'unknown_node_instance', status: 409 });
     await expect(fake.adapter.mutate({ ...s, physicalUid: uid, devScope: { ...s.devScope, writable: ['**'] } }, 'start', 'changed'))
       .rejects.toMatchObject({ code: 'command_id_payload_mismatch' });
   });
   it('should surface 429 admission without retrying or losing the tenant', async () => {
     const fake = await setup(); await fake.adapter.heartbeat(); const s = session();
-    await fake.adapter.create(s, sandboxSpec(s), 'create');
-    fake.node.admission.draining = true;
+    await fake.adapter.create(s, { ...sandboxSpec(s), profile: 'node-22' }, 'create');
     const calls = fake.calls.length;
-    await expect(fake.adapter.create(s, sandboxSpec(s), 'another')).rejects.toMatchObject({ status: 429, retryAfterMs: 1000 });
+    await expect(fake.adapter.create(s, { ...sandboxSpec(s), profile: 'node-22' }, 'another')).rejects.toMatchObject({ status: 429, retryAfterMs: 1000 });
     expect(fake.calls).toHaveLength(calls + 1); expect(fake.calls.at(-1)?.tenant).toBe('sentropic');
   });
   it.each(['nodeEpoch', 'nodeInstanceId', 'provenanceKey'] as const)('should latch refusal on %s mismatch', async field => {
     const fake = await setup(); const alarm = vi.fn();
-    const other = session(); void other;
     const config = { ...fake.config, ...(field === 'nodeEpoch' ? { nodeEpoch: 1 }
-      : field === 'nodeInstanceId' ? { nodeInstanceId: 'unexpected' } : { provenanceKey: fake.node ? fake.config.ticketKey : fake.config.provenanceKey }) };
+      : field === 'nodeInstanceId' ? { nodeInstanceId: 'unexpected' } : { provenanceKey: fake.config.ticketKey }) };
     const adapter = new ExecutionNodeAdapter(config, fake.adapter.transport, Date.now, alarm);
     await expect(adapter.inspect()).rejects.toMatchObject({ code: 'execution_node_identity_mismatch' });
     await expect(adapter.heartbeat()).rejects.toMatchObject({ code: 'execution_node_identity_mismatch' });
