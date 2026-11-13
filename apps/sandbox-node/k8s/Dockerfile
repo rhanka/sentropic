@@ -25,7 +25,7 @@ RUN /tools/node_modules/.bin/esbuild apps/sandbox-node/src/entry.ts --bundle --p
  && ./execution-node --self-test
 RUN apt-get update && apt-get install -y --no-install-recommends erofs-utils && rm -rf /var/lib/apt/lists/*
 COPY --from=rootfs / /sandbox-rootfs/
-RUN mkfs.erofs -q -T 1767225600 --all-root rootfs.erofs /sandbox-rootfs
+RUN mkfs.erofs --quiet -T 1767225600 --all-root rootfs.erofs /sandbox-rootfs
 
 FROM scratch AS runtime
 WORKDIR /srv/sandbox-node
