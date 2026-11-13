@@ -59,12 +59,24 @@ export async function qualifyCrashAndFailure(directory: string, release: string)
         assert.ok(child.exitCode === null && Date.now() < deadline, 'crash fixture readiness failed');
         await new Promise(resolve => setTimeout(resolve, 25));
       }
+      const scopeGroup = failure === 'oom' ? run('systemctl', ['show', `builder-sbx-${uid}.scope`, '--property=ControlGroup', '--value']) : '';
+      const scopeEvents = () => {
+        if (!scopeGroup) return 'unavailable';
+        try { return readFileSync(`/sys/fs/cgroup${scopeGroup}/memory.events`, 'utf8').trim().replace(/\n/g, ','); }
+        catch { return 'collected'; }
+      };
+      const beforeScope = failure === 'oom' ? scopeEvents() : '';
       if (!failure) child.kill('SIGKILL');
       const result = await Promise.race([exited, new Promise<never>((_, reject) => {
         const timer = setTimeout(() => reject(new Error('crash worker exit deadline')), 5000); timer.unref();
       })]);
       if (failure) assert.equal(result.code, 7); else assert.equal(result.signal, 'SIGKILL');
-      if (failure === 'oom') assert.ok(oomKills() > beforeOOM && beforeOOM >= 0, 'kernel OOM kill not observed');
+      if (failure === 'oom') {
+        const afterOOM = oomKills();
+        const result = run('systemctl', ['show', `builder-sbx-${uid}.scope`, '--property=Result', '--value']);
+        console.log(`RECEIPT ${network} OOM tenant_oom_kill_before=${beforeOOM} after=${afterOOM} scope_events_before=${beforeScope} scope_events_after=${scopeEvents()} scope_result=${result || 'collected'}`);
+        assert.ok(afterOOM > beforeOOM && beforeOOM >= 0, 'kernel OOM kill not observed');
+      }
       assert.throws(() => assertCleanStartup(), /surviving sandbox/);
     } finally {
       child.kill('SIGKILL'); await exited;

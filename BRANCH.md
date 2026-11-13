@@ -23,6 +23,7 @@
   - [x] BRDPF-EX1: align co-signed AMD-28 network contract (k8s 3b042fd) in spec; documentation only; rollback the spec line with the network implementation.
 
 ## Feedback Loop
+- [x] R2 qualification-11 / recovery: OOM receipts include scope memory events and systemd result; worker recovery also kills exact-UID stream helpers outside tenant scopes before reconstructing mounted bundles.
 - [x] R2 qualification-2: real-host switch scenarios now use the production asynchronous file observer on private gate files, atomic switch/binary replacement and the shared GET-node capability builder.
 - [x] R2 qualification-3/5/7: gates verify the manifest and canonical PATH/pinned runsc version, pass the configured cap/timeout, start the burst concurrently from idle and receipt actual helper peaks/cgroup memory/tasks/OOM.
 - [x] R2 qualification-8/9/10: compare stable protocol/address listener sets, reserve disk for four/two sandboxes, require exact systrap/capability/network-namespace OCI shapes.

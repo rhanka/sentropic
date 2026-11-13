@@ -8,7 +8,7 @@ import { parseRunscList } from './runsc-inventory.js';
 import { throwFilesystemError } from './filesystem-errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
 import { forwardSandboxPort } from './port-forward.js';
-import { rmSync, readFileSync, statSync } from 'node:fs';
+import { rmSync, readFileSync, statSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { auditNetworkSpec, auditStartedNetwork } from './network-audit.js';
 import { ExecutionNodeError } from './errors.js';
@@ -121,13 +121,21 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   /** Recover only parent-retained launches after thread death; never launch again. */
   recoverSandbox(options: RunSandboxOptions): void {
     const path = dirname(options.overlayUpper);
+    // A helper belongs to the agent cgroup, so scope termination alone misses it.
+    for (const pid of readdirSync('/proc').filter(name => /^\d+$/.test(name))) {
+      try {
+        const argv = readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0');
+        if (argv.includes(this.rootArg) && argv.includes('port-forward') && argv.includes(`sandbox-${options.sandboxUid}`)
+          && argv.some(arg => arg.startsWith(`--stream=/run/execution-node/ports/${options.sandboxUid}/`))) process.kill(Number(pid), 'SIGKILL');
+      } catch (error) { if (!['ENOENT', 'ESRCH'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error; }
+    }
     const mounted = readFileSync('/proc/self/mountinfo', 'utf8').trim().split('\n')
       .map(line => line.split(' ')[4]?.replace(/\\([0-7]{3})/g, (_, octal) => String.fromCharCode(parseInt(octal, 8))))
       .filter((target): target is string => !!target && target.startsWith(`${path}/`))
       .sort((a, b) => a.split('/').length - b.split('/').length);
     this.scopes.set(`runsc-${options.tenantId}-${options.sandboxUid}`, {
       scope: `builder-sbx-${options.sandboxUid}.scope`, tenantId: options.tenantId, uid: options.sandboxUid,
-      bundle: { path, mounted, workspace: join(path, 'workspace'), output: join(path, 'quota/output') }, stopped: false,
+      bundle: { path, mounted, workspace: join(path, 'workspace'), output: join(path, 'writable/output') }, stopped: false,
     });
   }
 

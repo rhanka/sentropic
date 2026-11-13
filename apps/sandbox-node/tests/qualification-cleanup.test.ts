@@ -13,7 +13,7 @@ import { networkProbeCount, networkTargets } from '../src/qualification-network.
 vi.mock('../src/node-lock.js', () => ({ acquireNodeLock: vi.fn() }));
 vi.mock('../src/qualification-prerequisites.js', () => ({ qualificationPrerequisites: vi.fn() }));
 vi.mock('../src/qualification-switch.js', () => ({ qualifyPortsSwitch: vi.fn(async () => {}) }));
-vi.mock('../src/qualification-peer.js', () => ({ qualificationPeer: () => ({ start: async () => {}, close: async () => {} }) }));
+vi.mock('../src/qualification-peer.js', () => ({ qualificationPeer: () => ({ start: async () => {}, verify() {}, close: async () => {} }) }));
 vi.mock('../src/qualification-processes.js', () => ({ qualificationProcesses: () => ({}), assertQualificationProcessesGone: vi.fn() }));
 vi.mock('../src/qualification-network.js', async original => ({ ...await original<typeof import('../src/qualification-network.js')>(),
   hostListeners: () => '', kernelNetworkWitness: async () => ({ close: async () => {} }),
@@ -30,7 +30,9 @@ vi.mock('node:child_process', () => ({ execFileSync: (file: string, args: string
   : file === 'runsc' ? JSON.stringify(Array.from({ length: networkProbeCount(networkTargets(['15.235.44.193'], '127.77.0.3')) },
     (_, i) => ({ name: `network-${i}`, ok: true }))) : '/dev/loop7' }));
 vi.mock('node:fs', async original => ({ ...await original<typeof import('node:fs')>(),
-  existsSync: () => true, readFileSync: () => 'header\n', mkdtempSync: () => '/run/execution-node/qd-test', rmSync: vi.fn() }));
+  existsSync: () => true, readFileSync: (path: string) => path === '/proc/self/cgroup' ? '0::/qualification\n'
+    : path.endsWith('/memory.events') ? 'oom_kill 0\n' : path.endsWith('/pids.current') ? '4\n' : 'header\n',
+  mkdtempSync: () => '/run/execution-node/qd-test', rmSync: vi.fn() }));
 
 describe('real-host qualification finalization with fake runtime', () => {
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.useRealTimers(); });
