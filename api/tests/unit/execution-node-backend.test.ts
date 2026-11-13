@@ -100,4 +100,24 @@ describe('concrete execution node backend', () => {
     await backend.pods.remove(key, runtime); expect(transport).toHaveBeenCalledTimes(count);
     expect(fake.node.daemon.listSandboxes('sentropic')).toHaveLength(0);
   });
+  it('should preserve an uncertain allocation when its replay is refused and reconcile it later', async () => {
+    const fake = await fakeExecutionNode(); servers.push(fake); await fake.adapter.heartbeat(); const s = session(); let creates = 0;
+    const adapter = new ExecutionNodeAdapter(fake.config, async (method, path, body, headers) => {
+      if (method === 'POST' && path === '/v1/sandboxes') {
+        creates++;
+        if (creates === 2) return { status: 403, headers: {}, bytes: Buffer.from('{"error":"custody_revoked"}') };
+        const response = await fake.adapter.transport(method, path, body, headers);
+        if (creates === 1) throw new ExecutionNodeRefusal('node_transport_failure');
+        return response;
+      }
+      return fake.adapter.transport(method, path, body, headers);
+    }, fake.now);
+    const inputs = { tenant: () => 'sentropic', provision: async () => ({ session: s, spec: sandboxSpec(s) }) } as unknown as ExecutionNodeInputs;
+    const backend = createExecutionNodeBackend(adapter, memoryRows(), inputs);
+    await expect(backend.pods.ensure(key, runtime)).rejects.toThrow(/node_transport_failure/);
+    await expect(backend.pods.remove(key, runtime)).rejects.toMatchObject({ status: 403 });
+    await backend.pods.remove(key, runtime);
+    expect(creates).toBe(3); expect(fake.node.daemon.listSandboxes('sentropic')).toHaveLength(1);
+    expect(fake.node.daemon.listSandboxes('sentropic')[0]?.state).toBe('destroyed');
+  });
 });
