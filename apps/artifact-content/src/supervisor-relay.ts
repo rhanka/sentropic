@@ -100,10 +100,13 @@ export function createSupervisorRelay(options: SupervisorRelayOptions) {
       const at = now();
       const body = options.publicKeys.map(key => openFrame(key, frame, at)).find(Boolean);
       if (!body || body.fence.podName !== podName) return empty(403);
-      if (options.dataPlane) return dataPlaneFetch(options.dataPlane, { kind: 'supervisor', podName }, SUPERVISOR_PATH, {
-        method: 'POST', headers: { 'content-type': 'application/octet-stream', 'content-length': String(frame.length) }, body: frame,
-        signal: AbortSignal.any([request.signal, AbortSignal.timeout(RELAY_UPSTREAM_TIMEOUT_MS)]), maxBytes: MAX_REPLY_BYTES,
-      });
+      if (options.dataPlane) {
+        const response = await dataPlaneFetch(options.dataPlane, { kind: 'supervisor', podName }, SUPERVISOR_PATH, {
+          method: 'POST', headers: { 'content-type': 'application/octet-stream', 'content-length': String(frame.length) }, body: frame,
+          signal: AbortSignal.any([request.signal, AbortSignal.timeout(RELAY_UPSTREAM_TIMEOUT_MS)]), maxBytes: MAX_REPLY_BYTES,
+        });
+        return response.status === 200 || response.status === 403 ? response : empty(502);
+      }
       const result = await forward(podName, frame, request.signal);
       if (result.status !== 200) return empty(result.status);
       return new Response(new Uint8Array(result.body), { status: 200, headers: { 'content-type': 'application/octet-stream',
