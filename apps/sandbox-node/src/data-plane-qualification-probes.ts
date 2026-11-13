@@ -13,6 +13,7 @@ export async function probeDataPlane(options: {
   report(name: string): void; checkTcp(): void;
   signal?: AbortSignal;
   diagnostic?: RuntimeDiagnostic; stage?(name: string): void;
+  switchMode?: 'switch-closed' | 'digest-mismatch'; closeSwitch?(): void;
 }) {
   const { certificates: tls, uid, node, report } = options;
   let probe = 0;
@@ -81,6 +82,7 @@ export async function probeDataPlane(options: {
     catch (error) { if (Date.now() >= deadline) throw error; await new Promise(resolve => setTimeout(resolve, 25)); }
   }
   report('mTLS HTTP through real runsc UDS to 5173'); options.checkTcp();
+  if (!options.switchMode) {
   options.stage?.('mTLS certificate refusals');
   for (const identity of [{}, qualificationCertificates().dataPlane]) {
     await assert.rejects(new Promise<void>((resolve, reject) => {
@@ -112,7 +114,8 @@ export async function probeDataPlane(options: {
     });
     assert.equal(wsStatus, 403, `${name} WS`);
   }
-  for (const mode of ['expiry', 'revoke-custody'] as const) {
+  }
+  for (const mode of options.switchMode ? [options.switchMode] : ['expiry', 'revoke-custody']) {
     options.stage?.(`HTTP/WS ${mode}`);
     const ttl = mode === 'expiry' ? 1500 : 10000;
     const issuedAt = Date.now(), signed = token(ttl);
@@ -135,6 +138,7 @@ export async function probeDataPlane(options: {
         timer = setTimeout(() => reject(new Error(`${mode} stream cut timeout`)), Math.max(0, start - Date.now()) + 1000);
       })]);
       if (mode === 'revoke-custody') await node.revoke();
+      if (mode === 'switch-closed' || mode === 'digest-mismatch') options.closeSwitch!();
       const ended = await bounded;
       for (const at of ended) assert.ok(at - start <= 250, `${mode} must cut locally within 250 ms`);
       report(`${mode} concurrent HTTP + WS 1008 within 250 ms (and <=1s end-to-end)`);

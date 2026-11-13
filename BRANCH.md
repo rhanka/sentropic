@@ -55,6 +55,7 @@
 - [x] AMD-28 gate coverage: kernel witnesses in ports namespaces, exact host TCP/UDP inventory, fixed-port refusal and kernel-confirmed OOM cleanup in both modes.
 - [x] AMD-28 revocation regressions: shared 50ms monitor, local cut before asynchronous stop, retry and reservation release.
 - [x] AMD-28 audit regressions: every forbidden flag, UDS/FIFO requirements, OCI annotations/capabilities/devices, sentry inode/host/peer/listener failures and profile/digest refusals.
+- [x] AMD-28 switch gate: real HTTP/WS cuts within 250ms, 409 admission and sandbox destruction for closed-switch and digest-mismatch scenarios.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.
