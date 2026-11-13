@@ -1,83 +1,58 @@
-# Feature: S1-C1 artifact-content execution-node data plane
+# Feature: Bounded isolated data-plane qualification
 
 ## Objective
-- [ ] Deliver the approved S1-C1 mTLS data-plane transport and D7-A CSP profile.
+- [ ] Repair the qualification workload, cancellation, private fixtures and custody verification roles.
 
 ## Scope / Guardrails
-- [x] Worktree `tmp/worktrees/s1-c1`; branch `feat/s1-c1-artifact-content-data-plane` from origin/main.
-- [x] Make-only, Docker-first; no VM, cluster, merge or deployment.
-- [x] ENV=feat-s1-c1; API_PORT=9145, UI_PORT=5345, MAILDEV_UI_PORT=1245 checked free.
-- [x] Existing k8s path remains the configurable hot rollback, as explicitly required by the packet.
-- [x] No signing or heartbeat implementation: S1-B0a owns both.
+- [x] Worktree: `tmp/worktrees/sandbox-node-dpq`; branch: `fix/sandbox-node-data-plane-qual`; base: `origin/main`.
+- [x] Make-only, Docker-first; `ENV=test-sandbox-dpq` last; no VM access and no merge.
+- [x] Ports: API 9460, UI 5660, Maildev 1560; check availability before tests.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `apps/artifact-content/**`
+  - `apps/sandbox-node/**`
+  - `api/src/services/artifacts/live/**`
+  - `api/tests/**`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
-  - `.github/workflows/**`
   - `.cursor/rules/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/**`
-- [x] Exceptions: none.
+  - `.github/workflows/**`
+- **Exception process**:
+  - [x] No exceptions declared.
 
 ## Feedback Loop
-- [ ] C1-AGENT: S1-B0a/PR #1022 owns real agent handlers, API authority and their integrated E2E; operator/browser qualification remains external to this lane.
-- [x] C1-ISSUER: published B0a Custody RPC is consumed by the real authenticated client; standalone execution-node composition refuses missing RPC configuration.
-- [x] Track single-writer: conductor imports this mergeable BRANCH.md; this concurrent lane does not append `.track`.
+- [x] Packet references merged #1022; fetched `origin/main` is `87485f912` (#1020). Use the actual origin/main ancestry.
 
 ## AI Flaky tests
-- [x] No AI tests or flaky exceptions.
+- [x] No AI tests apply.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; no implementation delegation or integration into main.
+- [x] Mono-branch; independent code reviews after local validation.
 
 ## UAT Management (in orchestration context)
-- [x] Hermetic contract qualification only; no production or browser UAT claim.
+- [x] Real runsc qualification remains operator-owned; no VM access in this lane.
 
 ## Plan / Todo (lot-based)
-- [x] Round 3: fixed 250 ms polling and independent 900 ms request-send freshness bound; delayed stale OK regressions across two replicas.
-- [x] Round 3: fake agent rejects execution tickets, mismatched active principal/epoch and ports other than 5173; compact JWS verification mirrors B0a.
-- [x] Round 3: README and supervisor RPC fixture use 5173; 228 tests in 17 files, TypeScript 5.4.5 and lint pass (one existing console warning).
-- [x] Round 3: independent Astra high review APPROVE at `2f1de05fb`; `.h2a/reviews/pr-1020-astra.r3.md`; final commit changes this plan only.
-- [x] Round 3: B0a guest authority resolves to the active owner's signed principal; unchanged agent data-plane checks remain aligned with the fake.
-- [ ] Round 3: exact-head CI and report/done marker; conductor imports this result after CI, avoiding a post-CI source-only commit.
-- [x] Round 2: compact EdDSA fixture, faithful agent custody guard, authenticated RPC client and replica-wide watch.
-  - [x] Compact six-claim EdDSA JWS and real CustodyGuard WAL/stream lifecycle replace the two-segment fake and watcher-only revocation.
-  - [x] RPC: reuse controller HMAC identity, bounded responses, watch-before/after-issue and fail-closed per-replica polling.
-  - [x] Published B0a Custody RPC contract consumed; standalone composition creates the authenticated issuer in execution-node mode.
-  - [x] Round 2 review P1: mirror the unchanged agent guard in test-only content sources because the CI image omits sandbox-node; no Dockerfile/API scope expansion.
-  - [x] Round 2 review P2: validate RPC lease primitive types before use and dispose on all transport validation exceptions; malformed date/token/UID regressions stop polling.
-  - [x] Tests: `data-plane-agent.test.ts`, `data-plane-custody.test.ts`, `data-plane-rpc.test.ts`; existing HTTP/WS/live/supervisor/config/CSP/k8s regressions.
-  - [x] Final local result: 221 tests in 16 files, types and lint pass; 221 tests plus types also pass with sandbox-node sources masked absent.
-  - [x] Independent Astra high closure APPROVE at fde2382bc04972dae19d06f4a6b866d67e67b837; this final commit is plan-only.
-  - [ ] Exact-head CI and final report/done marker: conductor closes this source item from the recorded final run to avoid a post-CI self-referential commit.
-- [x] Lot 0: read binding packet/spec/agent code; mechanically check branch and record isolated ports.
-- [x] Lot 1: issuer interface, env validation, mTLS transport and bounded custody lifetime.
-- [x] Lot 2: wire live HTTP/HMR and supervisor relay; retain k8s selection.
-- [x] Lot 3: D7-A opt-in CSP and worker query admission.
-- [x] Lot 4: hermetic `data-plane.test.ts`, `data-plane-upgrade.test.ts`, `data-plane-config.test.ts`, `data-plane-relay.test.ts`; existing live/relay/config regressions; typecheck and lint.
-  - [x] Ephemeral certificates and fake signed-token issuer/server; no external service or credentials.
-  - [x] HMR 1008/reconnect and handshake refusal; config and both CSP profiles.
-  - [x] Scoped data-plane checks: 15 passing tests; TLS fixture time encoding corrected with a focused regression.
-  - [x] Live HTTP and signed supervisor integration tests added.
-  - [x] Issuance timeout/abort/revocation races and invalid token lifetimes covered.
-  - [x] Vite worker entry query verified against installed Vite source; opt-in admission preserves the default profile.
-  - [x] Revocation during asynchronous WS route recheck has a regression test.
-  - [x] Review: retain HTTP custody through transformation and backpressure; validate upstream status before Response construction.
-  - [x] Review regressions: status 600 and HTTP consumers paused after upstream completion.
-  - [x] Review P1 regression: expiry/revocation during a post-fetch live-route check refuses buffered bytes.
-  - [x] Local result: 197 tests across 13 files, scoped TypeScript 5.4.5 with locked Node types passed; lint zero errors (one existing console warning).
-  - [x] Distinct sentropic/immo resource admissions preserve separate custody headers and tokens.
-  - [x] Second review P1: non-200 upstream HTML is discarded before response release; 201/500 live refusal regressions.
-- [x] Lot 5: README contract/env documentation, independent code review, scoped validation.
-  - [x] README documents env names, opaque issuer contract, WS renewal and agent prerequisite.
-  - [x] Independent Astra high closure APPROVE at b5b12ffa29cbf5b946115729271e69852120a6fd; all three P1 findings resolved and tested.
-  - [x] Final commit changes this plan only; reviewed implementation and test bytes are unchanged.
-- [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.
-  - [x] CI finding: TypeScript 5.4 DOM types lack AbortSignal.any; use a local type bridge to the pinned Node 24 native composition and align the local compiler with the committed lock.
-  - [x] Compatibility review P2: remove manual source subscriptions; repeated issuance success/failure with a shared signal leaves no source listeners.
-  - [x] Independent Astra high compatibility closure APPROVE at e27f2a00b63c8e1fadb4cf0ff3ae86b8328e0e75; final change is plan-only.
-  - [x] No Compose stack started; isolated Docker test commands self-remove; `make down ENV=feat-s1-c1` completed.
-  - [x] CI classifies this path as API; app-cluster-mesh shards invoke test-artifact-content (tests, types, lint) through their Make dependency. No CI edits.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read mandatory rules, packet, template and qualification implementation; mechanical branch check passed.
+- [ ] **Lot 1 — Workload and runtime readiness**
+  - [ ] Reproduce missing source parent permissions in `tests/bundle.test.ts`.
+  - [ ] Test actual generated qualification spec and long-lived HTTP/WS fixture.
+  - [ ] Reject early launcher exit and unavailable port targets in `tests/runtime-adapter.test.ts`.
+- [ ] **Lot 2 — Bounded execution and cleanup**
+  - [ ] Test deadline, signal interruption, scope/sandbox exit, hanging probes and finalization.
+  - [ ] Use private copied bases, remove relay directories and refuse stale qualification resources.
+  - [ ] Apply private fixture handling to isolation qualification and its tests.
+- [ ] **Lot 3 — Custody keys**
+  - [ ] Separate custody verification/signing configuration and enforce cross-use refusal both ways.
+  - [ ] Update node/API custody tests and operator installation instructions.
+- [ ] **Lot 4 — Final validation**
+  - [ ] Run scoped `make check-sandbox-node` with all ports, then relevant API checks.
+  - [ ] Rebuild and verify archive through `docker-slot.sh`; record SHA-256 and internal sums.
+  - [ ] Obtain independent code reviews and resolve findings.
+  - [ ] Push, open PR using this file and verify green CI on exact head; do not merge.
+  - [ ] Run `make down-volumes ENV=test-sandbox-dpq`.
+  - [ ] Write French report and completion marker under `.tmp/rv/`.
