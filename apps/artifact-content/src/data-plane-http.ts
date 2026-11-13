@@ -1,13 +1,16 @@
 import type { DataPlaneTransport, CustodySubject } from './data-plane';
 import { custodyRefused } from './data-plane';
+import { custodyResponse } from './data-plane-body';
 
 /** Buffer within both custody and size bounds; no bytes escape after expiry/revocation. */
 export async function dataPlaneFetch(transport: DataPlaneTransport, subject: CustodySubject, path: string,
-  options: { method: string; headers: Record<string, string>; body?: Buffer; signal: AbortSignal; maxBytes: number }) {
+  options: { method: string; headers: Record<string, string>; body?: Buffer; signal: AbortSignal; maxBytes: number;
+    consume?: (response: Response) => Promise<Response> }) {
   const hop = await transport.prepare(subject, options.signal).catch(() => undefined);
   if (!hop) return custodyRefused();
+  let transferred = false;
   try {
-    return await new Promise<Response>(resolve => {
+    const response = await new Promise<Response>(resolve => {
       let settled = false; let unguard = () => {};
       const finish = (response: Response) => {
         if (settled) return;
@@ -19,6 +22,9 @@ export async function dataPlaneFetch(transport: DataPlaneTransport, subject: Cus
       outgoing.once('error', abort);
       outgoing.once('response', incoming => {
         if (incoming.statusCode === 403) { finish(custodyRefused()); return; }
+        if (!incoming.statusCode || incoming.statusCode < 200 || incoming.statusCode > 599) {
+          finish(new Response(null, { status: 502 })); return;
+        }
         const chunks: Buffer[] = []; let length = 0;
         incoming.on('data', (chunk: Buffer) => {
           length += chunk.length;
@@ -41,6 +47,9 @@ export async function dataPlaneFetch(transport: DataPlaneTransport, subject: Cus
       else if (options.signal.aborted) abort();
       else outgoing.end(options.body);
     });
+    if (response.status !== 200) return response;
+    const output = await custodyResponse(hop, response, options.signal, options.consume);
+    transferred = true; return output;
   } catch { return hop.valid() ? new Response(null, { status: 502 }) : custodyRefused(); }
-  finally { hop.dispose(); }
+  finally { if (!transferred) hop.dispose(); }
 }
