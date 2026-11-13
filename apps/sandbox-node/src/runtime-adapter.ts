@@ -8,7 +8,7 @@ import { parseRunscList } from './runsc-inventory.js';
 import { throwFilesystemError } from './filesystem-errors.js';
 import type { ExecutionNodeDevScope } from './contract.js';
 import { forwardSandboxPort } from './port-forward.js';
-import { rmSync, readFileSync } from 'node:fs';
+import { rmSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { auditNetworkSpec, auditStartedNetwork } from './network-audit.js';
 import { ExecutionNodeError } from './errors.js';
@@ -218,7 +218,7 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
         if (entry) entry.exited = true;
         if (code === 0 && (options.network !== 'ports' || ready)) resolve();
         else if (code === 0) reject(new ExecutionNodeError('network_isolation_violation'));
-        else reject(code === 78 ? new ExecutionNodeError('network_isolation_violation') : new Error(`sandbox launcher exited: ${code}`));
+        else reject(code === 78 || options.network === 'ports' ? new ExecutionNodeError('network_isolation_violation') : new Error(`sandbox launcher exited: ${code}`));
         if (ready || (code === 0 && options.network !== 'ports')) options.onExit?.(code);
       });
       const poll = () => {
@@ -233,6 +233,8 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
               } catch (error) {
                 fail(error instanceof ExecutionNodeError ? error : new ExecutionNodeError('network_isolation_violation')); return;
               }
+            } else if (Number.isSafeInteger(state.pid) && state.pid > 1) {
+              this.namespaces.set(runtimeId, String(statSync(`/proc/${state.pid}/ns/net`).ino));
             }
             ready = true; resolve(); return;
           }

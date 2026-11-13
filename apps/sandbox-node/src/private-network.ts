@@ -20,7 +20,7 @@ printf '%s\n' "$routes6" | awk '
 `;
 
 export const privateNetworkScript = `
-ip link set lo up
+ip link set lo up || { echo network_isolation_violation >&2; exit 78; }
 if ! ( set -e; ${privateNetworkInventory} ); then echo network_isolation_violation >&2; exit 78; fi
 stat -Lc %i /proc/self/ns/net > "$1"
 shift
