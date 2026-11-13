@@ -1,6 +1,24 @@
 import { expect, it, vi } from 'vitest';
 import { createGeminiDecisionsTransport } from '../src/transport/gemini-decisions.js';
 
+it.each([
+  { status: 400 }, { status: 302 }, { status: 200, redirected: true },
+  { status: 200, contentType: 'text/plain' },
+  { status: 200, length: 'invalid' }, { status: 200, length: '5' },
+])('should cancel an unread response body on early refusal: %j', async ({ status, redirected, contentType, length }) => {
+  const cancel = vi.fn();
+  const body = new ReadableStream<Uint8Array>({ cancel });
+  const response = new Response(body, { status, headers: {
+    'content-type': contentType ?? 'application/json', ...(length ? { 'content-length': length } : {}),
+  } });
+  if (redirected) Object.defineProperty(response, 'redirected', { value: true });
+  const fetch = vi.fn(async () => response);
+  expect(await createGeminiDecisionsTransport({ fetch, maxResponseBytes: 4 }).send('{}', 'synthetic-secret'))
+    .toMatchObject({ ok: false });
+  expect(cancel).toHaveBeenCalledTimes(1);
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
 it.each([[400, 'PROVIDER_REJECTED'], [401, 'AUTHENTICATION_FAILED'], [403, 'AUTHENTICATION_FAILED'],
   [429, 'RATE_LIMITED'], [503, 'PROVIDER_UNAVAILABLE'], [302, 'PROVIDER_REJECTED']] as const)(
   'should map HTTP %s without exposing provider errors or retrying', async (status, code) => {
