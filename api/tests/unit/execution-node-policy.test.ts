@@ -53,7 +53,8 @@ describe('execution node API policies', () => {
     async () => { throw new Error('must not connect'); });
     expect(nodeHash('one')).not.toBe(nodeHash('two'));
     expect(() => node.verifyExport({ status: 200, headers: {}, bytes: Buffer.from('tampered') }, {
-      physicalUid: 'id', ownership: { tenantId: 'immo' } as never, devScope: {} as never })).toThrow(/invalid_node_provenance/);
+      physicalUid: 'id', ownership: { tenantId: 'immo' } as never, devScope: {} as never },
+    { buildId: 'build', command: ['/bin/true'] })).toThrow(/invalid_node_provenance/);
   });
   it('should send one heartbeat from the elected database lock holder and release on stop', async () => {
     const sent = deferred(); const query = vi.fn(async (sql: string) => ({ rows: [{ held: sql.includes('try_advisory_lock') }] }));

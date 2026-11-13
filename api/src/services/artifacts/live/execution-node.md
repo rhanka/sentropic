@@ -63,6 +63,9 @@ The product scheduler starts one heartbeat loop per process. A dedicated Postgre
 connection holds a node-specific advisory lock, selecting one replica to inspect
 the pinned identity and send `/v1/node/heartbeat` once per second without a tenant
 header. DB session loss stops that leader; identity mismatch stops and alarms.
+Pool acquisition and queries are bounded at 300 ms, node calls at 500 ms. Failure
+destroys the DB session and aborts any outstanding heartbeat request; stop is
+bounded too. Late pool acquisitions are destroyed without acquiring the lock.
 The agent independently refuses mutations after five seconds without a heartbeat.
 
 `issueNodeCustody(node, session, principalId, minCustodyEpoch, ttlMs, now)` is the
@@ -125,16 +128,20 @@ The shipped agent uses `/v1/sandboxes/:id/export`, returning gzip bytes with a
 signed node/epoch/tenant/archive hash. `exportRetainedBuild` verifies that JWS,
 uploads through the control-plane presigned PUT URL, then deletes the sandbox.
 Failed upload preserves retained output. A stopping response is an explicit
-retryable refusal, never permission to export. Persist all command ids and URL
-with the intent so retries keep identical method/path/body triples.
+retryable refusal, never permission to export. The backend persists command ids,
+durable destination, upload confirmation and candidate result. Short-lived upload
+authorization is obtained afresh through `exportOptions.authorizeUpload` for
+each PUT and never enters the agent's idempotency body. Controller reconciliation
+continues BUILDING/VERIFYING after an API restart without starting the build again;
+lost DELETE responses reconcile against the uploaded checkpoint and node status.
 Creation and revocation intents are persisted before remote mutations; a lost
 response is reconciled against that exact intent. Clean build/wake replaces a
 stopped physical sandbox and persists a new route fence before worker commands.
 
-The shipped agent does not upload the supplied URL or emit the full frozen
-ArtifactProvenanceV1. BRB0A-EX2 adds its frozen sandbox GET for lifecycle retries;
-k8s must release and deploy an updated agent (GET and 202-stop progression)
-before enabling this backend.
-Base GET and full provenance are agent-lane handoffs before complete status
-reconciliation or the full provenance/publication gate; no complete
-ArtifactProvenanceV1 qualification is claimed here.
+The updated agent returns archive bytes to the API and signs their physical UID,
+attemptId, buildId, command argv and devScope source, tenant, node identity/epoch
+and hash. The consumer requires these expected fields before upload. The archive
+also includes authenticated sandbox GET, stop-202 progression and custody-enforced
+HTTP/WS. k8s must qualify/install the digest-pinned archive before G-A, including
+real runsc stream-mode forwarding. No complete ArtifactProvenanceV1 runtime/base
+measurement qualification is claimed by these hermetic tests.
