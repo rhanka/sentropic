@@ -4,7 +4,8 @@ export type RuntimeDiagnostic = (step: string, detail: string) => void;
 
 /** Runtime output only; never pass request headers, signed tokens or key objects here. */
 export function boundedRuntimeOutput(stream: Readable | null | undefined, step: string, report?: RuntimeDiagnostic) {
-  if (!stream || !report) return;
+  if (!stream) return;
+  if (!report) { stream.resume(); return; }
   let remaining = 4096;
   stream.on('data', (chunk: Buffer) => {
     if (remaining <= 0) return;

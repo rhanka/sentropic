@@ -17,6 +17,8 @@ import { qualificationNode } from '../src/data-plane-qualification-node.js';
 import { FakeRuntimeAdapter, type RunSandboxOptions } from '../src/runtime-adapter.js';
 import { runInNewContext } from 'node:vm';
 import { once } from 'node:events';
+import { forwardSandboxPort } from '../src/port-forward.js';
+import { streamHelper } from './stream-helper.js';
 
 describe('data-plane qualification harness (hermetic; real-host gate remains operator-owned)', () => {
   it('should refuse to touch the host without isolated qualification authorization', async () => {
@@ -54,8 +56,10 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
     const custody = new CustodyGuard(join(directory, 'wal'));
     const sandbox = { id: 'qualification', tenantId: 'sentropic', state: 'running', network: 'ports', poolOwned: false,
       ownership: { principalId: 'qualification', custodyEpoch: 1 } } as SandboxRecord;
+    const forward = forwardSandboxPort('runsc', '--root=/private', sandbox.id, 5173, join(directory, 'forward'),
+      streamHelper('sandbox', join(directory, 'upstream'), sockets));
     const data = createDataPlane({ custody, publicKey: createPublicKey(keys.publicKeyPem),
-      sandbox: () => sandbox, target: async () => ({ socketPath: join(directory, 'upstream') }) });
+      sandbox: () => sandbox, target: () => forward.ready });
     const server = createAgentServer({ ca: tls.ca, ...tls.server }, (req, res, role) => { void data.http(req, res, role); });
     server.on('connection', track);
     server.on('upgrade', (req, socket, head) => { void data.upgrade(req, socket, head, agentRole(req) ?? ''); });
@@ -73,6 +77,7 @@ describe('data-plane qualification harness (hermetic; real-host gate remains ope
       expect(results.filter(name => name.includes('within 250 ms'))).toHaveLength(2);
       expect(upstream.listening).toBe(true);
     } finally {
+      forward.stop();
       for (const socket of sockets) socket.destroy();
       await Promise.all([new Promise<void>(resolve => server.close(() => resolve())),
         new Promise<void>(resolve => upstream.close(() => resolve()))]);

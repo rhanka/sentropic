@@ -37,7 +37,7 @@
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
 - [x] Lot 2a: reproduce the unsupported NetworkNone selection; select NetworkSandbox only inside a fresh loopback-only namespace for ports workloads; propagate and test the declared network policy.
-- [ ] Lot 2b: reproduce stream-helper semantics and verify readiness with bounded retries in qualification tests.
+- [x] Lot 2b: reproduce `socket hang up` with a NetworkNone helper and prove HTTP/WS with an actual cross-process socket donation surviving helper exit; add bounded internal readiness.
 - [ ] Lot 3: run `check-sandbox-node`, TypeScript and memory checks; review the final diff.
 - [ ] Lot 4: build and verify archive via docker-slot after confirming at least 30 GB free; record SHA256SUMS.
 - [ ] Lot 5: PR using this file, CI green on exact head, cleanup test volumes, French report and done marker; do not merge.

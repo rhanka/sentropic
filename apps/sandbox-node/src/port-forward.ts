@@ -18,18 +18,18 @@ export function forwardSandboxPort(binary: string, rootArg: string, uid: string,
   const server = createServer(local => {
     diagnostic?.('UDS connect', `accepted port=${port}`);
     sockets.add(local); local.pause();
-    const streamPath = `${socketPath}.${++sequence}`;
+    const stream = ++sequence, streamPath = `${socketPath}.${stream}`;
     let child: ChildProcess | undefined; let timer: ReturnType<typeof setTimeout>; let closed = false;
     const close = () => {
       if (closed) return; closed = true;
       clearTimeout(timer); local.destroy(); child?.kill('SIGKILL'); if (bridge.listening) bridge.close(); bridges.delete(bridge);
     };
     const bridge = createServer(remote => {
-      diagnostic?.('port-forward donation', `connected stream=${sequence}`);
+      diagnostic?.('port-forward donation', `connected stream=${stream}`);
       clearTimeout(timer); sockets.add(remote); bridge.close(); bridges.delete(bridge);
       remote.once('close', () => { sockets.delete(remote); local.destroy(); });
       remote.on('error', close); local.once('close', () => remote.destroy());
-      remote.once('data', () => diagnostic?.('5173 first byte', `stream=${sequence}`));
+      remote.once('data', () => diagnostic?.('5173 first byte', `stream=${stream}`));
       local.pipe(remote).pipe(local); local.resume();
     });
     bridge.maxConnections = 1;
@@ -39,14 +39,14 @@ export function forwardSandboxPort(binary: string, rootArg: string, uid: string,
       if (stopped || local.destroyed) { close(); return; }
       try {
         child = launch(binary, [rootArg, 'port-forward', `--stream=${streamPath}`, `sandbox-${uid}`, String(port)]);
-        diagnostic?.('port-forward spawn', `port=${port} stream=${sequence}`);
+        diagnostic?.('port-forward spawn', `port=${port} stream=${stream}`);
         boundedRuntimeOutput(child.stderr, 'port-forward stderr', diagnostic);
-        children.add(child); child.once('error', close);
+        children.add(child); child.once('error', () => { children.delete(child!); diagnostic?.('port-forward spawn failure', `stream=${stream}`); close(); });
         child.once('exit', (code, signal) => {
           diagnostic?.('port-forward exit', `code=${code} signal=${signal ?? 'none'}`);
           children.delete(child!); if (code !== 0) close();
         });
-        timer = setTimeout(close, 1000); timer.unref();
+        timer = setTimeout(() => { diagnostic?.('port-forward donation timeout', `stream=${stream}`); close(); }, 1000); timer.unref();
       } catch { close(); }
     });
   });
