@@ -44,8 +44,8 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — Read packet, diagnosis, rules and template; create isolated branch; mechanical branch check.
-- [ ] Lot 1 — Correct OpenAI Chat Completions limits using catalog reasoning capabilities and family guards.
-  - [ ] Add `api/tests/unit/llm-runtime-generation.test.ts` for the real title call and legacy model.
+- [x] Lot 1 — Correct OpenAI Chat Completions limits using catalog reasoning capabilities and family guards.
+  - [x] Add `api/tests/unit/llm-runtime-generation.test.ts` for the real title call and legacy model.
 - [ ] Lot 2 — Warn on title failure with safe structured provider metadata; retain null result.
   - [ ] Add focused title failure tests under `api/tests/unit/`.
 - [ ] Lot 3 — Add bounded observer and hermetic sentinel tests in `e2e/fixtures/provider-server.test.mjs`.
