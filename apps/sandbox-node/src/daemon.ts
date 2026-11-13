@@ -86,6 +86,7 @@ export class ExecutionNodeDaemon {
   private readonly now: () => number;
   private readonly sandboxes = new Map<string, SandboxRecord>();
   private readonly launches = new Map<string, Promise<SandboxRecord>>();
+  private readonly retentionTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly transitions = new Map<string, Promise<unknown>>();
   private readonly idempotence = new Map<string, { bodyHash: string; result: unknown }>();
 
@@ -174,11 +175,29 @@ export class ExecutionNodeDaemon {
   }
 
   private releaseSlot(sandbox: SandboxRecord): void {
+    clearTimeout(this.retentionTimers.get(sandbox.id));
+    this.retentionTimers.delete(sandbox.id);
     if (sandbox.slot) {
       if (sandbox.slot === 'build') this.admission.builds.release(sandbox.tenantId);
       else this.admission.release(sandbox.tenantId, sandbox.slot);
       sandbox.slot = undefined;
     }
+  }
+
+  private retainOutput(sandbox: SandboxRecord, subPath = 'ui/dist', ttlMs = 300_000): void {
+    if (sandbox.slot === 'build') this.admission.builds.finishExecution(sandbox.tenantId);
+    sandbox.state = 'stopped-output-retained';
+    sandbox.outputSubPath = subPath;
+    const timer = setTimeout(() => {
+      void this.transition(sandbox.id, async () => {
+        if (!['stopped-output-retained', 'exported'].includes(sandbox.state)) return;
+        if (sandbox.runtimeId) await this.adapter.destroySandbox(sandbox.runtimeId);
+        sandbox.runtimeId = undefined; sandbox.state = 'destroyed'; this.releaseSlot(sandbox);
+        this.audit.record('sandbox.destroyed', sandbox.tenantId, sandbox.id, 'retention expired');
+      }).catch(error => this.audit.record('sandbox.cleanup_failed', sandbox.tenantId, sandbox.id, String(error)));
+    }, ttlMs);
+    timer.unref();
+    this.retentionTimers.set(sandbox.id, timer);
   }
 
   /** Cross-tenant access by id fails closed without leaking existence. */
@@ -222,11 +241,17 @@ export class ExecutionNodeDaemon {
       const slot = Object.hasOwn(SERVICE_TIMEOUT_MS, input.spec.profile) ? 'build'
         : input.warmStandby === true ? 'standby' : 'live';
       if (slot === 'build') await this.admission.admitBuild(input.spec.tenantId, input.spec.profile as HeavyProfile, async () => {
-        const sandbox = await this.failSandbox(input.spec.tenantId, id, 'service timeout');
+        await this.transition(id, async () => {
+        const sandbox = this.getSandbox(input.spec.tenantId, id)!;
+        if (['stopped-output-retained', 'exported', 'destroyed'].includes(sandbox.state)) return;
+        sandbox.state = 'failed';
+        sandbox.allProcessesExited = sandbox.runtimeId ? await this.adapter.stopSandbox(sandbox.runtimeId) : true;
+        this.audit.record('sandbox.failed', sandbox.tenantId, id, 'service timeout');
         if (sandbox.allProcessesExited) {
           if (sandbox.runtimeId) await this.adapter.destroySandbox(sandbox.runtimeId);
           sandbox.runtimeId = undefined; sandbox.state = 'destroyed'; this.releaseSlot(sandbox);
         }
+        });
       });
       else this.admission.admit(input.spec.tenantId, slot, input.commandId);
       // Authentication grants this immutable queue entry; ticket expiry is not a service deadline.
@@ -295,8 +320,7 @@ export class ExecutionNodeDaemon {
     sandbox.state = 'stopping';
     sandbox.allProcessesExited = await this.adapter.stopSandbox(sandbox.runtimeId!);
     if (sandbox.allProcessesExited) {
-      sandbox.state = 'stopped-output-retained';
-      sandbox.outputSubPath = 'ui/dist';
+      this.retainOutput(sandbox);
       this.audit.record('sandbox.stopped', sandbox.tenantId, sandbox.id, sandbox.state);
     }
     });
@@ -398,8 +422,9 @@ export class ExecutionNodeDaemon {
     this.requireScope(sandbox, input.devScope);
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/stop`, sandbox.ownership);
-    if (input.stop.retentionTtlMs !== undefined && input.stop.retentionTtlMs > 300_000) {
-      throw new ExecutionNodeError('command_id_payload_mismatch', 'retentionTtlMs exceeds 300s');
+    if (input.stop.retentionTtlMs !== undefined && (!Number.isFinite(input.stop.retentionTtlMs)
+      || input.stop.retentionTtlMs < 0 || input.stop.retentionTtlMs > 300_000)) {
+      throw new ExecutionNodeError('command_id_payload_mismatch', 'retentionTtlMs must be between 0 and 300s');
     }
     return this.idempotent(tenantId, input.commandId, { id, stop: input.stop }, () => this.transition(id, async () => {
       if (sandbox.state !== 'running' && sandbox.state !== 'stopping') {
@@ -410,8 +435,7 @@ export class ExecutionNodeDaemon {
       sandbox.allProcessesExited = sandbox.runtimeId ? await this.adapter.stopSandbox(sandbox.runtimeId) : true;
       if (!sandbox.allProcessesExited) return sandbox;
       if (input.stop.retainOutput === true) {
-        sandbox.state = 'stopped-output-retained';
-        sandbox.outputSubPath = input.stop.outputSubPath ?? 'ui/dist';
+        this.retainOutput(sandbox, input.stop.outputSubPath, input.stop.retentionTtlMs);
       } else {
         if (sandbox.runtimeId) await this.adapter.destroySandbox(sandbox.runtimeId);
         sandbox.runtimeId = undefined;
