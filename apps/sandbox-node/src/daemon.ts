@@ -249,6 +249,11 @@ export class ExecutionNodeDaemon {
         sandboxUid: id,
         mounts: sandbox.mounts,
         command: sandbox.command,
+        onExit: code => {
+          if (sandbox.state === 'running') void this.failSandbox(tenantId, id, `runtime exited: ${code}`).catch(error => {
+            this.audit.record('sandbox.stop_failed', tenantId, id, String(error));
+          });
+        },
         overlayUpper: paths.upper,
         overlayWork: paths.work,
         quotaMiB: sandbox.slot === 'build' ? 1536 : 704,

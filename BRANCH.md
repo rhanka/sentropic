@@ -36,6 +36,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 3 integration: signed transport cycle covers write/export/delete and rejects absent/substituted scope; heartbeat loss fences mutations, runtime exits trigger stop, and naturally unloaded scopes can be cleaned safely.
 - [x] RUN 3 B2/B3g: source writes now reach the private overlay through a scoped, symlink-safe host writer; runtime source mounts remain read-only. HTTPS import uses a bounded streaming reader.
 - [x] RUN 3 B3f: base import now streams HTTPS into tenant-private storage, verifies SHA-256, syncs before immutable publication, and registers only verified identities.
 - [x] RUN 3 B3e: production listener now dispatches lifecycle requests with a mandatory verification key and bounded JSON input; binary exports use application/gzip rather than JSON serialization.

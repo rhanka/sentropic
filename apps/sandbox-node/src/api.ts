@@ -19,6 +19,7 @@ export class AgentApi {
     const { daemon } = this.node;
     const { path, method, tenantId, role, ticket } = request;
     if (role !== 'control-plane') throw new ExecutionNodeError('custody_revoked');
+    this.custody.requireHeartbeat();
     if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) throw new ExecutionNodeError('command_id_payload_mismatch');
     const body = request.body as Record<string, unknown>;
     const commandId = body.commandId;
@@ -45,6 +46,8 @@ export class AgentApi {
     if (JSON.stringify(devScope) !== JSON.stringify(sandbox.devScope)) throw new ExecutionNodeError('command_id_payload_mismatch', 'session devScope mismatch');
     daemon.authorizeCommand(ticket, tenantId, commandId, body, method, path,
       operation === 'claim' ? (body.claim as { ownership: ExecutionNodeOwnership }).ownership : sandbox.ownership);
+    if (ticket) this.custody.authorize({ tenantId, resourceId: id, custodyEpoch: ticket.ticket.ownership.custodyEpoch,
+      issuedAt: ticket.ticket.issuedAt, deadlineAt: ticket.ticket.deadlineAt }, tenantId, id);
     if (method === 'DELETE' && !operation) return { status: 200, body: await daemon.deleteSandbox(tenantId, id, { ...body, commandId, ticket }) };
     if (method !== 'POST') throw new ExecutionNodeError('command_id_payload_mismatch');
     if (operation === 'start') return { status: 200, body: await daemon.promoteToRunning(tenantId, id, { ...body, commandId, ticket } as Parameters<typeof daemon.promoteToRunning>[2]) };
