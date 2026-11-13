@@ -28,6 +28,7 @@
 - [x] Astra review: reject empty/premature HTTP responses before first bytes; bound runsc version detection with SIGKILL.
 - [x] Enforce the wall-clock deadline in a separate supervisor event loop: SIGTERM the worker alone to preserve flock during cleanup, then process-group SIGKILL after 10 seconds for a blocked worker.
 - [x] Astra closure review APPROVE after signal-routing regression; report `.tmp/rv/dpq-review-astra-closure.md`.
+- [x] Independent security review APPROVE; Argon APPROVE with umask finding accepted: force output-parent traversal under UMask=0077.
 - [x] Packet references merged #1022; fetched `origin/main` is `87485f912` (#1020). Use the actual origin/main ancestry.
 - [x] Track import is reserved for the conductor, the designated single writer; deliver the updated branch checklist for import.
 
@@ -43,21 +44,21 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read mandatory rules, packet, template and qualification implementation; mechanical branch check passed.
-- [ ] **Lot 1 — Workload and runtime readiness**
+- [x] **Lot 1 — Workload and runtime readiness**
   - [x] Reproduce missing source parent permissions in `tests/bundle.test.ts`; failed before fix (0700), corrected to 0755.
   - [x] Test actual generated qualification spec and execute its HTTP/WS server command in the mTLS harness.
   - [x] Detect early workload/scope exit and refuse unavailable port targets; preserve legitimate short build completion.
-- [ ] **Lot 2 — Bounded execution and cleanup**
+- [x] **Lot 2 — Bounded execution and cleanup**
   - [x] Validate deadline, SIGTERM, early sandbox exit, probe failure and successful finalization using the real qualification entry with fake host/runtime dependencies.
   - [x] Remove relay directories and refuse stale qualification resources, including the reported legacy `caf46fda` base; bases and bundles use private roots.
   - [x] Apply private fixture handling and leftovers inventory to isolation qualification; all 13 isolation orchestration tests pass.
-- [ ] **Lot 3 — Custody keys**
+- [x] **Lot 3 — Custody keys**
   - [x] Validate separate `CUSTODY_PUBLIC_KEY` / `ARTIFACT_CUSTODY_ED25519_KEY_B64`; API tests prove cross-use refusal both ways.
   - [x] Update node/API custody tests and operator installation instructions; dossier §A.3 separates the three ticket/token keys.
 - [ ] **Lot 4 — Final validation**
-  - [ ] Run scoped `make check-sandbox-node` with all ports, then relevant API checks.
+  - [x] Local node checks: 185 tests, both TypeScript projects and memory check; API: 71 tests. Node/API source lint: zero errors.
   - [ ] Rebuild and verify archive through `docker-slot.sh`; record SHA-256 and internal sums.
-  - [ ] Obtain independent code reviews and resolve findings.
+  - [x] Obtain independent code reviews and resolve findings; Astra closure and independent security review APPROVE, Argon umask finding accepted.
   - [ ] Push, open PR using this file and verify green CI on exact head; do not merge.
   - [ ] Run `make down-volumes ENV=test-sandbox-dpq`.
   - [ ] Write French report and completion marker under `.tmp/rv/`.
