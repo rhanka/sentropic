@@ -44,7 +44,7 @@
   - [ ] Reject early launcher exit and unavailable port targets in `tests/runtime-adapter.test.ts`.
 - [ ] **Lot 2 — Bounded execution and cleanup**
   - [ ] Test deadline, signal interruption, scope/sandbox exit, hanging probes and finalization.
-  - [ ] Use private copied bases, remove relay directories and refuse stale qualification resources.
+  - [ ] Remove relay directories and refuse stale qualification resources; bases and bundles now use private roots.
   - [ ] Apply private fixture handling to isolation qualification and its tests.
 - [ ] **Lot 3 — Custody keys**
   - [ ] Separate custody verification/signing configuration and enforce cross-use refusal both ways.

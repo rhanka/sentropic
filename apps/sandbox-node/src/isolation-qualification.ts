@@ -22,9 +22,11 @@ export async function qualifyIsolation(): Promise<void> {
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
   const adapter = new RunscRuntimeAdapter();
   const boxes: Array<{ tenant: string; uid: string; path: string; base: string; image: string; loop: string; runtimeId?: string }> = [];
+  let directory: string | undefined;
   try {
     assert.equal(run('systemctl', ['show', 'execution-node.service', '--property=ActiveState', '--value']), 'inactive', 'service must be stopped');
     assertCleanStartup();
+    directory = mkdtempSync('/run/execution-node/qi-');
     // Consume the operator's authorization once, under the shared lock.
     rmSync('/etc/execution-node/isolated-qualification');
     for (const tenant of ['sentropic', 'immo']) {
@@ -34,8 +36,8 @@ export async function qualifyIsolation(): Promise<void> {
       assert.match(device, /^\/dev\/loop[0-9]+$/);
       const loop = run('losetup', ['--noheadings', '--output=BACK-FILE', device]);
       assert.ok(loop.startsWith('/'));
-      const uid = `qual-isolation-${randomUUID()}`, path = join(root, tenant, 'sandboxes', uid);
-      const base = mkdtempSync(join(root, tenant, 'bases', 'qual-isolation-'));
+      const uid = `qual-isolation-${randomUUID()}`, path = join(directory, tenant, 'sandboxes', uid);
+      const base = mkdtempSync(join(directory, `base-${tenant}-`));
       const image = join(base, 'source.erofs');
       boxes.push({ tenant, uid, path, base, image, loop });
       copyFileSync(join(release, 'qualification.erofs'), image);
@@ -92,6 +94,7 @@ export async function qualifyIsolation(): Promise<void> {
       } catch { report(`${box.tenant} cleanup`, false); }
     }
     process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
+    if (directory && !failed) rmSync(directory, { recursive: true, force: true });
     releaseLock();
   }
   if (failed) throw new Error('isolation qualification failed');
