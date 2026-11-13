@@ -10,10 +10,11 @@ No Python. No stack required for local regression tests.
 - `src/tickets.ts` — Ed25519 execution-ticket issue/verify (30 s TTL).
 - `src/runtime-adapter.ts` — `RuntimeAdapter` interface, `FakeRuntimeAdapter`
   (tests), `RunscRuntimeAdapter` (`runsc --network=none`, systrap).
-- `src/admission.ts` — one warm session/tenant, complete memory.current reservations.
+- `src/admission.ts` — one warm session/tenant, reservation-based admission, full memory.current telemetry.
 - `src/build-queue.ts` — one global publish build, bounded strict tenant alternation.
 - `src/custody.ts` — fsync-persisted monotone revocation and stream fencing.
-- `src/service.ts`, `src/api.ts` — public mTLS lifecycle routes and job-alerts heartbeat.
+- `src/service.ts`, `src/api.ts` — public mTLS lifecycle routes, pull metrics and control-plane heartbeat.
+- `src/operator.ts`, `src/node-control.ts` — k8s-signed operator JWS and node drain/heartbeat gates.
 - `src/bundle.ts`, `src/base-store.ts` — digest-verified EROFS bases and private OCI bundles.
 - `src/source-write.ts`, `src/output.ts` — scoped source writer and bounded quiescent archive reader.
 - `src/audit.ts` — append-only audit log (every row carries `tenant_id`).
