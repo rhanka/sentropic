@@ -22,6 +22,7 @@ import { installEnvironment, readInstallHeapMb } from './recipes';
 import type { LivePorts } from './ports';
 import { selectSandboxBackend, sandboxBackendKind, SANDBOX_BACKEND_ENV, type SandboxBackend } from './sandbox-backend';
 import type { ExecutionNodeAdapter } from './execution-node-adapter';
+import { executionNodeHeartbeat } from './execution-node-heartbeat';
 
 type Env = Readonly<Record<string, string | undefined>>;
 /** Flag of the composed builder service (cm/api); anything but `1` keeps the 503 builder_unavailable mount. */
@@ -96,11 +97,14 @@ export function createProductBuilder(env: Env, deps: ProductBuilderDeps) {
 
 function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   const now = deps.now ?? Date.now; const id = deps.id ?? randomUUID;
+  let heartbeat: ReturnType<typeof executionNodeHeartbeat> | undefined;
   const kind = read(SANDBOX_BACKEND_ENV, () => sandboxBackendKind(env));
   const sandboxBackend = kind === 'execution-node' ? read(SANDBOX_BACKEND_ENV, () => selectSandboxBackend(env, {
     kubernetes: () => undefined,
     executionNode: node => {
       if (!deps.executionNodeBackend) return refuse('ARTIFACT_EXECUTION_NODE_SESSION_REGISTRY');
+      heartbeat = executionNodeHeartbeat(deps.pool, node,
+        code => deps.log(code, new LiveError('builder_unavailable', code)));
       return deps.executionNodeBackend(node);
     },
   })) : undefined;
@@ -149,8 +153,12 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
     api: service.api, controller: service.controller,
     /** Idempotent: one scheduler per process, renewing leases and reconciling every 30 s; `stop` clears it. */
     start() {
-      running ??= createLiveScheduler({ controller: service.controller, intervalMs: SCHEDULER_INTERVAL_MS,
-        onError: (_key, error) => deps.log('artifact_live_tick_failed', error) }).start();
+      if (!running) {
+        heartbeat?.start();
+        const scheduler = createLiveScheduler({ controller: service.controller, intervalMs: SCHEDULER_INTERVAL_MS,
+          onError: (_key, error) => deps.log('artifact_live_tick_failed', error) }).start();
+        running = { stop() { scheduler.stop(); void heartbeat?.stop(); running = null; } };
+      }
       return running;
     },
   };

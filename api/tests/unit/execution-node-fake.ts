@@ -50,7 +50,7 @@ export async function fakeExecutionNode() {
       } else reply(result.status, result.body);
     } catch (error) { const e = error as { status?: number; code?: string }; reply(e.status ?? 500, { error: e.code ?? 'internal_error' }); }
   });
-  await new Promise<void>(resolve => server.listen(0, 'localhost', resolve));
+  await new Promise<void>(resolve => server.listen(0, resolve));
   const address = server.address() as { port: number };
   const config: ExecutionNodeConfig = { url: new URL(`https://localhost:${address.port}`), nodeId: node.daemon.nodeId,
     nodeInstanceId: 'instance', nodeEpoch: 2, provenanceKey: provenance.publicKey, ticketKey: keys.privateKey,

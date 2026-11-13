@@ -28,7 +28,8 @@ export function executionNodeHeartbeat(pool: Pool, node: ExecutionNodeAdapter, a
       if (stopped || current !== client) return;
       if (!verified) { await node.inspect(); verified = true; }
       if (!stopped && current === client) await node.heartbeat();
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message === 'execution_node_identity_mismatch') stopped = true;
       alarm('execution_node_heartbeat_failed'); discard();
     }
   }

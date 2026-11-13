@@ -46,10 +46,10 @@ export function executionNodeConfig(env: Env): ExecutionNodeConfig {
 /** Bounded binary export, no redirects, normal hostname verification, TLS 1.3 + control-plane certificate. */
 export function executionNodeTransport(config: ExecutionNodeConfig): NodeTransport & { close(): void } {
   const agent = new Agent({ ...config.tls, minVersion: 'TLSv1.3', keepAlive: true, rejectUnauthorized: true });
-  const call: NodeTransport = (method, path, body, headers = {}) => new Promise((resolve, reject) => {
+  const call: NodeTransport = (method, path, body, headers = {}) => new Promise<NodeReply>((resolve, reject) => {
     if (!path.startsWith('/v1/') || path.includes('://')) { reject(new ExecutionNodeRefusal('invalid_node_path')); return; }
     const req = request(new URL(path, config.url), { method, agent,
-      headers: { 'content-type': 'application/json', ...headers } }, res => {
+      headers: { 'content-type': 'application/json', ...(body ? { 'content-length': String(body.length) } : {}), ...headers } }, res => {
       let length = 0; const chunks: Buffer[] = [];
       res.on('data', (chunk: Buffer) => {
         length += chunk.length;
@@ -61,6 +61,6 @@ export function executionNodeTransport(config: ExecutionNodeConfig): NodeTranspo
     req.setTimeout(5000, () => req.destroy());
     req.on('error', () => reject(new ExecutionNodeRefusal('node_transport_failure')));
     req.end(body);
-  });
+  }).catch(() => { throw new ExecutionNodeRefusal('node_transport_failure'); });
   return Object.assign(call, { close: () => agent.destroy() });
 }
