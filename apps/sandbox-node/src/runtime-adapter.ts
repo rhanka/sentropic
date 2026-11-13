@@ -94,10 +94,6 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
 
   runscArgs(options: RunSandboxOptions): string[] {
     const args = ['--network=none', '--platform=systrap', 'run', '--bundle', options.overlayUpper];
-    for (const mount of options.mounts) {
-      args.push('--mount', `${mount.source}:${mount.target}${mount.readOnly ? ':ro' : ''}`);
-    }
-    args.push(`--memory=${options.quotaMiB}M`, `--uid=${options.uid}`, `--gid=${options.gid}`);
     args.push(`sandbox-${options.sandboxUid}`);
     return args;
   }
@@ -110,8 +106,20 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
       `--property=MemoryMax=${options.quotaMiB}M`, '--property=MemorySwapMax=0',
       '--property=MemoryOOMGroup=yes', this.binary, ...this.runscArgs(options)], { stdio: 'ignore' });
     await new Promise<void>((resolve, reject) => {
-      child.once('error', reject);
-      child.once('spawn', resolve);
+      const deadline = Date.now() + 5000;
+      let timer: ReturnType<typeof setTimeout>;
+      const fail = (error: Error) => { clearTimeout(timer); reject(error); };
+      child.once('error', fail);
+      child.once('exit', code => fail(new Error(`sandbox launcher exited: ${code}`)));
+      const poll = () => {
+        try {
+          const state = JSON.parse(execFileSync(this.binary, ['state', `sandbox-${options.sandboxUid}`], { encoding: 'utf8', timeout: 1000 }));
+          if (state.status === 'running') { resolve(); return; }
+        } catch { /* The runtime may not have created its state yet. */ }
+        if (Date.now() >= deadline) { fail(new Error('sandbox runtime readiness timeout')); return; }
+        timer = setTimeout(poll, 25);
+      };
+      child.once('spawn', () => { timer = setTimeout(poll, 0); });
     });
     const runtimeId = `runsc-${options.tenantId}-${options.sandboxUid}`;
     this.scopes.set(runtimeId, { scope, tenantId: options.tenantId });
