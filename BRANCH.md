@@ -23,6 +23,8 @@
   - [x] BRDPF-EX1: align co-signed AMD-28 network contract (k8s 3b042fd) in spec; documentation only; rollback the spec line with the network implementation.
 
 ## Feedback Loop
+- [x] R2 qualification-8/9/10: compare stable protocol/address listener sets, reserve disk for four/two sandboxes, require exact systrap/capability/network-namespace OCI shapes.
+- [x] R2 qualification-1: preserve the node-22 wire profile and thread the daemon-derived live/standby slot into the runtime; heavy/browser/unknown profiles remain refused.
 - [x] R2c-4: controlled TCP/UDP tenant witnesses self-connect before/after cross-tenant probes and fail on any delivered probe datagram; host UDP witnesses bind alongside TCP controls.
 - [x] R2c-3: keep ownership aligned with the irreversible custody cut after WAL failure; fresh signed tickets at the GET-visible epoch retry persistence and retain stop/delete access.
 - [x] R2c-2: retain launch identities in the TLS parent; worker death closes admission and starts cleanup-only reconciliation, including launches in flight, without releasing reservations early.

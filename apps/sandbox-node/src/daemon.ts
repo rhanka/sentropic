@@ -246,7 +246,9 @@ export class ExecutionNodeDaemon {
     compatibility?: ExecutionNodeClaimSpec['compatibility'];
   }): Promise<SandboxRecord> {
     input = structuredClone(input);
-    requireNetworkPolicy(input.spec.network, input.spec.profile);
+    const slot = Object.hasOwn(SERVICE_TIMEOUT_MS, input.spec.profile) ? 'build'
+      : input.warmStandby === true ? 'standby' : 'live';
+    requireNetworkPolicy(input.spec.network, input.spec.profile, undefined, slot);
     validateDevScope(input.spec.devScope);
     validateDiskQuota(input.spec.quotaMiB, input.spec.quotaInodes);
     if (input.spec.tenantId !== input.ownership.tenantId) {
@@ -258,8 +260,6 @@ export class ExecutionNodeDaemon {
     const mounts = resolveMounts(input.spec.tenantId, input.spec.baseMounts, this.bases);
     return this.idempotent(input.spec.tenantId, input.commandId, 'POST', '/v1/sandboxes', body, async () => {
       const id = randomUUID();
-      const slot = Object.hasOwn(SERVICE_TIMEOUT_MS, input.spec.profile) ? 'build'
-        : input.warmStandby === true ? 'standby' : 'live';
       if (slot === 'build') await this.admission.admitBuild(input.spec.tenantId, input.spec.profile as HeavyProfile, async () => {
         await this.transition(id, async () => {
         const sandbox = this.getSandbox(input.spec.tenantId, id)!;
@@ -361,6 +361,7 @@ export class ExecutionNodeDaemon {
         command: sandbox.command,
         network: sandbox.network,
         profile: sandbox.profile,
+        slot: sandbox.slot,
         onExit: code => {
           void Promise.resolve().then(() => this.runtimeExited(sandbox, code)).catch(error => {
             this.audit.record('sandbox.stop_failed', tenantId, id, String(error));

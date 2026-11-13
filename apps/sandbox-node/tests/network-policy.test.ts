@@ -7,6 +7,21 @@ const input = { tenantId: 'immo', sandboxUid: 'network', mounts: [], overlayUppe
   overlayWork: '/tmp/work', quotaMiB: 704, uid: 1000, gid: 1000 };
 
 describe('AMD-28 admission', () => {
+  it.each([false, true])('should admit the real node-22 live wire profile with the derived session slot (standby=%s)', async warmStandby => {
+    const node = createExecutionNode();
+    const launch = vi.spyOn(node.adapter, 'runSandbox');
+    const ownership = { tenantId: 'immo', poolOwned: false, workspaceId: 'w', principalId: 'p', attemptId: 'a', purpose: 'live', generation: 1, custodyEpoch: 1 };
+    const compatibility = { tenantId: 'immo', profile: 'node-22' };
+    const box = await node.daemon.createSandbox({ commandId: 'real-profile', warmStandby, ownership, compatibility,
+      spec: { tenantId: 'immo', profile: 'node-22', network: 'ports', baseMounts: [], quotaMiB: 16, quotaInodes: 1024,
+        command: ['/bin/sleep', '60'], devScope: { kind: 'ui', writable: ['ui/**'], refused: [], source: { repo: 'r', path: 'p', commit: 'c' } } } } as never);
+    if (warmStandby) await node.daemon.claimSandbox({ commandId: 'claim', standbyId: box.id,
+      claim: { tenantId: 'immo', ownership, compatibility }, devScope: box.devScope } as never);
+    else await node.daemon.promoteToRunning('immo', box.id, { commandId: 'start', devScope: box.devScope } as never);
+    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ profile: 'node-22', slot: warmStandby ? 'standby' : 'live', network: 'ports' }));
+    expect(new RunscRuntimeAdapter().runscArgs({ ...input, network: 'ports', profile: 'node-22', slot: 'live' })).toContain('--network=sandbox');
+    expect(() => new RunscRuntimeAdapter().runscArgs({ ...input, network: 'ports', profile: 'artifact-build', slot: 'live' })).toThrow();
+  });
   it.each(['artifact-build', 'prebundle', 'cold-materialize', 'browser-harness', 'other', undefined])('should refuse ports for profile %s', profile => {
     expect(() => requireNetworkPolicy('ports', profile)).toThrow('live or standby');
   });

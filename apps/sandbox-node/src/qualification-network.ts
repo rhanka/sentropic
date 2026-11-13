@@ -6,8 +6,9 @@ import { isIP } from 'node:net';
 import { createSocket } from 'node:dgram';
 
 export type NetworkTarget = readonly [host: string, port: number];
-export const hostListeners = () => execFileSync('ss', ['-H', '-ltnup'],
-  { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }).trim().split('\n').sort().join('\n');
+export const hostListeners = () => [...new Set(execFileSync('ss', ['-H', '-ltnu'],
+  { encoding: 'utf8', timeout: 1000, killSignal: 'SIGKILL' }).trim().split('\n').filter(Boolean)
+  .map(line => { const columns = line.trim().split(/\s+/); assert.ok(columns.length >= 6); return `${columns[0]} ${columns[4]}`; }))].sort().join('\n');
 
 export async function kernelNetworkWitness(uid: string, release: string) {
   const { pid } = JSON.parse(execFileSync('runsc', ['--root=/run/execution-node/runsc', 'state', `sandbox-${uid}`],
