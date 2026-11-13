@@ -44,6 +44,7 @@
 - [x] Lot 0: read rules, source contracts, normative recipe, options and gate requirements; check branch mechanically.
 - [ ] Lot 1: add shared closed types and AMD-ISO canonical re-exports without changing historical definitions.
   - [x] Define portable compile recipe, options, output and diagnostic types; npm view reports 0.25.0, local version bumped to 0.26.0-dev.27.
+  - [x] Define host-authenticated execution context and validate success/refusal diagnostics without partial output leaks.
 - [ ] Lot 2: implement portable canonical encoding, path/base64 checks, recipe and output validation with closed effective options.
   - [x] Add portable closed JSON schemas for recipe, effective options, manifest, descriptors and diagnostics.
   - [x] Add RFC 8785 encoding, SHA-256/SRI, canonical base64/path checks and duplicate-key JSON parsing.

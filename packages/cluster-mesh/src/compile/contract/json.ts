@@ -5,7 +5,7 @@ export function parseCompileJson(text: string): unknown {
   const tokens = text.match(/"(?:[^"\\\u0000-\u001f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null|[{}\[\]:,]|\s+|./gu) ?? [];
   let index = 0;
   const next = (): string | undefined => {
-    while (tokens[index] !== undefined && /^\s+$/u.test(tokens[index]!)) index++;
+    while (tokens[index] !== undefined && /^[\x20\t\r\n]+$/u.test(tokens[index]!)) index++;
     return tokens[index];
   };
   const fail = (): never => { throw new CompileContractError('invalid_recipe'); };

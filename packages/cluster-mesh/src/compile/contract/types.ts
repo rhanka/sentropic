@@ -92,3 +92,35 @@ export interface CompileServeRequestV1 {
 export type CompileServeResultV1 = Exclude<CompileResultV1, { status: 'ok' }>
   | { apiVersion: 1; status: 'ok'; digest: string; manifestDigest: string;
       output: CompileOutputDescriptorV1; bytes: Uint8Array };
+
+/** Constructed by the authenticated host, never deserialized from recipe authority. */
+export interface CompileExecutionContext {
+  readonly tenantId: string;
+  readonly workspaceId: string;
+  readonly principalId: string;
+  readonly attemptId: string;
+  readonly purpose: string;
+  readonly resourceId: string;
+  readonly custodyEpoch: number;
+  readonly devScope: {
+    readonly kind: 'ui' | 'fullstack';
+    readonly writable: readonly string[];
+    readonly refused: readonly string[];
+    readonly source: { readonly repo: string; readonly path: string; readonly commit: string };
+  };
+  readonly virtualSourceManifest: Readonly<Record<string, string>>;
+  readonly virtualSourceGrants: readonly {
+    readonly path: string; readonly sha256: string; readonly grantId: string;
+  }[];
+  readonly destinationAuthorization: {
+    readonly resourceId: string; readonly action: 'preview' | 'publish' | 'serve';
+    readonly authorizationId: string;
+  };
+  readonly deadlineAt: string;
+  readonly commandId: string;
+  readonly signal: AbortSignal;
+}
+export interface VueCompileAdapter {
+  compile(request: CompileRequestV1, context: CompileExecutionContext): Promise<CompileResultV1>;
+  serve(request: CompileServeRequestV1, context: CompileExecutionContext): Promise<CompileServeResultV1>;
+}
