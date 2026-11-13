@@ -14,6 +14,16 @@ async function fixture() {
   return { node, api };
 }
 describe('API custody RPC client', () => {
+  it.each(['issuedAt', 'deadlineAt', 'physicalUid', 'token'])('should refuse a malformed %s and stop polling after request abort', async field => {
+    const { node, api } = await fixture(); api.invalid(field);
+    const controller = new AbortController();
+    const response = await dataPlaneFetch(dataPlaneFromEnv(node.env, api.replica())!, subject, '/src/main.ts', {
+      method: 'GET', headers: {}, signal: controller.signal, maxBytes: 1024,
+    });
+    expect(response.status).toBe(403); expect(node.received).toHaveLength(0);
+    const count = api.requests.length; controller.abort();
+    await new Promise(resolve => setTimeout(resolve, 300)); expect(api.requests).toHaveLength(count);
+  });
   it('should authenticate exact HTTP bytes, preserve all lease fields and forward the API-owned supervisor port', async () => {
     const { node, api } = await fixture(); node.setPort(8792);
     const transport = dataPlaneFromEnv(node.env, api.replica())!;

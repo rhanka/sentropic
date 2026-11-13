@@ -9,6 +9,7 @@ export async function fakeCustodyApi(issuer: CustodyIssuer) {
   const key = randomBytes(32); const kid = 'controller-test';
   let version = 'a'.repeat(64); let refusal = false; let hang = false; let oversized = false;
   let changeOnIssue = false;
+  let invalidField: string | undefined;
   const requests: { operation: string; subject: CustodySubject; authenticated: boolean }[] = [];
   const server = createServer(async (req, res) => {
     const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(chunk);
@@ -29,7 +30,7 @@ export async function fakeCustodyApi(issuer: CustodyIssuer) {
     else if (operation === 'issue') {
       const lease = await issuer.issue(subject, new AbortController().signal);
       if (changeOnIssue) version = 'b'.repeat(64);
-      res.end(JSON.stringify(lease));
+      res.end(JSON.stringify(invalidField ? { ...lease, [invalidField]: { toString: null } } : lease));
     } else res.writeHead(404).end();
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -39,6 +40,7 @@ export async function fakeCustodyApi(issuer: CustodyIssuer) {
   return { env, requests, replica: () => custodyIssuerFromEnv(env)!,
     revoke() { refusal = true; }, change() { version = 'b'.repeat(64); }, hang() { hang = true; },
     oversized() { oversized = true; }, changeOnIssue() { changeOnIssue = true; },
+    invalid(field: string) { invalidField = field; },
     close: () => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); }),
   };
 }

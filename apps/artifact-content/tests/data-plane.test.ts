@@ -12,6 +12,15 @@ const get = (f: Awaited<ReturnType<typeof fixture>>) => dataPlaneFetch(f.transpo
   method: 'GET', headers: { accept: '*/*' }, signal: AbortSignal.timeout(2000), maxBytes: 1024,
 });
 describe('execution-node data plane', () => {
+  it('should unsubscribe when an injected issuer throws during lease validation', async () => {
+    const f = await fixture();
+    const issuer = { ...f.issuer, async issue() {
+      const lease = await f.issuer.issue(subject, new AbortController().signal);
+      return Object.defineProperty(lease, 'issuedAt', { get() { throw new Error('invalid metadata'); } });
+    } };
+    await expect(dataPlaneFromEnv(f.env, issuer)!.prepare(subject)).rejects.toThrow('custody_revoked');
+    expect(f.watchers).toBe(0); expect(f.received).toHaveLength(0);
+  });
   it('should authenticate mTLS and forward only the issued tenant, physical UID and custody token', async () => {
     const f = await fixture(); const response = await get(f);
     expect(response.status).toBe(200); expect(await response.text()).toBe('live');

@@ -1,4 +1,4 @@
-import { CustodyRevoked, type CustodyIssuer, type CustodyLease, type CustodySubject } from './data-plane';
+import { CustodyRevoked, isCustodyLease, type CustodyIssuer, type CustodySubject } from './data-plane';
 import { custodyRpcFromEnv, type CustodyRpc } from './custody-rpc';
 
 type Watch = { ready: Promise<string>; check(): Promise<string>; stop(): void; revoked: boolean };
@@ -43,9 +43,9 @@ export function createRpcCustodyIssuer(rpc: CustodyRpc): CustodyIssuer {
       try {
         await Promise.all(active.map(watch => watch.ready));
         if (signal.aborted || active.some(watch => watch.revoked)) throw new CustodyRevoked();
-        const lease = await rpc('issue', subject, signal) as CustodyLease;
+        const lease = await rpc('issue', subject, signal);
         await Promise.all(active.map(watch => watch.check()));
-        if (signal.aborted || active.some(watch => watch.revoked) || !lease || typeof lease !== 'object') throw new CustodyRevoked();
+        if (signal.aborted || active.some(watch => watch.revoked) || !isCustodyLease(lease)) throw new CustodyRevoked();
         // The data-plane transport validates every lease field and the TTL before opening a node connection.
         return lease;
       } catch { throw new CustodyRevoked(); }
