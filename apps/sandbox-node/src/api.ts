@@ -58,6 +58,11 @@ export class AgentApi {
       return { status: 200, body: result.bytes };
     }
     if (operation === 'renew') return { status: 200, body: daemon.renewSandbox(tenantId, id) };
+    if (operation === 'write') {
+      if (typeof body.path !== 'string' || typeof body.contentBase64 !== 'string') throw new ExecutionNodeError('command_id_payload_mismatch');
+      await daemon.writeFile(tenantId, id, { ...body, path: body.path, commandId, devScope, contentBase64: body.contentBase64, ticket });
+      return { status: 200, body: { written: true } };
+    }
     if (operation === 'revoke-custody') return { status: 200, body: this.custody.revoke(tenantId, id, Number(body.custodyEpoch)) };
     throw new ExecutionNodeError('command_id_payload_mismatch', 'unknown lifecycle operation');
   }
