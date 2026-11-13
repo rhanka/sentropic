@@ -1,11 +1,13 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
+import { qualificationStorage } from './qualification-storage.js';
 
 /** Read-only: an operator must reconcile interrupted runs before granting another run. */
-export function assertNoQualificationLeftovers(release: string, runtime = '/run/execution-node', tenants = '/var/lib/builder/tenants'): void {
+export function assertNoQualificationLeftovers(release: string, runtime = '/run/execution-node', tenants = '/var/lib/builder/tenants', storage = qualificationStorage): void {
   const list = (path: string) => existsSync(path) ? readdirSync(path) : [];
   const leftovers = list(runtime).filter(name => /^(qd-|qi-)/.test(name)).map(name => join(runtime, name));
+  leftovers.push(...list(storage).filter(name => /^(qd-|qi-)/.test(name)).map(name => join(storage, name)));
   leftovers.push(...list(join(runtime, 'ports')).map(name => join(runtime, 'ports', name)));
   const digest = createHash('sha256').update(readFileSync(join(release, 'qualification.erofs'))).digest('hex');
   for (const tenant of ['sentropic', 'immo']) {

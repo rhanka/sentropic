@@ -217,6 +217,8 @@ export class RunscRuntimeAdapter implements RuntimeAdapter {
   }
 
   async destroySandbox(runtimeId: string): Promise<void> {
+    // prepareBundle can fail before any scope/runtime was registered; repeated cleanup is safe.
+    if (!this.scopes.has(runtimeId)) return;
     if (!this.hasRunsc()) failNoBinary();
     if (!await this.stopSandbox(runtimeId)) throw new Error('sandbox_not_quiesced');
     for (const forward of this.forwards.get(runtimeId)?.values() ?? []) forward.stop();

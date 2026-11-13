@@ -13,6 +13,7 @@ import { qualificationNode } from './data-plane-qualification-node.js';
 import { probeDataPlane } from './data-plane-qualification-probes.js';
 import { QualificationDeadline, qualificationDeadline, qualificationCleanup } from './qualification-deadline.js';
 import { assertNoQualificationLeftovers } from './qualification-leftovers.js';
+import { createQualificationDirectory } from './qualification-storage.js';
 
 function tcpListeners() {
   return new Set(['/proc/net/tcp', '/proc/net/tcp6'].flatMap(path => readFileSync(path, 'utf8').trim().split('\n').slice(1)
@@ -28,7 +29,7 @@ export async function qualifyDataPlane(): Promise<void> {
   const timeout = qualificationDeadline();
   const unlock = await acquireNodeLock();
   const deadline = new QualificationDeadline(timeout);
-  let directory: string | undefined, fixture: ReturnType<typeof qualificationNode> | undefined;
+  let directory: string | undefined, socketDirectory: string | undefined, fixture: ReturnType<typeof qualificationNode> | undefined;
   let server: ReturnType<typeof createAgentServer> | undefined;
   const sockets = new Set<Duplex>();
   let failed = false;
@@ -44,7 +45,8 @@ export async function qualifyDataPlane(): Promise<void> {
     rmSync(marker); // Consume operator authorization once, under the service's shared flock.
     const baseline = tcpListeners();
     const checkTcp = () => { for (const listener of tcpListeners()) assert.ok(baseline.has(listener), 'new host TCP listener'); };
-    directory = mkdtempSync('/run/execution-node/qd-');
+    directory = createQualificationDirectory(dirname(process.execPath), 'qd');
+    socketDirectory = mkdtempSync('/run/execution-node/qd-');
     fixture = qualificationNode(directory, dirname(process.execPath));
     const sandbox = await fixture.start();
     deadline.monitor(() => {
@@ -64,13 +66,13 @@ export async function qualifyDataPlane(): Promise<void> {
     server = createAgentServer({ ca: tls.ca, ...tls.server }, (req, res, role) => { void data.http(req, res, role); });
     server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
     server.on('upgrade', (req, socket, head) => { void data.upgrade(req, socket, head, agentRole(req) ?? ''); });
-    const socketPath = join(directory, 'tls.sock');
+    const socketPath = join(socketDirectory, 'tls.sock');
     await new Promise<void>((resolve, reject) => { server!.once('error', reject); server!.listen(socketPath, resolve); });
     await deadline.wait(probeDataPlane({ socketPath, certificates: tls, uid: sandbox.id, node: fixture, report, checkTcp, signal: deadline.signal }));
     checkTcp(); report('no host TCP listener opened');
     deadline.stopMonitoring();
     await deadline.wait(fixture.lifecycle(deadline.signal)); report('authenticated GET / stop-202 progress / export / DELETE');
-  } catch { failed = true; console.error('FAIL real-host data-plane execution'); }
+  } catch (error) { failed = true; console.error('FAIL real-host data-plane execution:', error instanceof Error ? error.message : 'unknown error'); }
   finally {
     deadline.abort(new Error('qualification finished'));
     deadline.stopMonitoring();
@@ -79,11 +81,14 @@ export async function qualifyDataPlane(): Promise<void> {
       // Start runtime cleanup even if the TLS listener refuses to finish closing.
       const cleanup = [fixture?.close()];
       if (server) cleanup.push(new Promise<void>(resolve => server!.close(() => resolve())));
-      await qualificationCleanup(async () => { await Promise.all(cleanup); });
-      if (directory) {
-        assertCleanStartup(directory);
-        rmSync(directory, { recursive: true });
-        console.log('PASS empty runtime, scope and mount inventory after cleanup');
+      try { await qualificationCleanup(async () => { await Promise.all(cleanup); }); }
+      finally {
+        if (socketDirectory) rmSync(socketDirectory, { recursive: true, force: true });
+        if (directory) {
+          assertCleanStartup(directory);
+          rmSync(directory, { recursive: true, force: true });
+          console.log('PASS empty runtime, scope and mount inventory after cleanup');
+        }
       }
     } catch { failed = true; console.error('FAIL data-plane qualification cleanup'); }
     deadline.close(); unlock();
