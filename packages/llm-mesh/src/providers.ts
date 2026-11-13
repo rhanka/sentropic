@@ -76,6 +76,7 @@ export const knownModelIds = [
   'muse-spark-1.3',
   'muse-spark-1.3-contributor',
   'muse-wonder-1.0',
+  'muse-ember-1.0',
   'muse-wonder-full-1.0',
 ] as const;
 
@@ -104,7 +105,7 @@ export const knownModelIdsByProvider = {
   cohere: ['command-a-03-2025', 'command-a-reasoning-08-2025'],
   gcp: ['google/gemini-3.5-flash@gcp', 'google/gemini-3.1-flash-lite@gcp', 'anthropic/claude-sonnet-4-6@gcp', 'anthropic/claude-opus-4-6@gcp'],
   local: ['laneformer-2b-it'],
-  muse: ['muse-spark-1.3', 'muse-spark-1.3-contributor', 'muse-wonder-1.0', 'muse-wonder-full-1.0'],
+  muse: ['muse-spark-1.3', 'muse-spark-1.3-contributor', 'muse-wonder-1.0', 'muse-ember-1.0', 'muse-wonder-full-1.0'],
   typesafe: [],
 } as const satisfies Record<ProviderId, readonly KnownModelId[]>;
 

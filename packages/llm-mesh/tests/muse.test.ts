@@ -13,6 +13,7 @@ const MUSE_CATALOG_KEYS = [
   'muse-spark-1.3',
   'muse-spark-1.3-contributor',
   'muse-wonder-1.0',
+  'muse-ember-1.0',
   'muse-wonder-full-1.0',
 ] as const;
 
@@ -47,7 +48,7 @@ describe('muse provider package surface', () => {
     expect(adapters).toHaveLength(8);
   });
 
-  it('exposes the four Muse models through the registry built from default adapters', () => {
+  it('exposes the Muse models through the registry built from default adapters', () => {
     const registry = createProviderRegistry(createDefaultProviderAdapters());
     const muse = registry.requireProvider('muse');
 
@@ -79,5 +80,13 @@ describe('muse provider package surface', () => {
     expect(wonder?.reasoningTier).toBe('advanced');
     expect(full?.label).toBe('Muse Wonder Full');
     expect(full?.reasoningTier).toBe('advanced');
+  });
+
+  it('should expose Ember as one vision model supporting xhigh and max', () => {
+    const ember = getModelProfile('muse', 'muse-ember-1.0');
+    expect(ember?.label).toBe('Muse Ember');
+    expect(ember?.capabilities.contextWindowTokens).toBe(1_000_000);
+    expect(ember?.capabilities.modalities.input).toContain('image');
+    expect(ember?.capabilities.reasoning.supportedEfforts).toEqual(['xhigh', 'max']);
   });
 });

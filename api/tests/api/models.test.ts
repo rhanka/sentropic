@@ -90,12 +90,13 @@ describe('llm-mesh model projections', () => {
       'google/gemini-3.5-flash@gcp',
     ]);
     expect(modelsByProvider('muse')).toEqual([
+      'muse-ember-1.0',
       'muse-spark-1.3',
       'muse-spark-1.3-contributor',
       'muse-wonder-1.0',
       'muse-wonder-full-1.0',
     ]);
-    expect(data.models).toHaveLength(37);
+    expect(data.models).toHaveLength(38);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
