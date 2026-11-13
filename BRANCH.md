@@ -60,6 +60,7 @@
   - [x] Independent Astra high closure APPROVE at b5b12ffa29cbf5b946115729271e69852120a6fd; all three P1 findings resolved and tested.
   - [x] Final commit changes this plan only; reviewed implementation and test bytes are unchanged.
 - [ ] Lot 6: push, PR, exact-head CI, report and done marker; no merge/deploy.
-  - [x] CI finding: TypeScript 5.4 DOM types lack AbortSignal.any; use portable composed cancellation and align the local compiler with the committed lock.
+  - [x] CI finding: TypeScript 5.4 DOM types lack AbortSignal.any; use a local type bridge to the pinned Node 24 native composition and align the local compiler with the committed lock.
+  - [x] Compatibility review P2: remove manual source subscriptions; repeated issuance success/failure with a shared signal leaves no source listeners.
   - [x] No Compose stack started; isolated Docker test commands self-remove; `make down ENV=feat-s1-c1` completed.
   - [x] CI classifies this path as API; app-cluster-mesh shards invoke test-artifact-content (tests, types, lint) through their Make dependency. No CI edits.
