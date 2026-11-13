@@ -75,6 +75,7 @@ Deliver a standalone Node window driver (W0..W9) with watchdog, pre-commit rollb
   - Switch back to `tmp/worktrees/t3-driver` after UAT.
 
 ## Plan / Todo (lot-based)
+- [x] RUN8 M2: JSON health/discovery/JWKS/auth/email proofs before ACCEPTED under shared HTTP budget; eleven negative regressions failed first; expected signing kid required.
 - [x] RUN8 M1: standalone finish-open preview never saves simulated progress; real CLI bytes/resume regression failed first.
 - [x] RUN8 B1: dedicated email input and JSON/Origin headers on both mandatory POSTs; two regressions failed first; HTTP fixture rejects invalid requests.
 - [x] RUN7 SIGSTOP recovery proof explicitly observes API stopped before suspension and all three workloads restored to one replica after takeover.

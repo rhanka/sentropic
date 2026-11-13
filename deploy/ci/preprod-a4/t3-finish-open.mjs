@@ -156,9 +156,8 @@ async function runProbe(probe, p, opts = {}) {
     opts.print?.(`# dry-run: probe ${p.id} ${p.url} expect ${p.expect}`);
     return;
   }
-  const res = await probe(p.url, { ...p.options, ...(p.id === 'S-6' ? { redirect: 'manual' } : {}), signal: AbortSignal.timeout(
+  const res = await probe(p.url, { ...p.options, redirect: 'manual', signal: AbortSignal.timeout(
     effectiveTimeout(p.timeoutMs ?? 5000, opts, (opts.now ?? monoMs)())) });
-  await res.body?.cancel?.();
   if (res.status !== p.expect) throw new Error(`probe_failed: ${p.id}`);
   if (p.id === 'S-6') {
     const location = res.headers?.get('location');
@@ -167,7 +166,29 @@ async function runProbe(probe, p, opts = {}) {
       || !login.search || login.searchParams.has('error') || location.includes('error=')) {
       throw new Error('probe_failed: S-6 login_redirect');
     }
+    await res.body?.cancel?.();
+  } else if (/^S-(3|4|5|7|8|9a|9b)$/.test(p.id)) {
+    try {
+      if (!/^application\/json(?:;|$)/i.test(res.headers?.get('content-type') ?? '')) throw new Error('json_required');
+      const body = await res.json();
+      let valid = false;
+      if (p.id === 'S-3') valid = body.status === 'ok';
+      if (p.id === 'S-4') valid = body.issuer === p.issuer
+        && body.authorization_endpoint === `${p.issuer}/api/v1/auth/oauth/authorize`
+        && body.token_endpoint === `${p.issuer}/api/v1/auth/oauth/token`
+        && body.jwks_uri === new URL('/.well-known/jwks.json', p.issuer).href;
+      if (p.id === 'S-5') valid = Array.isArray(body.keys) && body.keys.some(k => k.kid === p.signingKid
+        && k.kty === 'OKP' && k.crv === 'Ed25519' && typeof k.x === 'string' && /^[\w-]{43}$/.test(k.x));
+      if (p.id === 'S-7' || p.id === 'S-8') valid = body.error?.code === 'unauthorized'
+        && body.error?.message === 'Authentication required.';
+      if (p.id.startsWith('S-9')) valid = body.success === true && body.delivery === 'email'
+        && typeof body.expiresAt === 'string' && Number.isFinite(Date.parse(body.expiresAt));
+      if (!valid) throw new Error('invalid_body');
+    } catch { throw new Error(`probe_failed: ${p.id} functional_body`); }
+  } else {
+    await res.body?.cancel?.();
   }
+  effectiveTimeout(1, opts, (opts.now ?? monoMs)());
 }
 
 function cliArg(argv, name) {
