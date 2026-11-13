@@ -22,6 +22,7 @@ function ownership(tenantId: 'sentropic' | 'immo' = 'sentropic'): ExecutionNodeO
 function spec(): ExecutionNodeSandboxSpec {
   return {
     tenantId: 'sentropic',
+    devScope: { kind: 'ui', writable: ['ui/**'], refused: ['ui/dist/**'], source: { repo: 'fixture', path: 'registry.ts', commit: 'abc' } },
     physicalUid: 'uid-1',
     profile: 'node-22',
     runtimeClass: 'gvisor',

@@ -1,7 +1,10 @@
 import type {
+  ExecutionNodeDevScope,
   ExecutionNodeBaseRef,
   ExecutionNodeTenantId,
 } from './contract.js';
+import { lstatSync } from 'node:fs';
+import { posix, matchesGlob, join } from 'node:path';
 import { ExecutionNodeError } from './errors.js';
 import type { SandboxMount } from './runtime-adapter.js';
 
@@ -57,8 +60,32 @@ export function resolveMounts(
 }
 
 /** Writes resolve inside /workspace only; anything else is rejected. */
-export function checkWritePath(workspacePath: string): void {
-  if (workspacePath !== '/workspace' && !workspacePath.startsWith('/workspace/')) {
+export function checkWritePath(workspacePath: string, scope?: ExecutionNodeDevScope, root?: string): string {
+  validateDevScope(scope);
+  const normalized = posix.normalize(workspacePath);
+  if (workspacePath.includes('\0') || workspacePath.includes('\\') || !normalized.startsWith('/workspace/')) {
     throw new ExecutionNodeError('cross_tenant_base_forbidden', `writes outside /workspace forbidden: ${workspacePath}`);
+  }
+  const relative = normalized.slice('/workspace/'.length);
+  if (!scope!.writable.some(glob => matchesGlob(relative, glob))
+    || scope!.refused.some(glob => matchesGlob(relative, glob))) throw new ExecutionNodeError('cross_tenant_base_forbidden', 'devScope write denied');
+  if (root) {
+    let current = root;
+    for (const segment of relative.split('/')) {
+      current = join(current, segment);
+      try {
+        if (lstatSync(current).isSymbolicLink()) throw new ExecutionNodeError('cross_tenant_base_forbidden', 'symlink write denied');
+      } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    }
+  }
+  return relative;
+}
+
+export function validateDevScope(scope: ExecutionNodeDevScope | undefined): asserts scope is ExecutionNodeDevScope {
+  if (!scope || !['ui', 'api', 'jobs', 'data', 'fullstack'].includes(scope.kind)
+    || !Array.isArray(scope.writable) || !scope.writable.length || !Array.isArray(scope.refused)
+    || !scope.source?.repo || !scope.source.path || !scope.source.commit
+    || [...scope.writable, ...scope.refused].some(glob => typeof glob !== 'string' || glob.startsWith('/') || glob.split('/').includes('..'))) {
+    throw new ExecutionNodeError('command_id_payload_mismatch', 'valid host-resolved devScope with provenance required');
   }
 }

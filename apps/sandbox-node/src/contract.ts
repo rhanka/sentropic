@@ -119,7 +119,15 @@ export const EXECUTION_NODE_TENANT_SLICE_DEFAULTS: Record<
   },
 };
 
+export interface ExecutionNodeDevScope {
+  readonly kind: 'ui' | 'api' | 'jobs' | 'data' | 'fullstack';
+  readonly writable: readonly string[];
+  readonly refused: readonly string[];
+  readonly source: { readonly repo: string; readonly path: string; readonly commit: string };
+}
+
 export interface ExecutionNodeSandboxSpec {
+  readonly devScope: ExecutionNodeDevScope;
   readonly tenantId: ExecutionNodeTenantId;
   readonly physicalUid: string;
   readonly profile: string;
@@ -256,6 +264,7 @@ export const EXECUTION_NODE_V1_SANDBOX_SPEC_SCHEMA: ExecutionNodeJsonSchema = {
   required: [
     'tenantId',
     'physicalUid',
+    'devScope',
     'profile',
     'runtimeClass',
     'baseMounts',
@@ -268,6 +277,7 @@ export const EXECUTION_NODE_V1_SANDBOX_SPEC_SCHEMA: ExecutionNodeJsonSchema = {
   properties: {
     tenantId: { enum: ['sentropic', 'immo'] },
     physicalUid: { type: 'string', minLength: 1 },
+    devScope: { type: 'object', required: ['kind', 'writable', 'refused', 'source'] },
     profile: { type: 'string', minLength: 1 },
     runtimeClass: { type: 'string', minLength: 1 },
     baseMounts: {
