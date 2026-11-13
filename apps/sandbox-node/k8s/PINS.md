@@ -37,9 +37,9 @@ values below:
 
 ## RUN 9 delivery (supersedes prior compiled releases)
 
-- Archive SHA-256: `0b1288e2a10bc5d2e61249997370cbd183a2593ad48cfa194b56127b9363bd54`.
-- SEA executable SHA-256: `631f92fb018738f082e78bc396e045947a34b50c3674cddaba45a32491c3a5cc`.
-- Shared EROFS rootfs SHA-256: `b9dc75522f328541d0e6627f5df01dfb68a4c1653945e9df63a9bb40ef4799eb`.
+- Archive SHA-256: `f4cac77d73b130d770dd012a2196899b3fe1e51cc041a9c41d568485dc527818`.
+- SEA executable SHA-256: `28fc88ebaf1e283e76e52f645291718a300190c923f97f62efc84369da0e9744`.
+- Shared EROFS rootfs SHA-256: `0a4e7e2c38a2d2ac5dee3973af091a3f8e10076c86d338d1f271982ea0c16999`.
 - Supersedes RUN 8 archive `9789357855f9a377c77fdb9fd9a451b13a21c83bf8e342dcdc62c2ad8da0b036` and all earlier releases.
 - Configuration/unit/operator key/startup/README/restart B-test/isolation qualification are covered by the archive's SHA256SUMS.
 - Archive root mode 0755 and extracted SEA execution as uid 65534 are verified.
