@@ -8,6 +8,7 @@ describe('OCI bundle lifecycle', () => {
   const owner = { uid: process.getuid!(), gid: process.getgid!() };
   it.each([[704, 512], [1536, 1024]])('should apply the signed OCI task limit for %i MiB', (quotaMiB, limit) => {
     const root = mkdtempSync(join(tmpdir(), 'bundle-pids-'));
+    const previousMask = process.umask(0o077);
     try {
       const bundle = prepareBundle({ tenantId: 'immo', sandboxUid: 'tasks', overlayUpper: join(root, 'upper'),
         overlayWork: join(root, 'work'), quotaMiB, diskQuotaMiB: 8, quotaInodes: 32, ...owner,
@@ -26,7 +27,7 @@ describe('OCI bundle lifecycle', () => {
         expect(spec.mounts.find((mount: { destination: string }) => mount.destination === '/workspace/ui/dist').source).toBe(bundle.output);
       }
       destroyBundle(bundle, () => {});
-    } finally { rmSync(root, { recursive: true, force: true }); }
+    } finally { process.umask(previousMask); rmSync(root, { recursive: true, force: true }); }
   });
   it('should install per-sandbox block and inode hard limits before mounting source', () => {
     const root = mkdtempSync(join(tmpdir(), 'disk-quota-'));
