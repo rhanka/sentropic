@@ -40,6 +40,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 5 operator README reconciles AMD-17, slice/scope values, installed identities/paths, SEA/rootfs custody, S3 control-plane secrets, pull metrics and the exact control heartbeat protocol.
 - [x] RUN 5 B-test added: isolated-only agent restart with live loop/ext4, EROFS and overlay mounts, witness retained, host/new-agent namespace visibility and cleanup asserted. Original namespace FD guarantees cleanup even on regression. Execution remains k8s S1-K1; no local mount/restart performed.
 - [x] RUN 5 SEA qualification: moved real EDQUOT qualification into the shipped executable; both supervisor and unprivileged quota writer run without host Node. Explicit isolated-host guard remains mandatory; no host quota/mount operation performed locally.
 - [x] RUN 5 AMD-27 rootfs channel: failing shared-rootfs registry regression; startup registers only the verified release rootfs for both tenants. PUT bases refuses rootfs replacement; tenant source/dependency bases remain control-plane deliveries.

@@ -11,14 +11,18 @@ Rollback pool `artifact-builders` stays min/desired 0, max 2.
 
 | systemd resource | Required value |
 | --- | --- |
-| `builder.slice` | MemoryMax=2944M, MemorySwapMax=512M, CPUQuota=180% |
-| `builder-tenant.slice` | Intermediate parent required by systemd naming |
-| `builder-tenant-{sentropic,immo}.slice` | MemoryMax=2304M, MemoryHigh=2048M, MemoryLow=704M, MemorySwapMax=256M, CPUWeight=100, TasksMax=4096 |
-| `builder-sbx-<physicalUid>.scope` | 704M warm (swap 0) OR 1536M build (swap <=256M), MemoryOOMGroup=yes |
+| `builder.slice` | MemoryMax=2944M, MemoryLow=1408M, MemorySwapMax=512M, CPUQuota=180% |
+| `builder-tenant.slice` | MemoryLow=1408M; intermediate parent required by naming |
+| `builder-tenant-{sentropic,immo}.slice` | MemoryMax=2304M, MemoryHigh=2304M, MemoryLow=704M, MemorySwapMax=256M, CPUWeight=100, TasksMax=2048 |
+| warm scope | MemoryMax=704M, MemoryHigh=704M, MemoryLow=704M, CPUWeight=200, swap 0 |
+| build scope | MemoryMax=1536M, MemoryHigh=1408M, MemoryLow=0, CPUWeight=100, swap 256M |
+| all scopes | OOMPolicy=kill (sets memory.oom.group), TasksMax=256 |
 
-Measured identity: host 512 + agent 192 + parent 2944 + margin 172 = 3820 MiB.
-The agent has MemoryMin=64M. k8s provides 1 GiB zram (zstd) only as a peak
-absorber; it never increases RAM admission. A lower MemTotal reduces admission
+AMD-17: MemTotal=4,005,416,960 bytes, floor 3819 MiB;
+host 512 + agent 192 + parent 2944 + margin 171 = 3819 MiB.
+The agent has MemoryMin=64M (k8s also sets system.slice MemoryMin=64M).
+k8s provides 1 GiB zram (zstd), mem_limit=128 MiB inside the 171 MiB margin;
+it never increases RAM admission. Below floor 3819, reduce admission
 and requires k8s to reduce the parent ceiling before routing traffic.
 
 Admission reserves at most 2944 MiB including runsc sentry, cache, slab
@@ -30,6 +34,8 @@ reservation. Service deadlines are 60 s for artifact-build and 120 s for
 prebundle/cold-materialize; timeout kills and destroys before releasing the slot.
 The 2 s/5 s live admission goal is not a build queue deadline.
 Warm replacement requires complete destruction, including upperdir cleanup.
+Admission uses reservations alone (AMD-21); complete tenant memory.current,
+including cache left by destroyed scopes, remains telemetry only.
 
 Resolve the scope's effective `ControlGroup` using systemd and verify its
 tenant ancestry before writing scope-only `cgroup.kill`. Require
@@ -41,7 +47,7 @@ tenant ancestry before writing scope-only `cgroup.kill`. Require
   nftables allowlist of MKS egress IPs and operator IPs, default deny.
 - Separate operator/control-plane/data-plane certificates; CA, cert and
   key paths are mandatory. No plaintext agent listener.
-- Pin runsc systrap and crun version/SHA-256 in PINS.md before installation.
+- Pin runsc systrap release-20261102.0 under `/opt/gvisor/20261102`.
   Sandboxes use runsc `--network=none`; crun is benchmark witness only.
 - EROFS/overlay support; `/var/lib/builder/tenants/<tenantId>` mode 0700.
   Enforce 16 GiB project quota and inode quota per tenant at S1-A1a.
@@ -49,31 +55,44 @@ tenant ancestry before writing scope-only `cgroup.kill`. Require
   formats a private ext4 volume with project quotas and applies the session's
   `quotaMiB`/`quotaInodes` hard limits to its upper/work/output project.
   Missing quota support fails launch; memory remains a separate 704/1536 MiB limit.
-- BHS public S3 endpoint, prefix-limited tenant keys or presigned URLs.
-- No Python: Node/static probes only. Enable unattended-upgrades with
+- Bucket `sentropic-execution-bhs`, prefix `tenants/<tenantId>/<env>/`.
+  Presigned URLs only; ZERO static S3 secret on the VM. Sentropic control plane
+  holds `SANDBOX_S3_{SENTROPIC,IMMO}_ACCESS_KEY_ID` and corresponding
+  `_SECRET_ACCESS_KEY`, minted/rotated by k8s every 90 days.
+- Zero project Python. Enable unattended-upgrades with
   an agreed reboot window. Rebuild from cloud-init, without snapshots.
 
 ## k8s delivery through cloud-init
 
 Canonical provisioning is in the separate `poc-k8s` repository:
-`platform/artifact-builder-vm/cloud-init.yaml`. It installs Node, pinned
-runtimes, slices, firewall, `k8s/sandbox-node.service` and `k8s/start.sh`
+`platform/artifact-builder-vm/cloud-init.yaml`. It installs pinned
+runtimes, slices, firewall, `k8s/execution-node.service` and `k8s/start.sh`
 as `/usr/local/libexec/sandbox-node-start` (0755).
 
 k8s verifies the release archive SHA-256, extracts to
-`/opt/sandbox-node/releases/<64-character-sha256>`, sets `RELEASE_DIR` in
-`/etc/sandbox-node/agent.env`, and restarts the unit. Moving tags are
+`/opt/execution-node/releases/<64-character-sha256>`, sets `RELEASE_DIR` in
+`/etc/execution-node/agent.env`, and restarts the unit. Moving tags are
 forbidden deployment references. Keep the previous verified digest.
 
-`agent.env` requires `AGENT_CA`, `AGENT_CERT`, `AGENT_KEY`,
-`NODE_INSTANCE_ID`, `NODE_EPOCH`, `AGENT_TICKET_PUBLIC_KEY` (Ed25519 public-key
-file) and HTTPS `JOB_ALERTS_URL`;
-`AGENT_PORT` defaults to 8443. Persist node identity/monotone epoch and
-custody WAL across restarts; environment/cert files are mode 0600.
-The cluster probes `/v1/node` using an operator certificate. The agent
-sends an mTLS job-alerts heartbeat every 15 s; alert on heartbeat/probe
-failure or epoch mismatch. Control-plane heartbeat loss over 5 s blocks
-mutations independently of monitoring heartbeats.
+The archive ships a single glibc Linux x86_64 Node SEA executable; no host Node
+is required (libc6/libstdc++6/libgcc-s1 must exist). It also ships `agent.env`,
+the operator public key, exact unit/startup and sentropic-built shared rootfs.
+Copy the shipped config, add RELEASE_DIR and install the public keys below.
+TLS paths are `/etc/execution-node/tls/{ca.crt,server.crt,server.key}`;
+`AGENT_PORT` defaults to 8443. CNs: `control-plane:sentropic-api`,
+`data-plane:artifact-content`, `operator:cluster-controller`. TLS 1.3 required.
+The agent reads `/var/lib/builder/node-instance-id` and owns/fsyncs `node-epoch`;
+persist both plus custody.wal across restart. Environment/private files: 0600.
+Pull-only: cluster operator probe `GET /v1/node` every 5 min, no ticket/header
+tenant ID. Metrics include sandboxesActive, memoryBytes, cpuSecondsTotal,
+psiStallSeconds (memory some), wfqWaitMs and cacheHitsTotal, labelled by tenant,
+purpose=all aggregate. Probe stdout goes via cluster Fluent Bit to
+`sentropic-cluster-logs/raw/poc-ca/builder-vm-probe/`; journald stays local.
+No VM push, shipper or S3 writer. Sentropic-api alone sends
+`POST /v1/node/heartbeat` every 1 s with
+`{expectedNodeInstanceId,expectedNodeEpoch,sentAt}` (ISO UTC); no tenant header.
+Wrong role/node/epoch or sentAt older than 5 s/future is refused.
+Heartbeat absence >5 s blocks mutations; operator reads never refresh it.
 
 ## Qualification boundary
 
@@ -96,10 +115,11 @@ must be refused by the host's source policy.
 `X-Execution-Ticket` is base64url JSON `{ticket,signature}`. Its body hash covers
 `JSON.stringify(requestBody)` and binds commandId, route, owner and node identity.
 Each session request includes devScope; creation carries it in spec.
-`POST /v1/bases/ensure` takes `{commandId,ownership,base,url}` (HTTPS, SHA-256);
+`PUT /v1/tenants/:tenantId/bases` takes `{commandId,ownership,base,url}` (HTTPS, SHA-256);
 creation requires rootfs/source bases and an absolute argv command, with no shell.
-Imports accept only `s3.bhs.io.cloud.ovh.net/<bucket>/tenants/<tenantId>/...`
-or `<bucket>.s3.bhs.io.cloud.ovh.net/tenants/<tenantId>/...`; redirects,
+Imports accept only `s3.bhs.io.cloud.ovh.net/sentropic-execution-bhs/tenants/<tenantId>/<env>/...`
+or `sentropic-execution-bhs.s3.bhs.io.cloud.ovh.net/tenants/<tenantId>/<env>/...`;
+`SANDBOX_ENV` binds env (shipped value preprod is configuration only). Redirects,
 encoded paths, credentials and alternate ports are rejected before download.
 `POST /v1/sandboxes/:id/start` starts a created record. `/write` takes
 `{commandId,devScope,path,contentBase64}`. `/stop` takes `stop`; `/export` takes
@@ -115,7 +135,7 @@ output with the same body binding; completed promises retain no archive buffer.
 On the isolated qualification host, after verifying the extracted release,
 set `QUAL_RELEASE_DIR` to that release and `QUALIFICATION_ONLY=isolated`, then run
 `make -f Makefile -f apps/sandbox-node/checks.mk qualify-sandbox-node-disk ENV=test-sandbox-host`.
-This executes real non-root writes exceeding block and inode hard limits and
+The SEA executes real non-root writes exceeding block and inode hard limits and
 requires `EDQUOT` in both cases; it unmounts/removes only its private test volumes.
 It requires root for mount/quota setup. It is not a substitute for the full
 runsc/EROFS lifecycle qualification and does not deploy the agent.
