@@ -5,6 +5,10 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildProbes, loadState, saveState, validateProbes } from './t3-lib.mjs';
+import { drive, recover } from './t3-window-driver.mjs';
+import { fence } from './t3-fence.mjs';
+import { digest } from './guards.mjs';
+import { approvedRequest } from './fixtures.mjs';
 import { emailProbe, probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
 import { finishOpen } from './t3-finish-open.mjs';
 
@@ -23,6 +27,7 @@ function acceptanceContext() {
           metadata: { generation: 1 }, status: { readyReplicas: 1, observedGeneration: 1 } });
       }
       if (args[1] === 'middleware') return '{"spec":{}}';
+      if (args[1] === 'cronjob' && args[2] === 'sentropic-idp-identity-export') return '{"spec":{"suspend":true}}';
       if (args[1] === 'ingress') return JSON.stringify({ metadata: { annotations: {
         'traefik.ingress.kubernetes.io/router.middlewares': 'sentropic-preprod-a4-verification@kubernetescrd' } } });
       return '{}';
@@ -86,4 +91,53 @@ test('RUN8 finish-open CLI preview preserves active bytes and real resumption st
   assert.equal(seen.length, 8, 'preview cannot cause a real resume to skip acceptance');
   assert.ok(writes.some(w => w.startsWith('annotate ingress')));
   assert.equal(ctx.state.substate, 'TWO_HOSTS_OPEN');
+});
+
+for (const refusal of ['rbac', 'annex']) {
+  test(`RUN8 ${refusal} refusal before fence causes zero recovery mutations`, async () => {
+    const { ctx, writes } = acceptanceContext();
+    const dir = mkdtempSync(join(tmpdir(), 't3-refusal-'));
+    const original = ctx.call;
+    ctx.stateDir = dir;
+    ctx.print = () => {};
+    ctx.config.tier = 'preprod';
+    ctx.config.kubeconfigFile = join(dir, 'kube');
+    ctx.config.authorizationFile = join(dir, 'authorization.json');
+    ctx.config.executionFile = join(dir, 'annex.json');
+    writeFileSync(ctx.config.kubeconfigFile, 'synthetic', { mode: 0o600 });
+    writeFileSync(ctx.config.authorizationFile, '{}', { mode: 0o600 });
+    writeFileSync(ctx.config.executionFile, '{}', { mode: 0o600 });
+    ctx.call = args => args[0] === 'auth' ? refusal === 'rbac' ? 'no' : 'yes' : original(args);
+    // Preserve the observation even if a broken recovery itself fails later.
+    try { await drive(ctx); } catch {}
+    assert.deepEqual(writes, []);
+    assert.equal(loadState(dir).watchdogDone, true, 'pre-fence refusal disarms recovery');
+  });
+}
+
+test('RUN8 partially applied delivered fence persists intent and still recovers after response loss', async () => {
+  const { ctx, writes } = acceptanceContext();
+  ctx.stateDir = mkdtempSync(join(tmpdir(), 't3-partial-fence-'));
+  ctx.print = () => {};
+  ctx.config.revisions = {};
+  const state = { ...ctx.state, step: 'W1', fenceStarted: false };
+  saveState(ctx.stateDir, state);
+  const env = { A4_TIER: 'preprod', A4_ACTION: 'fence', A4_DRY_RUN: '0', T3_STATE_DIR: ctx.stateDir };
+  const authorization = { ...approvedRequest, format: 'preprod-a4-authorization/1' };
+  const annex = JSON.stringify({ ...authorization, format: 'preprod-a4-execution/1',
+    actions: { fence: [['scale', 'deployment/api', '--replicas=0'], ['scale', 'deployment/ui', '--replicas=0']] } });
+  for (const [key, contents] of [['A4_KUBECONFIG_FILE', 'synthetic'],
+    ['A4_AUTHORIZATION_FILE', JSON.stringify(authorization)], ['A4_EXECUTION_FILE', annex]]) {
+    env[key] = join(ctx.stateDir, key);
+    writeFileSync(env[key], contents, { mode: 0o600 });
+  }
+  env.A4_EXECUTION_SHA256 = digest(annex);
+  assert.throws(() => fence(env, (_kube, args) => {
+    assert.equal(loadState(ctx.stateDir).fenceStarted, true, 'marker precedes first write');
+    writes.push(args.join(' '));
+    throw new Error('response_lost_after_write');
+  }), /response_lost/);
+  assert.equal(await recover(ctx, state, 'partial-fence'), 3);
+  assert.ok(writes.includes('scale deployment/ui --replicas=1'), 'rollback completes even with stale parent state');
+  assert.equal(loadState(ctx.stateDir).step, 'DONE');
 });
