@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { createExecutionNode } from './index.js';
 import { generateTicketKeyPair, issueTicket, sha256Hex } from './tickets.js';
@@ -9,12 +10,24 @@ import { basePath } from './mounts.js';
 import type { ExecutionNodeOwnership } from './contract.js';
 import type { SandboxRecord } from './daemon.js';
 
+function fileHash(path: string) {
+  const fd = openSync(path, 'r'), hash = createHash('sha256'), buffer = Buffer.alloc(1024 * 1024);
+  try {
+    for (;;) {
+      const length = readSync(fd, buffer, 0, buffer.length, null);
+      if (!length) return hash.digest('hex');
+      hash.update(buffer.subarray(0, length));
+    }
+  } finally { closeSync(fd); }
+}
+
 // A real daemon and adapter, with keys and state belonging only to this qualification.
 export function qualificationNode(directory: string, release: string) {
   const keys = generateTicketKeyPair();
   const rootfs = join(release, 'rootfs.erofs');
+  const rootDigest = fileHash(rootfs);
   const node = createExecutionNode({ useRunsc: true, ticketPublicKeyPem: keys.publicKeyPem,
-    sharedRootfs: { path: rootfs, digest: sha256Hex(readFileSync(rootfs)) } });
+    sharedRootfs: { path: rootfs, digest: rootDigest } });
   const custody = new CustodyGuard(join(directory, 'custody.wal'));
   const api = new AgentApi(node, custody);
   let ownership: ExecutionNodeOwnership = { tenantId: 'sentropic', poolOwned: false,
@@ -36,11 +49,11 @@ export function qualificationNode(directory: string, release: string) {
   };
   return { node, custody, keys, get ownership() { return ownership; },
     async start() {
-      const identityDigest = sha256Hex(readFileSync(join(release, 'qualification.erofs')));
+      const identityDigest = fileHash(join(release, 'qualification.erofs'));
       const base = { tenantId: 'sentropic' as const, kind: 'source' as const, baseId: 'qualification', identityDigest };
       const path = basePath(base); mkdirSync(dirname(path), { recursive: true });
       if (!existsSync(path)) { copyFileSync(join(release, 'qualification.erofs'), path); createdBases.push(path); }
-      assert.equal(sha256Hex(readFileSync(path)), identityDigest);
+      assert.equal(fileHash(path), identityDigest);
       node.bases.register(base);
       // HTTP streaming and HMR run inside gVisor's network namespace, on the production service port.
       const script = `const h=require('http'),c=require('crypto'),f=require('fs');
@@ -53,7 +66,7 @@ export function qualificationNode(directory: string, release: string) {
       const created = await call('/v1/sandboxes', { commandId: 'qualification-create', ownership,
         spec: { tenantId: 'sentropic', devScope, profile: 'artifact-build', network: 'ports',
           command: ['/usr/local/bin/node', '-e', script], uid: 1000, gid: 1000, quotaMiB: 1408, quotaInodes: 4096,
-          baseMounts: [{ baseId: 'shared-rootfs', kind: 'rootfs', identityDigest: sha256Hex(readFileSync(rootfs)) }, base] } });
+          baseMounts: [{ baseId: 'shared-rootfs', kind: 'rootfs', identityDigest: rootDigest }, base] } });
       sandbox = created.body as SandboxRecord;
       await call(`/v1/sandboxes/${sandbox.id}/start`, { commandId: 'qualification-start', devScope, quotaMiB: 1408, uid: 1000, gid: 1000 });
       return sandbox;
