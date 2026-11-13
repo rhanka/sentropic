@@ -12,7 +12,7 @@ const memoryRows = (): RemoteRows => {
   return { async read<T>(key: string) { return values.get(key) as T | undefined; },
     async update<T, R>(key: string, change: (current: T | undefined) => { next?: T; result: R }) {
       const result = change(values.get(key) as T | undefined);
-      if (result.next !== undefined) values.set(key, structuredClone(result.next)); else values.delete(key); return result.result;
+      if (result.next !== undefined) values.set(key, structuredClone(result.next)); return result.result;
     } };
 };
 const runtime = { ownerId: 'principal', sessionId: 'session', generation: 1, leaseEpoch: 1,
@@ -86,5 +86,18 @@ describe('concrete execution node backend', () => {
     const sandboxes = fake.node.daemon.listSandboxes('sentropic');
     expect(sandboxes).toHaveLength(1); expect(sandboxes[0]?.state).toBe('destroyed');
     expect(fake.calls.filter(call => call.path.endsWith('/revoke-custody'))).toHaveLength(1);
+  });
+  it('should close a definite creation refusal and clean up without replaying allocation', async () => {
+    const fake = await fakeExecutionNode(); servers.push(fake); await fake.adapter.heartbeat(); const s = session();
+    const transport = vi.fn(async (method, path, body, headers) => path === '/v1/sandboxes'
+      ? { status: 403, headers: {}, bytes: Buffer.from('{"error":"cross_tenant_base_forbidden"}') }
+      : fake.adapter.transport(method, path, body, headers));
+    const adapter = new ExecutionNodeAdapter(fake.config, transport, fake.now);
+    const inputs = { tenant: () => 'sentropic', provision: async () => ({ session: s, spec: sandboxSpec(s) }) } as unknown as ExecutionNodeInputs;
+    const backend = createExecutionNodeBackend(adapter, memoryRows(), inputs);
+    await expect(backend.pods.ensure(key, runtime)).rejects.toMatchObject({ status: 403 });
+    const count = transport.mock.calls.length;
+    await backend.pods.remove(key, runtime); expect(transport).toHaveBeenCalledTimes(count);
+    expect(fake.node.daemon.listSandboxes('sentropic')).toHaveLength(0);
   });
 });

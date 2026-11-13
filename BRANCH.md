@@ -58,6 +58,7 @@ Implement S1-B0a and its heartbeat, custody and ownership addendum. Preserve the
   - [x] Connect stateless forge/head coalescing and verified retained export into the selected backend; node mode never uses the codeload staging provider.
   - [x] Preserve existing Kubernetes clean semantics while allowing a node clean to return a fresh physical UID, persisted with a new route fence before build/wake.
   - [x] Persist create intent before dispatch and replay it to reconcile uncertain creation; missing allocation rows are safe to remove. Replace stopped physical sandboxes on clean.
+  - [x] Use explicit persisted closed tombstones (Postgres undefined means no write), and close definitive 4xx creation refusals; fake rows now match the real store semantics.
   - [x] Persist revocation intent before the remote mutation; reconcile only that exact custody epoch and preserve stable removal command ids after lost responses.
   - [x] Refuse provisioning whose tenant/principal/generation/session does not match authenticated runtime inputs.
 - [ ] Lot 2: Ed25519 tickets, ownership/devScope, identity/provenance pin and idempotent lifecycle.

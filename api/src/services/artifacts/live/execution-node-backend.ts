@@ -28,7 +28,7 @@ export interface ExecutionNodeInputs {
 }
 type Stored = { session: NodeSession; key: LiveKey; nodeInstanceId: string; nodeEpoch: number;
   pendingSpec?: ExecutionNodeSandboxSpec; createCommandId: string; removalEpoch?: number;
-  revoking?: { epoch: number; commandId: string } };
+  revoking?: { epoch: number; commandId: string }; closed?: true };
 const unavailable = (): never => { throw new ExecutionNodeRefusal('node_base_hydration_unconfigured'); };
 const row = (runtime: LiveRuntime) => JSON.stringify(['execution-node', runtime.sessionId, runtime.generation, runtime.leaseEpoch]);
 
@@ -41,11 +41,20 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
   const command = (runtime: LiveRuntime, op: string) => `${runtime.sessionId}:${runtime.leaseEpoch}:${runtime.routeEpoch}:${op}`;
   async function stored(runtime: LiveRuntime) {
     let value = await rows.read<Stored>(row(runtime));
-    if (!value || value.nodeInstanceId !== node.config.nodeInstanceId || value.nodeEpoch !== node.config.nodeEpoch) {
+    if (!value || value.closed || value.nodeInstanceId !== node.config.nodeInstanceId || value.nodeEpoch !== node.config.nodeEpoch) {
       throw new ExecutionNodeRefusal('node_runtime_unreconciled');
     }
     if (value.pendingSpec) {
-      const created = await node.create(value.session, value.pendingSpec, value.createCommandId);
+      let created;
+      try { created = await node.create(value.session, value.pendingSpec, value.createCommandId); }
+      catch (error) {
+        // A closed HTTP refusal has not allocated this intent. Transport/5xx outcomes stay pending.
+        if (error instanceof ExecutionNodeRefusal && error.status >= 400 && error.status < 500) {
+          const next: Stored = { ...value, pendingSpec: undefined, closed: true };
+          await rows.update<Stored, void>(row(runtime), () => ({ next, result: undefined }));
+        }
+        throw error;
+      }
       if (typeof created.id !== 'string') throw new ExecutionNodeRefusal('invalid_node_response');
       value = { ...value, session: { ...value.session, physicalUid: created.id }, pendingSpec: undefined };
       const next = value;
@@ -71,7 +80,7 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
     pods: {
       async ensure(key, runtime) {
         let value = await rows.read<Stored>(row(runtime)); const adopted = !!value;
-        if (!value) {
+        if (!value || value.closed) {
           const prepared = await (inputs?.provision(key, runtime) ?? unavailable());
           if (prepared.session.ownership.tenantId !== inputs!.tenant(key)
             || prepared.session.ownership.principalId !== runtime.ownerId
@@ -81,7 +90,7 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
             nodeInstanceId: node.config.nodeInstanceId, nodeEpoch: node.config.nodeEpoch };
           const next = value;
           await rows.update<Stored, void>(row(runtime), current => {
-            if (current && JSON.stringify(current) !== JSON.stringify(next)) throw new ExecutionNodeRefusal('node_runtime_conflict');
+            if (current && !current.closed && JSON.stringify(current) !== JSON.stringify(next)) throw new ExecutionNodeRefusal('node_runtime_conflict');
             return { next, result: undefined };
           });
         }
@@ -96,7 +105,7 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
       },
       async describe() { return undefined; },
       async remove(_key, runtime) {
-        if (!await rows.read<Stored>(row(runtime))) return;
+        const recorded = await rows.read<Stored>(row(runtime)); if (!recorded || recorded.closed) return;
         let value = await stored(runtime); let session = value.session; const status = await node.status(session);
         if (!status || status.state === 'destroyed') return;
         if (value.removalEpoch === undefined) {
@@ -119,7 +128,7 @@ export function createExecutionNodeBackend(node: ExecutionNodeAdapter, rows: Rem
         let uid: string | undefined;
         if (!status || status.state !== 'creating') {
           await backend.pods.remove(value.key, runtime);
-          await rows.update<Stored, void>(row(runtime), () => ({ next: undefined, result: undefined }));
+          await rows.update<Stored, void>(row(runtime), () => ({ next: { ...value, closed: true }, result: undefined }));
           uid = (await backend.pods.ensure(value.key, runtime)).uid;
         }
         const cleaned = await (inputs?.worker.clean(runtime) ?? unavailable());
