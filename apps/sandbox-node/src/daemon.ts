@@ -14,6 +14,7 @@ import { checkTicket, sha256Hex, verifyTicketSignature } from './tickets.js';
 import type { RuntimeAdapter } from './runtime-adapter.js';
 import { ExecutionNodeAdmission } from './admission.js';
 import { AuditLog } from './audit.js';
+import { SERVICE_TIMEOUT_MS, type HeavyProfile } from './build-queue.js';
 import { TenantBaseRegistry, checkWritePath, resolveMounts, sandboxPaths, validateDevScope } from './mounts.js';
 
 export interface SandboxRecord {
@@ -187,11 +188,17 @@ export class ExecutionNodeDaemon {
     this.requireTicket(ticket, input.spec.tenantId, input.commandId, body, 'POST', '/v1/sandboxes', input.ownership);
     const mounts = resolveMounts(input.spec.tenantId, input.spec.baseMounts, this.bases);
     return this.idempotent(input.spec.tenantId, input.commandId, body, async () => {
-      const slot = input.spec.profile === 'artifact-build' ? 'build'
-        : input.warmStandby === true ? 'standby' : 'live';
-      if (slot === 'build') await this.admission.admitBuild(input.spec.tenantId);
-      else this.admission.admit(input.spec.tenantId, slot, input.commandId);
       const id = randomUUID();
+      const slot = Object.hasOwn(SERVICE_TIMEOUT_MS, input.spec.profile) ? 'build'
+        : input.warmStandby === true ? 'standby' : 'live';
+      if (slot === 'build') await this.admission.admitBuild(input.spec.tenantId, input.spec.profile as HeavyProfile, async () => {
+        const sandbox = await this.failSandbox(input.spec.tenantId, id, 'service timeout');
+        if (sandbox.allProcessesExited) {
+          if (sandbox.runtimeId) await this.adapter.destroySandbox(sandbox.runtimeId);
+          sandbox.runtimeId = undefined; sandbox.state = 'destroyed'; this.releaseSlot(sandbox);
+        }
+      });
+      else this.admission.admit(input.spec.tenantId, slot, input.commandId);
       const paths = sandboxPaths(input.spec.tenantId, id);
       const record: SandboxRecord = {
         devScope: structuredClone(input.spec.devScope),

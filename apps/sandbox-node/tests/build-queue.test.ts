@@ -1,7 +1,28 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BuildQueue } from '../src/build-queue.js';
 
 describe('global publish admission', () => {
+  it('should invoke timeout cleanup before allowing the opposite tenant to start', async () => {
+    vi.useFakeTimers();
+    try {
+      const queue = new BuildQueue();
+      const cleanup = vi.fn(async () => { queue.release('sentropic'); });
+      await (queue.acquire as (...args: unknown[]) => Promise<void>)('sentropic', 'artifact-build', cleanup);
+      const next = queue.acquire('immo');
+      await vi.advanceTimersByTimeAsync(59_999);
+      expect(cleanup).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(cleanup).toHaveBeenCalledOnce();
+      await next; queue.release('immo');
+    } finally { vi.useRealTimers(); }
+  });
+  it('should count the active job within the two outstanding jobs per tenant', async () => {
+    const queue = new BuildQueue();
+    await queue.acquire('immo');
+    const waiting = queue.acquire('immo');
+    await expect(queue.acquire('immo')).rejects.toMatchObject({ status: 429 });
+    queue.release('immo'); await waiting; queue.release('immo');
+  });
   it('should alternate tenants without preemption or a five second build deadline', async () => {
     const queue = new BuildQueue();
     const order: string[] = [];
