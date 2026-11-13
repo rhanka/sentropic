@@ -51,6 +51,21 @@ test('should fail closed for unknown metadata and bounded or invalid error bodie
   }
 });
 
+test('should mark an oversized request unknown without changing its original bytes', async () => {
+  const secret = 'sensitive-sentinel'.repeat(5000);
+  const wire = JSON.stringify({ model: 'gpt-5.4-nano', messages: [{ role: 'user', content: secret }] });
+  const rows = [];
+  const observe = createProviderObserver({ record: row => rows.push(row), fetchImpl: async request => {
+    assert.equal(await request.text(), wire);
+    return new Response('{}');
+  } });
+  await observe('https://api.openai.com/v1/chat/completions', { method: 'POST', body: wire });
+  for (const field of ['model', 'stream', 'toolsCount', 'tokenLimits', 'temperaturePresent']) {
+    assert.equal(rows[0][field], 'unknown');
+  }
+  assert.ok(!JSON.stringify(rows).includes('sensitive-sentinel'));
+});
+
 test('should leave a successful stream untouched and record cancellation without error text', async () => {
   const rows = [];
   const response = new Response('data: stream-bytes\n\n', { headers: { 'content-type': 'text/event-stream' } });
@@ -92,6 +107,15 @@ test('should preserve streaming chunks, usage and model routing over HTTP', asyn
   assert.equal(packets.at(-1), '[DONE]');
   assert.ok(packets.slice(0, -1).map(packet => JSON.parse(packet)).some(chunk => chunk.choices[0].delta.content));
   assert.equal(receipt.calls, 1);
+});
+
+test('should reject the incompatible title token field and accept the supported limit', async t => {
+  const { post } = await fixture(t);
+  const rejected = await post({ model: 'gpt-5.4-nano', max_tokens: 32 });
+  assert.equal(rejected.status, 400);
+  assert.equal((await rejected.json()).error.param, 'max_tokens');
+  assert.equal((await post({ model: 'gpt-5.4-nano', max_completion_tokens: 32 })).status, 200);
+  assert.equal((await post({ model: 'mistral-small-2603', max_tokens: 32 })).status, 200);
 });
 
 test('should stream the real OpenAI Responses reasoning-evaluator protocol', async t => {

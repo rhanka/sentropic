@@ -106,6 +106,12 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
       if (req.url !== '/v1/chat/completions') throw new Error('Unexpected provider endpoint');
       if (!body.model || !Array.isArray(body.messages) || body.messages.length === 0) throw new Error('Expected model and messages');
       if (!['mistral-small-2603', 'mistral-medium-3.5', 'gpt-5.4-nano'].includes(body.model)) throw new Error('Unexpected model route');
+      if (body.model === 'gpt-5.4-nano' && Object.hasOwn(body, 'max_tokens')) {
+        receipt.failedRequests++;
+        res.writeHead(400, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify({ error: { code: 'unsupported_parameter',
+          type: 'invalid_request_error', param: 'max_tokens' } }));
+      }
       const outcome = await respond(body);
       receipt.calls++;
       receipt.models[body.model] = (receipt.models[body.model] ?? 0) + 1;
@@ -358,13 +364,13 @@ export function createProviderObserver({ fetchImpl = globalThis.fetch, record })
     const body = await boundedObservationJson(request.clone());
     record({ type: 'request', requestId, host,
       pathname: closedValue(url.pathname, observationPaths),
-      model: closedValue(body?.model, observationModels), stream: body?.stream === true,
-      toolsCount: Array.isArray(body?.tools) ? body.tools.length : 0,
+      model: closedValue(body?.model, observationModels), stream: body === null ? 'unknown' : body?.stream === true,
+      toolsCount: body === null ? 'unknown' : Array.isArray(body?.tools) ? body.tools.length : 0,
       formatType: closedValue(body?.response_format?.type ?? body?.text?.format?.type, ['text', 'json_object', 'json_schema']),
       reasoning: closedValue(body?.reasoning_effort ?? body?.reasoning?.effort, ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']),
-      tokenLimits: Object.fromEntries(tokenLimitFields.filter(field => Object.hasOwn(body ?? {}, field))
+      tokenLimits: body === null ? 'unknown' : Object.fromEntries(tokenLimitFields.filter(field => Object.hasOwn(body ?? {}, field))
         .map(field => [field, typeof body[field] === 'number' && Number.isFinite(body[field]) ? body[field] : 'unknown'])),
-      temperaturePresent: Object.hasOwn(body ?? {}, 'temperature'),
+      temperaturePresent: body === null ? 'unknown' : Object.hasOwn(body ?? {}, 'temperature'),
     });
     try {
       const response = await fetchImpl(request);
