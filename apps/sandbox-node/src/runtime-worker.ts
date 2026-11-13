@@ -5,7 +5,8 @@ import { forwardBudget } from './forward-budget.js';
 
 if (!parentPort) throw new Error('runtime worker requires parent port');
 if (workerData.production) useK8sPortsSwitch();
-const runtime = new RunscRuntimeAdapter(workerData.binary);
+const runtime = new RunscRuntimeAdapter(workerData.binary, undefined,
+  (stage, detail) => parentPort!.postMessage({ event: 'diagnostic', stage, detail }));
 const methods = new Set(['runSandbox', 'assertRunning', 'portTarget', 'writeFile', 'stopSandbox', 'exportOutput', 'destroySandbox']);
 parentPort.on('message', async ({ id, method, args }) => {
   try {
