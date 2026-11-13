@@ -23,6 +23,7 @@ import type { LivePorts } from './ports';
 import { selectSandboxBackend, sandboxBackendKind, SANDBOX_BACKEND_ENV } from './sandbox-backend';
 import { createExecutionNodeBackend, type ExecutionNodeInputs } from './execution-node-backend';
 import { executionNodeHeartbeat } from './execution-node-heartbeat';
+import { executionNodeForge } from './execution-node-forge';
 
 type Env = Readonly<Record<string, string | undefined>>;
 /** Flag of the composed builder service (cm/api); anything but `1` keeps the 503 builder_unavailable mount. */
@@ -131,10 +132,12 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
   const forgeBindings = createForgeBindings(createPostgresRemoteLiveRows(deps.pool), config);
   const reads = createLeaseForgeReads({ config, bindings: forgeBindings, fetch: deps.fetch, now, id,
     generation: runtimeGeneration(createPostgresLiveStore(deps.pool), key => service.remote.session(key)) });
+  const forge = kind === 'execution-node' ? executionNodeForge(deps.executionNodeInputs,
+    runtimeGeneration(createPostgresLiveStore(deps.pool), key => service.remote.session(key))) : remoteHostForge(reads);
   // D0 binding view: generation and owner of the host's last reconcile; publication stays explicit (R4, no autoPublish).
   const binding: LivePorts['binding'] = async key => {
     const { generation, ownerId } = await service.remote.session(key);
-    return { generation, ownerId, headSha: await reads.head(key), healthy: true, autoPublish: false,
+    return { generation, ownerId, headSha: await forge.head(key), healthy: true, autoPublish: false,
       automaticAuthorized: false, releaseId: null, releaseCommit: null, initialUnpublishedBranchEligible: false };
   };
   const schedule = (work: () => Promise<void>) => { void work().catch(error => deps.log('artifact_builder_job_failed', error)); };
@@ -145,7 +148,10 @@ function composeProductBuilder(env: Env, deps: ProductBuilderDeps) {
     authenticate: deps.authenticate, schedule, liveWaitMs: PRODUCT_LIVE_WAIT_MS, now, id, binding,
     installBudget: readInstallBudget(env), sizing: readWorkerSizing(env),
     installEnv: installEnvironment(readInstallHeapMb(env)),
-    forge: remoteHostForge(reads), sources: { source: reads.source }, forgeBindings,
+    forge, sources: { source: kind === 'execution-node' ? async (...args) => {
+      if (!deps.executionNodeInputs) throw new LiveError('builder_unavailable', 'node_base_hydration_unconfigured');
+      return deps.executionNodeInputs.source(...args);
+    } : reads.source }, forgeBindings,
     routes: createLiveFenceRoutes({ baseUrl: edgeUrl, key: fenceKey, now, fetch: deps.fetch }),
     heavy: { node, ...PRODUCT_HEAVY }, admission: PRODUCT_ADMISSION, cache: { signingKey: () => signingKey } });
   let running: { stop(): void } | null = null;
