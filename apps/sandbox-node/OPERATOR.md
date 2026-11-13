@@ -158,10 +158,46 @@ output with the same body binding; completed promises retain no archive buffer.
 On the isolated qualification host, after verifying the extracted release,
 set `QUAL_RELEASE_DIR` to that release and `QUALIFICATION_ONLY=isolated`, then run
 `make -f Makefile -f apps/sandbox-node/checks.mk qualify-sandbox-node-disk ENV=test-sandbox-host`.
+The SEA runs standalone, without starting the agent or loading its service configuration:
+`QUALIFICATION_ONLY=isolated <release>/execution-node --qualify-disk` (root required).
 The SEA executes real non-root writes exceeding block and inode hard limits and
 requires `EDQUOT` in both cases; it unmounts/removes only its private test volumes.
+Linux errno -122 is accepted even when Node reports its code as `UNKNOWN`.
 It requires root for mount/quota setup. It is not a substitute for the full
 runsc/EROFS lifecycle qualification and does not deploy the agent.
+
+Run the real two-tenant isolation qualification as root on the isolated host:
+`QUALIFICATION_ONLY=isolated <release>/execution-node --qualify-isolation`, or
+`QUALIFICATION_ONLY=isolated QUAL_RELEASE_DIR=<release> sh <release>/qualify-isolation.sh`.
+It also requires `/etc/execution-node/isolated-qualification`, installed tenant
+loop mounts/slices, pinned runsc in PATH, and quota and mount tools.
+The archive ships `qualification.erofs`, covered by SHA256SUMS; no `mkfs.erofs`
+or erofs-utils installation is needed on the VM.
+The service must be stopped (systemd ActiveState=inactive) and the sandbox,
+scope and runsc inventories must be empty before creation. The agent and this
+command hold the same exclusive `/run/lock/execution-node.lock` throughout
+execution; concurrent service startup fails closed. The marker is consumed
+once under that lock after inventory validation; recreate it for each run.
+No agent listener, signing keys or host Node installation is needed.
+It creates one 704 MiB session sandbox per tenant through the production adapter,
+using the release EROFS rootfs and disposable tenant-private source/dependency bases.
+In each sandbox it checks zero read/write access to the other tenant's sandbox,
+bases, loop backing image and mount, hidden host state/key/runtime paths, read-only
+own bases, loopback-only interfaces and blocked IPv4/IPv6/metadata/host connections.
+Host checks assert tenant cgroup ancestry and AMD-27 scope properties. Each check
+prints PASS or FAIL; any failure exits nonzero. A timeout fails the network check.
+Cleanup targets only its generated UUID scopes, bundles, mounts and test bases;
+failed cleanup is reported and leaves evidence for operator reconciliation.
+The qualification neither restarts the agent nor changes existing tenant data.
+This command must pass on the real isolated host before S1-K1 is accepted.
+
+The archive's `./` entry and extracted release directory are mode 0755 so the
+unprivileged disk-quota child can execute the SEA. k8s also applies `chmod 0755`
+to the release directory at install. Release contents are public; no private
+key ships in the archive. Installed TLS private keys and the agent environment
+file containing private configuration remain root-only mode 0600; the generated
+node-provenance PKCS#8 private key remains root-only mode 0400. Public archive
+directory permissions do not change these separately installed file modes.
 
 ## Exact execution-node.service
 

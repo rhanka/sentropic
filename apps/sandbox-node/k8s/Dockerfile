@@ -26,8 +26,12 @@ RUN /tools/node_modules/.bin/esbuild apps/sandbox-node/src/entry.ts --bundle --p
 RUN apt-get update && apt-get install -y --no-install-recommends erofs-utils && rm -rf /var/lib/apt/lists/*
 COPY --from=rootfs / /sandbox-rootfs/
 RUN mkfs.erofs --quiet -T 1767225600 --all-root rootfs.erofs /sandbox-rootfs
+RUN mkdir -p /qualification/node_modules \
+ && printf 'isolation fixture' > /qualification/isolation-marker \
+ && chmod 0777 /qualification && chmod 0666 /qualification/isolation-marker \
+ && mkfs.erofs --quiet -T 1767225600 --all-root qualification.erofs /qualification
 
 FROM scratch AS runtime
 WORKDIR /srv/sandbox-node
-COPY --from=build /workspace/execution-node /workspace/rootfs.erofs ./
+COPY --from=build /workspace/execution-node /workspace/rootfs.erofs /workspace/qualification.erofs ./
 ENTRYPOINT ["/srv/sandbox-node/execution-node"]
