@@ -16,6 +16,7 @@ import { createPrivateKey, createPublicKey, sign, createHash } from 'node:crypto
 import { assertCleanStartup } from './restart.js';
 import { createDataPlane } from './data-plane.js';
 import { custodyVerificationKey } from './custody-key.js';
+import { portsEnabled, useK8sPortsSwitch } from './network-policy.js';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -36,18 +37,30 @@ const node = createExecutionNode({ useRunsc: true, nodeInstanceId, nodeEpoch,
   reservableMiB,
   ticketPublicKeyPem: readFileSync(required('AGENT_TICKET_PUBLIC_KEY'), 'utf8') });
 const api = new AgentApi(node, custody);
+useK8sPortsSwitch();
 const operator = new OperatorGuard(required('AGENT_OPERATOR_PUBLIC_KEYS').split(',').map(path => readFileSync(path, 'utf8')), nodeInstanceId, nodeEpoch);
 const control = new NodeControl(nodeInstanceId, nodeEpoch, custody, operator);
 const provenanceKey = createPrivateKey(readFileSync('/etc/execution-node/keys/node-provenance.ed25519'));
 if (provenanceKey.asymmetricKeyType !== 'ed25519') throw new Error('Ed25519 node provenance key required');
 const provenancePublicKey = createPublicKey(provenanceKey).export({ type: 'spki', format: 'pem' }).toString();
-const dataPlane = createDataPlane({ custody,
+const dataPlane = createDataPlane({ custody, portsEnabled,
   publicKey: custodyVerificationKey(readFileSync(required('CUSTODY_PUBLIC_KEY')), readFileSync(required('AGENT_TICKET_PUBLIC_KEY'))),
   sandbox: (tenant, uid) => node.daemon.peekSandbox(tenant, uid),
   target: async (sandbox, port) => {
     if (!sandbox.runtimeId || !node.adapter.portTarget) throw new Error('sandbox_port_unavailable');
     return node.adapter.portTarget(sandbox.runtimeId, port);
   } });
+let disabling = false;
+const portsTimer = setInterval(() => {
+  if (portsEnabled()) return;
+  dataPlane.cutPorts();
+  if (!disabling) {
+    disabling = true;
+    void node.daemon.disablePorts().catch(() => { console.error('ports cleanup failed; retrying'); })
+      .finally(() => { disabling = false; });
+  }
+}, 50);
+portsTimer.unref();
 export const server = createAgentServer(tls, async (req, res, role) => {
   const reply = (status: number, body: unknown) => { res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body)); };
   try {
@@ -74,7 +87,7 @@ export const server = createAgentServer(tls, async (req, res, role) => {
         intermediateSlice: { name: 'builder-tenant.slice', memoryLowMiB: 1408 }, hostMemory,
         metrics: nodeMetrics(node), tenantSlices: Object.fromEntries((['sentropic', 'immo'] as const).map(id =>
           [id, node.admission.quotaSnapshot(id, `/builder.slice/builder-tenant.slice/builder-tenant-${id}.slice`)])),
-        capabilities: { supportedOps: ['node', 'quotas', 'bases', 'create', 'start', 'claim', 'stop', 'export', 'delete', 'renew', 'revoke-custody', 'write'] } }); return;
+        capabilities: { supportedOps: ['node', 'quotas', 'bases', 'create', 'start', 'claim', 'stop', 'export', 'delete', 'renew', 'revoke-custody', 'write', ...(portsEnabled() ? ['ports'] : [])] } }); return;
     }
     if (scope.scope === 'tenant' && url.pathname === `/v1/tenants/${scope.tenantId}/quotas` && req.method === 'GET') {
       reply(200, node.admission.quotaSnapshot(scope.tenantId,

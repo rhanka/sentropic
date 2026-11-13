@@ -225,6 +225,15 @@ export class ExecutionNodeDaemon {
     return [...this.sandboxes.values()].filter(sandbox => sandbox.tenantId === tenantId);
   }
 
+  async disablePorts(): Promise<void> {
+    await Promise.all([...this.sandboxes.values()].filter(box => box.network === 'ports' && box.state !== 'destroyed')
+      .map(box => this.transition(box.id, async () => {
+        if (box.runtimeId) await this.adapter.destroySandbox(box.runtimeId);
+        box.runtimeId = undefined; box.state = 'destroyed'; box.allProcessesExited = true;
+        this.releaseSlot(box); this.audit.record('sandbox.ports_disabled', box.tenantId, box.id);
+      })));
+  }
+
   async createSandbox(input: {
     spec: ExecutionNodeSandboxSpec;
     ownership: ExecutionNodeOwnership;
