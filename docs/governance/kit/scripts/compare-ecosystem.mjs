@@ -40,7 +40,9 @@ const owners = {
 const nature = {lib:'PACKAGE',cli:'EXECUTION',service:'EXECUTION',store:'STORAGE',function:'CAPABILITY'};
 const browser = await chromium.launch({args:['--no-sandbox']});
 const page = await browser.newPage({colorScheme:'light'});
-const report = {baseline:readFileSync(out+'/baseline.txt','utf8').trim(),version:'0.40.0',status:'pending',images:[],diagnostics:[]};
+const report = {baseline:readFileSync(out+'/baseline.txt','utf8').trim(),
+  version:JSON.parse(readFileSync('node_modules/@sentropic/design-system-svelte/package.json')).version,
+  status:'pending',images:[],diagnostics:[]};
 try {
   for (const file of readdirSync(out).filter(name=>/^old-.*\.svg$/.test(name)).sort()) {
     await page.goto('file://'+process.cwd()+'/'+out+'/'+file);
