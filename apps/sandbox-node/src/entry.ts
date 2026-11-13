@@ -11,7 +11,7 @@ if (process.argv.includes('--self-test')) {
 } else if (process.argv.includes('--qualify-data-plane-worker')) {
   void qualifyDataPlane().catch(() => { process.exit(1); });
 } else if (process.argv.includes('--qualify-data-plane')) {
-  void superviseQualification().catch(() => { console.error('FAIL data-plane qualification'); process.exitCode = 1; });
+  void superviseQualification().catch(() => { console.error('FAIL step=supervisor data-plane qualification'); process.exitCode = 1; });
 } else if (process.argv.includes('--qualify-isolation')) {
   void qualifyIsolation().catch(() => { console.error('FAIL isolation qualification'); process.exitCode = 1; });
 } else if (process.argv.includes('--qualify-disk')) {

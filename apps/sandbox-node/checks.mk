@@ -39,7 +39,7 @@ verify-sandbox-node-artifact:
 	  if output=$$(/release/execution-node --qualify-isolation 2>&1); then exit 1; fi; \
 	  test "$$output" = "FAIL isolation qualification"; \
 	  if output=$$(/release/execution-node --qualify-data-plane 2>&1); then exit 1; fi; \
-	  test "$$output" = "FAIL data-plane qualification"'; \
+	  test "$$output" = "FAIL step=supervisor data-plane qualification"'; \
 	docker run --rm --user=65534:65534 --network=none --read-only -v "$(CURDIR)/$$release:/release:ro" \
 	  --entrypoint /release/execution-node node:24-bookworm-slim@sha256:0e2646ab57e77b7a384a0cb59b6815b182c77e1f9c3ba36bd8435bd9c4e6680e --self-test
 
