@@ -159,7 +159,7 @@ export interface ExecutionNodeStopSpec {
 export interface ExecutionNodeExportSpec {
   readonly buildId: string;
   readonly subPath: string;
-  readonly presignedPutUrl: string;
+  readonly destination: string;
   readonly maxBytes: number;
 }
 
