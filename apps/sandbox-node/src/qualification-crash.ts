@@ -48,7 +48,6 @@ export async function qualifyCrashAndFailure(directory: string, release: string)
       child.once('error', reject); child.once('exit', (code, signal) => resolve({ code, signal }));
     });
     void exited.catch(() => {});
-    let cleaned = false;
     try {
       const deadline = Date.now() + 8000;
       while (!existsSync(join(path, 'ready.json'))) {
@@ -73,8 +72,7 @@ export async function qualifyCrashAndFailure(directory: string, release: string)
       if (existsSync(join(path, 'ready.json'))) assertQualificationProcessesGone(JSON.parse(readFileSync(join(path, 'ready.json'), 'utf8')));
       assertCleanStartup();
       assert.ok(!readFileSync('/proc/self/mountinfo', 'utf8').split('\n').some(line => line.split(' ')[4]?.startsWith(`${path}/`)));
-      cleaned = true;
-      if (cleaned) rmSync(path, { recursive: true });
+      rmSync(path, { recursive: true });
     }
     console.log(`PASS ${network} ${failure ? 'failure' : 'SIGKILL gate crash'} reconciled: no scope, runtime, mount, process or netns`);
   }

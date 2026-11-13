@@ -28,7 +28,7 @@ export function assertQualificationProcessesGone(snapshot: ReturnType<typeof qua
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     }
     if (snapshot.pids.includes(pid)) {
-      // Reused PID is permitted; a surviving captured process is not.
+      // Fail closed even if PID reuse cannot be distinguished from survival.
       assert.fail(`qualification process ${pid} still exists`);
     }
   }

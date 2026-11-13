@@ -42,6 +42,7 @@
 - [x] Round 2c matrix: both modes and tenants simultaneous; scripts run under shipped unit hardening with bounded supervisors.
 - [x] Round 2c inventory: scope processes and private netns references (including host FDs) checked after cleanup.
 - [x] Round 2c data plane: live peer witness, ports network probes, HTTP/WS and revocation share a real-host run.
+- [x] Round 2c regressions: hardened prerequisites receipt and actual child SIGKILL orchestration in Docker.
 - [ ] Round 2d: tests, archive rebuild/verification, exact-head green CI and receipt.
 - [x] Lot 0: read rules, previous packets, generated fixture and forwarding implementation; verify branch mechanically.
 - [x] Lot 1: staged safe diagnostics for TLS/CN, custody, UDS, helper, fixture, HTTP/WS and failure inventories; real in-sandbox accept readiness before probes.
