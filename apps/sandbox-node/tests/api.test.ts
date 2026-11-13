@@ -8,6 +8,50 @@ import { AgentApi } from '../src/api.js';
 
 const devScope = { kind: 'ui' as const, writable: ['ui/**'], refused: ['ui/dist/**'], source: { repo: 'test', path: 'registry.ts', commit: 'abc' } };
 describe('agent lifecycle transport', () => {
+  it.each(['start', 'claim'])('should reject a signed %s command reused for another sandbox', async operation => {
+    const dir = mkdtempSync(join(tmpdir(), 'route-replay-'));
+    try {
+      const keys = generateTicketKeyPair();
+      const node = createExecutionNode({ ticketPublicKeyPem: keys.publicKeyPem });
+      const custody = new CustodyGuard(join(dir, 'wal')); custody.heartbeat();
+      const api = new AgentApi(node, custody);
+      const ownership = { tenantId: 'immo' as const, poolOwned: false as const, workspaceId: 'ws', principalId: 'u',
+        attemptId: 'a', purpose: 'test', generation: 1, custodyEpoch: 1 };
+      const compatibility = { tenantId: 'immo', repoId: 'repo', sourceTreeSha256: 'src', lockSha256: 'lock',
+        prebundleDigest: 'pre', rootfsBaseDigest: 'root', profile: 'node-22', viteConfigDigest: 'vite' };
+      const call = (path: string, body: Record<string, unknown>, method = 'POST') => {
+        const now = Date.now();
+        const ticket = issueTicket({ v: 1, tenantId: 'immo', commandId: String(body.commandId), method, path,
+          bodySha256: sha256Hex(JSON.stringify(body)), targetNodeId: node.daemon.nodeId,
+          expectedNodeInstanceId: node.daemon.nodeInstanceId, expectedNodeEpoch: node.daemon.nodeEpoch, ownership,
+          issuedAt: new Date(now).toISOString(), deadlineAt: new Date(now + 30_000).toISOString() }, keys.privateKeyPem);
+        return api.dispatch({ path, body, method, tenantId: 'immo', role: 'control-plane', ticket });
+      };
+      const create = async (commandId: string, profile = 'node-22') => {
+        const result = await call('/v1/sandboxes', { commandId, ownership, compatibility,
+          warmStandby: operation === 'claim', spec: { tenantId: 'immo', devScope, profile,
+            baseMounts: [], uid: 1000, gid: 1000, quotaMiB: 512, quotaInodes: 1000 } });
+        return (result.body as { id: string }).id;
+      };
+      const first = await create('create-a');
+      const body = { commandId: 'shared', devScope, uid: 1000, gid: 1000,
+        ...(operation === 'claim' ? { claim: { tenantId: 'immo', ownership, compatibility } } : {}) };
+      const path = `/v1/sandboxes/${first}`;
+      expect((await call(`${path}/${operation}`, body)).body).toMatchObject({ id: first, state: 'running' });
+      const launches = vi.spyOn(node.adapter, 'runSandbox');
+      expect((await call(`${path}/${operation}`, body)).body).toMatchObject({ id: first });
+      // A claimed session must release its sole warm slot before creating the next standby.
+      if (operation === 'claim') await call(`${path}/stop`, { commandId: 'stop-a', devScope, stop: {} });
+      const second = await create('create-b', operation === 'start' ? 'artifact-build' : 'node-22');
+      await expect(call(`/v1/sandboxes/${second}/${operation}`, body))
+        .rejects.toMatchObject({ code: 'command_id_payload_mismatch', status: 409 });
+      expect(node.daemon.getSandbox('immo', second)).toMatchObject({
+        state: operation === 'start' ? 'creating' : 'standby', runtimeId: undefined });
+      expect(launches).not.toHaveBeenCalled();
+      await call(`/v1/sandboxes/${second}/${operation}`, { ...body, commandId: 'fresh' });
+      expect(launches).toHaveBeenCalledTimes(1);
+    } finally { rmSync(dir, { recursive: true }); }
+  });
   it('should accept signed lifecycle calls and reject missing or substituted session scopes', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'signed-api-'));
     try {

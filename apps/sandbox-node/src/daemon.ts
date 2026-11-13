@@ -88,7 +88,7 @@ export class ExecutionNodeDaemon {
   private readonly launches = new Map<string, Promise<SandboxRecord>>();
   private readonly retentionTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly transitions = new Map<string, Promise<unknown>>();
-  private readonly idempotence = new Map<string, { bodyHash: string; result: unknown }>();
+  private readonly idempotence = new Map<string, { method: string; path: string; bodySha256: string; result: unknown }>();
 
   constructor(options: DaemonOptions) {
     this.nodeId = options.nodeId;
@@ -143,17 +143,18 @@ export class ExecutionNodeDaemon {
     }
   }
 
-  private idempotent<T>(tenantId: ExecutionNodeTenantId, commandId: string, body: unknown, produce: () => T, retainValue = true): T {
+  private idempotent<T>(tenantId: ExecutionNodeTenantId, commandId: string, method: string, path: string,
+    body: unknown, produce: () => T, retainValue = true): T {
     const slot = this.idempotence.get(`${tenantId}:${commandId}`);
-    const bodyHash = sha256Hex(JSON.stringify(body ?? null));
+    const bodySha256 = sha256Hex(JSON.stringify(body));
     if (slot) {
-      if (slot.bodyHash !== bodyHash) {
-        throw new ExecutionNodeError('command_id_payload_mismatch', `command ${commandId} replayed with a different body`);
+      if (slot.method !== method || slot.path !== path || slot.bodySha256 !== bodySha256) {
+        throw new ExecutionNodeError('command_id_payload_mismatch', `command ${commandId} replayed with a different request`);
       }
       if (slot.result !== undefined) return slot.result as T;
     }
     const result = produce();
-    this.idempotence.set(`${tenantId}:${commandId}`, { bodyHash, result });
+    this.idempotence.set(`${tenantId}:${commandId}`, { method, path, bodySha256, result });
     if (!retainValue && result instanceof Promise) void result.then(() => {
       const entry = this.idempotence.get(`${tenantId}:${commandId}`);
       if (entry?.result === result) entry.result = undefined;
@@ -236,7 +237,7 @@ export class ExecutionNodeDaemon {
     this.authorizeCommand(ticket, input.spec.tenantId, input.commandId, body, 'POST', '/v1/sandboxes', input.ownership);
     const admittedEpoch = this.nodeEpoch;
     const mounts = resolveMounts(input.spec.tenantId, input.spec.baseMounts, this.bases);
-    return this.idempotent(input.spec.tenantId, input.commandId, body, async () => {
+    return this.idempotent(input.spec.tenantId, input.commandId, 'POST', '/v1/sandboxes', body, async () => {
       const id = randomUUID();
       const slot = Object.hasOwn(SERVICE_TIMEOUT_MS, input.spec.profile) ? 'build'
         : input.warmStandby === true ? 'standby' : 'live';
@@ -301,7 +302,7 @@ export class ExecutionNodeDaemon {
     this.requireScope(sandbox, input.devScope);
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/start`, sandbox.ownership);
-    return this.idempotent(tenantId, input.commandId, body, () => this.startRuntime(sandbox, input));
+    return this.idempotent(tenantId, input.commandId, 'POST', `/v1/sandboxes/${id}/start`, body, () => this.startRuntime(sandbox, input));
   }
 
   private startRuntime(sandbox: SandboxRecord, input: { uid: number; gid: number }): Promise<SandboxRecord> {
@@ -376,7 +377,7 @@ export class ExecutionNodeDaemon {
     const sandbox = this.getSandbox(input.claim.tenantId, input.standbyId);
     if (!sandbox) throw new ExecutionNodeError('unknown_node_instance', `unknown sandbox ${input.standbyId}`);
     this.requireScope(sandbox, input.devScope);
-    return this.idempotent(input.claim.tenantId, input.commandId, body, async () => {
+    return this.idempotent(input.claim.tenantId, input.commandId, 'POST', `/v1/sandboxes/${standbyId}/claim`, body, async () => {
       if (sandbox.state !== 'standby') {
         throw new ExecutionNodeError('already_claimed', `sandbox ${sandbox.id} in state ${sandbox.state}`);
       }
@@ -426,7 +427,7 @@ export class ExecutionNodeDaemon {
       || input.stop.retentionTtlMs < 0 || input.stop.retentionTtlMs > 300_000)) {
       throw new ExecutionNodeError('command_id_payload_mismatch', 'retentionTtlMs must be between 0 and 300s');
     }
-    return this.idempotent(tenantId, input.commandId, { id, stop: input.stop }, () => this.transition(id, async () => {
+    return this.idempotent(tenantId, input.commandId, 'POST', `/v1/sandboxes/${id}/stop`, body, () => this.transition(id, async () => {
       if (sandbox.state !== 'running' && sandbox.state !== 'stopping') {
         throw new ExecutionNodeError('already_claimed', `sandbox ${id} in state ${sandbox.state}`);
       }
@@ -457,8 +458,7 @@ export class ExecutionNodeDaemon {
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, tenantId, input.commandId, body, 'POST', `/v1/sandboxes/${id}/write`, sandbox.ownership);
     this.requireScope(sandbox, input.devScope);
-    return this.idempotent(tenantId, input.commandId, { method: 'POST', path: `/v1/sandboxes/${id}/write`,
-      bodySha256: sha256Hex(JSON.stringify(body)) }, async () => {
+    return this.idempotent(tenantId, input.commandId, 'POST', `/v1/sandboxes/${id}/write`, body, async () => {
       if (sandbox.state !== 'running' || !sandbox.runtimeId) {
         throw new ExecutionNodeError('already_claimed', `sandbox ${id} is ${sandbox.state}, writes require running`);
       }
@@ -481,7 +481,7 @@ export class ExecutionNodeDaemon {
     if (input.spec.maxBytes <= 0) {
       throw new ExecutionNodeError('command_id_payload_mismatch', 'maxBytes must be positive');
     }
-    return this.idempotent(tenantId, input.commandId, { id, spec: input.spec }, () => this.transition(id, async () => {
+    return this.idempotent(tenantId, input.commandId, 'POST', `/v1/sandboxes/${id}/export`, body, () => this.transition(id, async () => {
       if (sandbox.state !== 'stopped-output-retained' && sandbox.state !== 'exported') {
         throw new ExecutionNodeError('sandbox_not_quiesced', `sandbox ${id} is ${sandbox.state}`);
       }
@@ -512,7 +512,7 @@ export class ExecutionNodeDaemon {
     this.requireScope(sandbox, input.devScope);
     const { ticket, ...body } = input;
     this.authorizeCommand(ticket, tenantId, input.commandId, body, 'DELETE', `/v1/sandboxes/${id}`, sandbox.ownership);
-    return this.idempotent(tenantId, input.commandId, { id }, () => this.transition(id, async () => {
+    return this.idempotent(tenantId, input.commandId, 'DELETE', `/v1/sandboxes/${id}`, body, () => this.transition(id, async () => {
       if (sandbox.state === 'running') {
         throw new ExecutionNodeError('sandbox_still_running', `sandbox ${id} is running`);
       }
