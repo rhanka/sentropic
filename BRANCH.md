@@ -41,6 +41,7 @@ Freeze the local ExecutionNodeV1 contract and the two-tenant model on the BHS d2
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] RUN 5 CI 43379755991 lock-policy failure: removed the one-shot lock-generation make target after the guard flagged its npm install --package-lock-only path. SEA build continues to use committed exact lock + npm ci; no policy relaxation, no runtime/archive change.
 - [x] RUN 5 final artifact: 2206040078562ddf4c32d0d9d34825fc1dee3abba7cc76ef45ce8b6bee3eed6e (Node SEA + shared rootfs + public config/unit/README/B-test). Archive and all file checksums verified, extracted SEA self-test passes. 75 standalone regressions and 14 SCA inventory regressions pass; scoped lint has zero errors.
 - [x] BR-SN1-EX11: CI 43379243080 security-sca-gate failed because its expected lock inventory omitted the new SEA build-tools lock. Add that exact covered directory to its expectation; scanner coverage already includes it automatically. Impact: inventory assertion only, no policy exclusion/suppression; rollback: remove the directory from the expectation if the SEA tool lock is removed.
 - [x] RUN 5 final packaging: observed erofs-utils 1.5 rejects -q; corrected to its documented --quiet flag. Archive also carries OPERATOR.md and the restart B-test so the k8s digest handoff is self-contained.

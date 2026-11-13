@@ -2,8 +2,6 @@
 SANDBOX_NODE_IMAGE := node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2
 SANDBOX_NODE_NPM_CACHE ?= $(HOME)/.cache/sentropic-sandbox-node/npm
 .PHONY: check-sandbox-node
-lock-sandbox-node-build-tools:
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR)/apps/sandbox-node/k8s/build-tools:/tools" -w /tools $(SANDBOX_NODE_IMAGE) sh -ec 'npm install --package-lock-only --ignore-scripts --no-audit --no-fund; node -e '\''const fs=require("node:fs");fs.writeFileSync("package-lock.json", JSON.stringify(JSON.parse(fs.readFileSync("package-lock.json")))+"\n")'\'''
 qualify-sandbox-node-disk:
 	@case "$(ENV)" in test-*) ;; *) echo 'isolated test ENV required'; exit 1;; esac
 	@"$${QUAL_RELEASE_DIR:?verified qualification release required}/execution-node" --qualify-disk
