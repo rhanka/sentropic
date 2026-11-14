@@ -7,7 +7,7 @@ import {
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { env, requiresOAuthProductionSecrets } from '../../config/env';
-import { DEVELOPMENT_SECRET_SEED, resolveDeploymentSecret } from '../../config/deployment-secrets';
+import { DEVELOPMENT_SECRET_SEED, isProvisionedDeploymentSecret, resolveDeploymentSecret } from '../../config/deployment-secrets';
 import { db } from '../../db/client';
 import { bindCmAppDatabase, withAppDatabaseMethods, type CmIdentityTransaction } from '../../services/identity/cm-transaction';
 import { createConsentStoreAdapter } from '../../services/auth/consent-store-adapter';
@@ -226,9 +226,12 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
  * on every /authorize, /consent and /token request — a total OAuth outage where it previously worked.
  */
 const resolveOAuthStateSecret = (): string => {
-  const secret = env.OAUTH_SIGNING_KEK || env.JWT_SECRET;
-  if (!secret && requiresOAuthProductionSecrets()) {
-    throw new Error('JWT_SECRET or OAUTH_SIGNING_KEK is required for OAuth state sealing in production.');
+  const deployed = requiresOAuthProductionSecrets();
+  const secret = deployed
+    ? [env.OAUTH_SIGNING_KEK, env.JWT_SECRET].find(isProvisionedDeploymentSecret)
+    : env.OAUTH_SIGNING_KEK || env.JWT_SECRET;
+  if (!secret && deployed) {
+    throw new Error('JWT_SECRET or OAUTH_SIGNING_KEK must be provisioned for OAuth state sealing in production.');
   }
   return secret || DEVELOPMENT_SECRET_SEED;
 };

@@ -703,8 +703,12 @@ test-ci-api-tag-guard: ci-test-env ## Regress publish-api-image tag collision gu
 	@bash scripts/test-api-tag-guard.sh $(or $(CI_TAG_GUARD_CASE),all)
 
 .PHONY: test-ci-api-image-canonical
-test-ci-api-image-canonical: ci-test-env ## Regress canonical artifact resolution (reuse/absent/fail-closed) and tag inputs
+test-ci-api-image-canonical: ci-test-env test-ci-k8s-bundle-secret ## Regress canonical artifact resolution (reuse/absent/fail-closed) and tag inputs
 	@bash scripts/test-api-image-canonical.sh $(or $(CI_CANONICAL_CASE),all)
+
+.PHONY: test-ci-k8s-bundle-secret
+test-ci-k8s-bundle-secret: ci-test-env ## Regress deployment secret bundle preflight with fake kubectl only (BRT1-EX1)
+	@bash scripts/test-k8s-bundle-secret.sh
 
 .PHONY: test-artifact-content-image
 test-artifact-content-image: ci-test-env ## Qualify the content role in the recorded canonical production artifact
@@ -4222,9 +4226,12 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 			sub(/^[[:space:]]*export[[:space:]]+/, "", line); \
 			if (index(line, key "=") == 1) { \
 				value = substr(line, length(key) + 2); \
-				sub(/[[:space:]]+#.*$$/, "", value); \
-				gsub(/^"/, "", value); \
-				gsub(/"$$/, "", value); \
+				if (value ~ /^"/) { \
+					sub(/^"/, "", value); \
+					sub(/"[[:space:]]*(#.*)?$$/, "", value); \
+				} else { \
+					sub(/[[:space:]]+#.*$$/, "", value); \
+				} \
 			} \
 		} \
 		END { printf "%s", value }' "$(K8S_ENV_FILE)" ; } ; \
@@ -4243,6 +4250,13 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 			} \
 		} \
 		END { printf "%s", value }' "$(K8S_ENV_FILE)" ; } ; \
+	JWT_SECRET=$$(get JWT_SECRET) ; SECRET_ENC_KEY=$$(get SECRET_ENCRYPTION_KEY) ; \
+	require_secret() { \
+	  if ! printf '%s' "$$2" | awk 'BEGIN { RS = "\0" } { gsub(/^[[:space:]]+|[[:space:]]+$$/, ""); valid = length($$0) >= 32 } END { exit !valid }'; then \
+	    echo "$$1 must contain at least 32 non-padding characters" >&2; exit 1; \
+	  fi; \
+	} ; \
+	require_secret JWT_SECRET "$$JWT_SECRET" ; require_secret SECRET_ENCRYPTION_KEY "$$SECRET_ENC_KEY" ; \
 	POSTGRES_PASSWORD=$$(get POSTGRES_PASSWORD) ; [ -n "$$POSTGRES_PASSWORD" ] || POSTGRES_PASSWORD=app ; \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-postgres \
 	  --from-literal=POSTGRES_PASSWORD="$$POSTGRES_PASSWORD" \
@@ -4255,7 +4269,6 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	DS_AK=$$(get DOC_STORAGE_ACCESS_KEY) ; DS_SK=$$(get DOC_STORAGE_SECRET_KEY) ; DS_BK=$$(get DOC_STORAGE_BUCKET) ; \
 	DS_EP=$$(get DOC_STORAGE_ENDPOINT) ; DS_RG=$$(get DOC_STORAGE_REGION) ; \
 	SCW_TEM=$$(get SCW_TEM_SECRET_KEY) ; OAUTH_KEK=$$(get OAUTH_SIGNING_KEK) ; \
-	SECRET_ENC_KEY=$$(get SECRET_ENCRYPTION_KEY) ; \
 	GOA_CID=$$(get GOOGLE_OAUTH_CLIENT_ID) ; GOA_CS=$$(get GOOGLE_OAUTH_CLIENT_SECRET) ; \
 	GOA_RU=$$(get GOOGLE_OAUTH_REDIRECT_URI) ; \
 	GHOA_CID=$$(get GITHUB_OAUTH_CLIENT_ID) ; GHOA_CS=$$(get GITHUB_OAUTH_CLIENT_SECRET) ; \
@@ -4290,6 +4303,7 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --from-literal=GOOGLE_DRIVE_PICKER_APP_ID="$$GD_PID" \
 	  --from-literal=SCW_TEM_SECRET_KEY="$$SCW_TEM" \
 	  --from-literal=OAUTH_SIGNING_KEK="$$OAUTH_KEK" \
+	  --from-literal=JWT_SECRET="$$JWT_SECRET" \
 	  --from-literal=SECRET_ENCRYPTION_KEY="$$SECRET_ENC_KEY" \
 	  --from-literal=GOOGLE_OAUTH_CLIENT_ID="$$GOA_CID" \
 	  --from-literal=GOOGLE_OAUTH_CLIENT_SECRET="$$GOA_CS" \

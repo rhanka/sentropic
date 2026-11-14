@@ -55,6 +55,7 @@ export const seedOAuthClients = async (): Promise<SeededOAuthClient[]> => {
       id: 'seed-design-system',
       name: 'Sentropic Design System',
       redirectUris: DESIGN_SYSTEM_REDIRECT_URIS,
+      requireTenant: false,
     },
   ];
 
@@ -73,6 +74,7 @@ export const seedOAuthClients = async (): Promise<SeededOAuthClient[]> => {
       name: client.name,
       redirectUris: client.redirectUris,
       requirePkce: true,
+      requireTenant: client.requireTenant ?? true,
       responseTypes: ['code'],
       tokenEndpointAuthMethod: 'client_secret_basic',
       updatedAt: now,
@@ -90,6 +92,7 @@ export const seedOAuthClients = async (): Promise<SeededOAuthClient[]> => {
           name: values.name,
           redirectUris: values.redirectUris,
           requirePkce: values.requirePkce,
+          ...(client.requireTenant === undefined ? {} : { requireTenant: client.requireTenant }),
           responseTypes: values.responseTypes,
           tokenEndpointAuthMethod: values.tokenEndpointAuthMethod,
           updatedAt: now,
