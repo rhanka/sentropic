@@ -68,9 +68,12 @@ SELECT 1 / ((:'acl_sha256' = '${expectedHash}')::int);
 export async function restore(ctx, approval) {
   const { config, call } = ctx;
   const dumpBytes = privateBytes(config.restoreDumpFile), acl = privateBytes(config.restoreAclFile).toString();
+  const fenced = JSON.parse(privateBytes(`${ctx.stateDir}/w5-review.json`).toString());
   if (!approval?.ownerRef || /pending|TODO|<|>/i.test(approval.ownerRef)
     || approval.namespace !== config.namespace || approval.operationId !== config.request.operationId
-    || approval.dumpSha256 !== digest(dumpBytes) || approval.aclSqlSha256 !== digest(acl)) {
+    || approval.dumpSha256 !== digest(dumpBytes) || approval.aclSqlSha256 !== digest(acl)
+    || fenced.backupSha256 !== approval.dumpSha256 || fenced.aclSqlSha256 !== approval.aclSqlSha256
+    || fenced.aclCatalogSha256 !== approval.aclCatalogSha256) {
     throw new Error('restore_not_authorized');
   }
   for (const name of ['api', 'auth-idp', 'ui']) {
