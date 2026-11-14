@@ -32,7 +32,7 @@
 - [x] Lot 0: read packet, all four Astra reviews, merged driver and constraints; mechanical branch PASS.
 - [ ] Lot 1: W0/W2/W5 stability gates wired; container-only actual legacy migration regression suite added.
 - [ ] Lot 2: explicit rearm archives PVC and state before clearing custody; restore/rearm tests pending.
-- [ ] Lot 3: host guards and isolated restore routing; dedicated fixture tests.
+- [ ] Lot 3: grace=1s, export protection and restore-only destination/runtime routing implemented; fixture tests pending.
 - [ ] Lot 4: v5 plan reconciliation, #1001 pins/switch, exact operator handoff.
 - [ ] Final validation: focused operator and PostgreSQL tests on final bytes; PR and exact-head CI green.
 - [ ] Review: independent code and design review evidence; no consensus claim without completed peers.

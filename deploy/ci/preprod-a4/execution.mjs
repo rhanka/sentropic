@@ -15,7 +15,7 @@ export function executionGrant(env, request, read = privateInput, tier = tierOf(
 
 /** Execute only the exact command vectors recorded in the owner's immutable annex. */
 export function execute(env = process.env, call = kubectl, read = privateInput) {
-  const tier = tierOf(env), { namespace } = tier;
+  const tier = tierOf(env), namespace = tier.destinationNamespace ?? tier.namespace;
   read(env.A4_KUBECONFIG_FILE);
   const action = env.A4_ACTION;
   const request = JSON.parse(read(action === 'fence' ? env.A4_AUTHORIZATION_FILE : env.A4_REQUEST_FILE));
@@ -39,7 +39,7 @@ export function execute(env = process.env, call = kubectl, read = privateInput) 
     const setImage = args.length === 4 && args[0] === 'set' && args[1] === 'image'
       && ['api', 'ui', 'auth-idp'].some(name => args[2] === `deployment/${name}` && args[3] === `${name}=${image}`);
     if (!allowed.some(pattern => pattern.test(command)) && !setImage) throw new Error('command_not_allowed');
-    if (/statefulset\/postgres(?: |$)|cronjob sentropic-idp-identity-sync .*false/.test(command)) throw new Error('protected_controller');
+    if (/statefulset\/postgres(?: |$)|cronjob sentropic-idp-identity-(?:sync|export) .*false/.test(command)) throw new Error('protected_controller');
   }
   if (commands.some(args => args[0] === 'scale' && ['deployment/ui', 'deployment/auth-idp'].includes(args[1])
     && args[2] !== '--replicas=0')) assertTrafficRestriction(request, grant, k, namespace);

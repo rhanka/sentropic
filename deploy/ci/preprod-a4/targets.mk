@@ -13,6 +13,20 @@ export A4_VERIFY_PHASE ?= internal
 export A4_EXECUTION_FILE
 export A4_EXECUTION_SHA256
 export A4_ACTION
+k8s-restore-a4-action k8s-restore-a4-verify k8s-restore-a4-custody k8s-restore-a4-prepare: export override A4_TIER := restore
+.PHONY: k8s-restore-a4-action k8s-restore-a4-verify k8s-restore-a4-custody k8s-restore-a4-prepare
+k8s-restore-a4-action:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/execution.mjs
+k8s-restore-a4-verify:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/verify.mjs
+k8s-restore-a4-custody:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/ops.mjs
+k8s-restore-a4-prepare:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/run.mjs
 # The tier is bound by the target name, never by a variable (A4_TIER cannot be overridden).
 k8s-preprod-a4-action k8s-preprod-a4-verify k8s-preprod-a4-custody k8s-preprod-a4-prepare: export override A4_TIER := preprod
 k8s-prod-a4-action k8s-prod-a4-verify k8s-prod-a4-custody k8s-prod-a4-prepare: export override A4_TIER := prod
