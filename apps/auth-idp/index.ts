@@ -15,7 +15,11 @@ import { serve } from '@hono/node-server';
 import { env } from '../../api/src/config/env';
 import { assertDeploymentSecrets } from '../../api/src/config/deployment-secrets';
 import { logger } from '../../api/src/logger';
+import { installGracefulShutdown } from '../../api/src/services/graceful-shutdown';
 import { createIdpApp } from './idp-app';
+
+// The IdP exits on SIGTERM instead of holding its pod Terminating for the whole grace period.
+const shutdown = installGracefulShutdown({ log: logger });
 
 // Fail closed before serving: a deployed IdP never signs or seals with a missing or public key.
 try {
@@ -31,5 +35,5 @@ const port = Number(process.env.IDP_PORT ?? process.env.API_PORT ?? env.PORT);
 
 const app = createIdpApp();
 
-serve({ fetch: app.fetch, port });
+shutdown.attach(serve({ fetch: app.fetch, port }));
 logger.info(`Standalone IdP (PLACEHOLDER auth-idp) listening on http://0.0.0.0:${port}`);
