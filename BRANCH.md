@@ -58,7 +58,7 @@
   - [x] Land generic app context unchanged.
   - [x] Land frozen GAS r3 unchanged.
 - [ ] **Lot 2 — Superseded builder specifications**
-  - [ ] Land SLO with the requested supersession header and unchanged body.
+  - [x] Land SLO with the requested supersession header and unchanged body.
   - [ ] Land serverless with the requested supersession header and unchanged body.
 - [ ] **Lot 3 — Final validation and handoff**
   - [ ] Verify exact source/body equivalence and git diff --check; pass make scope-check before every commit.
