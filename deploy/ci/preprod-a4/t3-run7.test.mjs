@@ -9,7 +9,7 @@ import { poll } from './t3-watchdog.mjs';
 import { buildProbes } from './t3-lib.mjs';
 import { drive } from './t3-window-driver.mjs';
 import { finishOpen } from './t3-finish-open.mjs';
-import { emailProbe, expectedSigningKid, probeEndpoints, probeReply, verificationHeader, verificationSpec } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, observerProbes, probeEndpoints, probeReply, verificationHeader, verificationSpec } from './t3-probe-fixture.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
 const endpoints = probeEndpoints();
@@ -26,9 +26,9 @@ for (const location of ['https://client.test/callback?error=invalid_scope',
   'https://client.test/callback?error=invalid_target', '/auth/login?error=invalid_scope', '',
   'https://evil.test/auth/login?continue=ok', '/auth/login?continue=ok']) {
   test(`RUN7 S-6 accepts only the error-free login redirect: ${location}`, async () => {
-    const state = { namespace: 'sentropic-preprod', middlewareSpec: {} };
+    const state = { namespace: 'sentropic-preprod', middlewareSpec: verificationSpec };
     const writes = [];
-    const ctx = { state, images: { candidate: 'c', ui: 'u' }, ...buildProbes({ endpoints, emailProbe, expectedSigningKid }), save: () => {},
+    const ctx = { state, images: { candidate: 'c', ui: 'u' }, ...buildProbes({ endpoints, ...observerProbes(), emailProbe, expectedSigningKid }), save: () => {},
       verification: verificationHeader,
       call: args => {
         const cmd = args.join(' ');
@@ -37,7 +37,7 @@ for (const location of ['https://client.test/callback?error=invalid_scope',
           return JSON.stringify({ spec: { replicas: 1, template: { spec: { containers: [{ name, image: name === 'ui' ? 'u' : 'c' }] } } },
             status: { readyReplicas: 1, observedGeneration: 1 }, metadata: { generation: 1 } });
         }
-        if (cmd.includes('get middleware')) return '{"spec":{}}';
+        if (cmd.includes('get middleware')) return JSON.stringify({ spec: verificationSpec });
         if (cmd.includes('get ingress')) return JSON.stringify({ metadata: { annotations: {
           'traefik.ingress.kubernetes.io/router.middlewares': 'sentropic-preprod-a4-verification@kubernetescrd' } } });
         writes.push(cmd); return '{}';
@@ -75,7 +75,7 @@ for (const entry of ['emergency', 'classify', 'rollback', 'finish-open']) {
     const dir = mkdtempSync(join(tmpdir(), 't3-deadline-'));
     const config = join(dir, 'config.json');
     writeFileSync(config, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
-      endpoints, images: { candidate: 'c', ui: 'u' }, middlewareSpec: verificationSpec }));
+      endpoints, ...observerProbes(), images: { candidate: 'c', ui: 'u' }, middlewareSpec: verificationSpec }));
     saveState(dir, { step: 'W3', t0MonoMs: monoMs() - 299_500 });
     writeFileSync(join(dir, 'kubectl'), '#!/bin/sh\nsleep 0.3\necho \'{"items":[],"spec":{"suspend":true}}\'\n', { mode: 0o700 });
     const args = entry === 'emergency' ? ['sh', [`${here}t3-emergency.sh`, '--config', config, '--state-dir', dir]]

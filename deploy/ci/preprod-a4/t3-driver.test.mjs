@@ -663,10 +663,10 @@ test('finishOpen patches an existing middleware instead of recreating it', async
   const state = { namespace: 'sentropic-preprod', middlewareSpec: ctx.config.middlewareSpec };
   const images = { candidate: CANDIDATE, ui: UI_IMAGE };
   await finishOpen({ call: ctx.call, probe: ctx.probe, verification: ctx.verification, state,
-    save: next => Object.assign(state, next), images, probes: buildProbes(ctx.config).probes, externalProbes: [] });
+    save: next => Object.assign(state, next), images, ...buildProbes(ctx.config) });
   const joined = calls.join('\n');
   assert.ok(!joined.includes('create -f -'), 'no create over the existing middleware (no AlreadyExists)');
-  assert.ok(joined.includes('patch middleware a4-verification'), 'middleware patched in place');
+  assert.ok(joined.includes('patch middleware a4-verification --type=json'), 'middleware patched in place via JSON Patch');
   assert.equal(state.substate, 'TWO_HOSTS_OPEN');
 });
 
@@ -943,7 +943,7 @@ test('finishOpen restarts a stopped api before opening traffic', async () => {
   const state = { namespace: 'sentropic-preprod', middlewareSpec: verificationSpec };
   const images = { candidate: CANDIDATE, ui: UI_IMAGE };
   await finishOpen({ call: ctx.call, probe: ctx.probe, verification: ctx.verification, state,
-    save: next => Object.assign(state, next), images, probes: buildProbes(ctx.config).probes, externalProbes: [] });
+    save: next => Object.assign(state, next), images, ...buildProbes(ctx.config) });
   const joined = calls.join('\n');
   assert.ok(joined.includes('scale deployment/api --replicas=1'), 'stopped api restarted before open');
   assert.equal(state.substate, 'TWO_HOSTS_OPEN');
