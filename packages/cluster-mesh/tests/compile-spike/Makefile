@@ -1,9 +1,11 @@
 ROOT := $(abspath ../../../..)
+KUBECONFIG ?= /home/antoinefa/src/sentropic/.tmp/a4-private/tenant-kubeconfig
+export KUBECONFIG
 ENV ?= feat-v8-spike
 IMAGE := mcr.microsoft.com/playwright:v1.60.0-noble@sha256:9bd26ad900bb5e0f4dee75839e957a89ae89c2b7ab1e76050e559790e946b948
 TOOLS := $(ENV)-v8-tools
 
-.PHONY: prepare fixtures bundle probe
+.PHONY: prepare fixtures bundle probe adapter export pod-start pod-run pod-results pod-delete
 prepare:
 	@test "$$(df --output=avail -BG / | tail -1 | tr -dc '0-9')" -ge 30
 	docker run --rm -v $(TOOLS):/tools -w /tools $(IMAGE) npm install --ignore-scripts --no-audit --no-fund --save-exact @vue/compiler-sfc@3.6.0-rc.15 @vue/compiler-vapor@3.6.0-rc.15 vue@3.6.0-rc.15 sucrase@3.35.1 esbuild@0.25.12 isolated-vm@6.1.2 gray-matter@4.0.3 zod@4.6.7
@@ -16,3 +18,27 @@ bundle:
 
 probe:
 	docker run --rm -v $(TOOLS):/tools -v $(ROOT):/repo:ro -w /tools $(IMAGE) node spike/compiler-probe.mjs
+
+adapter:
+	docker run --rm -v $(TOOLS):/tools -v $(ROOT):/repo:ro -w /tools $(IMAGE) sh -ec './node_modules/.bin/esbuild /repo/packages/skills/tests/sandbox/v8-spike.mjs --bundle --platform=node --format=esm --external:isolated-vm --external:docx --external:pptxgenjs --outfile=spike/adapter.mjs; node spike/adapter.mjs'
+
+export:
+	@mkdir -p results
+	docker run --rm -u "$$(id -u):$$(id -g)" -v $(TOOLS):/tools:ro -v $(CURDIR)/results:/results $(IMAGE) cp /tools/spike/bootstrap.js /tools/spike/compiler-probe.json /results/
+
+pod-start:
+	kubectl apply -f pod.yaml
+	kubectl wait --for=condition=Ready pod/v8-vd-2-0-spike -n sentropic-preprod --timeout=60s
+	kubectl exec -n sentropic-preprod v8-vd-2-0-spike -- mkdir -p /tmp/spike
+	kubectl cp results/bootstrap.js sentropic-preprod/v8-vd-2-0-spike:/tmp/spike/bootstrap.js
+	kubectl cp fixtures.mjs sentropic-preprod/v8-vd-2-0-spike:/tmp/spike/fixtures.mjs
+	kubectl cp isolate-bench.mjs sentropic-preprod/v8-vd-2-0-spike:/tmp/spike/isolate-bench.mjs
+
+pod-run:
+	kubectl exec -n sentropic-preprod v8-vd-2-0-spike -- node /tmp/spike/isolate-bench.mjs
+
+pod-results:
+	kubectl cp sentropic-preprod/v8-vd-2-0-spike:/tmp/spike/isolate-results.json results/isolate-results.json
+
+pod-delete:
+	kubectl delete pod v8-vd-2-0-spike -n sentropic-preprod --ignore-not-found --wait=false
