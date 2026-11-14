@@ -56,7 +56,7 @@
   - [x] Land V8 delivery unchanged.
   - [x] Land Vue Vapor migration unchanged.
   - [x] Land generic app context unchanged.
-  - [ ] Land frozen GAS r3 unchanged.
+  - [x] Land frozen GAS r3 unchanged.
 - [ ] **Lot 2 — Superseded builder specifications**
   - [ ] Land SLO with the requested supersession header and unchanged body.
   - [ ] Land serverless with the requested supersession header and unchanged body.
