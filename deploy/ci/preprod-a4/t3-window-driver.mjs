@@ -8,6 +8,7 @@ import { buildProbes, claimDead, claimRecovery, effectiveTimeout, monoMs, readRe
   runKubectl, loadState, saveState, stepTimeoutMs, utcNow, validateProbes } from './t3-lib.mjs';
 import { ROTATED_KEYS, preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
 import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
+import { checkApplicability } from './t3-applicability.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const TOTAL_BUDGET_MS = 300_000;
@@ -418,6 +419,7 @@ function assertPreviewSafe(ctx) {
 
 async function driveInner(ctx, state) {
   checkRbac(ctx);
+  checkApplicability(ctx, psql, 'W0');
   const t0 = monoMs();
   state.t0MonoMs = t0;
   const cutoff = ms => t0 + ms;
@@ -457,7 +459,7 @@ async function driveInner(ctx, state) {
     if (missing && !ctx.probeReadOnly && !ctx.dryRun) throw new Error('middleware_missing_after_restrict');
     if (missing) ctx.print('# note: no a4-verification middleware (no fence here)');
   }
-  state.storesSha256 = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
+  checkApplicability(ctx, psql, 'W2');
   saveState(ctx.stateDir, state);
   if (monoMs() > cutoff(35_000)) return recover(ctx, state, 'W2_cutoff');
   heartbeat(ctx, state, 'W3');
@@ -482,8 +484,7 @@ async function driveInner(ctx, state) {
         A4_REMOTE_FILE: ctx.config.remoteFile, A4_REHEARSAL_FILE: ctx.config.rehearsalFile }, to(30_000, step));
     }
     if (step === 'W5') {
-      const now = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
-      if (now !== state.storesSha256) throw new Error('encrypted_stores_drift');
+      checkApplicability(ctx, psql, 'W5');
     }
     if (monoMs() > cutoff(STEP_CUTOFFS[step])) return recover(ctx, state, `${step}_cutoff`);
   }

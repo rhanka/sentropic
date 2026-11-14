@@ -10,6 +10,7 @@ import { loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
 import { preCommitRollback } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
 import { emailProbe, expectedSigningKid, probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
+import { applicabilityFixture } from './t3-applicability.test.mjs';
 
 const CANDIDATE = 'ghcr.io/rhanka/sentropic-api@sha256:candidate';
 const UI_IMAGE = 'ghcr.io/rhanka/sentropic-ui@sha256:ui';
@@ -58,6 +59,7 @@ export function makeCall(scenario = {}) {
     if (cmd.startsWith('auth can-i')) return 'yes';
     if (args[0] === 'exec') {
       const statement = String(input ?? '');
+      if (statement.includes('cutover-applicability-v1')) return JSON.stringify(applicabilityFixture());
       if (statement.includes('journal_present')) return scenario.journal === false ? 'f|0\n' : `t|${scenario.locks ?? 0}\n`;
       if (statement.includes('identity_committed')) return scenario.committed ? 't\n' : 'f\n';
       if (statement.includes('asset_column_present')) return 'f\n';
@@ -140,6 +142,8 @@ export function makeCtx(overrides = {}) {
   writeFileSync(defaultKeys.apiJwtSecretFile, 'test-jwt-secret');
   writeFileSync(defaultKeys.secretEncryptionKeyFile, 'test-enc-key');
   writeFileSync(defaultKeys.idpSessionJwtFile, 'test-idp-jwt');
+  const applicabilityBaselineFile = join(keyDir, 'baseline.json');
+  writeFileSync(applicabilityBaselineFile, JSON.stringify(applicabilityFixture()));
   return {
     ctx: {
       call, printed,
@@ -157,6 +161,7 @@ export function makeCtx(overrides = {}) {
         expectedSigningKid,
         request: { format: 'x', operationId: 'test' },
         rotationKeyFiles: defaultKeys,
+        applicabilityBaselineFile,
         ...(overrides.config ?? {}),
       },
     },
