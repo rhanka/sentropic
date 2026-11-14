@@ -143,6 +143,16 @@ describe('artifact host migrations', () => {
     await runMigrations(database);
     expect(await journal()).toEqual(receipts);
     expect((await database.query('SELECT * FROM artifacts.blob_bytes')).rows).toEqual(bytes);
+    expect((await database.query('SELECT * FROM control.artifact_image_rollback_receipts')).rows).toHaveLength(6);
+    const repeat = await database.connect();
+    try {
+      await repeat.query(sql);
+      await installPreviousImage(repeat);
+      await repeat.query(readFileSync(new URL('../../src/services/artifacts/image-resume.sql', import.meta.url), 'utf8'));
+    } finally { await repeat.query('ROLLBACK'); repeat.release(); }
+    await runMigrations(database);
+    expect(await journal()).toEqual(receipts);
+    expect((await database.query('SELECT * FROM artifacts.blob_bytes')).rows).toEqual(bytes);
   });
 
   it('should serialize concurrent first installations and package reruns', async () => {
