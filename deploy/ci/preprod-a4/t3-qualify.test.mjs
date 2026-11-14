@@ -62,3 +62,25 @@ test('baseline capture requires the live witness session first and binds the bas
     assert.ok(!order.includes('sql')); assert.equal(receipts.length,0);
   }
 });
+// The pinned dump client is 17.11: under a 17.12 server its dumps carry column options that the prod
+// minor refuses. The operator proves, read-only, that server and client are the pinned prod bytes.
+test('postgres qualification requires the pinned prod server bytes and the pinned dump client', async () => {
+  const { PROD_POSTGRES_IMAGE, PROD_POSTGRES_TOOL_IMAGE } = await import('./t3-fixture.mjs');
+  const base = { tier: 'restore', namespace: 'sentropic-restore-a4' };
+  const deps = ({ version = '17.11', imageID = `docker.io/library/${PROD_POSTGRES_IMAGE}`, client = PROD_POSTGRES_TOOL_IMAGE } = {}) => {
+    const calls = [];
+    return { calls, call: (args, input) => {
+      calls.push(args.join(' '));
+      if (args[0] === 'exec') { assert.equal(input, 'SHOW server_version'); return `${version}\n`; }
+      return args[1] === 'pod' ? JSON.stringify({ status: { containerStatuses: [{ name: 'postgres', imageID }] } })
+        : JSON.stringify({ spec: { jobTemplate: { spec: { template: { spec: { initContainers: [{ name: 'dump', image: client }] } } } } } });
+    } };
+  };
+  const ok = deps();
+  assert.deepEqual(await qualify('postgres-version', base, ok), { postgresVersion: '17.11' });
+  assert.ok(ok.calls.every(line => /^(get pod postgres-0 |get cronjob pgbackup |exec postgres-0 )/.test(line)), 'read-only');
+  for (const drift of [{ version: '17.12' }, { imageID: `docker.io/library/postgres@sha256:${'d'.repeat(64)}` }, { imageID: '' },
+    { client: 'postgres:17-alpine' }, { client: `postgres:17-alpine@sha256:${'d'.repeat(64)}` }]) {
+    await assert.rejects(qualify('postgres-version', base, deps(drift)), /postgres_version_unqualified/, JSON.stringify(drift));
+  }
+});
