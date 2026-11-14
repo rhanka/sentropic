@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import { rearm } from './t3-rearm.mjs';
 import { saveState } from './t3-lib.mjs';
 import { inputs } from './t3-preflight.test.mjs';
+import { gzipSync } from 'node:zlib';
+import { digest } from './guards.mjs';
 
 test('rearm archives custody before deletion and refreshes the private state directory', () => {
   const next = inputs(), stateDir = mkdtempSync(join(tmpdir(),'t3-rearm-'));
@@ -13,6 +15,7 @@ test('rearm archives custody before deletion and refreshes the private state dir
   const config = { ...next.config, request: { operationId: 'old' }, executionSha256: '0'.repeat(64),
     legacyImages: { api: 'legacy-api', 'auth-idp': 'legacy-idp', ui: 'legacy-ui' } };
   const calls = [];
+  const archiveBytes = gzipSync(Buffer.alloc(1024));
   const archive = `${stateDir}-attempt-old`;
   const call = (args,input) => {
     calls.push(args.join(' '));
@@ -22,7 +25,8 @@ test('rearm archives custody before deletion and refreshes the private state dir
       assert.match(readFileSync(join(archive,'custody.sha256'),'utf8'),/^[a-f0-9]{64}$/);
       return '';
     }
-    if (args[0] === 'exec' && args.includes('sh')) return Buffer.from('synthetic-archive').toString('base64');
+    if (args[0] === 'exec' && args.includes('sh')) return archiveBytes.toString('base64');
+    if (args[0] === 'exec' && args.includes('sha256sum')) return `${digest(archiveBytes)}  /tmp/t3-custody.tar.gz`;
     if (args[0] === 'get' && args[1] === 'deployment') {
       const name = args[2];
       return JSON.stringify({ spec: { replicas: 1, template: { spec: {
