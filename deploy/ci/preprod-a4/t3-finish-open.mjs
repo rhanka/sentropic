@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { buildProbes, effectiveTimeout, loadState, monoMs, podLabels, recoveryDeadline, runKubectl, saveState, validateProbes } from './t3-lib.mjs';
+import { buildProbes, effectiveTimeout, loadState, monoMs, podLabels, recoveryDeadline, runKubectl, saveState, validateProbes, validateObservers } from './t3-lib.mjs';
 
 // Post-commit convergence, idempotent across restarts (Astra v2 M3).
 // States: POSTCOMMIT_RESTRICTED -> ACCEPTED -> BACKUP_RESUMED ->
@@ -88,7 +88,7 @@ export function reconcileRestrictSafe(ctx, state) {
 }
 
 export async function finishOpen(ctx) {
-  const { call, probe, state, save, images, probes = [], externalProbes = [] } = ctx;
+  const { call, probe, state, save, images, probes = [], externalProbes = [],restrictedProbes = [] } = ctx;
   const dry = { dryRun: ctx.dryRun === true, print: ctx.print ?? (() => {}),
     deadlineMs: ctx.deadlineMs, now: ctx.now };
   effectiveTimeout(1, ctx, (ctx.now ?? monoMs)());
@@ -101,6 +101,7 @@ export async function finishOpen(ctx) {
     ensureStarted(call, 'api', images.candidate, dry);
     ensureStarted(call, 'ui', images.ui, dry);
     ensureStarted(call, 'auth-idp', images.candidate, dry);
+    for (const p of restrictedProbes) await runProbe(probe,p,dry);
     for (const p of probes) await runProbe(probe, p, dry);
     state.substate = 'ACCEPTED';
     state.acceptedSha256 = createHash('sha256').update(JSON.stringify(probes.map(p => p.id))).digest('hex');
@@ -220,10 +221,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const probes = config.probes ?? fromEndpoints.probes;
   const externalProbes = config.externalProbes ?? fromEndpoints.externalProbes;
   try {
+    if (!dryRun) validateObservers(config);
     const done = await finishOpen({ call, probe: fetch, state,
       save: dryRun ? () => {} : next => saveState(stateDir, next), images: config.images,
-      probes, externalProbes, deadlineMs,
+      probes, externalProbes, restrictedProbes: fromEndpoints.restrictedProbes, deadlineMs,
       dryRun, print: console.log });
+    if (!dryRun) {
+      Object.assign(done,{ step: 'DONE',watchdogDone: true,commitVerified: true }); saveState(stateDir,done);
+    }
     console.log(`finish_open_ok substate=${done.substate}`);
   } catch (err) {
     console.error(`finish_open_failed: ${err.message}`);

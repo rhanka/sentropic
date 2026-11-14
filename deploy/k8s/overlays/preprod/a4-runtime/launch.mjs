@@ -4,7 +4,7 @@ import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 // The key ring tier follows the pod namespace (downward API, deploy/k8s/components/a4-wiring).
-export const tiers = Object.freeze({ 'sentropic-preprod': 'preprod', sentropic: 'prod' });
+export const tiers = Object.freeze({ 'sentropic-preprod': 'preprod', sentropic: 'prod', 'sentropic-restore-a4': 'prod' });
 export const approvalRef = 'qk-secret-custody-r2:Q-K=A:2026-11-02';
 const scriptName = /^[a-z][a-z0-9-]*$/;
 export const entrypoint = args => {

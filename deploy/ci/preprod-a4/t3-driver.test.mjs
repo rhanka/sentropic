@@ -9,9 +9,11 @@ import { COMMIT_CUTOFF_MS, FINISH_CUTOFF_MS, RBAC_COUNT, TOTAL_BUDGET_MS,
 import { loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
 import { preCommitRollback } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
-import { emailProbe, expectedSigningKid, probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, probeReply, observerProbes } from './t3-probe-fixture.mjs';
+import { applicabilityFixture } from './t3-applicability.test.mjs';
+import { rehearsalFixture } from './t3-rehearsal-fixture.mjs';
 
-const CANDIDATE = 'ghcr.io/rhanka/sentropic-api@sha256:candidate';
+const CANDIDATE = `ghcr.io/rhanka/sentropic-api@sha256:${'e'.repeat(64)}`;
 const UI_IMAGE = 'ghcr.io/rhanka/sentropic-ui@sha256:ui';
 
 // Fault-injectable kubectl double: canned reads, recorded writes.
@@ -57,7 +59,10 @@ export function makeCall(scenario = {}) {
     }
     if (cmd.startsWith('auth can-i')) return 'yes';
     if (args[0] === 'exec') {
+      if (args.some(a => String(a).includes('/run/cm-cutover/snapshot.json'))) return JSON.stringify(scenario.snapshot);
       const statement = String(input ?? '');
+      if (statement.includes('AS acl_sha256')) return 'a'.repeat(64);
+      if (statement.includes('cutover-applicability-v1')) return JSON.stringify(applicabilityFixture());
       if (statement.includes('journal_present')) return scenario.journal === false ? 'f|0\n' : `t|${scenario.locks ?? 0}\n`;
       if (statement.includes('identity_committed')) return scenario.committed ? 't\n' : 'f\n';
       if (statement.includes('asset_column_present')) return 'f\n';
@@ -127,7 +132,8 @@ export function makeCall(scenario = {}) {
 }
 
 export function makeCtx(overrides = {}) {
-  const { call, calls } = makeCall(overrides.scenario ?? {});
+  const scenario = overrides.scenario ?? {};
+  const { call, calls } = makeCall(scenario);
   const printed = [];
   // Default rotation key material: every full drive poses the W3 keys, so
   // tests get files unless they opt out (rotationKeyFiles: undefined).
@@ -140,6 +146,10 @@ export function makeCtx(overrides = {}) {
   writeFileSync(defaultKeys.apiJwtSecretFile, 'test-jwt-secret');
   writeFileSync(defaultKeys.secretEncryptionKeyFile, 'test-enc-key');
   writeFileSync(defaultKeys.idpSessionJwtFile, 'test-idp-jwt');
+  const applicabilityBaselineFile = join(keyDir, 'baseline.json');
+  writeFileSync(applicabilityBaselineFile, JSON.stringify(applicabilityFixture()));
+  const qualification = rehearsalFixture(keyDir,{ candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE,operationId: 'test' },JSON.stringify(applicabilityFixture()));
+  scenario.snapshot = qualification.snapshot;
   return {
     ctx: {
       call, printed,
@@ -153,10 +163,13 @@ export function makeCtx(overrides = {}) {
         candidateImage: CANDIDATE, revisions: { api: '12', 'auth-idp': '9', ui: '4' },
         images: { candidate: CANDIDATE, ui: UI_IMAGE },
         endpoints: probeEndpoints(),
+        ...observerProbes(),
         emailProbe,
         expectedSigningKid,
-        request: { format: 'x', operationId: 'test' },
+        request: { format: 'x', operationId: 'test',candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE },
         rotationKeyFiles: defaultKeys,
+        applicabilityBaselineFile,
+        ...qualification,
         ...(overrides.config ?? {}),
       },
     },
@@ -168,11 +181,64 @@ test('RBAC matrix covers exactly 50 couples', () => {
   assert.equal(RBAC_COUNT, 50);
 });
 
+test('W5 allows session-only source drift and stages the fenced seven-hash receipt before checkpoint', async () => {
+  const { ctx } = makeCtx({ scenario: { committed: true } });
+  let staged;
+  ctx.delivered = (_ctx,_script,env) => {
+    if (env.A4_STAGE === 'rehearsal') staged = JSON.parse(readFileSync(env.A4_REHEARSAL_FILE,'utf8'));
+    if (env.A4_PHASE === 'checkpoint') {
+      assert.equal(staged.sourceContentSha256,'b'.repeat(64));
+      for (const key of ['schemaSha256','journalSha256','remoteSnapshotDigest','mappingSha256','identityAssetSha256','connectorAssetSha256']) {
+        assert.equal(staged[key],'a'.repeat(64));
+      }
+    }
+    return '';
+  };
+  await drive(ctx);
+  assert.ok(staged);
+  assert.equal(JSON.parse(readFileSync(ctx.config.rehearsalFile)).sourceContentSha256,'a'.repeat(64));
+});
+
+test('W5 ACL drift refuses before staging rehearsal or starting the candidate', async () => {
+  const { ctx } = makeCtx();
+  const original = ctx.call,operations = [];
+  ctx.call = (args,input) => String(input).includes('AS acl_sha256') ? 'c'.repeat(64) : original(args,input);
+  ctx.delivered = (_ctx,_script,env) => { operations.push(env.A4_STAGE ?? env.A4_ACTION ?? env.A4_PHASE); return ''; };
+  assert.equal(await drive(ctx),3);
+  assert.ok(!operations.includes('rehearsal'));
+  assert.ok(!operations.includes('start-api'));
+});
+
+test('armed CLI hands a T+174s fault directly to one full-budget watchdog recovery', async () => {
+  const { recover } = await import('./t3-window-driver.mjs');
+  const { ctx, calls } = makeCtx({ scenario: { committed: true } });
+  const t0 = monoMs()-174000;
+  let clock = t0+174000;
+  const state = { step: 'W8',t0MonoMs: t0,heartbeatMonoMs: monoMs(),namespace: 'sentropic-preprod',
+    driverPid: process.pid,childPid: process.pid,watchdogPid: process.pid,watchdogArmed: true,
+    middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+  const before = calls.length;
+  assert.equal(await recover(ctx,state,'transient_at_174s'),5);
+  assert.equal(calls.length,before,'no first recovery attempt or API stop in the driver');
+  const original = ctx.call;
+  let classified = false,restarted = false,finished = false;
+  ctx.now = () => clock;
+  ctx.call = (...args) => {
+    if (!classified && args[0].join(' ') === 'scale deployment/api --replicas=0') { clock+=36000; classified=true; }
+    if (!restarted && args[0].join(' ') === 'scale deployment/api --replicas=1') { clock+=28000; restarted=true; }
+    return original(...args);
+  };
+  const probe = ctx.probe;
+  ctx.probe = (...args) => { if (!finished) { clock+=55000; finished=true; } return probe(...args); };
+  assert.equal(await poll(ctx),4);
+  assert.equal(loadState(ctx.stateDir).step,'DONE');
+  assert.ok(clock <= t0+300000,'one 119-second composite recovery fits the original window');
+});
+
 test('RUN6 budgets and staged PVC inputs precede every consumer', async () => {
   const { ctx } = makeCtx();
   const seen = [];
   ctx.config.remoteFile = '/private/remote.json';
-  ctx.config.rehearsalFile = '/private/rehearsal.json';
   ctx.delivered = (c, script, env) => {
     const op = env.A4_ACTION ?? env.A4_OPERATION ?? env.A4_PHASE;
     if (op === 'custodian') assert.ok(seen.includes('budgets'), 'mandatory budgets Secret exists');
@@ -180,7 +246,8 @@ test('RUN6 budgets and staged PVC inputs precede every consumer', async () => {
     if (op === 'checkpoint') assert.ok(seen.includes('stage:rehearsal'), 'rehearsal on PVC');
     if (op === 'stage') {
       assert.equal(env.A4_REMOTE_FILE, ctx.config.remoteFile);
-      assert.equal(env.A4_REHEARSAL_FILE, ctx.config.rehearsalFile);
+      assert.equal(env.A4_REHEARSAL_FILE, env.A4_STAGE === 'rehearsal'
+        ? `${ctx.stateDir}/fenced-rehearsal.json` : ctx.config.rehearsalFile);
     }
     seen.push(op === 'stage' ? `${op}:${env.A4_STAGE}` : op);
     return '';
@@ -464,7 +531,7 @@ test('delivered timeouts never outlive the step cutoff', async () => {
 });
 
 test('probe URLs are operator inputs, never invented by the driver', () => {
-  assert.deepEqual(buildProbes({}), { probes: [], externalProbes: [] });
+  assert.deepEqual(buildProbes({}), { probes: [], externalProbes: [],restrictedProbes: [] });
   const { probes } = buildProbes({ endpoints: {
     appHealth: 'https://app/health', idpConfig: 'https://idp/.well-known/openid-configuration',
     idpJwks: 'https://idp/jwks.json', appMe: 'https://app/me', idpMe: 'https://idp/me',
@@ -800,6 +867,7 @@ esac
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
     endpoints: probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`), emailProbe, expectedSigningKid,
+    ...observerProbes(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`),
     revisions: { api: '12', 'auth-idp': '9', ui: '4' }, candidateImage: 'candidate-img',
     middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } },
     images: { candidate: 'candidate-img', ui: 'ui-img' } }));

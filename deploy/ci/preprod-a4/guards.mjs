@@ -9,6 +9,8 @@ export const tiers = Object.freeze({
   prod: Object.freeze({ tier: 'prod', namespace: 'sentropic', origin: 'https://sentropic.sent-tech.ca' }),
 });
 export function tierOf(env) {
+  if (env.A4_TIER === 'restore') return { ...tiers.prod, destinationNamespace: 'sentropic-restore-a4',
+    origin: 'https://app.restore-a4.test' };
   if (!Object.hasOwn(tiers, env.A4_TIER ?? '')) throw new Error('tier_invalid');
   return tiers[env.A4_TIER];
 }
@@ -21,7 +23,7 @@ export const canonical = value => JSON.stringify(value && typeof value === 'obje
       .map(([key, item]) => [key, JSON.parse(canonical(item))])) : value);
 
 export function kubectl(config, args, input, namespace) {
-  if (!Object.values(tiers).some(tier => tier.namespace === namespace)) throw new Error('namespace_invalid');
+  if (namespace !== 'sentropic-restore-a4' && !Object.values(tiers).some(tier => tier.namespace === namespace)) throw new Error('namespace_invalid');
   const result = spawnSync('kubectl', ['--kubeconfig', config, '--namespace', namespace,
     '--request-timeout=60s', ...args], { input, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
   if (result.status !== 0 || result.error) throw new Error('kubectl_failed');

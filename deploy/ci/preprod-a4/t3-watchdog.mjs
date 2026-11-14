@@ -49,8 +49,8 @@ async function pollInner(ctx) {
   const over = state.t0MonoMs != null && now - state.t0MonoMs > TOTAL_BUDGET_MS;
   const past = state.stepDeadlineMonoMs != null && now > state.stepDeadlineMonoMs;
   const alive = !pidDead(state.driverPid);
-  if (alive && !over && !(stale && past)) return 'waiting';
-  const reason = !alive ? 'watchdog_driver_dead' : over ? 'watchdog_budget' : 'watchdog_stale_past_deadline';
+  if (alive && !state.recoveryRequested && !over && !(stale && past)) return 'waiting';
+  const reason = state.recoveryRequested ?? (!alive ? 'watchdog_driver_dead' : over ? 'watchdog_budget' : 'watchdog_stale_past_deadline');
   if (!claimRecovery(ctx.stateDir, me)) {
     const owner = readRecoveryClaim(ctx.stateDir);
     if (!claimDead(owner)) {

@@ -4,11 +4,16 @@ import { writeFileSync } from 'node:fs';
 
 export const emailProbe = { email: 'cutover@example.test' };
 export const expectedSigningKid = 'qualified-kid';
+export const observerProbes = (base = 'https://idp.test') => ({
+  restrictedProbes: ['S-1','S-2'].map((id,i) => ({ id,url: `${base}/restricted${i}`,expect: 403 })),
+  externalProbes: ['external-app','external-idp'].map(id => ({ id,url: `${base}/${id}`,expect: 200 })),
+});
 export function probeEndpoints(base = 'https://idp.test') {
   return Object.fromEntries(['appHealth', 'idpConfig', 'idpJwks', 's6Authorize', 'appMe', 'idpMe', 'emailApp', 'emailIdp']
     .map(name => [name, `${base}/${name}`]));
 }
 export function probeReply(url, options = {}) {
+  if (/restricted[01]$/.test(url)) return new Response('excluded',{ status: 403 });
   if (/email(App|Idp)$/.test(url)) {
     let body;
     try { body = JSON.parse(options.body); } catch { /* handler rejects invalid JSON */ }

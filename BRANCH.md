@@ -1,0 +1,82 @@
+# Feature: Close T3 operator driver gaps
+## Objective
+- [ ] Complete the reviewed applicability, preflight, rearm and restore contracts without cluster access.
+## Scope / Guardrails
+- [x] Worktree `tmp/worktrees/t3-gaps`, branch `fix/t3-driver-gaps`, rebased onto `origin/main` at `c95ca6bb9`; only BRANCH.md conflicted; reviewed source bytes replayed unchanged.
+- [x] Tests `ENV=test-t3-gaps`; API 9165, UI 5365, Maildev 1265, checked free.
+- [x] No cluster calls, secret values, Python, production or preproduction actions.
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `deploy/ci/preprod-a4/**`
+  - `deploy/ci/idp-identity-sync/workflow.selftest.mjs`
+  - `deploy/k8s/overlays/preprod/a4-runtime/**`
+  - `deploy/k8s/overlays/restore-a4/**`
+  - `deploy/k8s/components/a4-wiring/patch-auth-idp-a4.yaml`
+  - `api/tests/api/t3-*`
+  - `docs/runbooks/t3-*`
+  - `.github/workflows/ci.yml`
+  - `BRANCH.md`
+  - `ui/src/lib/stores/workspaceScope.ts`
+  - `ui/src/lib/components/ImportExportDialog.svelte`
+  - `ui/tests/stores/workspaceScope.test.ts`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `.github/workflows/**`
+## Feedback Loop
+- [x] BRT3-EX2: exact-head CI exposed import workspace selection overwritten by a stale membership refresh; allow the two UI files and focused store regression only. Impact: refresh after committed import, ignore superseded responses/errors. Rollback reverts this bounded correction; no timeout/retry or gate changes.
+- [x] CI import failure reproduced by a deferred stale response (1 failure before correction); focused workspace store suite now passes 11/11, including stale 409/500 errors, in a disposable locked-dependency container without an image build.
+- [x] UI review hardening approved: bind import continuation to its initiating user, refuse mutations after a session change during membership refresh; 13/13 focused tests include actual-handler account switch and logout cases without changing timeouts.
+- [x] BRT3-EX1: add scoped operator/PostgreSQL jobs to existing validate-idp-sync CI gate; impact limited to T3 validation, rollback removes the two steps.
+- [x] SQL qualification detected ambiguous PostgreSQL internal-char concatenation in default ACL names; explicit text cast applied.
+- [x] ACL mismatch now raises an SQL error inside the transaction, rather than relying on psql quit status; round-trip refusal rechecked.
+- [x] Actual restore exposed global default ACL leakage during reload; reset inherited defaults before recreating objects, then replay original ACLs.
+- [x] Capture initdb public-schema owner/ACL from the catalogue because pg_dump may omit it; verify exact parity.
+- [x] Added complete offline preflight and successful rearm regression, including archive-before-erasure ordering.
+- [x] Emit four individual encrypted-store fingerprints alongside the aggregate; SQL mutation coverage includes all four stores.
+- [x] Operator test files run serially to avoid competing process supervisors on the shared host; process-deadline assertions are unchanged.
+- [x] Read-only qualification Make utility exposes exact RBAC, baseline capture and inert fixture generation commands for OPERATOR.
+- [x] Review hardening: validate excluded observer and witness URLs as fixture-only, require nonexpired legacy witness, retain sentropic-app SA and correct TEM endpoint key.
+- [x] Offline preflight now validates every annex action through the same command validator used at execution, before the first fence mutation.
+- [x] Removed cold Node startup overhead from the kubectl test double; actual process supervisors, hostile descendants, deadlines and all assertions remain exercised.
+- [x] R1: canonical effective ACLs sort grantor/grantee/privilege/delegation and normalize implicit defaults; restore fixture now includes reader USAGE on public.
+- [x] R2: tar must succeed and validate before transfer; gzip CRC and remote SHA must match before archive persistence and custody erasure.
+- [x] R5: offline authorization-code PKCE challenge contributes its own SHA; same-length challenge-only SQL mutation changes applicability.
+- [x] R5-B1: armed CLI delegates recovery immediately to the watchdog; no 60-second attempt precedes the full-budget recovery. Composite T+174s regression added.
+- [x] R5-B2/M3: bind original rehearsal and P-0 baseline to the annex policy; derive the final fenced receipt only after applicability/ACL equality and preserve both originals.
+- [x] W5 now validates applicability and ACLs before staging its derived receipt; driver doubles use a real original/fenced receipt pair.
+- [x] Added regressions for session-only seven-hash rebasing, ACL drift before staging, missing annex actions and partial/corrupt custody archives.
+- [x] SQL canonicalization treats zero-dimensional empty ACL arrays as no entries before aclexplode.
+- [x] R5-B3/M2: fixture preserves the immutable logical WebAuthn verifier; W3 explicitly wires the dedicated IdP JWT Secret, including legacy templates.
+- [x] R5-M4: human emergency passes the protected witness configuration; successful classified rollback persists DONE/commitVerified=false for rearm.
+- [x] R5-M1: preflight requires both excluded-source 403 probes; finish-open executes them before acceptance and requires configured final external probes.
+- [x] Qualification usable-auth reads both real authenticated /me responses after reopening, checks expected user IDs and records monotonic elapsed/fault-to-auth against final state; health alone cannot qualify.
+- [x] Added qualification refusal tests (401, wrong identity, late completion, incomplete window), plus fixture SA/logical-verifier/TEM assertions.
+- [x] Added explicit production-URL refusal across restore observer/witness paths and human-emergency DONE/commitVerified=false assertion.
+- [x] Human recovery records its reason, and committed finish-open persists DONE so authenticated qualification uses the correct recovery envelope.
+- [x] Protected ACL SQL capture accepts the full reviewed schema inventory, with a 64 MiB bound rather than the small JSON-input bound.
+- [x] Restore test uses the actual namespace-prefixed middleware reference; A4_TEST_FILES supports focused reruns without changing the full CI default.
+- [x] Final review F2: rollback witness rejects redirects. Handoff regression reproduced a stale fence marker overwrite and is fixed before delegation.
+- [x] Final review F1: original and fenced receipts validate all strict W6 fields, references, hashes and flags before fence/staging; fixtures now carry complete qualification receipts.
+- [x] Added a container-only test executing the actual W6 Zod schema declarations against original/fenced receipts and every missing-field mutation.
+- [x] CI workflow selftest includes the added operator/SQL/schema gates; schema test reuses an existing committed Zod tool lock. Alpine APK 404 was verified transient by a later HTTP 200 on the exact URL.
+- [x] Final F1 closure: every receipt hash and candidate field is explicitly a string; array coercions are refused by both the operator parser and real W6 schema tests.
+- [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
+- [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
+## AI Flaky tests
+- [x] No AI tests or flaky allowances.
+## Orchestration Mode (AI-selected)
+- [x] Multi-branch: driver here, #1001 corrected on its own branch; no merge authorized.
+## UAT Management (in orchestration context)
+- [ ] Operator validates isolated restore namespaces, authentication and timing after code delivery.
+## Plan / Todo (lot-based)
+- [x] Lot 0: read packet, all four Astra reviews, merged driver and constraints; mechanical branch PASS.
+- [x] Lot 1: W0/W2/W5 applicability and four-store gates, offline PKCE and real legacy SQL mutation suite pass.
+- [x] Lot 2: maintenance, original/fenced receipt, full restore/ACL, witness and rearm archive/refusal paths implemented and exercised.
+- [x] Lot 3: isolated fixture/routing, logical verifier, IdP key wiring, observers and authenticated completion tests implemented.
+- [ ] Lot 4: v5 plan reconciliation, #1001 pins/switch, exact operator handoff.
+- [x] Final local validation: 206/206 operator tests, actual W6 Zod schema acceptance/mutation tests, four-store/PKCE SQL drift checks, full restore semantic ACL parity and atomic refusal pass; standalone restore runtime renders.
+- [ ] PR and exact-head CI green, recorded in the final packet report; no merge authorized.
+- [ ] Review: independent code and design review evidence; no consensus claim without completed peers.

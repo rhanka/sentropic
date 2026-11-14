@@ -13,17 +13,19 @@ export function executionGrant(env, request, read = privateInput, tier = tierOf(
   return grant;
 }
 
-/** Execute only the exact command vectors recorded in the owner's immutable annex. */
-export function execute(env = process.env, call = kubectl, read = privateInput) {
-  const tier = tierOf(env), { namespace } = tier;
-  read(env.A4_KUBECONFIG_FILE);
-  const action = env.A4_ACTION;
-  const request = JSON.parse(read(action === 'fence' ? env.A4_AUTHORIZATION_FILE : env.A4_REQUEST_FILE));
-  if (action === 'fence') assertAuthorization(request, tier); else assertRequest(request, tier);
-  const grant = executionGrant(env, request, read, tier);
+export function validateMiddleware(grant) {
+  const spec = grant.middlewareSpec;
+  if (!spec || digest(canonical(spec)) !== grant.middlewareSpecSha256
+    || Object.keys(spec).join(',') !== 'ipAllowList' || Object.keys(spec.ipAllowList).join(',') !== 'sourceRange'
+    || !spec.ipAllowList.sourceRange?.length || !spec.ipAllowList.sourceRange.every(range => /\/(32|128)$/.test(range))) {
+    throw new Error('traffic_boundary_invalid');
+  }
+  return spec;
+}
+
+export function validateActionCommands(grant, request, action, namespace) {
   if (!['fence', 'delete-custodian', 'start-api', 'start-ui', 'start-idp', 'refence', 'resume', 'restrict', 'open-traffic'].includes(action)
-    || !['0', '1'].includes(env.A4_DRY_RUN ?? '1')) throw new Error('action_invalid');
-  const k = (args, input) => call(env.A4_KUBECONFIG_FILE, args, input, namespace);
+    ) throw new Error('action_invalid');
   const commands = grant.actions?.[action];
   if (!Array.isArray(commands) || !commands.length) throw new Error('action_not_authorized');
   const resource = '(?:deployment|statefulset)/[a-z][a-z0-9-]*';
@@ -39,18 +41,27 @@ export function execute(env = process.env, call = kubectl, read = privateInput) 
     const setImage = args.length === 4 && args[0] === 'set' && args[1] === 'image'
       && ['api', 'ui', 'auth-idp'].some(name => args[2] === `deployment/${name}` && args[3] === `${name}=${image}`);
     if (!allowed.some(pattern => pattern.test(command)) && !setImage) throw new Error('command_not_allowed');
-    if (/statefulset\/postgres(?: |$)|cronjob sentropic-idp-identity-sync .*false/.test(command)) throw new Error('protected_controller');
+    if (/statefulset\/postgres(?: |$)|cronjob sentropic-idp-identity-(?:sync|export) .*false/.test(command)) throw new Error('protected_controller');
   }
+  return commands;
+}
+
+/** Execute only the exact command vectors recorded in the owner's immutable annex. */
+export function execute(env = process.env, call = kubectl, read = privateInput) {
+  const tier = tierOf(env), namespace = tier.destinationNamespace ?? tier.namespace;
+  read(env.A4_KUBECONFIG_FILE);
+  const action = env.A4_ACTION;
+  const request = JSON.parse(read(action === 'fence' ? env.A4_AUTHORIZATION_FILE : env.A4_REQUEST_FILE));
+  if (action === 'fence') assertAuthorization(request, tier); else assertRequest(request, tier);
+  const grant = executionGrant(env, request, read, tier);
+  if (!['0', '1'].includes(env.A4_DRY_RUN ?? '1')) throw new Error('action_invalid');
+  const k = (args, input) => call(env.A4_KUBECONFIG_FILE, args, input, namespace);
+  const commands = validateActionCommands(grant,request,action,namespace);
   if (commands.some(args => args[0] === 'scale' && ['deployment/ui', 'deployment/auth-idp'].includes(args[1])
     && args[2] !== '--replicas=0')) assertTrafficRestriction(request, grant, k, namespace);
   // Network boundary is tenant-approved, namespace-scoped and attached before either proxy starts.
   if (action === 'restrict') {
-    const spec = grant.middlewareSpec;
-    if (!spec || digest(canonical(spec)) !== grant.middlewareSpecSha256
-      || Object.keys(spec).join(',') !== 'ipAllowList' || Object.keys(spec.ipAllowList).join(',') !== 'sourceRange'
-      || !spec.ipAllowList.sourceRange?.length || !spec.ipAllowList.sourceRange.every(range => /\/(32|128)$/.test(range))) {
-      throw new Error('traffic_boundary_invalid');
-    }
+    const spec = validateMiddleware(grant);
     for (const name of ['sentropic', 'auth-idp']) {
       const ingress = JSON.parse(k(['get', 'ingress', name, '-o', 'json']));
       if (ingress.metadata.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']) {

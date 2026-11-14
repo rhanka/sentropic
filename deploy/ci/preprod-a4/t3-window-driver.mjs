@@ -8,6 +8,9 @@ import { buildProbes, claimDead, claimRecovery, effectiveTimeout, monoMs, readRe
   runKubectl, loadState, saveState, stepTimeoutMs, utcNow, validateProbes } from './t3-lib.mjs';
 import { ROTATED_KEYS, preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
 import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
+import { checkApplicability } from './t3-applicability.mjs';
+import { preflight } from './t3-preflight-static.mjs';
+import { prepareFencedReceipt } from './t3-rehearsal.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const TOTAL_BUDGET_MS = 300_000;
@@ -187,6 +190,13 @@ export async function recover(ctx, state, reason) {
       return 1;
     }
   }
+  // Reconcile child-persisted fence intent before saving the handoff state.
+  if (!ctx.recoverOwner && state.watchdogArmed && state.watchdogPid) {
+    state.recoveryRequested = reason;
+    saveState(ctx.stateDir,state);
+    ctx.print?.('# recovery handed to armed watchdog');
+    return 5;
+  }
   // In-process single-flight: a second concurrent recover() (overlapping
   // watchdog ticks, or a drive() catch racing the watchdog) stands down
   // instead of running a second recovery in parallel.
@@ -294,14 +304,14 @@ export async function recover(ctx, state, reason) {
       saveState(ctx.stateDir, state);
       return 3;
     }
-    const { probes, externalProbes } = buildProbes(ctx.config);
+    const { probes, externalProbes, restrictedProbes } = buildProbes(ctx.config);
     // The api was frozen above, so a committed database always restarts the
     // api here before converging. Never boots a legacy image: ensureStarted
     // pins the candidate image.
     ctx.print?.('# recover: restarting committed api before finish-open');
     ensureStarted(ctx.call, 'api', ctx.config.images.candidate, { dryRun: ctx.dryRun, print: ctx.print });
     await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
-      save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes, deadlineMs, now });
+      save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes, restrictedProbes, deadlineMs, now });
     // Same single-writer guard on the post-commit branch.
     state.step = 'DONE';
     state.watchdogDone = true;
@@ -403,7 +413,8 @@ function initializeState(ctx) {
   validateProbes(buildProbes(ctx.config).probes);
   const state = { version: 1, step: 'W0', fenceStarted: false, startedAtUtc: utcNow(), driverPid: process.pid,
     watchdogPid: ctx.watchdogPid,
-    childPid: process.pid, namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null,
+    childPid: process.pid, namespace: ctx.config.namespace, operationId: ctx.config.request?.operationId,
+    middlewareSpec: ctx.config.middlewareSpec ?? null,
     stepDeadlineMonoMs: monoMs() + 600_000 };
   saveState(ctx.stateDir, state);
   return state;
@@ -418,6 +429,7 @@ function assertPreviewSafe(ctx) {
 
 async function driveInner(ctx, state) {
   checkRbac(ctx);
+  checkApplicability(ctx, psql, 'W0');
   const t0 = monoMs();
   state.t0MonoMs = t0;
   const cutoff = ms => t0 + ms;
@@ -457,7 +469,7 @@ async function driveInner(ctx, state) {
     if (missing && !ctx.probeReadOnly && !ctx.dryRun) throw new Error('middleware_missing_after_restrict');
     if (missing) ctx.print('# note: no a4-verification middleware (no fence here)');
   }
-  state.storesSha256 = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
+  checkApplicability(ctx, psql, 'W2');
   saveState(ctx.stateDir, state);
   if (monoMs() > cutoff(35_000)) return recover(ctx, state, 'W2_cutoff');
   heartbeat(ctx, state, 'W3');
@@ -476,14 +488,15 @@ async function driveInner(ctx, state) {
     heartbeat(ctx, state, step);
     (ctx.delivered ?? delivered)(ctx, script, { ...baseEnv(ctx), ...env,
       A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(120_000, step));
+    let rehearsalFile = ctx.config.rehearsalFile;
+    if (step === 'W5') {
+      checkApplicability(ctx, psql, 'W5');
+      rehearsalFile = prepareFencedReceipt(ctx,psql);
+    }
     if (step === 'W4' || step === 'W5') {
       (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'stage',
         A4_STAGE: step === 'W4' ? 'inputs' : 'rehearsal',
-        A4_REMOTE_FILE: ctx.config.remoteFile, A4_REHEARSAL_FILE: ctx.config.rehearsalFile }, to(30_000, step));
-    }
-    if (step === 'W5') {
-      const now = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
-      if (now !== state.storesSha256) throw new Error('encrypted_stores_drift');
+        A4_REMOTE_FILE: ctx.config.remoteFile, A4_REHEARSAL_FILE: rehearsalFile }, to(30_000, step));
     }
     if (monoMs() > cutoff(STEP_CUTOFFS[step])) return recover(ctx, state, `${step}_cutoff`);
   }
@@ -511,9 +524,9 @@ async function driveInner(ctx, state) {
   if (!info.apiReady) return recover(ctx, state, 'api_not_ready');
   heartbeat(ctx, state, 'W8');
   if (monoMs() > cutoff(FINISH_CUTOFF_MS)) return recover(ctx, state, 'W8_cutoff');
-  const { probes, externalProbes } = buildProbes(ctx.config);
+  const { probes, externalProbes, restrictedProbes } = buildProbes(ctx.config);
   await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
-    save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes,
+    save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes,restrictedProbes,
     deadlineMs: t0 + FINISH_CUTOFF_MS });
   heartbeat(ctx, state, 'W9');
   if (monoMs() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
@@ -544,6 +557,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
     postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch, print: console.log };
   try {
+    if (!dryRun) preflight(config);
     ctx.initialState = initializeState(ctx);
     const watchdog = spawn(process.execPath, [join(HERE, 't3-watchdog.mjs'),
       '--state-dir', stateDir, '--config', configPath,

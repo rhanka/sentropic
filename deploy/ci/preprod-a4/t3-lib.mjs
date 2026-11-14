@@ -111,7 +111,16 @@ export function buildProbes(config) {
       headers: { ...config.emailProbe?.headers, 'content-type': 'application/json', origin: new URL(url).origin },
       body: JSON.stringify({ email: config.emailProbe?.email }) } });
   }
-  return { probes, externalProbes: config.externalProbes ?? [] };
+  return { probes, externalProbes: config.externalProbes ?? [],restrictedProbes: config.restrictedProbes ?? [] };
+}
+
+export function validateObservers(config) {
+  for (const id of ['S-1','S-2']) {
+    const p = config.restrictedProbes?.find(p => p.id === id);
+    if (!p || p.expect !== 403 || !URL.canParse(p.url)) throw new Error('restricted_observer_missing');
+  }
+  if (!Array.isArray(config.externalProbes) || config.externalProbes.length < 2
+    || config.externalProbes.some(p => !URL.canParse(p.url) || p.expect !== 200)) throw new Error('external_probes_missing');
 }
 
 export function validateProbes(probes) {
