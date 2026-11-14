@@ -15,6 +15,11 @@ export function createLazyArtifactBlobs(load: () => Promise<{ blobs: Publication
   return {
     putBlob: async (key, bytes) => (await load()).blobs.putBlob(key, bytes),
     getBlob: async key => (await load()).blobs.getBlob(key),
+    getBlobRange: async (key, start, end) => {
+      const blobs = (await load()).blobs;
+      return blobs.getBlobRange ? blobs.getBlobRange(key, start, end) :
+        (await blobs.getBlob(key))?.slice(start, end + 1);
+    },
     deleteBlob: async (key, transaction) => (await load()).blobs.deleteBlob(key, transaction),
     listKeys: async prefix => (await load()).blobs.listKeys(prefix),
     listKeysPaged: async (prefix, page) => {
@@ -52,6 +57,7 @@ export async function createPrivateArtifactStorage(options: { client: S3Client; 
   const blobs: PublicationBlobStore = {
     async putBlob(key, bytes) { await assertPrivate(); await upstream.putBlob(key, bytes); },
     async getBlob(key) { await assertPrivate(); return upstream.getBlob(key); },
+    async getBlobRange(key, start, end) { await assertPrivate(); return upstream.getBlobRange!(key, start, end); },
     async deleteBlob(key) { await assertPrivate(); await upstream.deleteBlob(key); },
     async listKeys(prefix) { await assertPrivate(); return upstream.listKeys(prefix); },
     async listKeysPaged(prefix, page) { await assertPrivate(); return upstream.listKeysPaged!(prefix, page); },

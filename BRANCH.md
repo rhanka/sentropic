@@ -117,6 +117,13 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Switch back to worktree after UAT.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot 11 — Astra FIX R5**
+  - [x] Fetch and mechanically verify feat/t4a-cm-artifact-storage; origin/main is already an ancestor.
+  - [x] Reproduce concurrent PostgreSQL collector deadlock with barriers and false missing S3 range through both host wrappers.
+  - [x] Acquire the digest lock before reservation retry updates; enumerate pending keys without row locks.
+  - [x] Forward private S3 range reads through both host wrappers, preserving privacy enforcement.
+  - [x] Qualify PostgreSQL 27/27, package 59/59, tuple 5 passed/3 conditional skips, package build and host typecheck; guarded archive sha256 f385d846efe5127709c8a6592d653a063a16e9da7349aabf218278655e0fd370.
+  - [ ] Await exact-head CI; append FIX R5 report and remove isolated volumes.
 - [ ] **Lot 10 — Astra FIX R4**
   - [x] Add PostgreSQL regressions for reservation starvation, verified GC transaction forwarding and full republication after collection in both placement directions.
   - [x] Rotate persisted reservation attempts independently of physical listing and host restarts.
