@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { canonical, digest, tiers } from './guards.mjs';
 import { wireCommands } from './ops.mjs';
+import { templateDigest } from './t3-rollback.mjs';
 
 // Strategic-merge keys of the pod template lists (patchMergeKey in k8s.io/api core/v1).
 const MERGE_KEYS = { containers: 'name', initContainers: 'name', env: 'name', volumes: 'name',
@@ -88,7 +89,8 @@ export function judge({ live, rendered, image, annexCommands }, run = local) {
   const result = Object.fromEntries(NAMES.map(name => {
     const applied = before[name].metadata.annotations?.['kubectl.kubernetes.io/last-applied-configuration'];
     const [from, to] = [objects[name].spec.template, after[name].spec.template];
-    return [name, { wiredSha256: digest(canonical(from)), renderedSha256: digest(canonical(to)),
+    return [name, { legacySha256: templateDigest(before[name].spec.template),
+      wiredSha256: digest(canonical(from)), renderedSha256: digest(canonical(to)),
       diff: templateDiff(from, to, applied ? JSON.parse(applied).spec?.template : undefined) }];
   }));
   return { version: 't3-template-diff/1', strictZero: Object.values(result).every(entry => !entry.diff.length), deployments: result };
