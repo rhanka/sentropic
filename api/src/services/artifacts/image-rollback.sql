@@ -1,5 +1,5 @@
 -- Offline only: stop every writer/maintenance job and migrate each scope to
--- object with verified read-back before running this through make db-query.
+-- object with verified read-back before running make artifact-image-rollback.
 -- Retain all DDL and data; only the six incompatible receipts are retired.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
