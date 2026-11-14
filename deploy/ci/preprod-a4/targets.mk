@@ -60,7 +60,7 @@ k8s-preprod-a4-prepare: ## Prepare the owner-authorized A4 evidence; dry-run by 
 
 test-preprod-a4: ## Scoped operator, secret-composition and bundle preparation tests; no cluster
 	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test deploy/ci/preprod-a4/*.test.mjs
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test --test-concurrency=1 deploy/ci/preprod-a4/*.test.mjs
 
 .PHONY: test-t3-sql
 test-t3-sql: ## Exercise applicability and restore on a disposable PostgreSQL; no network or cluster
