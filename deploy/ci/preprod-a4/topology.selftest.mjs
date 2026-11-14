@@ -3,6 +3,7 @@ import { approvedRequest, image, sha } from './fixtures.mjs';
 import { canonical, digest, tiers } from './guards.mjs';
 import { execute } from './execution.mjs';
 import { verify } from './verify.mjs';
+import { verificationLine, verificationSpec } from './t3-probe-fixture.mjs';
 
 export async function verifyRenderedSequence(rendered, tierName) {
   const { namespace } = tiers[tierName];
@@ -11,7 +12,7 @@ export async function verifyRenderedSequence(rendered, tierName) {
   const objects = structuredClone(rendered);
   const object = (kind, name) => objects.find(item => item.kind === kind && item.metadata.name === name);
   const deployments = objects.filter(item => item.kind === 'Deployment');
-  const restriction = { ipAllowList: { sourceRange: ['192.0.2.10/32'] } };
+  const restriction = verificationSpec;
   const grant = { ...request, format: `${tierName}-a4-execution/1`, uiImage: image.replace('sentropic-api', 'sentropic-ui'),
     middlewareSpecSha256: digest(canonical(restriction)), trafficRestrictionReceiptRef: 'tenant:synthetic-denial-proof', actions: {
       'start-ui': [['scale', 'deployment/ui', '--replicas=1']],
@@ -33,9 +34,9 @@ export async function verifyRenderedSequence(rendered, tierName) {
   const backend = name => object('Ingress', name).spec.rules[0].http.paths[0].backend.service.name;
   assert.equal(backend('sentropic'), 'ui'); assert.equal(backend('auth-idp'), 'auth-idp');
   const calls = [], env = { A4_TIER: tierName, A4_KUBECONFIG_FILE: '/private/kube', A4_REQUEST_FILE: '/private/request',
-    A4_EXECUTION_FILE: '/private/annex', A4_EXECUTION_SHA256: digest(JSON.stringify(grant)) };
+    A4_EXECUTION_FILE: '/private/annex', A4_EXECUTION_SHA256: digest(JSON.stringify(grant)), A4_VERIFICATION_FILE: '/private/verification' };
   const read = path => path === env.A4_REQUEST_FILE ? JSON.stringify(request)
-    : path === env.A4_EXECUTION_FILE ? JSON.stringify(grant) : 'private';
+    : path === env.A4_EXECUTION_FILE ? JSON.stringify(grant) : path === env.A4_VERIFICATION_FILE ? verificationLine : 'private';
   const call = (_config, args) => {
     calls.push(args);
     if (args[0] === 'exec') return `verificationSha256=${sha}\n`;

@@ -7,6 +7,7 @@ import { ops } from './ops.mjs';
 import { run } from './run.mjs';
 import { verify } from './verify.mjs';
 import { approvedRequest, cron, fixture, image, sha } from './fixtures.mjs';
+import { verificationHeader, verificationLine, verificationSpec } from './t3-probe-fixture.mjs';
 
 const prod = { ...approvedRequest, format: 'prod-a4-request/1', namespace: 'sentropic',
   emailCodeActiveKeyRef: 'email-code-hmac:v1:prod:0123456789abcdef' };
@@ -69,7 +70,7 @@ test('should wire prod from the shared A4 wiring component and create prod budge
 });
 
 test('should restrict prod traffic only with the prod verification middleware and probe the prod origin', async () => {
-  const spec = { ipAllowList: { sourceRange: ['192.0.2.10/32'] } };
+  const spec = verificationSpec;
   const annotate = middleware => ['sentropic', 'auth-idp'].map(name =>
     ['annotate', 'ingress', name, `traefik.ingress.kubernetes.io/router.middlewares=${middleware}@kubernetescrd`, '--overwrite']);
   const grant = (middleware) => ({ ...prod, format: 'prod-a4-execution/1', middlewareSpec: spec,
@@ -97,7 +98,8 @@ test('should restrict prod traffic only with the prod verification middleware an
   };
   const probed = [];
   const bytes = JSON.stringify(g);
-  await verify({ ...env, A4_VERIFY_PHASE: 'http', A4_EXECUTION_FILE: '/private/annex', A4_EXECUTION_SHA256: digest(bytes) },
-    call, read({ '/private/annex': bytes }), async url => { probed.push(url); return new Response('{}', { status: 200 }); });
-  assert.deepEqual(probed, ['https://sentropic.sent-tech.ca/api/v1/health']);
+  await verify({ ...env, A4_VERIFY_PHASE: 'http', A4_EXECUTION_FILE: '/private/annex', A4_EXECUTION_SHA256: digest(bytes),
+    A4_VERIFICATION_FILE: '/private/verification' }, call, read({ '/private/annex': bytes, '/private/verification': verificationLine }),
+  async (url, options) => { probed.push([url, options.headers.authorization]); return new Response('{}', { status: 200 }); });
+  assert.deepEqual(probed, [['https://sentropic.sent-tech.ca/api/v1/health', verificationHeader]]);
 });

@@ -13,6 +13,7 @@ export A4_VERIFY_PHASE ?= internal
 export A4_EXECUTION_FILE
 export A4_EXECUTION_SHA256
 export A4_ACTION
+export A4_VERIFICATION_FILE
 export T3_ACTION T3_CONFIG T3_STATE_DIR T3_CHRONO_FILE
 # Every operator chronometer runs under the C numeric locale, whatever the caller exports:
 # a comma-decimal locale truncated /proc/uptime to whole seconds in rehearsal r8.
