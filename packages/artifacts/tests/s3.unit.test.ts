@@ -81,7 +81,11 @@ describe('s3 create-only puts', () => {
       startAfter = result.keys[result.keys.length - 1];
     }
     expect(walked).toEqual(all);
-    expect(seen[0]).toMatchObject({ startAfter: prefix, maxKeys: 3 });
+    for (const selected of [all[4]!, all[4]!.slice(0, -60)]) {
+      expect(await blobs.listKeysPaged!(selected, { maxItems: 1, maxEncodedBytes: 1000 }))
+        .toEqual({ keys: [all[4]], hasMore: false });
+    }
+    expect(seen[0]).toMatchObject({ startAfter: undefined, maxKeys: 3 });
     expect(seen[1]).toMatchObject({ startAfter: all[1], maxKeys: 3 });
     await expect(blobs.listKeysPaged!(prefix, {
       maxItems: 2, maxEncodedBytes: 1_000_000, startAfter: 'artifacts/other/blobs/sha256/' + 'f'.repeat(64),
