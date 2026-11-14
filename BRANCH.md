@@ -59,6 +59,9 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - `apps/artifact-content/tests/**`
   - `deploy/ci/artifact-content/object-store/artifact-content-db-role.sql`
   - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
+  - `packages/cluster-mesh/tests/storage/pg-driver.ts`
+  - `packages/cluster-mesh/tests/storage/pg-fixture.ts`
+  - `packages/cluster-mesh/tests/storage/postgres-driver-cleanup.spec.ts`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `packages/cluster-mesh/src/storage/artifact-blob.ts`
@@ -83,6 +86,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- BRT4a-EX6 (FIX R6b, conductor-authorized CI scope): fix the PostgreSQL qualification driver's deadline cleanup. A timed-out socket leaves its backend holding AccessShareLock and blocks DROP SCHEMA with 55P03; cancel the query and await same-session rollback before release, then drain both pools on close. Preserve product budgets, assertions and the R6 global digest lock order. Impact: storage qualification fixtures and their regression only. Rollback: revert the R6b test commit.
 - BRT4a-EX5 (R4 CI 43584332003): allow e2e/tests/03-dashboard.spec.ts to establish the collaborator presence required by its existing strict tooltip assertion. Evidence: browser-shard-3 snapshot shows the valid standalone disabled read-only lock, while the test unconditionally demands a positive presence count after concurrent initial GET/POST. Seed a real collaborator through the authenticated presence API before viewer navigation; preserve every assertion and timeout. Impact: fixture setup only. Rollback: revert this test commit.
 - BRT4a-EX4 (FIX R3 rebase integration): CI 43581832180 proves cluster-mesh dev.27 now equals origin/main despite the storage src delta. Bump to dev.28, synchronize root/API locks and selected fixture, and regenerate the local P1 manifest. Impact: release metadata only. Rollback: revert this metadata commit; the version gate fails again.
 - BRT4a-R3 (package release follow-through): aligning the provider version changes the APP-P1 manifest digest. Reproduced locally: 23 registry tests refused the old 0.2.27 pin. Recompute the 0.2.28 manifest with the unchanged `mcp:tools:invoke` projection, update the API pin and installed/dispatch fixtures, retain historical digest assertions, and qualify registry tests before pushing.
@@ -117,6 +121,13 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Switch back to worktree after UAT.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot 13 — FIX R6b PostgreSQL CI**
+  - [x] Fetch and mechanically verify the requested worktree and branch; compare the storage path with origin/main.
+  - [x] Measure transaction-local timeout settings and WAL commit waits without printing connection strings or values.
+  - [x] Reproduce the expired backend retaining schema locks; fix the evidenced test driver cleanup without changing product timeouts.
+  - [x] Preserve the original twelve-fragment numeric staged-item purge test and every assertion unchanged.
+  - [x] Qualify storage 535/535, scoped T4a API 87/87, package 59/59, tuple 5/5 and cluster-mesh typecheck/lint; retain existing conditional crash/tuple phases.
+  - [ ] Push and await green exact-head CI; append the final receipt and remove the isolated test volumes.
 - [x] **Lot 12 — Astra FIX R6**
   - [x] Fetch and mechanically verify feat/t4a-cm-artifact-storage; origin/main remains an ancestor.
   - [x] Reproduce cross-scope, two-digest PostgreSQL deadlock (40P01) using first-acquisition barriers.
