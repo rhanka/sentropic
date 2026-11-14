@@ -10,7 +10,12 @@ export function inputs() {
   const ui = `ghcr.io/rhanka/sentropic-ui@sha256:${'c'.repeat(64)}`;
   const authorization = { ...approvedRequest, format: 'preprod-a4-authorization/1' };
   const annex = { ...approvedRequest, format: 'preprod-a4-execution/1', uiImage: ui,
-    actions: { fence: [['scale','deployment/api','--replicas=0']] } };
+    actions: { fence: [['scale','deployment/api','--replicas=0']],
+      restrict: [['annotate','ingress','sentropic','traefik.ingress.kubernetes.io/router.middlewares=sentropic-preprod-a4-verification@kubernetescrd','--overwrite']],
+      'delete-custodian': [['delete','pod','sentropic-a4-custodian','--wait=true','--timeout=180s']],
+      'start-api': [['scale','deployment/api','--replicas=1']],
+      resume: [['patch','cronjob','pgbackup','--type=merge','-p','{"spec":{"suspend":false}}']],
+      'open-traffic': [['annotate','ingress','sentropic','traefik.ingress.kubernetes.io/router.middlewares-']] } };
   const budgets = { qualificationReceiptRef: 'track:t3-qualified' };
   for (const name of ['reservation','deletion','diagnostic','read','workspace','replicaExport','replicaValidation','replicaSync']) {
     budgets[name] = { deadlineMs: 10000, maxAttempts: 1 };
