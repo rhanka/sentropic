@@ -1024,6 +1024,10 @@ jobs:
         run: make test-artifact-content-manifests ENV=test-app-w3d
       - name: Gate transactional SQL on a disposable database
         run: make test-idp-sync-sql ENV=test-idp-sync
+      - name: Gate T3 operator state transitions
+        run: make test-preprod-a4 ENV=test-t3-gaps
+      - name: Gate T3 applicability and transactional restore
+        run: make test-t3-sql ENV=test-t3-gaps
 
   # BR80-EX1: immutable archives and preparation, never a shared mutable workspace.
   package-candidates:

@@ -29,6 +29,21 @@ sql -c 'CREATE SCHEMA control; CREATE TABLE control.event_outbox (id text,channe
 present=$(inspect)
 sql -c "INSERT INTO control.event_outbox VALUES ('t3','connector_grant_events','{}','queued','now')"
 [ "$(inspect)" != "$present" ]
+# Round-trip all schemas and real column/default ACLs through the delivered restore generator.
+sql -c 'CREATE ROLE t3_reader; GRANT SELECT (client_id) ON oauth_clients TO t3_reader; ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO t3_reader; CREATE SCHEMA artifacts; CREATE TABLE artifacts.t3_empty(id text)'
+acl=$(sql -f /tests/t3-acl.sql)
+pg_dump --no-owner --no-privileges > /tmp/t3-source.sql
+# Fixture grants are intentionally narrow: production capture uses t3-acl.mjs.
+cat > /tmp/t3-acl.sql <<'ACL'
+GRANT SELECT (client_id) ON public.oauth_clients TO t3_reader;
+ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO t3_reader;
+ACL
+sql -c 'CREATE SCHEMA cm_identity; CREATE TABLE cm_identity.after_commit(id text)'
+sql --single-transaction -v baseline_acl="$acl" -f /restore.sql >/tmp/restore.log 2>&1 || { cat /tmp/restore.log; exit 1; }
+[ "$(sql -f /tests/t3-acl.sql)" = "$acl" ]
+if sql --single-transaction -v baseline_acl="$(printf '%064d' 0)" -f /restore.sql >/tmp/refuse.log 2>&1; then exit 1; fi
+[ "$(sql -f /tests/t3-acl.sql)" = "$acl" ]
+echo 'PASS: full multi-schema restore, column/default ACL parity, atomic refusal on mismatch'
 sql -c 'DROP TABLE public.users CASCADE' >/tmp/drop.log 2>&1
 case "$(inspect)" in *'"ok": false'*) ;; *) exit 1;; esac
 echo 'PASS: real legacy SQL, optional relations, same-length ciphertext, remote and connector drift, missing sources'

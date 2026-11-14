@@ -65,7 +65,9 @@ test-preprod-a4: ## Scoped operator, secret-composition and bundle preparation t
 .PHONY: test-t3-sql
 test-t3-sql: ## Exercise applicability and restore on a disposable PostgreSQL; no network or cluster
 	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
-	@docker run --rm --network none --tmpfs /tmp:rw,exec -v "$(CURDIR)/api/drizzle:/migrations:ro" -v "$(CURDIR)/deploy/ci/preprod-a4:/tests:ro" --entrypoint sh postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 /tests/t3-sql-test.sh
+	@set -eu; template="$$(mktemp)"; trap 'rm -f "$$template"' EXIT; \
+	docker run --rm --network none -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node deploy/ci/preprod-a4/t3-restore-fixture.mjs > "$$template"; \
+	docker run --rm --network none --tmpfs /tmp:rw,exec -v "$$template:/restore.sql:ro" -v "$(CURDIR)/api/drizzle:/migrations:ro" -v "$(CURDIR)/deploy/ci/preprod-a4:/tests:ro" --entrypoint sh postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 /tests/t3-sql-test.sh
 
 A4_TEST_IMAGE ?= $(API_TOOL_IMAGE)
 .PHONY: test-preprod-a4-api
