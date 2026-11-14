@@ -703,8 +703,12 @@ test-ci-api-tag-guard: ci-test-env ## Regress publish-api-image tag collision gu
 	@bash scripts/test-api-tag-guard.sh $(or $(CI_TAG_GUARD_CASE),all)
 
 .PHONY: test-ci-api-image-canonical
-test-ci-api-image-canonical: ci-test-env ## Regress canonical artifact resolution (reuse/absent/fail-closed) and tag inputs
+test-ci-api-image-canonical: ci-test-env test-ci-k8s-bundle-secret ## Regress canonical artifact resolution (reuse/absent/fail-closed) and tag inputs
 	@bash scripts/test-api-image-canonical.sh $(or $(CI_CANONICAL_CASE),all)
+
+.PHONY: test-ci-k8s-bundle-secret
+test-ci-k8s-bundle-secret: ci-test-env ## Regress deployment secret bundle preflight with fake kubectl only (BRT1-EX1)
+	@bash scripts/test-k8s-bundle-secret.sh
 
 .PHONY: test-artifact-content-image
 test-artifact-content-image: ci-test-env ## Qualify the content role in the recorded canonical production artifact
