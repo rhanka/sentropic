@@ -40,7 +40,7 @@ export function preflight(config, read = privateInput) {
   validateApplicability(JSON.parse(read(config.applicabilityBaselineFile)));
   validateReceiptPolicy(config,grant,read);
   const acl = JSON.parse(read(config.aclReceiptFile));
-  if (!/^[a-f0-9]{64}$/.test(acl.aclCatalogSha256) || acl.aclSqlSha256 !== digest(read(config.restoreAclFile))) {
+  if (!/^[a-f0-9]{64}$/.test(acl.aclCatalogSha256) || acl.aclSqlSha256 !== digest(read(config.restoreAclFile,64*1024*1024))) {
     throw new Error('acl_baseline_invalid');
   }
   validateProbes(buildProbes(config).probes);
