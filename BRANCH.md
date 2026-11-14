@@ -121,6 +121,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Preserve the owning deletion transaction through the verification wrapper.
   - [x] Rewrite registered digests into their existing placement before republication.
   - [x] Reproduce four failing PostgreSQL cases before fixes, then pass 84/84 API regressions, 59/59 package tests and package build/typecheck.
+  - [x] Guard the R4 package archive and synchronize selected fixture integrity; tuple tests pass (5 passed, 3 conditional skips), archive sha256 9a40609b790e9bfe3998003c3ecab6df9f18815bac0501e2c74eb18d0e51dedf.
   - [ ] Keep prior storage regressions green; qualify package archive and exact-head CI, then report and remove test volumes.
 - [ ] **Lot 9 — Astra FIX R3**
   - [x] Rebase on origin/main and reproduce exact/partial prefix failures; fix bounded S3/Postgres/SQLite prefix selection.
