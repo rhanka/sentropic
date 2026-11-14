@@ -44,6 +44,7 @@
 - [x] SQL canonicalization treats zero-dimensional empty ACL arrays as no entries before aclexplode.
 - [x] R5-B3/M2: fixture preserves the immutable logical WebAuthn verifier; W3 explicitly wires the dedicated IdP JWT Secret, including legacy templates.
 - [x] R5-M4: human emergency passes the protected witness configuration; successful classified rollback persists DONE/commitVerified=false for rearm.
+- [x] R5-M1: preflight requires both excluded-source 403 probes; finish-open executes them before acceptance and requires configured final external probes.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests

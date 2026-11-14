@@ -88,7 +88,7 @@ export function reconcileRestrictSafe(ctx, state) {
 }
 
 export async function finishOpen(ctx) {
-  const { call, probe, state, save, images, probes = [], externalProbes = [] } = ctx;
+  const { call, probe, state, save, images, probes = [], externalProbes = [],restrictedProbes = [] } = ctx;
   const dry = { dryRun: ctx.dryRun === true, print: ctx.print ?? (() => {}),
     deadlineMs: ctx.deadlineMs, now: ctx.now };
   effectiveTimeout(1, ctx, (ctx.now ?? monoMs)());
@@ -101,6 +101,7 @@ export async function finishOpen(ctx) {
     ensureStarted(call, 'api', images.candidate, dry);
     ensureStarted(call, 'ui', images.ui, dry);
     ensureStarted(call, 'auth-idp', images.candidate, dry);
+    for (const p of restrictedProbes) await runProbe(probe,p,dry);
     for (const p of probes) await runProbe(probe, p, dry);
     state.substate = 'ACCEPTED';
     state.acceptedSha256 = createHash('sha256').update(JSON.stringify(probes.map(p => p.id))).digest('hex');
