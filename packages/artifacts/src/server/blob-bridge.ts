@@ -16,6 +16,7 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { blobDigestOfKey, type BlobKeyPage, type PublicationBlobStore } from './publication.js';
 import { assertBlobPrefix } from './blob-prefix.js';
+import type { FinalizeTxClient } from './commit/types.js';
 
 /** Per-process pagination secret: cursors are unforgeable without it, invalid after restart. */
 const PAGE_MAC_KEY = randomBytes(32);
@@ -256,8 +257,8 @@ export function createVerifiedBlobStore(upstream: PublicationBlobStore): Publica
         return upstream.listKeysPaged!(prefix, page);
       },
     }),
-    async deleteBlob(key: string): Promise<void> {
-      await upstream.deleteBlob(key);
+    async deleteBlob(key: string, transaction?: FinalizeTxClient): Promise<void> {
+      await upstream.deleteBlob(key, transaction);
     },
   };
 }
