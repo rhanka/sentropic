@@ -121,7 +121,7 @@ test('RUN7 watchdog kills a SIGSTOP recovery owner before its only writer restor
     assert.equal(readFileSync(join(dir, 'replicas-api'), 'utf8'), '0', 'API stopped before driver suspension');
     await new Promise(r => setTimeout(r, 1100));
     let writes = 0;
-    const code = await poll({ stateDir: dir, config: { revisions: {} }, print: () => {}, call: args => {
+    const code = await poll({ stateDir: dir, config: { templateDigests: {} }, print: () => {}, call: args => {
       let running = false;
       try { running = readFileSync(`/proc/${driver.pid}/stat`, 'utf8').split(') ')[1][0] !== 'Z'; } catch {}
       assert.equal(running, false, 'old writer must be dead before any recovery command');

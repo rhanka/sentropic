@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, openSync, readFileSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { templateDigest } from './t3-rollback.mjs';
 import { emailProbe, expectedSigningKid, probeEndpoints, observerProbes, verificationFile, verificationSpec } from './t3-probe-fixture.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
@@ -36,7 +37,13 @@ for (const { mode, step, operation, substate, committed = false } of cases) {
     writeFileSync(config, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
       witness: { url: `${new URL(endpoints.appHealth).origin}/legacyWitness`,cookie: 'synthetic-witness' },
       ...observerProbes(new URL(endpoints.appHealth).origin), verificationCredentialFile: verificationFile(dir),
-      endpoints, emailProbe, expectedSigningKid, images: { candidate: 'c', ui: 'u' }, revisions: {}, request: { operationId: 'process-test' } }));
+      endpoints, emailProbe, expectedSigningKid, images: { candidate: 'c', ui: 'u' },
+      templateDigests: {
+        api: templateDigest({ spec: { containers: [{ name: 'api', image: 'c' }] } }),
+        'auth-idp': templateDigest({ spec: { containers: [{ name: 'auth-idp', image: 'c' }] } }),
+        ui: templateDigest({ spec: { containers: [{ name: 'ui', image: 'u' }] } }),
+      },
+      request: { operationId: 'process-test' } }));
     // The double needs no Node runtime. Keep real driver/watchdog/process-group
     // supervision while avoiding dozens of cold Node startups in each recovery.
     writeFileSync(join(dir, 'kubectl'), `#!/bin/sh

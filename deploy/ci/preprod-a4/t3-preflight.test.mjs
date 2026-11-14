@@ -55,7 +55,7 @@ export function inputs(witnessUrl = 'https://app.test/api/v1/me') {
       { id: 'external-idp',url: 'https://idp.test/.well-known/openid-configuration',expect: 200 }],
     witness, verificationCredentialFile: '/verification',
     rotationKeyFiles: { apiJwtSecretFile: '/jwt', secretEncryptionKeyFile: '/enc', idpSessionJwtFile: '/idp' },
-    revisions: { api: '1', 'auth-idp': '2', ui: '3' }, preCmDir: '/cms' };
+    templateDigests: { api: 'a'.repeat(64), 'auth-idp': 'b'.repeat(64), ui: 'c'.repeat(64) }, preCmDir: '/cms' };
   return { config, files, read: name => files[name] ?? 'synthetic-private-input' };
 }
 test('offline preflight accepts complete bound inputs without invoking Kubernetes', () => {
@@ -109,7 +109,7 @@ test('offline preflight refuses annex, baseline, keys, remote and budget drift',
     f => { f.config.initialSecretKeyNames.push('JWT_SECRET'); },
     f => { f.files['/remote'] = '{"changed":true}'; },
     f => { f.files['/budgets'] = '{}'; },
-    f => { f.config.revisions.api = ''; },
+    f => { f.config.templateDigests.api = ''; },
   ]) {
     const f = inputs(); mutate(f); assert.throws(() => preflight(f.config,f.read));
   }
