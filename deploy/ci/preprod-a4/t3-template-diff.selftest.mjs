@@ -23,7 +23,7 @@ console.log('PASS: legacy prod templates, W3 wire and annex images give the prod
 
 // Controls: the judge sees an unwired legacy template and an annex image that is not the pin.
 const unwired = templateDiff(legacy().items[0].spec.template, pins.api.spec.template);
-for (const path of ['/spec/volumes', '/spec/securityContext/runAsUser', '/spec/containers/api/command',
+for (const path of ['/spec/affinity', '/spec/volumes', '/spec/securityContext/runAsUser', '/spec/containers/api/command',
   '/spec/containers/api/env', '/spec/containers/api/volumeMounts']) assert.ok(unwired.includes(path), path);
 const drift = judge({ live, rendered, image, annexCommands: [['set', 'image', 'deployment/ui', 'ui=ghcr.io/rhanka/sentropic-ui:other']] });
 assert.deepEqual(drift.deployments.ui.diff, ['/spec/containers/ui/image']);

@@ -32,6 +32,39 @@ test('should preserve the IdP entrypoint and wire both stopped consumers without
     return JSON.stringify({ spec: { replicas: args[2] === 'auth-idp' ? 1 : 0 } });
   }, read), /consumer_not_quiesced/);
 });
+test('should pin the custodian to the tenant database node, where custody stays attached', () => {
+  const affinity = { podAffinity: { preferredDuringSchedulingIgnoredDuringExecution: [{ weight: 100, podAffinityTerm: {
+    topologyKey: 'kubernetes.io/hostname', labelSelector: { matchLabels: {
+      'app.kubernetes.io/name': 'sentropic', 'app.kubernetes.io/component': 'postgres' } } } }] } };
+  const spec = { affinity, containers: [{ name: 'api', command: ['node', '/run/cm-runtime/launch.mjs'], env: [], envFrom: [],
+    volumeMounts: [{ name: 'cm-cutover', mountPath: '/run/cm-cutover', readOnly: true }] }],
+  volumes: [{ name: 'cm-runtime', configMap: { name: 'sentropic-a4-runtime' } },
+    { name: 'cm-cutover', persistentVolumeClaim: { claimName: 'sentropic-a4-custody', readOnly: true } }] };
+  const read = path => path === env.A4_REQUEST_FILE ? JSON.stringify(request) : 'private';
+  const pod = (nodeName, phase = 'Running', metadata = {}) => ({ metadata, spec: { nodeName }, status: { phase } });
+  const custodian = (pods, template = spec, calls = []) => {
+    ops({ ...env, A4_OPERATION: 'custodian', A4_DRY_RUN: '0' }, (_config, args, input) => {
+      calls.push({ args, input });
+      return args[1] === 'deployment' ? JSON.stringify({ spec: { replicas: 0, template: { spec: template } } })
+        : args[1] === 'pods' ? JSON.stringify({ items: pods }) : '';
+    }, read);
+    return calls;
+  };
+  const calls = custodian([pod('node-b'), pod('node-a', 'Succeeded'), pod('node-c', 'Running', { deletionTimestamp: 'now' })]);
+  assert.deepEqual(calls[1].args, ['get', 'pods', '-l',
+    'app.kubernetes.io/name=sentropic,app.kubernetes.io/component=postgres', '-o', 'json']);
+  assert.deepEqual(JSON.parse(calls.find(call => call.args[0] === 'create').input).spec.affinity, { nodeAffinity: {
+    requiredDuringSchedulingIgnoredDuringExecution: { nodeSelectorTerms: [
+      { matchFields: [{ key: 'metadata.name', operator: 'In', values: ['node-b'] }] }] } } });
+  // No resolved single node, or no placement rule on the wired template: refused before any write.
+  for (const [pods, template, error] of [[[], spec, /custody_node_unresolved/],
+    [[pod('node-a'), pod('node-b')], spec, /custody_node_unresolved/], [[pod(undefined)], spec, /custody_node_unresolved/],
+    [[pod('node-a')], { ...spec, affinity: undefined }, /overlay_not_installed/]]) {
+    const refused = [];
+    assert.throws(() => custodian(pods, template, refused), error);
+    assert(!refused.some(call => call.args[0] === 'create'));
+  }
+});
 test('should refuse malformed keys, unexpected previous slots and incorrect active fingerprints', () => {
   const base = { CM_A4_NAMESPACE: 'sentropic-preprod', CM_IDENTITY_EMAIL_CODE_POLICY: 'hmac-sha256', CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF: approvalRef,
     CM_IDENTITY_EMAIL_CODE_ACTIVE_KEY_REF: activeRef, EMAIL_CODE_HMAC_KEY_ACTIVE_REF: activeRef };
