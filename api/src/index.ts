@@ -106,6 +106,12 @@ if (process.argv.includes('--secret-reencrypt')) {
 // A served process exits on SIGTERM instead of holding its pod Terminating for the whole grace period.
 // Outside production nothing is drained: a development reload must not wait for open event streams.
 const shutdown = installGracefulShutdown({ log: logger, drainMs: env.NODE_ENV === 'production' ? undefined : 0 });
+let loadedQueueManager: { pause(): void } | null = null;
+const sweepTimers: Array<ReturnType<typeof setInterval>> = [];
+const trackSweep = (timer: ReturnType<typeof setInterval>) => {
+  sweepTimers.push(timer);
+  return timer;
+};
 
 // Fail closed before serving: a deployed runtime never signs or seals with a missing or public key.
 try {
@@ -131,6 +137,7 @@ try {
 // import below documents. A load failure keeps warn-and-defaults.
 try {
   const { queueManager } = await import('./services/queue-manager');
+  loadedQueueManager = queueManager;
   await queueManager.reloadSettings();
   logger.info('Queue settings loaded.');
 } catch (error) {
@@ -190,6 +197,12 @@ try {
 const reservationReaper = startReservationReaper(reservationReaperConfig,
   (limit) => runReservationReaperSweep({ database: db, limit }));
 process.once('exit', () => { void reservationReaper.stop(); });
+shutdown.onStop(() => {
+  for (const timer of sweepTimers.splice(0)) clearInterval(timer);
+  loadedQueueManager?.pause();
+  void reservationReaper.stop();
+  void outboxDispatcher.stop();
+});
 
 if (process.env.NODE_ENV !== 'test') {
   try {
@@ -198,11 +211,11 @@ if (process.env.NODE_ENV !== 'test') {
     logger.error({ err: error }, 'Identity revocation delivery failed at startup');
   }
 
-  setInterval(() => {
+  trackSweep(setInterval(() => {
     drainCmRevocations().catch((error) => {
       logger.error({ err: error }, 'Identity revocation delivery failed');
     });
-  }, 15 * 60 * 1000); // every 15 minutes
+  }, 15 * 60 * 1000)); // every 15 minutes
 
   // Chat trace purge (retention > 7 days). Run once at boot, then daily.
   try {
@@ -210,30 +223,31 @@ if (process.env.NODE_ENV !== 'test') {
   } catch {
     // already logged inside
   }
-  setInterval(() => {
+  trackSweep(setInterval(() => {
     void runChatTracePurge();
-  }, 24 * 60 * 60 * 1000);
+  }, 24 * 60 * 60 * 1000));
 
   // Lock expiry sweep (short TTL). Purge expired locks and notify via SSE.
-  setInterval(() => {
+  trackSweep(setInterval(() => {
     purgeExpiredLocksSweep().catch((error) => {
       logger.error({ err: error }, 'Lock expiry sweep failed');
     });
-  }, 30 * 1000);
+  }, 30 * 1000));
 
   // Queue reaper (WI-1): recover stranded `processing` jobs at boot (before any
   // local jobs start → liveJobIds=[]) then every 5 minutes with live ids excluded.
   // Boot sweep runs before any local job starts, so no live ids to skip.
   await runQueueReaperSweep([]);
-  setInterval(() => {
+  trackSweep(setInterval(() => {
     // Import queueManager lazily to avoid circular-import at module load time.
     import('./services/queue-manager').then(({ queueManager }) => {
+      loadedQueueManager = queueManager;
       const liveIds = Array.from(queueManager.getLiveJobIds());
       void runQueueReaperSweep(liveIds);
     }).catch((error) => {
       logger.error({ err: error }, 'Queue reaper periodic sweep failed');
     });
-  }, 5 * 60 * 1000); // every 5 minutes
+  }, 5 * 60 * 1000)); // every 5 minutes
 
   // Stream events purge (WI-2): purge old chat_stream_events at boot, then daily.
   try {
@@ -241,9 +255,9 @@ if (process.env.NODE_ENV !== 'test') {
   } catch {
     // already logged inside
   }
-  setInterval(() => {
+  trackSweep(setInterval(() => {
     void runStreamEventsPurge();
-  }, 24 * 60 * 60 * 1000);
+  }, 24 * 60 * 60 * 1000));
 
   // Outbox dispatcher (BR-60 ARCH-14): LISTEN outbox_pending + periodic sweep.
   // Claims control.event_outbox pending rows and emits via EventBusPort (pg NOTIFY).
@@ -284,9 +298,9 @@ if (process.env.NODE_ENV !== 'test') {
   // (OPS_NOTIFY_SWEEP_AUTOSTART=false); the sweep itself never throws.
   if (process.env.OPS_NOTIFY_SWEEP_AUTOSTART !== 'false') {
     await runOpsNotificationSweepSafe();
-    setInterval(() => {
+    trackSweep(setInterval(() => {
       void runOpsNotificationSweepSafe();
-    }, OPS_SWEEP_INTERVAL_MS);
+    }, OPS_SWEEP_INTERVAL_MS));
   }
 
   // BR-59-act: idempotently register the `opportunity` object type — the
