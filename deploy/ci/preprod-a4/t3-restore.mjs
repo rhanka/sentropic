@@ -95,6 +95,6 @@ export async function restore(ctx, approval) {
   pg(ctx, readFileSync(new URL('../artifact-data-guard/refuse-artifact-data.sql', import.meta.url), 'utf8'));
   pg(ctx, restoreSql(dump, acl, approval.aclCatalogSha256), ['--single-transaction']);
   if (pg(ctx, aclSql()).trim() !== approval.aclCatalogSha256) throw new Error('restore_acl_mismatch');
-  return preCommitRollback({ ...ctx, revisions: config.revisions, preCmDir: config.preCmDir,
+  return preCommitRollback({ ...ctx, tier: config.tier, revisions: config.revisions, preCmDir: config.preCmDir,
     healthUrl: config.endpoints.appHealth, jwksUrl: config.endpoints.idpJwks, witness: config.witness });
 }
