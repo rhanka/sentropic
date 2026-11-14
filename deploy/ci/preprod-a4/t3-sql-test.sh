@@ -7,6 +7,12 @@ mkdir -p "$PGDATA"; chown postgres:postgres "$PGDATA"
 su postgres -c 'initdb -D "$PGDATA" --auth=trust' >/tmp/init.log 2>&1
 su postgres -c 'pg_ctl -D "$PGDATA" -l /tmp/pg.log -o "-k /tmp -c listen_addresses=" -w start' >/tmp/start.log 2>&1
 sql() { psql -XqAt -v ON_ERROR_STOP=1 "$@"; }
+# The gate qualifies the prod minor only. Behind a floating tag the same image name once gave a newer
+# minor, whose dumps carry column options the prod server refuses.
+version=$(sql -c 'show server_version')
+[ "$version" = "${T3_PG_VERSION:?}" ] || { echo "postgres_version_mismatch: server $version, expected $T3_PG_VERSION"; exit 1; }
+case "$(pg_dump --version)" in *" $T3_PG_VERSION") ;; *) echo "postgres_version_mismatch: $(pg_dump --version)"; exit 1;; esac
+echo "PASS: server and pg_dump are PostgreSQL $T3_PG_VERSION"
 for migration in /migrations/*.sql; do sql -f "$migration" >/tmp/migrate.log 2>&1; done
 sql -f /migrations/control/0013_oauth_refresh_tokens.sql >/tmp/migrate.log 2>&1
 inspect() { sql -f /tests/cutover-applicability-v1.sql; }
