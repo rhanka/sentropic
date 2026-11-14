@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { COMMIT_CUTOFF_MS, FINISH_CUTOFF_MS, RBAC_COUNT, TOTAL_BUDGET_MS,
-  buildProbes, checkRbac, classify, drive, loadSql, splitSql } from './t3-window-driver.mjs';
+  STEP_CUTOFFS, awaitWritersGone, buildProbes, checkRbac, classify, drive, loadSql, splitSql } from './t3-window-driver.mjs';
 import { loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
 import { preCommitRollback } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
@@ -22,6 +22,7 @@ export function makeCall(scenario = {}) {
   const liveSecrets = { ...(scenario.secretData ?? {}) };
   const createdSecrets = {};
   let frontalPollsLeft = scenario.frontalTerminating ?? 0;
+  let writerPollsLeft = scenario.writersTerminating ?? 0;
   const scaled = {};
   const readyDeploy = (name, image) => ({ spec: { replicas: 1,
     template: { spec: { containers: [{ name, image }] } } },
@@ -74,6 +75,14 @@ export function makeCall(scenario = {}) {
     }
     if (cmd.startsWith('get pods -l app.kubernetes.io/name=sentropic')) {
       const component = cmd.match(/component=([a-z-]+)/)?.[1];
+      if (component === 'api' && scenario.writersUnreadableOnce) {
+        scenario.writersUnreadableOnce = false;
+        throw new Error('kubectl_failed: get pods -l');
+      }
+      if (component === 'api' && writerPollsLeft > 0) {
+        writerPollsLeft -= 1;
+        return JSON.stringify({ items: [{ metadata: { name: 'api-legacy', deletionTimestamp: 'now' }, status: { phase: 'Running' } }] });
+      }
       if ((component === 'ui' || component === 'auth-idp') && frontalPollsLeft > 0) {
         frontalPollsLeft -= 1;
         return JSON.stringify({ items: [{ metadata: { name: 'terminating' } }] });
@@ -1023,4 +1032,48 @@ test('RUN5 rotation keys never travel in argv, even base64', async () => {
   assert.ok(!joined.includes('test-jwt-secret') && !joined.includes('test-enc-key'), 'no raw secret in argv');
   assert.ok(!joined.includes(b64('test-jwt-secret')) && !joined.includes(b64('test-enc-key')), 'no base64 secret in argv');
   assert.ok(!joined.includes(' -p ') || !joined.includes('JWT_SECRET'), 'no secret payload in -p argv');
+});
+
+// Rehearsal r9: the fence returns in 1.6 s but the legacy api and auth-idp pods stay Terminating
+// for about 31 s. A fast W4 then met them at the W5 fence assertion (writer_pod_present).
+test('R7 W3 waits for the terminating legacy pods before the custodian is created', async () => {
+  const { ctx, calls } = makeCtx({ scenario: { writersTerminating: 2 } });
+  const apiPolls = () => calls.filter(line => line.startsWith('get pods -l') && line.includes('component=api')).length;
+  const inner = ctx.call, during = [];
+  ctx.call = (args, input) => {
+    if (args.join(' ').includes('component=api') && !during.length) during.push(loadState(ctx.stateDir));
+    return inner(args, input);
+  };
+  let pollsBeforeCustodian = null;
+  ctx.delivered = (c, script, env) => {
+    if (env.A4_OPERATION === 'custodian') pollsBeforeCustodian = apiPolls();
+    return '';
+  };
+  await drive(ctx);
+  assert.equal(pollsBeforeCustodian, 3, 'two polls saw the terminating pod, the third saw none');
+  // The wait spends the W3 budget only: same step, same hard cutoff, nothing added.
+  assert.equal(during[0].step, 'W3');
+  assert.equal(during[0].stepDeadlineMonoMs - during[0].t0MonoMs, STEP_CUTOFFS.W3);
+  assert.equal(STEP_CUTOFFS.W3, 50_000);
+});
+
+test('R7 the writer-pod wait is bounded and its failure rolls back before any custodian', async () => {
+  const stuck = makeCtx({ scenario: { writersTerminating: Infinity } });
+  const started = monoMs();
+  assert.throws(() => awaitWritersGone(stuck.ctx, monoMs() + 1200), /pods_not_zero: api/);
+  assert.ok(monoMs() - started < 6000, 'the wait stops at its deadline');
+  const { ctx } = makeCtx({ scenario: { writersUnreadableOnce: true } });
+  const seen = [];
+  ctx.delivered = (c, script, env) => { seen.push(env.A4_ACTION ?? env.A4_OPERATION ?? env.A4_PHASE); return ''; };
+  assert.equal(await drive(ctx), 3, 'pre-commit rollback');
+  assert.ok(!seen.includes('custodian') && !seen.includes('snapshot'));
+  assert.equal(loadState(ctx.stateDir).recoveryReason, 'throw:kubectl_failed: get pods -l');
+});
+
+test('R7 a read-only probe run has no fence, so it does not wait for the live pods', () => {
+  const { ctx, calls, printed } = makeCtx({ scenario: { writersTerminating: Infinity } });
+  ctx.dryRun = true; ctx.probeReadOnly = true;
+  awaitWritersGone(ctx, monoMs() + 60_000);
+  assert.equal(calls.length, 0);
+  assert.ok(printed.some(line => line.includes('legacy pods not awaited')));
 });
