@@ -3,7 +3,7 @@ import { gunzipSync } from 'node:zlib';
 import { digest } from './guards.mjs';
 import { aclStatements } from './t3-acl.mjs';
 import { preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
-import { monoMs } from './t3-lib.mjs';
+import { loadState, monoMs } from './t3-lib.mjs';
 
 export const aclSql = () => readFileSync(new URL('./t3-acl.sql', import.meta.url), 'utf8');
 export const aclFormulaSha256 = () => digest(aclSql());
@@ -95,6 +95,8 @@ export async function restore(ctx, approval) {
   pg(ctx, readFileSync(new URL('../artifact-data-guard/refuse-artifact-data.sql', import.meta.url), 'utf8'));
   pg(ctx, restoreSql(dump, acl, approval.aclCatalogSha256), ['--single-transaction']);
   if (pg(ctx, aclSql()).trim() !== approval.aclCatalogSha256) throw new Error('restore_acl_mismatch');
-  return preCommitRollback({ ...ctx, tier: config.tier, revisions: config.revisions, preCmDir: config.preCmDir,
-    healthUrl: config.endpoints.appHealth, jwksUrl: config.endpoints.idpJwks, witness: config.witness });
+  const state = ctx.stateDir ? loadState(ctx.stateDir) : null;
+  return preCommitRollback({ ...ctx, templateDigests: state?.templateDigests ?? config.templateDigests,
+    preCmDir: config.preCmDir, healthUrl: config.endpoints.appHealth, jwksUrl: config.endpoints.idpJwks,
+    witness: config.witness });
 }
