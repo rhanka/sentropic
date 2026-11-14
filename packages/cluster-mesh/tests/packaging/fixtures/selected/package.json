@@ -7,7 +7,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1152.0",
-    "@sentropic/cluster-mesh": "file:../sentropic-cluster-mesh-0.26.0-dev.27.tgz",
+    "@sentropic/cluster-mesh": "file:../sentropic-cluster-mesh-0.26.0-dev.28.tgz",
     "@sentropic/comments": "0.3.1",
     "@sentropic/llm-gateway": "0.23.2",
     "@sentropic/llm-mesh": "0.38.0",
