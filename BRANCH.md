@@ -56,6 +56,7 @@
 - [x] Final review F1: original and fenced receipts validate all strict W6 fields, references, hashes and flags before fence/staging; fixtures now carry complete qualification receipts.
 - [x] Added a container-only test executing the actual W6 Zod schema declarations against original/fenced receipts and every missing-field mutation.
 - [x] CI workflow selftest includes the added operator/SQL/schema gates; schema test reuses an existing committed Zod tool lock. Alpine APK 404 was verified transient by a later HTTP 200 on the exact URL.
+- [x] Final F1 closure: every receipt hash and candidate field is explicitly a string; array coercions are refused by both the operator parser and real W6 schema tests.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests

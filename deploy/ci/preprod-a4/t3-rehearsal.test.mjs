@@ -13,7 +13,8 @@ test('original receipt validates every required field and rejects unknown keys o
     const missing = { ...original }; delete missing[key]; assert.throws(() => parseOriginalRehearsal(missing),key);
   }
   for (const patch of [{ extra: true },{ isolatedRestoreRef: 'pending' },{ restoredBackupSha256: 'bad' },
-    { candidateBootPassed: false },{ receiptRef: 'x'.repeat(513) }]) {
+    { candidateBootPassed: false },{ receiptRef: 'x'.repeat(513) },{ sourceContentSha256: [original.sourceContentSha256] },
+    { candidateCommit: [original.candidateCommit] },{ candidateImage: [original.candidateImage] }]) {
     assert.throws(() => parseOriginalRehearsal({ ...original,...patch }));
   }
   const fenced = fencedReceipt(original,{ ...original,sourceContentSha256: 'e'.repeat(64) },
