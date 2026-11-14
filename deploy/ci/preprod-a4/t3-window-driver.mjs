@@ -405,7 +405,8 @@ function initializeState(ctx) {
   validateProbes(buildProbes(ctx.config).probes);
   const state = { version: 1, step: 'W0', fenceStarted: false, startedAtUtc: utcNow(), driverPid: process.pid,
     watchdogPid: ctx.watchdogPid,
-    childPid: process.pid, namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null,
+    childPid: process.pid, namespace: ctx.config.namespace, operationId: ctx.config.request?.operationId,
+    middlewareSpec: ctx.config.middlewareSpec ?? null,
     stepDeadlineMonoMs: monoMs() + 600_000 };
   saveState(ctx.stateDir, state);
   return state;

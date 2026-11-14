@@ -1,6 +1,6 @@
 import { mkdirSync, renameSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadState, readRecoveryClaim } from './t3-lib.mjs';
+import { loadState, readRecoveryClaim, claimDead } from './t3-lib.mjs';
 import { classify } from './t3-window-driver.mjs';
 import { preflight } from './t3-preflight-static.mjs';
 import { digest } from './guards.mjs';
@@ -13,7 +13,8 @@ export function assertRearmState(state, claim, nextOperation) {
 // Explicit action only, after rollback. Evidence is archived before custody is erased.
 export function rearm(ctx, nextConfig) {
   const state = loadState(ctx.stateDir), config = ctx.config;
-  assertRearmState(state, readRecoveryClaim(ctx.stateDir), nextConfig.request.operationId);
+  const claim = readRecoveryClaim(ctx.stateDir);
+  assertRearmState(state, claim && !claimDead(claim), nextConfig.request.operationId);
   preflight(nextConfig);
   if (nextConfig.namespace !== config.namespace || nextConfig.executionSha256 === config.executionSha256
     || nextConfig.request.operationId === config.request.operationId) throw new Error('rearm_inputs_not_fresh');

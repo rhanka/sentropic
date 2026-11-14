@@ -13,6 +13,17 @@ export A4_VERIFY_PHASE ?= internal
 export A4_EXECUTION_FILE
 export A4_EXECUTION_SHA256
 export A4_ACTION
+export T3_ACTION T3_CONFIG T3_STATE_DIR
+.PHONY: k8s-t3-maintenance k8s-t3-window k8s-t3-preview
+k8s-t3-maintenance:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/t3-maintenance.mjs "$(T3_ACTION)" "$(T3_CONFIG)" "$(T3_STATE_DIR)" $(if $(filter 0,$(A4_DRY_RUN)),--execute,)
+k8s-t3-window:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/t3-window-driver.mjs --config "$(T3_CONFIG)" --state-dir "$(T3_STATE_DIR)" $(if $(filter 0,$(A4_DRY_RUN)),,--dry-run)
+k8s-t3-preview:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/t3-preflight-static.mjs "$(T3_CONFIG)"
 k8s-restore-a4-action k8s-restore-a4-verify k8s-restore-a4-custody k8s-restore-a4-prepare: export override A4_TIER := restore
 .PHONY: k8s-restore-a4-action k8s-restore-a4-verify k8s-restore-a4-custody k8s-restore-a4-prepare
 k8s-restore-a4-action:
