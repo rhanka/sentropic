@@ -1,5 +1,5 @@
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { digest } from './guards.mjs';
 
 export const applicabilitySql = () => readFileSync(new URL('./cutover-applicability-v1.sql', import.meta.url), 'utf8');
 const hashes = ['durableCutoverApplicabilitySha256', 'encryptedStoresSha256'];
@@ -31,10 +31,19 @@ export function assertStable(reference, current) {
 // row (rehearsal r9). The P-0 baseline is valid only when captured after the witness login, with no
 // admin login and no API restart until the fence. The capture proves the witness session is live and
 // binds the baseline to it; the preflight and W0 refuse a baseline bound to anything else.
-export const witnessBinding = witness => digest(`${witness?.url}\n${witness?.cookie}`);
+export const newWitnessSalt = () => randomBytes(32).toString('hex');
+export function witnessBinding(witness, salt) {
+  if (typeof salt !== 'string' || !/^[a-f0-9]{64}$/.test(salt)) throw new Error('baseline_not_after_witness');
+  return createHmac('sha256', Buffer.from(salt, 'hex')).update(`${witness?.url}\n${witness?.cookie}`).digest('hex');
+}
 export function assertBaselineAfterWitness(baseline, witness) {
   if (typeof witness?.url !== 'string' || typeof witness?.cookie !== 'string' || !witness.cookie.trim()
-    || baseline?.witnessSha256 !== witnessBinding(witness)) throw new Error('baseline_not_after_witness');
+    || typeof baseline?.witnessSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(baseline.witnessSha256)) {
+    throw new Error('baseline_not_after_witness');
+  }
+  const expected = Buffer.from(witnessBinding(witness, baseline.witnessSalt), 'hex');
+  const actual = Buffer.from(baseline.witnessSha256, 'hex');
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw new Error('baseline_not_after_witness');
 }
 
 export function inspectApplicability(ctx, query) {
@@ -58,8 +67,9 @@ export function checkApplicability(ctx, query, phase) {
     throw new Error(phase === 'W0' ? `baseline_stale_before_fence: ${err.message}` : err.message);
   }
   if (phase === 'W5') {
+    const { witnessSha256: _w, witnessSalt: _s, ...originalState } = reference;
     writeFileSync(`${ctx.stateDir}/applicability-review.json`, JSON.stringify({
-      rehearsalOriginalState: reference, fencedSnapshotState: current,
+      rehearsalOriginalState: originalState, fencedSnapshotState: current,
     }), { mode: 0o600 });
   }
 }

@@ -5,6 +5,7 @@ import { ops } from './ops.mjs';
 import { buildProbes, validateProbes, validateObservers } from './t3-lib.mjs';
 import { assertBaselineAfterWitness, validateApplicability } from './t3-applicability.mjs';
 import { validateReceiptPolicy } from './t3-rehearsal.mjs';
+import { aclFormulaSha256 } from './t3-restore.mjs';
 import { verificationCredential } from './verification-boundary.mjs';
 
 // Offline only. Never interprets a request template as observed fence evidence.
@@ -41,7 +42,8 @@ export function preflight(config, read = privateInput) {
   validateApplicability(JSON.parse(read(config.applicabilityBaselineFile)));
   validateReceiptPolicy(config,grant,read);
   const acl = JSON.parse(read(config.aclReceiptFile));
-  if (!/^[a-f0-9]{64}$/.test(acl.aclCatalogSha256) || acl.aclSqlSha256 !== digest(read(config.restoreAclFile,64*1024*1024))) {
+  if (!/^[a-f0-9]{64}$/.test(acl.aclCatalogSha256) || acl.aclFormulaSha256 !== aclFormulaSha256()
+    || acl.aclSqlSha256 !== digest(read(config.restoreAclFile,64*1024*1024))) {
     throw new Error('acl_baseline_invalid');
   }
   validateProbes(buildProbes(config).probes);

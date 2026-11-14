@@ -50,9 +50,13 @@ test('baseline capture requires the live witness session first and binds the bas
     },
     call: (_args,input) => { order.push('sql'); assert.match(input,/cutover-applicability-v1/); return JSON.stringify(applicabilityFixture()); } });
   await qualify('baseline',base,deps());
-  assert.deepEqual(order,['witness','sql']);
+  await qualify('baseline',base,deps());
+  assert.deepEqual(order,['witness','sql','witness','sql']);
   assert.equal(receipts[0].path,'/private/baseline');
-  assert.equal(receipts[0].value.witnessSha256,witnessBinding(witness));
+  assert.match(receipts[0].value.witnessSalt ?? '', /^[a-f0-9]{64}$/);
+  assert.notEqual(receipts[0].value.witnessSalt, receipts[1].value.witnessSalt);
+  assert.notEqual(receipts[0].value.witnessSha256, receipts[1].value.witnessSha256);
+  assert.equal(receipts[0].value.witnessSha256,witnessBinding(witness, receipts[0].value.witnessSalt));
   assert.doesNotMatch(JSON.stringify(receipts),/synthetic-witness/);
   for (const [config,status,error] of [[base,401,/baseline_witness_not_authenticated/],
     [{ ...base,witness: undefined },200,/baseline_witness_missing/],

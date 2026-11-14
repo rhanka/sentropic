@@ -6,6 +6,7 @@ import { digest, canonical } from './guards.mjs';
 import { STATE_HASHES } from './t3-rehearsal.mjs';
 import { applicabilityFixture } from './t3-applicability.test.mjs';
 import { witnessBinding } from './t3-applicability.mjs';
+import { aclFormulaSha256 } from './t3-restore.mjs';
 import { emailProbe, expectedSigningKid, probeEndpoints, observerProbes, verificationLine, verificationSpec } from './t3-probe-fixture.mjs';
 
 export function inputs(witnessUrl = 'https://app.test/api/v1/me') {
@@ -25,15 +26,16 @@ export function inputs(witnessUrl = 'https://app.test/api/v1/me') {
   for (const name of ['reservation','deletion','diagnostic','read','workspace','replicaExport','replicaValidation','replicaSync']) {
     budgets[name] = { deadlineMs: 10000, maxAttempts: 1 };
   }
+  const witnessSalt = 'e'.repeat(64);
   const files = { '/annex': JSON.stringify(annex), '/authorization': JSON.stringify(authorization),
-    '/remote': '{}', '/verification': `${verificationLine}\n`, '/baseline': JSON.stringify({ ...applicabilityFixture(),witnessSha256: witnessBinding(witness) }), '/budgets': JSON.stringify(budgets) };
+    '/remote': '{}', '/verification': `${verificationLine}\n`, '/baseline': JSON.stringify({ ...applicabilityFixture(),witnessSalt,witnessSha256: witnessBinding(witness,witnessSalt) }), '/budgets': JSON.stringify(budgets) };
   files['/rehearsal'] = JSON.stringify({ format: 'preprod-a4-rehearsal/2',candidateCommit: approvedRequest.candidateCommit,
     receiptRef: 'track:qualified-rehearsal',applicabilityReviewRef: 'track:prior-review',
     restoredBackupSha256: 'd'.repeat(64),isolatedRestoreRef: 'track:qualified-isolated-restore',
     candidateImage: image,candidateBootPassed: true,functionalAuthPassed: true,d11Passed: true,
     ...Object.fromEntries(STATE_HASHES.map(key => [key,'a'.repeat(64)])) });
   files['/acl'] = '-- synthetic ACL';
-  files['/acl-receipt'] = JSON.stringify({ aclCatalogSha256: 'a'.repeat(64),aclSqlSha256: digest(files['/acl']) });
+  files['/acl-receipt'] = JSON.stringify({ aclCatalogSha256: 'a'.repeat(64),aclSqlSha256: digest(files['/acl']),aclFormulaSha256: aclFormulaSha256() });
   const policy = { originalRehearsalSha256: digest(files['/rehearsal']),baselineSha256: digest(files['/baseline']),
     reviewRef: 'track:qualified-applicability',allowedChanges: ['sourceContentSha256'] };
   annex.applicabilityReceiptPolicySha256 = digest(canonical(policy)); files['/annex'] = JSON.stringify(annex);
@@ -105,8 +107,25 @@ test('offline preflight refuses annex, baseline, keys, remote and budget drift',
 // A later witness login gives another session: the baseline must be captured again after it.
 test('offline preflight refuses a baseline that is not bound to the configured witness login', () => {
   for (const mutate of [f => { f.config.witness.cookie = 'later-login'; },
-    f => { f.config.witness.url = 'https://app.test/api/v1/me?other'; }]) {
+    f => { f.config.witness.url = 'https://app.test/api/v1/me?other'; },
+    f => {
+      const b = JSON.parse(f.files['/baseline']); delete b.witnessSalt;
+      f.files['/baseline'] = JSON.stringify(b);
+      f.config.applicabilityReceiptPolicy.baselineSha256 = digest(f.files['/baseline']);
+      const annex = JSON.parse(f.files['/annex']);
+      annex.applicabilityReceiptPolicySha256 = digest(canonical(f.config.applicabilityReceiptPolicy));
+      f.files['/annex'] = JSON.stringify(annex); f.config.executionSha256 = digest(f.files['/annex']);
+    }]) {
     const f = inputs(); mutate(f);
     assert.throws(() => preflight(f.config,f.read),/baseline_not_after_witness/);
+  }
+});
+test('offline preflight rejects an old-formula ACL receipt before the fence', () => {
+  for (const patch of [{ aclFormulaSha256: undefined }, { aclFormulaSha256: '0'.repeat(64) }]) {
+    const f = inputs();
+    const receipt = { ...JSON.parse(f.files['/acl-receipt']), ...patch };
+    if (patch.aclFormulaSha256 === undefined) delete receipt.aclFormulaSha256;
+    f.files['/acl-receipt'] = JSON.stringify(receipt);
+    assert.throws(() => preflight(f.config, f.read), /acl_baseline_invalid/);
   }
 });

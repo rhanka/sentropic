@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { aclStatements } from './t3-acl.mjs';
-import { restoreSql } from './t3-restore.mjs';
+import { aclFormulaSha256, captureAcl, restoreSql } from './t3-restore.mjs';
 import { assertRearmState } from './t3-rearm.mjs';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fixture, PROD_POSTGRES_IMAGE, PROD_POSTGRES_TOOL_IMAGE, PROD_POSTGRES_VERSION, RESTORE_NS } from './t3-fixture.mjs';
 import { tierOf, assertRequest } from './guards.mjs';
 import { approvedRequest } from './fixtures.mjs';
@@ -42,6 +44,13 @@ test('restore covers all application schemas, invalidates OAuth and aborts befor
   assert.match(restoreSql('-- dump without the public schema', '', 'a'.repeat(64)),
     /CREATE SCHEMA public;\nCOMMENT ON SCHEMA public IS 'standard public schema';/);
   assert.throws(() => restoreSql('', '', "'injection"));
+  const dir = mkdtempSync(join(tmpdir(), 't3-acl-'));
+  try {
+    const receipt = captureAcl({ config: {}, call: args => args.includes('pg_dump') ? 'GRANT USAGE ON SCHEMA public TO app;\n'
+      : args.includes('psql') ? ('b'.repeat(64) + '\n') : '' }, dir);
+    assert.equal(receipt.aclFormulaSha256, aclFormulaSha256());
+    assert.equal(JSON.parse(readFileSync(join(dir, 'acl.json'), 'utf8')).aclFormulaSha256, aclFormulaSha256());
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('rearm refuses active, committed, unknown and reused attempts', () => {
