@@ -13,6 +13,7 @@
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `api/src/config/deployment-secrets.ts`
+  - `api/Dockerfile` (BRT1-EX2 only)
   - `api/src/routes/auth/oauth.ts`
   - `api/src/services/google-drive-oauth.ts`
   - `api/src/services/auth/jwks-adapter.ts`
@@ -41,6 +42,7 @@
 - [x] Review corrections: reject the committed IdP KEK seed in deployed resolvers; only update a seeded client's tenant policy when explicitly declared (A-R3-3).
 - [x] Bundle review correction: preserve quoted hash/comment bytes and assert received synthetic key digests, including padding and equals signs.
 - [x] Rebase: merge-tree identified BRANCH.md as the sole conflict; rebase onto main preserved the exact Makefile/API diff SHA-256 `0fa346f4f278bb3f13e8fdcd46871254df757f881b380178ef5fae3ea33a4683`. No package source or version changed; package post-rebase bump gate is not applicable.
+- [x] BRT1-EX2 — Direct test packaging blocker: the new bundle regression reads /workspace/Makefile, absent from ci-tools. Copy only Makefile into the ci-tools stage. Impact: test image gains its real recipe fixture; production stages remain unchanged. Rollback: remove that COPY and relocate the regression to a repository-mounted test lane. Cancel the superseded CI before pushing the corrected head; no rerun.
 
 ## AI Flaky tests
 - [x] No AI calls in scoped acceptance tests; no flaky allowance requested.
