@@ -426,7 +426,6 @@ COPY --from=ci-tool-base /opt/ast-grep /opt/ast-grep
 
 # Thin source layer: workspace sources and their builds on top of the dependency image.
 FROM ${TOOL_DEPS_IMAGE} AS ci-tools
-COPY Makefile /workspace/Makefile
 COPY apps/sandbox-node ./apps/sandbox-node
 COPY --from=base /workspace/api /workspace/api
 COPY --from=base /workspace/packages /workspace/packages
