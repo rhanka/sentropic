@@ -70,6 +70,6 @@
 - [x] Lot 2: maintenance, original/fenced receipt, full restore/ACL, witness and rearm archive/refusal paths implemented and exercised.
 - [x] Lot 3: isolated fixture/routing, logical verifier, IdP key wiring, observers and authenticated completion tests implemented.
 - [ ] Lot 4: v5 plan reconciliation, #1001 pins/switch, exact operator handoff.
-- [x] Final local validation: 203/203 operator tests, four-store/PKCE SQL drift checks, full restore semantic ACL parity and atomic refusal pass; standalone restore runtime renders.
+- [x] Final local validation: 206/206 operator tests, actual W6 Zod schema acceptance/mutation tests, four-store/PKCE SQL drift checks, full restore semantic ACL parity and atomic refusal pass; standalone restore runtime renders.
 - [ ] PR and exact-head CI green, recorded in the final packet report; no merge authorized.
 - [ ] Review: independent code and design review evidence; no consensus claim without completed peers.
