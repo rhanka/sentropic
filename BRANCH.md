@@ -1,0 +1,31 @@
+# Feature: Reconcile T3 production A4 IaC pins and convergence
+## Objective
+- [ ] Correct #1001 against the merged driver and publication receipts; no cluster actions or merge.
+## Scope / Guardrails
+- [x] Rebased `feat/t3-prod-a4-iac` on `origin/main` at `938709b08`.
+- [x] Worktree `tmp/t3-prod-a4-iac`; ENV=test-t3-iac, ports API 9166 / UI 5366 / Maildev 1266.
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `deploy/k8s/overlays/prod/kustomization.yaml`
+  - `deploy/ci/preprod-a4/bundle.selftest.mjs`
+  - `deploy/ci/artifact-content/bundle.selftest.mjs`
+  - `deploy/ci/preprod-a4/t3-iac.test.mjs`
+  - `BRANCH.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile`
+## Feedback Loop
+- [x] BR1001-EX1: Makefile prod-a4 switch authorized by packet; remove forced restart and block generic secret regeneration. Impact: explicit pod-template convergence required. Rollback: revert this branch before apply.
+- [ ] P-0.8: operator must prove exact pod-template and key parity before convergence; no runtime evidence claimed.
+## AI Flaky tests
+- [x] None.
+## Orchestration Mode (AI-selected)
+- [x] Multi-branch: separate driver gap branch, no merge authorized.
+## UAT Management (in orchestration context)
+- [ ] Operator qualifies isolated fixture and final pod templates.
+## Plan / Todo (lot-based)
+- [x] Lot 0: rebase and mechanically verify branch.
+- [x] Lot 1: UI digest corrected, API/auth-idp T2 digest retained, unconditional restart removed, generic secret target frozen; regression tests added.
+- [ ] Final validation: local rendering and scoped tests; push #1001 and exact-head green CI.
