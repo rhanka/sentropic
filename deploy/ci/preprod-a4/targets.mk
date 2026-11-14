@@ -91,12 +91,20 @@ test-preprod-a4: test-t3-template-diff ## Scoped operator, secret-composition an
 	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test --test-concurrency=1 $(A4_TEST_FILES)
 
+# PostgreSQL bytes of the prod tenant, by digest: the server image the live pod runs and the client
+# image of the dump jobs (same pins as t3-fixture.mjs, compared in t3-maintenance.test.mjs). The SQL
+# gate runs on each and refuses any other version: the floating tag gave the fixture 17.12, whose
+# dumps the prod minor cannot restore.
+T3_PG_VERSION := 17.11
+T3_PG_IMAGES := postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
 .PHONY: test-t3-sql
-test-t3-sql: ## Exercise applicability and restore on a disposable PostgreSQL; no network or cluster
+test-t3-sql: ## Exercise applicability, dump and restore on the pinned prod PostgreSQL bytes; no network or cluster
 	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
 	@set -eu; template="$$(mktemp)"; trap 'rm -f "$$template"' EXIT; \
 	docker run --rm --network none -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node deploy/ci/preprod-a4/t3-restore-fixture.mjs > "$$template"; \
-	docker run --rm --network none --tmpfs /tmp:rw,exec -v "$$template:/restore.sql:ro" -v "$(CURDIR)/api/drizzle:/migrations:ro" -v "$(CURDIR)/deploy/ci/preprod-a4:/tests:ro" --entrypoint sh postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 /tests/t3-sql-test.sh
+	for image in $(T3_PG_IMAGES); do echo "# $$image"; \
+		docker run --rm --network none --tmpfs /tmp:rw,exec -e T3_PG_VERSION=$(T3_PG_VERSION) -v "$$template:/restore.sql:ro" -v "$(CURDIR)/api/drizzle:/migrations:ro" -v "$(CURDIR)/deploy/ci/preprod-a4:/tests:ro" --entrypoint sh "$$image" /tests/t3-sql-test.sh; \
+	done
 
 A4_TEST_IMAGE ?= $(API_TOOL_IMAGE)
 .PHONY: test-t3-rehearsal-contract
