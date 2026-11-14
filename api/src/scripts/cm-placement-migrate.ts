@@ -22,6 +22,8 @@ export interface PlacementMigrationOptions {
   readonly resumeFrom?: string;
   /** Test hook: stop after this many batches. */
   readonly maxBatches?: number;
+  /** Qualification fault point after verified durable copies, before BEGIN. */
+  readonly beforePlacementSwitch?: () => Promise<void>;
 }
 
 export interface PlacementMigrationBatch {
@@ -128,6 +130,7 @@ export async function migratePlacement(options: PlacementMigrationOptions): Prom
       switched.push(row.digest);
     }
     if (switched.length > 0) {
+      await options.beforePlacementSwitch?.();
       const client = await options.pool.connect();
       try {
         await client.query('BEGIN');
