@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: '.',
-  testMatch: process.env.SPIKE_SPEC || ['v8-preview.spec.ts', 'v8-delivery.spec.ts', 'v8-hmr.spec.ts', 'v8-compiler.spec.ts'],
+  testMatch: process.env.SPIKE_SPEC || '00-v8-*.spec.ts',
   outputDir: '/results/traces',
   workers: 1,
   retries: 0,

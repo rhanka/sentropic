@@ -100,11 +100,16 @@ test('should prevent opaque-frame preview from starting workers', async ({ page 
   page.on('worker', worker => workers.push(worker.url()));
   await page.goto(origin);
   await page.evaluate(url => {
+    (window as any).frameBlocked = false;
+    document.addEventListener('securitypolicyviolation', event => {
+      if (event.effectiveDirective === 'frame-src') (window as any).frameBlocked = true;
+    });
     const frame = document.createElement('iframe');
     frame.sandbox.add('allow-scripts');
     frame.src = url;
     document.body.append(frame);
   }, origin);
+  await page.waitForFunction(() => (window as any).frameBlocked);
   // Exact application policy denies framing as well as opaque-origin worker use.
   expect(await page.locator('iframe').count()).toBe(1);
   expect(workers).toEqual([]);
