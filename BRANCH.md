@@ -53,7 +53,7 @@
   - [x] Verify V8 source SHA-256: ab53eb6a61a07fbff7c4092bcb64806b528825a8cf190e619008c680cccf2b9e.
 - [ ] **Lot 1 — Approved specifications**
   - [x] Land CM_FIRST_ARTIFACTS unchanged.
-  - [ ] Land V8 delivery unchanged.
+  - [x] Land V8 delivery unchanged.
   - [ ] Land Vue Vapor migration unchanged.
   - [ ] Land generic app context unchanged.
   - [ ] Land frozen GAS r3 unchanged.
