@@ -33,23 +33,23 @@ Source keys: A = `ui/src/lib/components/chat/AppChatPanel.svelte` (3,478); W = `
 | A | 1695 | 1725 | host | A8a | Checkpoint indexing, mutation classifier and humanised preview supplied by checkpointHost. |
 | A | 1726 | 1743 | host | A8a | Restore transport and silent history reload; busy/error guard. |
 | A | 1744 | 1793 | package | C2b | Restore/retry confirmation state and previous-user lookup; cancel of a retry prompt still retries without restore. |
-| A | 1794 | 1841 | package | C2b | Copied feedback for 2 s; rich/plain clipboard and existing fallback; failure reported via labels. |
-| A | 1842 | 1860 | host | A8a | Exposed focus and end-caret adapter currently queries `.ProseMirror`; replace through A7b's public focus API, never DS-private DOM. |
+| A | 1794 | 1836 | package | C2b | Copied feedback for 2 s; rich/plain clipboard and existing fallback; failure reported via labels. |
+| A | 1837 | 1860 | host | A8a | Exposed focus and end-caret adapter currently queries `.ProseMirror`; replace through A7b's public focus API, never DS-private DOM. |
 | A | 1861 | 1880 | package | C2b | Stable bottom positioning after layout across up to four animation frames. |
 | A | 1881 | 1883 | host | A8a | App API error formatting. |
-| A | 1884 | 1960 | host | A8a | Todo-runtime record/task/status normalisation and merge, primary action dispatch; todo schema remains host domain. |
-| A | 1961 | 1977 | host | A8a | Closing a todo via PATCH and error/busy state. |
-| A | 1978 | 2014 | package | C2b | Steer text/in-flight/target guards, clear-and-scroll, delegate optimistic acknowledgement and rollback to controller. |
-| A | 2015 | 2149 | host | A8a | Generated-file deduplication/adaptation and todo tool-result interpretation; preserve conflict handling and incremental tasks. |
-| A | 2150 | 2190 | host | A8a | Session metadata, checkpoints, documents and todo snapshot ingestion into application state. |
-| A | 2191 | 2311 | package | C2b | Frame staging, viewport threshold, chronological block merge, stable ordering and scroll-offset preservation. |
-| A | 2312 | 2339 | host | A8a | Fetch/create checkpoints; best-effort failure must not block a chat turn. |
-| A | 2340 | 2470 | host | A8a | Session list and summary-history NDJSON loading, stale session clearing and generation cancellation. |
+| A | 1884 | 1959 | host | A8a | Todo-runtime record/task/status normalisation and merge, primary action dispatch; todo schema remains host domain. |
+| A | 1960 | 1974 | host | A8a | Closing a todo via PATCH and error/busy state. |
+| A | 1975 | 2010 | package | C2b | Steer text/in-flight/target guards, clear-and-scroll, delegate optimistic acknowledgement and rollback to controller. |
+| A | 2011 | 2140 | host | A8a | Generated-file deduplication/adaptation and todo tool-result interpretation; preserve conflict handling and incremental tasks. |
+| A | 2141 | 2165 | host | A8a | Session metadata, checkpoints, documents and todo snapshot ingestion into application state. |
+| A | 2166 | 2292 | package | C2b | Frame staging, viewport threshold, chronological block merge, stable ordering and scroll-offset preservation. |
+| A | 2293 | 2318 | host | A8a | Fetch/create checkpoints; best-effort failure must not block a chat turn. |
+| A | 2319 | 2470 | host | A8a | Session list and summary-history NDJSON loading, stale session clearing and generation cancellation. |
 | A | 2471 | 2623 | host | A8a | Select session with staged history swap, model selection from last assistant, obsolete hydration rejection and error surface. |
-| A | 2624 | 2699 | host | A8a | New/delete/rescope session lifecycle, reset histories/tools/model/documents and refresh sessions after delete. |
-| A | 2700 | 2730 | host | A8a | Model catalogue/default preference transport and Gemini smoothing policy; controller owns catalogue validation. |
-| A | 2731 | 2864 | host | A8a | Domain send payload: contexts, tools, local definitions, workspace documents; controller send and best-effort checkpoint. |
-| A | 2865 | 2894 | package | C2b | Stop and feedback commands, busy guards and labelled error state via injected controller. |
+| A | 2624 | 2696 | host | A8a | New/delete/rescope session lifecycle, reset histories/tools/model/documents and refresh sessions after delete. |
+| A | 2697 | 2728 | host | A8a | Model catalogue/default preference transport and Gemini smoothing policy; controller owns catalogue validation. |
+| A | 2729 | 2866 | host | A8a | Domain send payload: contexts, tools, local definitions, workspace documents; controller send and best-effort checkpoint. |
+| A | 2867 | 2894 | package | C2b | Stop and feedback commands, busy guards and labelled error state via injected controller. |
 | A | 2895 | 2912 | host | A8a | Session-document key reset when leaving AI mode or clearing session. |
 | A | 2913 | 3014 | host | A8a | Mount catalogue/sessions/preferences, local-tool executor, projection stream, document job updates and session-title SSE. |
 | A | 3015 | 3042 | package | C2b | Preference-session change guard and open-menu viewport measurement; domain refresh callbacks injected. |
@@ -78,7 +78,8 @@ Source keys: A = `ui/src/lib/components/chat/AppChatPanel.svelte` (3,478); W = `
 | W | 1372 | 1520 | host | A8b | Provider readiness, connection test and local-tool permission policy CRUD. |
 | W | 1521 | 1598 | host | A8b | Extension reactive auth/onboarding/config gates and workspace draft reset. |
 | W | 1599 | 1716 | package | C3 | Placement migration, DnD drop zones, 5 px header grip threshold, interactive-target exclusion, pointer cancel and Escape. |
-| W | 1717 | 1813 | package | C3 | Outside click, first focus, Tab trap, Escape and session-menu Escape; preserve docked/mobile conditions. |
+| W | 1717 | 1726 | host | A8b | Publish handoff when tab/session/draft/comment/open state changes after browser readiness. |
+| W | 1727 | 1813 | package | C3 | Visible focusable discovery, composer-first focus, Escape close and Tab wrapping; retain composer-to-session-menu and Shift+Tab-to-close paths. |
 | W | 1814 | 1837 | host | A8b | Session label resolution and queue-derived running/failed badge data. |
 | W | 1838 | 1985 | host | A8b | Route/section-to-comment mapping, section label catalogue and external comment context overrides. |
 | W | 1986 | 2025 | host | A8b | Session selection/new/load across workspace scopes and API response adaptation. |
@@ -86,7 +87,7 @@ Source keys: A = `ui/src/lib/components/chat/AppChatPanel.svelte` (3,478); W = `
 | W | 2053 | 2085 | package | C3 | Pager focus/announcement and entry selection with injected session callback. |
 | W | 2086 | 2131 | host | A8b | Agent action dispatch to job retry/cancel/delete; job SSE feeds permanent bubble badge. |
 | W | 2132 | 2188 | host | A8b | Mount extension/API config, job feed and external app events; scoped listener lifecycle. |
-| W | 2189 | 2241 | package | C3 | Keyboard bubble trigger and external open/close choreography, focus after opening, preserve in-flight local-tool auto-close rule. |
+| W | 2189 | 2241 | package | C3 | Keyboard bubble trigger and external open/close choreography, focus after opening; preserve extension-overlay/docked/mobile/visible auto-close conditions. |
 | W | 2242 | 2283 | host | A8b | Sidepanel close notification, purge jobs REST action and host cleanup. |
 | W | 2284 | 2330 | host | A8b | App bubble auth/job visual status and accessible open/close semantics on DS icon-button/badge. |
 | W | 2331 | 2346 | package | C3 | Header drag surface and placement menu, delegated event constraints apply. |
