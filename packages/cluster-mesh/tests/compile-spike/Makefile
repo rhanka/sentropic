@@ -4,11 +4,11 @@ export KUBECONFIG
 ENV ?= feat-v8-spike
 IMAGE := mcr.microsoft.com/playwright:v1.60.0-noble@sha256:9bd26ad900bb5e0f4dee75839e957a89ae89c2b7ab1e76050e559790e946b948
 TOOLS := $(ENV)-v8-tools
+POD_SPEC ?= pod.yaml
 
 .PHONY: prepare fixtures bundle probe adapter export pod-start pod-run pod-results pod-delete
 prepare:
-	@test "$$(df --output=avail -BG / | tail -1 | tr -dc '0-9')" -ge 30
-	docker run --rm -v $(TOOLS):/tools -w /tools $(IMAGE) npm install --ignore-scripts --no-audit --no-fund --save-exact @vue/compiler-sfc@3.6.0-rc.15 @vue/compiler-vapor@3.6.0-rc.15 vue@3.6.0-rc.15 sucrase@3.35.1 esbuild@0.25.12 isolated-vm@6.1.2 gray-matter@4.0.3 zod@4.6.7
+	$(MAKE) -C $(ROOT)/e2e/tests/harness prepare ENV=$(ENV)
 
 fixtures:
 	docker run --rm -u "$$(id -u):$$(id -g)" -v $(ROOT):/repo -w /repo/packages/cluster-mesh/tests/compile-spike $(IMAGE) node fixtures.mjs --write
@@ -27,7 +27,7 @@ export:
 	docker run --rm -u "$$(id -u):$$(id -g)" -v $(TOOLS):/tools:ro -v $(CURDIR)/results:/results $(IMAGE) cp /tools/spike/bootstrap.js /tools/spike/compiler-probe.json /results/
 
 pod-start:
-	kubectl apply -f pod.yaml
+	kubectl apply -f $(POD_SPEC)
 	kubectl wait --for=condition=Ready pod/v8-vd-2-0-spike -n sentropic-preprod --timeout=60s
 	kubectl exec -n sentropic-preprod v8-vd-2-0-spike -- mkdir -p /tmp/spike
 	kubectl cp results/bootstrap.js sentropic-preprod/v8-vd-2-0-spike:/tmp/spike/bootstrap.js

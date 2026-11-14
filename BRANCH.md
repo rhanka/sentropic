@@ -65,6 +65,7 @@
   - [x] Load pinned bootstrap and exercise the block memo in the real addon.
   - [x] Exercise pinned bootstrap via SandboxRuntime and isolated-vm adapter.
   - [x] Open D12 on S/style under 500m/512Mi (N=200, p50=1.680124 ms, p95=4.267401 ms); no target relaxed.
+  - [x] Compare memo/whole bytes on 21 crossing cases and dispose real compiler loops at five stages.
   - [ ] Compare bytes, imported types, CSS passes, syntax and closure sizes.
   - [ ] Measure cold/fresh/retained contexts, pod limits, memory and cancellation.
 - [ ] **Lot 3 — Browser runtime (Q7, Q9–10, Q14–16)**

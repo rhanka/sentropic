@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: v8-vd-2-0-spike
+  namespace: sentropic-preprod
+  labels:
+    app: v8-vd-2-0-spike
+spec:
+  restartPolicy: Never
+  activeDeadlineSeconds: 3600
+  automountServiceAccountToken: false
+  containers:
+    - name: spike
+      image: ghcr.io/rhanka/sentropic-api@sha256:a81f6db4db6ecd5f4c8aad05ca01c8bb13b5c4542c40118ea48b897ab4971c26
+      command: [node, -e, "setInterval(() => {}, 60000)"]
+      resources:
+        requests:
+          cpu: "0"
+          memory: 256Mi
+        limits:
+          cpu: "0"
+          memory: 512Mi
