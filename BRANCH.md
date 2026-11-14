@@ -30,6 +30,7 @@
 - [x] Emit four individual encrypted-store fingerprints alongside the aggregate; SQL mutation coverage includes all four stores.
 - [x] Operator test files run serially to avoid competing process supervisors on the shared host; process-deadline assertions are unchanged.
 - [x] Read-only qualification Make utility exposes exact RBAC, baseline capture and inert fixture generation commands for OPERATOR.
+- [x] Review hardening: validate excluded observer and witness URLs as fixture-only, require nonexpired legacy witness, retain sentropic-app SA and correct TEM endpoint key.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
