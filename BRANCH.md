@@ -29,6 +29,7 @@
   - [x] No conditional path needed; record rationale, impact and rollback before any exception.
 
 ## Feedback Loop
+- [x] Print inventory part 01 committed with source lines, targets and future hooks.
 - [x] BR00-EX1: administrative `BRANCH.md` required by packet; no product scope expansion; rollback restores the base branch plan.
 - [x] Packet authorizes `ENV=feat-app-vue-t0`; it supersedes the generic test environment prefix for this isolated lane.
 - [ ] Conductor imports this branch under the existing migration Track item; no concurrent sidecar write from this worktree.
