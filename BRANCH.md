@@ -48,6 +48,7 @@
 - [x] Qualification usable-auth reads both real authenticated /me responses after reopening, checks expected user IDs and records monotonic elapsed/fault-to-auth against final state; health alone cannot qualify.
 - [x] Added qualification refusal tests (401, wrong identity, late completion, incomplete window), plus fixture SA/logical-verifier/TEM assertions.
 - [x] Added explicit production-URL refusal across restore observer/witness paths and human-emergency DONE/commitVerified=false assertion.
+- [x] Human recovery records its reason, and committed finish-open persists DONE so authenticated qualification uses the correct recovery envelope.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests

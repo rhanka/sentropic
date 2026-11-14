@@ -226,6 +226,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       save: dryRun ? () => {} : next => saveState(stateDir, next), images: config.images,
       probes, externalProbes, restrictedProbes: fromEndpoints.restrictedProbes, deadlineMs,
       dryRun, print: console.log });
+    if (!dryRun) {
+      Object.assign(done,{ step: 'DONE',watchdogDone: true,commitVerified: true }); saveState(stateDir,done);
+    }
     console.log(`finish_open_ok substate=${done.substate}`);
   } catch (err) {
     console.error(`finish_open_failed: ${err.message}`);

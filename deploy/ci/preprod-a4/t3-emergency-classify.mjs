@@ -42,7 +42,7 @@ if (!kubeconfig) {
       committed: info.committed, receipts: info.receipts, apiReady: info.apiReady }));
     if (info.locks === 0 && process.env.T3_STATE_DIR && !dryRun) {
       const state = loadState(process.env.T3_STATE_DIR) ?? {};
-      Object.assign(state,{ commitVerified: info.committed,locks: 0 });
+      Object.assign(state,{ commitVerified: info.committed,locks: 0,recoveryReason: 'human-emergency' });
       saveState(process.env.T3_STATE_DIR,state);
     }
     if (info.locks > 0) {
