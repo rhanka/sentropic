@@ -1,16 +1,7 @@
 import { supervisedSync } from './t3-processes.mjs';
+import { chrono, chronoStart, kubectlClass, monoMs } from './t3-chrono.mjs';
+export { monoMs };
 import { closeSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
-
-// Monotonic milliseconds shared by driver and watchdog. CLOCK_BOOTTIME via
-// /proc/uptime is immune to NTP steps; Date.now is log-only, never budget.
-export function monoMs() {
-  try {
-    const first = readFileSync('/proc/uptime', 'utf8').trim().split(/\s+/)[0];
-    const seconds = Number(first);
-    if (Number.isFinite(seconds) && seconds >= 0) return Math.floor(seconds * 1000);
-  } catch { /* fall through to wall clock (tests, non-Linux) */ }
-  return Date.now();
-}
 
 // Real pod selectors from deploy/k8s/base/30-api.yaml (B1: never `app=api`,
 // which matches nothing and would fake a zero-pod proof).
@@ -77,12 +68,14 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
       return '';
     }
     track(process.pid);
-    const started = monoMs();
+    const started = chronoStart();
     const result = supervisedSync('kubectl',
       ['--kubeconfig', kubeconfig, '--namespace', namespace, '--request-timeout=60s', ...effective],
       { input, encoding: 'utf8', timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir);
     track(result?.pid ?? null);
-    if (probeReadOnly) print(`# ${(monoMs() - started)}ms ${line}`);
+    const timing = chrono(kubectlClass(effective), started, { command: effective.slice(0, 3).join(' '), status: result.status },
+      { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE, T3_STATE_DIR: stateDir ?? process.env.T3_STATE_DIR });
+    if (probeReadOnly) print(`# ${timing.elapsedMs.toFixed(3)}ms ${line}`);
     if (result.error || result.status !== 0) {
       const err = new Error(`kubectl_failed: ${effective.slice(0, 3).join(' ')}`);
       err.cause = result.error?.message ?? result.stderr?.slice(0, 300);
