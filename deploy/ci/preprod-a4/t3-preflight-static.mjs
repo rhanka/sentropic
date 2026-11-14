@@ -33,8 +33,13 @@ export function preflight(config, read = privateInput) {
   }
   validateApplicability(JSON.parse(read(config.applicabilityBaselineFile)));
   validateProbes(buildProbes(config).probes);
+  if (!Array.isArray(config.externalProbes) || config.externalProbes.length < 2
+    || config.externalProbes.some(p => !URL.canParse(p.url) || p.expect !== 200)) throw new Error('external_probes_missing');
+  if (!URL.canParse(config.witness?.url) || typeof config.witness?.cookie !== 'string' || !config.witness.cookie.trim()
+    || !(Date.parse(config.witness.expiresAt) > Date.now() + 7200000)) throw new Error('legacy_witness_invalid');
   if (config.tier === 'restore') {
-    for (const url of Object.values(config.endpoints)) {
+    for (const url of [...Object.values(config.endpoints), ...config.externalProbes.map(p => p.url),
+      ...(config.probes ?? []).map(p => p.url), config.witness.url]) {
       if (!new URL(url).hostname.endsWith('.restore-a4.test')) throw new Error('fixture_http_not_isolated');
     }
   }
