@@ -9,11 +9,10 @@ import { poll } from './t3-watchdog.mjs';
 import { buildProbes } from './t3-lib.mjs';
 import { drive } from './t3-window-driver.mjs';
 import { finishOpen } from './t3-finish-open.mjs';
-import { emailProbe, expectedSigningKid, probeReply } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
-const endpoints = Object.fromEntries(['appHealth', 'idpConfig', 'idpJwks', 's6Authorize', 'appMe', 'idpMe', 'emailApp', 'emailIdp']
-  .map(name => [name, `https://idp.test/${name}`]));
+const endpoints = probeEndpoints();
 
 test('RUN7 missing mandatory probes refuses before the fence or any state write', async () => {
   const dir = mkdtempSync(join(tmpdir(), 't3-missing-probes-'));

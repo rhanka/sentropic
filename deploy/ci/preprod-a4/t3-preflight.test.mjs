@@ -44,7 +44,7 @@ export function inputs() {
     restrictedProbes: observerProbes().restrictedProbes,
     externalProbes: [{ id: 'external-app',url: 'https://app.test/',expect: 200 },
       { id: 'external-idp',url: 'https://idp.test/.well-known/openid-configuration',expect: 200 }],
-    witness: { url: 'https://app.test/api/v1/auth/me',cookie: 'synthetic-witness',expiresAt: new Date(Date.now()+86400000).toISOString() },
+    witness: { url: 'https://app.test/api/v1/me',cookie: 'synthetic-witness',expiresAt: new Date(Date.now()+86400000).toISOString() },
     rotationKeyFiles: { apiJwtSecretFile: '/jwt', secretEncryptionKeyFile: '/enc', idpSessionJwtFile: '/idp' },
     revisions: { api: '1', 'auth-idp': '2', ui: '3' }, preCmDir: '/cms' };
   return { config, files, read: name => files[name] ?? 'synthetic-private-input' };
