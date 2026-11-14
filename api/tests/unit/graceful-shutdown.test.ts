@@ -78,6 +78,16 @@ describe('graceful shutdown', () => {
     expect(proc.exit).toHaveBeenCalledWith(0);
   });
 
+  it('should close at once without a drain, so a development reload does not wait for open streams', () => {
+    const proc = fakeProcess();
+    const { server, calls } = fakeServer(false);
+    installGracefulShutdown({ log, proc, drainMs: 0 }).attach(server);
+    proc.emit('SIGTERM');
+    vi.advanceTimersByTime(0);
+    expect(calls).toEqual(['close', 'closeIdleConnections', 'closeAllConnections']);
+    expect(proc.exit).toHaveBeenCalledWith(0);
+  });
+
   it('should keep the drain well inside the default 30 s termination grace period', () => {
     expect(SHUTDOWN_DRAIN_MS).toBeLessThanOrEqual(10_000);
   });
@@ -95,7 +105,7 @@ describe('graceful shutdown', () => {
   it('should be installed by both server entry points and attached to their listeners', () => {
     for (const entry of ['../../src/index.ts', '../../../apps/auth-idp/index.ts']) {
       const source = readFileSync(fileURLToPath(new URL(entry, import.meta.url)), 'utf8');
-      expect(source).toMatch(/const shutdown = installGracefulShutdown\(\{ log: logger \}\);/);
+      expect(source).toContain("const shutdown = installGracefulShutdown({ log: logger, drainMs: env.NODE_ENV === 'production' ? undefined : 0 });");
       expect(source).toMatch(/shutdown\.attach\(serve\(\{ fetch: app\.fetch, port \}\)\);/);
     }
   });
