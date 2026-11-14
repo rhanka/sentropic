@@ -65,6 +65,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - `packages/cluster-mesh/src/storage/index.ts`
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/CHANGELOG.md`
+  - `e2e/tests/03-dashboard.spec.ts`
   - `package-lock.json`
   - `api/package-lock.json`
   - `BRANCH.md`
@@ -82,6 +83,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- BRT4a-EX5 (R4 CI 43584332003): allow e2e/tests/03-dashboard.spec.ts to establish the collaborator presence required by its existing strict tooltip assertion. Evidence: browser-shard-3 snapshot shows the valid standalone disabled read-only lock, while the test unconditionally demands a positive presence count after concurrent initial GET/POST. Seed a real collaborator through the authenticated presence API before viewer navigation; preserve every assertion and timeout. Impact: fixture setup only. Rollback: revert this test commit.
 - BRT4a-EX4 (FIX R3 rebase integration): CI 43581832180 proves cluster-mesh dev.27 now equals origin/main despite the storage src delta. Bump to dev.28, synchronize root/API locks and selected fixture, and regenerate the local P1 manifest. Impact: release metadata only. Rollback: revert this metadata commit; the version gate fails again.
 - BRT4a-R3 (package release follow-through): aligning the provider version changes the APP-P1 manifest digest. Reproduced locally: 23 registry tests refused the old 0.2.27 pin. Recompute the 0.2.28 manifest with the unchanged `mcp:tools:invoke` projection, update the API pin and installed/dispatch fixtures, retain historical digest assertions, and qualify registry tests before pushing.
 - BRT4a-R3 verification: registry 25/25, physical installed/bundled registry 2/2, workspace dispatch 14/14 PASS. APP-P1 digest computed from built 0.2.28: `b7d6d576986acc1256b6b23c988f70d5496eb9e93b7cb697cc37649b8bea5262`.
@@ -122,6 +124,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Rewrite registered digests into their existing placement before republication.
   - [x] Reproduce four failing PostgreSQL cases before fixes, then pass 84/84 API regressions, 59/59 package tests and package build/typecheck.
   - [x] Guard the R4 package archive and synchronize selected fixture integrity; tuple tests pass (5 passed, 3 conditional skips), archive sha256 9a40609b790e9bfe3998003c3ecab6df9f18815bac0501e2c74eb18d0e51dedf.
+  - [x] Diagnose CI dashboard read-only fixture race from the failed browser snapshot; establish real collaborator presence without changing assertions or timeouts (BRT4a-EX5).
   - [ ] Keep prior storage regressions green; qualify package archive and exact-head CI, then report and remove test volumes.
 - [ ] **Lot 9 — Astra FIX R3**
   - [x] Rebase on origin/main and reproduce exact/partial prefix failures; fix bounded S3/Postgres/SQLite prefix selection.
