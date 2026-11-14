@@ -27,6 +27,12 @@ test('should preserve the IdP entrypoint and wire both stopped consumers without
     assert(calls.some(args => args.join(' ') === `set image deployment/${name} ${name}=${image}`));
   }
   assert(!calls.some(args => args[0] === 'scale'));
+  // Every claim a wired template mounts exists before the first template patch.
+  const order = calls.map(args => args.join(' '));
+  for (const claim of ['custody-pvc.yaml', 'idp-session-pvc.yaml']) {
+    const applied = order.indexOf(`apply -f deploy/ci/preprod-a4/${claim}`);
+    assert(applied >= 0 && applied < order.findIndex(line => line.startsWith('patch deployment ')), claim);
+  }
   assert.throws(() => ops({ ...env, A4_OPERATION: 'wire', A4_DRY_RUN: '0' }, (_config, args) => {
     assert.equal(args[0], 'get');
     return JSON.stringify({ spec: { replicas: args[2] === 'auth-idp' ? 1 : 0 } });

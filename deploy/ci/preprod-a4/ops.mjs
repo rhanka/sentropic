@@ -7,6 +7,9 @@ export const wireCommands = image => ['api', 'auth-idp'].flatMap(name => [
   ['patch', 'configmap', name, '--type=merge', `--patch-file=${wiring}/patch-${name}-config.yaml`],
   ['patch', 'deployment', name, '--type=strategic', `--patch-file=${wiring}/patch-${name}-a4.yaml`],
   ['set', 'image', `deployment/${name}`, `${name}=${image}`]]);
+// Claims the wired templates mount. The wire creates them first: a consumer never starts
+// against a missing claim (the legacy prod namespace has no IdP session claim).
+export const wireVolumes = ['deploy/ci/preprod-a4/custody-pvc.yaml', 'deploy/ci/preprod-a4/idp-session-pvc.yaml'];
 
 // Custody is ReadWriteOnce: a consumer scheduled on another node waits for a detach and a new
 // attach (21-23 s measured, against 4 s on the same node). The wired API template prefers the
@@ -57,7 +60,7 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     const runtime = k(['kustomize', tier.destinationNamespace ? 'deploy/k8s/overlays/restore-a4/runtime'
       : 'deploy/k8s/overlays/preprod/a4-runtime']);
     if (env.A4_DRY_RUN === '0') {
-      k(['apply', '-f', 'deploy/ci/preprod-a4/custody-pvc.yaml']);
+      for (const file of wireVolumes) k(['apply', '-f', file]);
       k(['apply', '-f', '-'], runtime);
       for (const args of wireCommands(request.candidateImage)) k(args);
     }
