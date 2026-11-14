@@ -25,6 +25,9 @@ The compiler bootstrap must exist before compiler-worker tests. The committed
 tool lock and image digest freeze the local tools. Install scripts are disabled.
 New browser reports are `e2e/tests/harness/results/owned/playwright.json`, written
 as the host UID. Working directories live in the disposable container's `/tmp`.
+`evidence/browser.json` preserves the original 66-check run;
+`evidence/browser-followup.json` records 69 passing checks after the review fixes,
+including library-specific worker initialization and the empty-worker control.
 The prerelease Vue pin does not satisfy the DS package's stable `^3` peer range;
 `--legacy-peer-deps` is confined to these diagnostic tools and preserves that pin.
 No application or compiler bundle is fetched from a public CDN at runtime.
