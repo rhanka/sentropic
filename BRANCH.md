@@ -1,7 +1,15 @@
 # Feature: T4a storage — CM artifacts DB/S3 placement (CMF-1, S1, S2, S3)
 
 ## Objective
-Additive preprod-safe CM artifact storage: install package 0009-0013, harden blob bridge, add DB/composite placement 0014, placement-migrate tool. One PR, merge only after T3.
+Additive preprod-safe CM artifact storage: install package 0009-0013, harden blob bridge, add DB/composite placement 0014, placement-migrate tool. T3 remains isolated on its qualified immutable digest; this PR does not perform a cutover.
+
+## Deployment isolation and operational prerequisites
+- T3 pins API/IdP image `sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce`, built from `4625a94bc5d971a361efbe9639ce59cf242c1a13` (successful CI run 42942234207). That commit's `host-storage.ts` only installs 0001-0008; it does not install 0009-0014. The package can contain SQL assets without running them.
+- Main deploys through `ci.yml:deploy-preprod` and `make k8s-deploy-preprod`, using a namespace-scoped credential and the `preprod-a4` overlay (`sentropic-preprod`). It cannot deploy into production `sentropic` or alter T3's immutable image.
+- API startup installs 0009-0014 transactionally under the existing advisory lock, with content hashes and prefix receipts. DDL is additive/idempotent; 0014 defaults existing blob placement to `object`. Default placement stays `s3`; this PR neither sets cutover flags nor migrates existing bytes.
+- Builder VM and build-pool removal changes no storage contract: DB/S3 placement and verified blob reads/writes are independent of the execution backend. V8 owns future builds; no builder deployment or provisioning is part of this PR.
+- CMF-1o owner prerequisite: provision the RustFS `artifacts` write principal in the Secret Store, without exposing credentials. k8s prerequisites: measure the corpus, resize PostgreSQL PVC beyond 1 Gi and RustFS beyond 5 Gi in place as required, verify namespace quotas and storage-class expansion, and qualify an off-PVC object backup/restore with `s5cmd`. The former four-builder-pod quota belongs to the retired builder plan and is not a storage prerequisite.
+- No cluster or production action is authorized in this lane. No merge is performed; operational cutovers and owner gates remain separate.
 
 ## Scope / Guardrails
 - Scope limited to CM artifact storage, additive only, flag-gated, preprod-safe.
@@ -33,6 +41,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - `packages/artifacts/migrations/0014_db_blob_placement.sql`
   - `packages/artifacts/tests/**`
   - `packages/artifacts/package.json`
+  - `packages/artifacts/CHANGELOG.md`
   - `package-lock.json`
   - `api/package-lock.json`
   - `apps/artifact-content/src/**`
@@ -62,6 +71,8 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- BRT4a-R1 (rebase integration, resolved): main added a private builder cache using UUID manifest keys under `builder-cache/`, while the placement composite only accepts artifact digest keys. Keep `productPrivateCacheBlobs` on the existing private object store; artifact DB/S3 placement remains scoped to artifact blobs. Evidence: `cache-storage.ts` writes a UUID manifest and `createPostgresBlobPlacements` refuses that key.
+- BRT4a-EX3 (2026-11-13 rebase): preserve main cluster-mesh dev.26 and current dependencies; release storage as artifacts 0.2.28 and cluster-mesh dev.27, above registry pins. Regenerate selected archive integrity from the guarded package archive through make; synchronize workspace locks. Impact: packaging metadata only. Rollback: revert this metadata commit. Builder VM/pool removal does not change the DB/S3 storage contract; builder execution belongs to V8.
 - BRT4a-EX2 (CI gate fix, scope exception for 4 version-bump files): `enforce-package-bump` failed after the `origin/main` rebase (T5a merged cluster-mesh `0.26.0-dev.24`, equal to the branch version while the branch carries cluster-mesh src changes from `474cd8db1`) — dev.24 → dev.25 bump + root/api lock sync + fixture tgz rename + CHANGELOG entry, mirroring `d35d00f93`. Impact: version strings only, no behavior. Rollback: revert the bump commit; the gate returns to the same single failure.
 - BRT4a-EX1 (CI fix, scope exception for 3 packaging files outside Allowed Paths): `validate-cluster-mesh (source|lazy)` failed on `prepare-artifacts.spec.ts` — the selected fixture pinned `@sentropic/artifacts` 0.2.26 while the branch bumped the candidate to 0.2.27 (package-bump gate). Reason: PR CI must be green before the T3-gated merge; the fixture follow-up is the smallest blocking fix, no behavior change. Impact: `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` + `fixtures/selected/package{,-lock}.json` only; integrity `sha512-a/6mzB+...8cA==` computed from the branch-HEAD pack (`make pack-publishable-manifest PACKAGE=artifacts`, PASS, sha256 8d77d2...). Rollback: revert the fix commit; CI returns to the same single-test failure.
 
@@ -88,6 +99,12 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Switch back to worktree after UAT.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot 7 — Rebase and qualify exact head (2026-11-13)**
+  - [x] Rebase on origin/main; preserve prior uncommitted metadata in a stash.
+  - [x] Verify T3 candidate 4625a94b installs only 0001-0008; preprod deployment is namespace-scoped.
+  - [ ] Verify published versions, guarded archive tuple, scoped storage tests and scope gate.
+  - [ ] Push PR branch, update PR isolation evidence, await exact-head green CI; do not merge.
+  - [ ] Write French report and completion marker; remove isolated test volumes.
 - [x] **Lot 0 — Baseline and constraints**
   - [x] Read rules/MASTER.md, workflow.md, testing.md, COMMON-RULES.md.
   - [x] Read spec CM_FIRST_ARTIFACTS.md §2-§7 and §6.2, plan r3, verdict r3 ADOPT WITH AMENDMENTS.
@@ -116,12 +133,12 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] placement-migrate both directions, AP-3 counts, per-batch tx switch, resume cursor, never deletes source.
   - [x] Tests: rehearsal copy equal digests, source intact, resume after crash.
   - [x] Lot gate: typecheck-api PASS, cmf-s3-placement-migrate 4/4 (scoped, ENV=test-t4a-storage).
-- [x] **Lot 5 — Final validation (PR ouverte, NON mergée — gate T3)**
+- [x] **Lot 5 — Historical validation before the 2026-11-13 rebase**
   - [x] Typecheck impacted (typecheck-artifacts + typecheck-api PASS).
   - [x] Retest API scoped suites (cmf-s2 4/4, cmf-s3 4/4, host-migrations 19/19).
   - [x] Retest package suites scoped (blob-bridge 8/8, composite-blob 8/8).
   - [x] Patch bump @sentropic/artifacts 0.2.26 -> 0.2.27 + lock sync (this lane ships a PR, so CI enforce-package-bump applies; stays in the 0.2.x cluster-mesh pin; no other lock churn).
-  - [x] Final gate step 1: PR [#1003](https://github.com/rhanka/sentropic/pull/1003) open, do NOT merge (T3 gate). CI: all green except (a) `validate-cluster-mesh` fixture alignment — needs published 0.2.27 tarball (train/owner publish act, out of lane scope), (b) `test-e2e (5)` AI-flaky allowlisted (recorded above, train re-runs + owner sign-off).
+  - [x] Final gate step 1 superseded: historical fixture and AI-provider failures were resolved; run 43072344980 was green on dee7dcfb8. Lot 7 qualifies the rebased head. The former T3 merge restriction is lifted by the immutable-image and namespace isolation evidence above.
   - [ ] Final gate step 2: French report .tmp/rv/t4a-storage.md.
   - [ ] make down-volumes ENV=test-t4a-storage.
 - [x] **Lot 6 — FIX round 3 (Argon r2 BLOCKER/MAJOR closure, additive only)**
