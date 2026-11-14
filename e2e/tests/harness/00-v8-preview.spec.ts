@@ -14,6 +14,12 @@ const imports = JSON.stringify({ imports: {
   'document-only': '/value.mjs',
 } });
 const hash = `'sha256-${createHash('sha256').update(imports).digest('base64')}'`;
+function mapLibreReady() {
+  // These hooks are installed only by MapLibre's synchronous Worker constructor
+  // in both pinned source maps (source/worker.ts), after its imports evaluate.
+  return ['registerWorkerSource', 'addProtocol', 'removeProtocol', 'makeRequest']
+    .every(name => typeof (self as any)[name] === 'function');
+}
 const entry = `
 window.probe = async (name) => {
   const lib = await import(name);
@@ -46,6 +52,7 @@ test.beforeAll(async () => {
         mime = 'text/html';
         body = Buffer.from(`<script type="importmap">${imports}</script><script type="module" src="/entry.mjs"></script>`);
       } else if (path === '/entry.mjs') body = Buffer.from(entry);
+      else if (path === '/empty-worker.mjs') body = Buffer.from('export {};');
       else if (path === '/value.mjs') body = Buffer.from('export default 42');
       else if (path === '/bare-worker.mjs') body = Buffer.from("import x from 'document-only'; postMessage(x)");
       else {
@@ -77,17 +84,29 @@ for (const name of ['maplibre', 'geo', 'pdf']) {
     await page.evaluate(name => (window as any).probe(name), name);
     await expect.poll(() => workers.length).toBeGreaterThan(0);
     const worker = page.workers()[0];
-    // Evaluating in the worker proves the module and its imports finished loading.
     expect(await worker.evaluate(() => typeof self.postMessage)).toBe('function');
+    let initialized = name === 'pdf';
+    if (!initialized) await expect.poll(async () => initialized = await worker.evaluate(mapLibreReady), { timeout: 2000 }).toBe(true);
+    expect(initialized).toBe(true);
     const loadedWorkerUrls = page.workers().map(worker => new URL(worker.url(), origin).href);
-    await info.attach('worker-evidence', { body: JSON.stringify({ N: 1, workers, loadedWorkerUrls, requests: requests.slice(start), warnings, violations }), contentType: 'application/json' });
+    await info.attach('worker-evidence', { body: JSON.stringify({ N: 1, workers, loadedWorkerUrls, initialized, requests: requests.slice(start), warnings, violations }), contentType: 'application/json' });
     expect(loadedWorkerUrls.every(url => url.startsWith(origin) && !url.startsWith('blob:'))).toBe(true);
+    const expectedPath = name === 'pdf' ? '/pdfjs-dist/build/pdf.worker.mjs'
+      : `/${name === 'geo' ? 'maplibre-geo' : 'maplibre-gl'}/dist/maplibre-gl-worker.mjs`;
+    expect(loadedWorkerUrls.some(url => new URL(url).pathname === expectedPath)).toBe(true);
     // 6.14.0 publishes self-contained modules; 6.4.1 imports its shared file.
     if (name === 'maplibre') expect(requests.slice(start)).toContain('/maplibre-gl/dist/maplibre-gl-shared.mjs');
     expect(warnings).toEqual([]);
     expect(violations).toEqual([]);
   });
 }
+
+test('should reject an empty worker as a MapLibre initialization witness', async ({ page }) => {
+  await page.goto(origin);
+  const started = page.waitForEvent('worker');
+  await page.evaluate(() => { (window as any).emptyWorker = new Worker('/empty-worker.mjs', { type: 'module' }); });
+  expect(await (await started).evaluate(mapLibreReady)).toBe(false);
+});
 
 test('should reject document import-map specifiers inside a worker', async ({ page }) => {
   await page.goto(origin);

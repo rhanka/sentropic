@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { createServer } from 'node:http';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, symlink, rm } from 'node:fs/promises';
 import { build } from 'vite';
 import { contentHeaders } from '/repo/packages/artifacts/src/content/headers.ts';
 
 test('should match Vite styles, cascade and same-origin font with unbundled stylesheet links', async ({ page }, info) => {
-  const root = '/tools/css-reference';
-  await mkdir(root, { recursive: true });
+  const root = await mkdtemp('/tmp/v8-css-reference-');
+  await symlink('/tools/node_modules', `${root}/node_modules`);
   const script = `import './app.css';import '@fontsource-variable/inter';import './override.css';
     document.body.innerHTML='<div class="proof order maplibregl-map">Sample</div>';`;
   const app = '@import "maplibre-gl/dist/maplibre-gl.css";\n.proof{font-family:"Inter Variable";padding-left:7px;color:rgb(12,34,56)}.order{margin-left:1px}';
@@ -66,16 +66,20 @@ test('should match Vite styles, cascade and same-origin font with unbundled styl
     expect(candidate.fontLoaded).toBe(true);
     expect(fonts.some(url => url.startsWith(`${origin}/node_modules/`))).toBe(true);
     await info.attach('css-parity', { body: JSON.stringify({ N: 1, reference, candidate, fonts }), contentType: 'application/json' });
-  } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('should report the pinned DS theme refusal in the Vite reference', async ({}, info) => {
-  const root = '/tools/css-theme-baseline';
-  await mkdir(root, { recursive: true });
+  const root = await mkdtemp('/tmp/v8-css-theme-');
+  await symlink('/tools/node_modules', `${root}/node_modules`);
   await writeFile(`${root}/index.html`, '<script type="module" src="/entry.js"></script>');
   await writeFile(`${root}/entry.js`, 'import "@sentropic/design-system-themes/css/sent-tech.css"');
   let diagnostic = '';
   try { await build({ root, logLevel: 'silent' }); } catch (error) { diagnostic = String(error); }
+  finally { await rm(root, { recursive: true, force: true }); }
   expect(diagnostic).toContain('Invalid token in pseudo element');
   await info.attach('ds-theme-baseline-refusal', { body: JSON.stringify({ N: 1,
     package: '@sentropic/design-system-themes@0.12.0', baselineBuilt: false, diagnostic }), contentType: 'application/json' });
