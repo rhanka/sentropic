@@ -2,7 +2,7 @@ import type { CompileDiagnosticCodeV1, CompileDiagnosticV1, CompileResultV1 } fr
 import { COMPILE_DIAGNOSTIC_CODES, COMPILE_DIAGNOSTIC_STAGES } from './types.js';
 import { COMPILE_DIAGNOSTIC_SCHEMA, COMPILE_OUTPUT_DESCRIPTOR_SCHEMA, COMPILE_OUTPUT_MANIFEST_SCHEMA,
   closed, matchesCompileSchema } from './schema.js';
-import { CompileContractError, compileCanonicalJson } from './encoding.js';
+import { CompileContractError, compileCanonicalJson, normalizeCompilePath } from './encoding.js';
 import { compileManifestDigest } from './output.js';
 
 const hash = { type: 'string', pattern: '^[a-f0-9]{64}$' } as const;
@@ -21,10 +21,18 @@ export function compileDiagnostic(code: CompileDiagnosticCodeV1,
   return { code, stage, severity: code === 'diagnostics_truncated' ? 'warning' : severity,
     message: code.replaceAll('_', ' ') };
 }
+function validateDiagnosticPath(path: string | undefined): void {
+  try {
+    if (path !== undefined && path !== normalizeCompilePath(path)) throw new Error();
+  } catch { throw new CompileContractError('output_manifest_mismatch'); }
+}
 export function limitCompileDiagnostics(input: readonly CompileDiagnosticV1[]): CompileDiagnosticV1[] {
-  const sorted = input.filter(d => d.code !== 'diagnostics_truncated').map(d => ({
-    ...d, message: d.code.replaceAll('_', ' '),
-  })).sort((a, b) => COMPILE_DIAGNOSTIC_STAGES.indexOf(a.stage) - COMPILE_DIAGNOSTIC_STAGES.indexOf(b.stage));
+  const sorted = input.filter(d => d.code !== 'diagnostics_truncated').map(d => {
+    validateDiagnosticPath(d.path);
+    return { ...compileDiagnostic(d.code, d.stage, d.severity),
+      ...(d.path === undefined ? {} : { path: d.path }),
+      ...(d.range === undefined ? {} : { range: { start: d.range.start, end: d.range.end } }) };
+  }).sort((a, b) => COMPILE_DIAGNOSTIC_STAGES.indexOf(a.stage) - COMPILE_DIAGNOSTIC_STAGES.indexOf(b.stage));
   if (sorted.length <= 50 && !input.some(d => d.code === 'diagnostics_truncated')) return sorted;
   const kept = sorted.slice(0, 49);
   const firstError = sorted.find(d => d.severity === 'error');
@@ -42,6 +50,8 @@ export function validateCompileResult(input: unknown): asserts input is CompileR
   const result = input as CompileResultV1;
   let stageIndex = -1;
   for (const [index, diagnostic] of result.diagnostics.entries()) {
+    validateDiagnosticPath(diagnostic.path);
+    if (diagnostic.message !== diagnostic.code.replaceAll('_', ' ')) fail();
     const current = COMPILE_DIAGNOSTIC_STAGES.indexOf(diagnostic.stage);
     if (current < stageIndex || (diagnostic.range && diagnostic.range.start > diagnostic.range.end)) fail();
     stageIndex = current;

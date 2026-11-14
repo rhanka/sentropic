@@ -31,6 +31,8 @@
 ## Feedback Loop
 - [ ] Conductor owns Track writes and DS/h2a consumer receipts; questions recorded in .tmp/rv/v8-contract-questions.md.
 - [x] Review R1: reject hidden properties, sparse arrays, accessors and symbols before canonical identity encoding; regression cases reproduced.
+- [x] Review R1: enforce ASCII source paths, fatal UTF-8 entry decoding and safe diagnostic paths/messages; 123 compile tests pass.
+- [x] Sandbox qualification: 193/193 tests pass with a 4 GiB tmpfs at /tmp; default overlay storage still times out on durable custody revocation; no threshold increased.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests or flaky exceptions.
@@ -46,14 +48,15 @@
 - [x] Lot 1: add shared closed types and AMD-ISO canonical declaration without changing historical definitions.
   - [x] Define portable compile recipe, options, output and diagnostic types; npm view reports 0.25.0, local version bumped to 0.26.0-dev.27.
   - [x] Define host-authenticated execution context and validate success/refusal diagnostics without partial output leaks.
-- [ ] Lot 2: implement portable canonical encoding, path/base64 checks, recipe and output validation with closed effective options.
+- [x] Lot 2: implement portable canonical encoding, path/base64 checks, recipe and output validation with closed effective options.
   - [x] Add portable closed JSON schemas for recipe, effective options, manifest, descriptors and diagnostics.
   - [x] Add RFC 8785 encoding, SHA-256/SRI, canonical base64/path checks and duplicate-key JSON parsing.
   - [x] Implement semantic recipe and manifest validation, exact output verification and distinct recipe/manifest identities.
-- [ ] Lot 3: packages/cluster-mesh/tests/compile/contract.spec.ts covers shared golden vectors, changes of identity, invalid paths/options, diagnostic codes, manifest/SRI identity and legacy preservation.
+- [x] Lot 3: packages/cluster-mesh/tests/compile/contract.spec.ts covers shared golden vectors, changes of identity, invalid paths/options, diagnostic codes, manifest/SRI identity and legacy preservation.
   - [x] Publish reusable JCS/SHA-256/path/base64/JSON conformance corpus and canonical-profile checks.
   - [x] Pin recipe-key golden vector independently checked with Node crypto; add identity mutation and closed-option tests.
   - [x] Add packages/cluster-mesh/tests/compile/output.spec.ts for every shared diagnostic code, first-error preservation, manifest/SRI corruption and no partial refusals; initial 107 tests pass.
+  - [x] Add packages/cluster-mesh/tests/compile/canonical-input.spec.ts and validation.spec.ts for all reproduced R1 blockers.
 - [ ] Lot 4: run scoped make test-cluster-mesh, typecheck-cluster-mesh and independent code review; resolve findings.
 - [ ] Lot 5: bump/export cluster-mesh after registry check; make scope-check before every commit.
 - [ ] Lot 6: push, open PR with this plan, wait for exact-head green CI; do not merge.

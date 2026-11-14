@@ -14,7 +14,7 @@ function canonicalPaths(paths: string[]): void {
     if (seen.has(normalized)) refuse('duplicate_normalized_path');
     seen.add(normalized);
   }
-  if (paths.some(path => path !== normalizeCompilePath(path))) refuse('invalid_source_path');
+  if (paths.some(path => path !== normalizeCompilePath(path) || /[^A-Za-z0-9._/-]/u.test(path))) refuse('invalid_source_path');
 }
 /** Host authority, grants and compiler integrity require separate admission, never recipe claims. */
 export function validateCompileRecipe(input: unknown): asserts input is CompileRecipeV1 {
@@ -30,7 +30,7 @@ export function validateCompileRecipe(input: unknown): asserts input is CompileR
     const bytes = compileDecodeBase64(source.bytesBase64);
     if (bytes.length > 1048576 || (total += bytes.length) > 2097152) refuse('compile_quota_exceeded');
     // Text sources are exact UTF-8; binary assets remain opaque bytes.
-    if (/\.(?:vue|[cm]?[jt]s|css|json)$/u.test(source.path)) {
+    if (source.path === recipe.entry || /\.(?:vue|[cm]?[jt]s|css|json)$/u.test(source.path)) {
       try { new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
       catch { refuse('invalid_recipe'); }
     }

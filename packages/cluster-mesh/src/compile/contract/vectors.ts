@@ -24,6 +24,7 @@ export const COMPILE_CONFORMANCE_VECTORS = {
     { text: 'abc', expected: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' },
   ],
   invalidPaths: ['', '/App.vue', '../App.vue', './App.vue', 'a//b', 'a/../b', 'C:/a', 'a\\b', 'https:a', 'a\0b'],
+  invalidSourcePaths: ['é.vue', 'App name.vue', 'App?.vue', 'App#.vue', 'App%.vue'],
   invalidBase64: ['a', 'YQ', 'YQ=','YR==', 'YQ==\n', 'YQ__'],
   invalidJson: ['{"a":1,"a":2}', '{"a":1,"\\u0061":2}', '[1,]', '{"a":1,}', '1e999', '01', '\u00a0{}'],
 } as const;
