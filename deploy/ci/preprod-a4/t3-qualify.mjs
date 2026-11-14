@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { checkRbac, psql } from './t3-window-driver.mjs';
-import { inspectApplicability } from './t3-applicability.mjs';
+import { inspectApplicability, witnessBinding } from './t3-applicability.mjs';
 import { privateInput, tierOf } from './guards.mjs';
 import { PROBE_PATHS, runKubectl, loadState, monoMs, effectiveTimeout } from './t3-lib.mjs';
 import { digest } from './guards.mjs';
@@ -65,7 +65,15 @@ export async function qualify(action, config, dependencies = {}) {
     postgresUser: config.postgresUser ?? 'app' };
   if (action === 'rbac') { checkRbac(ctx); return { rbacPassed: true }; }
   if (action === 'baseline') {
-    write(config.applicabilityBaselineFile,inspectApplicability(ctx,psql));
+    // The witness login comes first: its session must already answer before the baseline is read.
+    const witness = config.witness;
+    if (!URL.canParse(witness?.url) || typeof witness?.cookie !== 'string' || !witness.cookie.trim() || (config.tier === 'restore'
+      && !new URL(witness.url).hostname.endsWith('.restore-a4.test'))) throw new Error('baseline_witness_missing');
+    const response = await (dependencies.probe ?? fetch)(witness.url,{ redirect: 'error',
+      headers: { cookie: witness.cookie },signal: AbortSignal.timeout(10000) });
+    await response.body?.cancel?.();
+    if (response.status !== 200) throw new Error('baseline_witness_not_authenticated');
+    write(config.applicabilityBaselineFile,{ ...inspectApplicability(ctx,psql),witnessSha256: witnessBinding(witness) });
     return { baselineWritten: true };
   }
   throw new Error('qualification_action_invalid');

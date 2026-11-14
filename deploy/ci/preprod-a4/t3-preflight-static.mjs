@@ -3,7 +3,7 @@ import { assertAuthorization, digest, privateInput, tierOf } from './guards.mjs'
 import { execute, executionGrant, validateActionCommands, validateMiddleware } from './execution.mjs';
 import { ops } from './ops.mjs';
 import { buildProbes, validateProbes, validateObservers } from './t3-lib.mjs';
-import { validateApplicability } from './t3-applicability.mjs';
+import { assertBaselineAfterWitness, validateApplicability } from './t3-applicability.mjs';
 import { validateReceiptPolicy } from './t3-rehearsal.mjs';
 
 // Offline only. Never interprets a request template as observed fence evidence.
@@ -54,6 +54,7 @@ export function preflight(config, read = privateInput) {
       if (!new URL(url).hostname.endsWith('.restore-a4.test')) throw new Error('fixture_http_not_isolated');
     }
   }
+  assertBaselineAfterWitness(JSON.parse(read(config.applicabilityBaselineFile)), config.witness);
   for (const name of ['apiJwtSecretFile', 'secretEncryptionKeyFile', 'idpSessionJwtFile']) {
     if (!read(config.rotationKeyFiles?.[name]).trim()) throw new Error('rotation_key_empty');
   }
