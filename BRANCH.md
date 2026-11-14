@@ -2,7 +2,7 @@
 ## Objective
 - [ ] Correct #1001 against the merged driver and publication receipts; no cluster actions or merge.
 ## Scope / Guardrails
-- [x] Rebased `feat/t3-prod-a4-iac` on `origin/main` at `938709b08`.
+- [x] Rebased `feat/t3-prod-a4-iac` on `origin/main` at `a627f54e5`; only BRANCH.md conflicted; tested deployment bytes are unchanged.
 - [x] Worktree `tmp/t3-prod-a4-iac`; ENV=test-t3-iac, ports API 9166 / UI 5366 / Maildev 1266.
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
