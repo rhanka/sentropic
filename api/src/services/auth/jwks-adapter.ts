@@ -5,7 +5,7 @@ import { exportJWK } from 'jose';
 import { desc, eq, sql } from 'drizzle-orm';
 
 import { env, requiresOAuthProductionSecrets } from '../../config/env';
-import { DEVELOPMENT_SECRET_SEED } from '../../config/deployment-secrets';
+import { DEVELOPMENT_SECRET_SEED, isProvisionedDeploymentSecret } from '../../config/deployment-secrets';
 import { db } from '../../db/client';
 import { idTokenSigningKeys } from '../../db/schema';
 
@@ -153,12 +153,12 @@ export const createJwksAdapter = (options: CreateJwksAdapterOptions = {}): JwksA
 const resolveOauthSigningKek = (options: CreateJwksAdapterOptions): string => {
   const isProduction = options.isProduction ?? requiresOAuthProductionSecrets();
   const kek =
-    options.oauthSigningKek ??
-    env.OAUTH_SIGNING_KEK ??
-    (isProduction ? undefined : env.JWT_SECRET ?? DEVELOPMENT_SECRET_SEED);
+    options.oauthSigningKek ||
+    env.OAUTH_SIGNING_KEK ||
+    (isProduction ? undefined : env.JWT_SECRET || DEVELOPMENT_SECRET_SEED);
 
-  if (!kek) {
-    throw new Error('OAUTH_SIGNING_KEK is required for OAuth signing key encryption in production.');
+  if (!kek || (isProduction && !isProvisionedDeploymentSecret(kek))) {
+    throw new Error('OAUTH_SIGNING_KEK must be provisioned for OAuth signing key encryption in production.');
   }
 
   return kek;
