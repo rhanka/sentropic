@@ -9,7 +9,7 @@ import { inputs } from './t3-preflight.test.mjs';
 import { gzipSync } from 'node:zlib';
 import { digest } from './guards.mjs';
 
-test('rearm archives custody before deletion and refreshes the private state directory', () => {
+for (const mode of ['success','tar-error','corrupt-transfer','wrong-hash']) test(`rearm archives safely: ${mode}`, () => {
   const next = inputs(), stateDir = mkdtempSync(join(tmpdir(),'t3-rearm-'));
   saveState(stateDir,{ step: 'DONE', commitVerified: false, operationId: 'old' });
   const config = { ...next.config, request: { operationId: 'old' }, executionSha256: '0'.repeat(64),
@@ -25,8 +25,11 @@ test('rearm archives custody before deletion and refreshes the private state dir
       assert.match(readFileSync(join(archive,'custody.sha256'),'utf8'),/^[a-f0-9]{64}$/);
       return '';
     }
-    if (args[0] === 'exec' && args.includes('sh')) return archiveBytes.toString('base64');
-    if (args[0] === 'exec' && args.includes('sha256sum')) return `${digest(archiveBytes)}  /tmp/t3-custody.tar.gz`;
+    if (args[0] === 'exec' && args.includes('sh')) {
+      if (mode === 'tar-error') throw new Error('tar failed after partial output');
+      return (mode === 'corrupt-transfer' ? Buffer.from('partial') : archiveBytes).toString('base64');
+    }
+    if (args[0] === 'exec' && args.includes('sha256sum')) return `${mode === 'wrong-hash' ? '0'.repeat(64) : digest(archiveBytes)}  /tmp/t3-custody.tar.gz`;
     if (args[0] === 'get' && args[1] === 'deployment') {
       const name = args[2];
       return JSON.stringify({ spec: { replicas: 1, template: { spec: {
@@ -35,6 +38,12 @@ test('rearm archives custody before deletion and refreshes the private state dir
     if (args[0] === 'get' && args[1] === 'jobs') return '{"items":[]}';
     return '';
   };
+  if (mode !== 'success') {
+    assert.throws(() => rearm({ config,stateDir,call },next.config,next.read));
+    assert.ok(!calls.some(c => c.includes('fs.rmSync')),'failed archive must never erase custody');
+    assert.ok(existsSync(join(stateDir,'t3-window-state.json')),'original evidence preserved');
+    return;
+  }
   const result = rearm({ config,stateDir,call },next.config,next.read);
   assert.equal(result.archive,archive);
   assert.ok(existsSync(join(archive,'operator-state','t3-window-state.json')));
