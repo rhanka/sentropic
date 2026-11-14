@@ -6,7 +6,7 @@
  */
 import { seedCmArtifactIdentity } from '../utils/cm-artifact-fixture';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { GetPublicAccessBlockCommand, ListObjectsV2Command, type S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, GetPublicAccessBlockCommand, ListObjectsV2Command, type S3Client } from '@aws-sdk/client-s3';
 import { createArtifactHostJobs, createLazyArtifactBlobs, createPrivateArtifactStorage } from '../../src/services/artifacts/lifecycle';
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
@@ -66,6 +66,93 @@ function hostWith(placementForSize?: (size: number) => 'db' | 'object', mode: 'd
 }
 
 describe('composite blob placement', () => {
+  it('closes a reservation durably when two collectors enumerate the same physical key', async () => {
+    const bytes = new TextEncoder().encode('concurrent reservation');
+    const key = keyFor(bytes);
+    const digest = `sha256:${key.split('/').pop()}`;
+    const memory = createMemoryBlobStore();
+    // Model S3's idempotent DELETE when both collectors saw the same key.
+    const physical = { ...memory, async deleteBlob(candidate: string) {
+      if (await memory.getBlob(candidate)) await memory.deleteBlob(candidate);
+    } };
+    await physical.putBlob(key, bytes);
+    const reservationId = randomUUID();
+    await pool.query(`INSERT INTO artifacts.object_intents (id, kind, payload)
+      VALUES ($1, 'delete-blob', $2)`, [reservationId, JSON.stringify({ deletionClaim: true,
+      digest, holder: 'gc', blobKey: key })]);
+    const barrier = () => {
+      let open!: () => void;
+      const wait = new Promise<void>(resolve => { open = resolve; });
+      return { wait, open };
+    };
+    const aListed = barrier();
+    const bLocked = barrier();
+    const aLockRequested = barrier();
+    const codes: string[] = [];
+    const executor = createPostgresCommitExecutor(pool);
+    const collector = (lane: 'a' | 'b') => createPostgresGcService({ ...executor,
+      async beginFinalization() {
+        const tx = await executor.beginFinalization();
+        await tx.query("SET LOCAL statement_timeout = '5s'", []);
+        return { ...tx, commit: () => tx.commit(), rollback: () => tx.rollback(),
+          release: (error?: unknown) => tx.release(error), async query<T>(sql: string, params: readonly unknown[]) {
+          if (lane === 'a' && sql.includes('pg_advisory_xact_lock')) aLockRequested.open();
+          const result = await tx.query<T>(sql, params).catch(error => {
+            codes.push(error.code);
+            throw error;
+          });
+          if (lane === 'b' && sql.includes('pg_advisory_xact_lock')) {
+            bLocked.open();
+            await aLockRequested.wait;
+          }
+          return result;
+        } };
+      },
+    }, client => createPostgresArtifactStore(client as unknown as Pool));
+    const first = collector('a').collect({ ...physical, async listKeys(prefix) {
+      aListed.open();
+      await bLocked.wait;
+      return physical.listKeys(prefix);
+    } }, 'artifacts/scope-p/blobs/sha256/');
+    await aListed.wait;
+    const second = collector('b').collect(physical, 'artifacts/scope-p/blobs/sha256/');
+    const reports = await Promise.all([first, second]);
+    expect(codes).not.toContain('40P01');
+    expect(reports.flatMap(report => report.failures)).toEqual([]);
+    expect(await physical.getBlob(key)).toBeUndefined();
+    expect((await pool.query('SELECT state FROM artifacts.object_intents WHERE id = $1', [reservationId])).rows)
+      .toEqual([{ state: 'done' }]);
+    expect((await pool.query("SELECT id FROM artifacts.object_intents WHERE state = 'pending'")).rows).toEqual([]);
+  });
+
+  it('reads an S3 range through both host wrappers and rejects an expired privacy check', async () => {
+    const bytes = new TextEncoder().encode('range bytes');
+    const key = keyFor(bytes);
+    let privateBucket = true;
+    const send = vi.fn(async (command: unknown) => {
+      if (command instanceof GetPublicAccessBlockCommand) return { PublicAccessBlockConfiguration: {
+        BlockPublicAcls: privateBucket, IgnorePublicAcls: true, BlockPublicPolicy: true, RestrictPublicBuckets: true } };
+      if (command instanceof GetObjectCommand) return { Body: { transformToByteArray: async () =>
+        command.input.Range === 'bytes=1-3' ? bytes.slice(1, 4) : bytes } };
+      throw new Error('unexpected S3 command');
+    });
+    const storage = await createPrivateArtifactStorage({ bucket: 'private-artifacts', client: { send } as unknown as S3Client });
+    await pool.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-p', 'tenant-a') ON CONFLICT DO NOTHING`);
+    await pool.query(`INSERT INTO artifacts.blobs (storage_scope_id, digest, size, placement)
+      VALUES ('scope-p', $1, $2, 'object')`, [`sha256:${key.split('/').pop()}`, bytes.length]);
+    const store = createPlacementBlobStore({ pool, s3: createLazyArtifactBlobs(async () => storage), mode: 's3', inlineMaxBytes: 8 });
+    expect(await store.getBlob(key)).toEqual(bytes);
+    expect(await store.getBlobRange!(key, 1, 3)).toEqual(bytes.slice(1, 4));
+    const reads = send.mock.calls.filter(([command]) => command instanceof GetObjectCommand).length;
+    privateBucket = false;
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 31000);
+    try {
+      await expect(store.getBlobRange!(key, 1, 3)).rejects.toThrow('Artifact bucket must remain private');
+      expect(send.mock.calls.filter(([command]) => command instanceof GetObjectCommand)).toHaveLength(reads);
+    } finally { clock.mockRestore(); }
+  });
+
   it('recovers byte-free debt beyond 100 permanently failing reservations after restart', async () => {
     const prefix = 'artifacts/scope-p/blobs/sha256/';
     const keys = Array.from({ length: 101 }, (_, i) => `${prefix}${String(i).padStart(64, '0')}`);
