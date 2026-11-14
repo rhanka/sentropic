@@ -401,6 +401,24 @@ export function applyRotationKeys(ctx) {
   ctx.print?.('# W3 rotation keys posed: JWT_SECRET, SECRET_ENCRYPTION_KEY, auth-idp-session-signing');
 }
 
+// The fence returns as soon as the Deployments are scaled, but the legacy api and auth-idp pods
+// stay Terminating for their whole grace period (about 31 s in rehearsal r9: Node as PID 1 ignores
+// SIGTERM). Until they are gone they can still write, they hold the CPU requests and limits the
+// custodian needs, and the W5 fence assertion rejects them. The wait spends W3 slack only: its
+// deadline is the W3 cutoff, so a pod that never leaves routes to the pre-commit rollback.
+export function awaitWritersGone(ctx, deadlineMs) {
+  if (ctx.dryRun && ctx.probeReadOnly) {
+    ctx.print('# note: legacy pods not awaited (no fence here)');
+    return;
+  }
+  const started = chronoStart();
+  try {
+    waitZeroPods(ctx.call, deadlineMs);
+  } finally {
+    chrono('writersGone', started, {}, { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE, T3_STATE_DIR: ctx.stateDir });
+  }
+}
+
 function baseEnv(ctx, extra = {}) {
   return { A4_TIER: ctx.tier, A4_KUBECONFIG_FILE: ctx.config.kubeconfigFile,
     A4_REQUEST_FILE: `${ctx.stateDir}/request.json`, A4_DRY_RUN: ctx.dryRun ? '1' : '0', ...extra };
@@ -487,6 +505,7 @@ async function driveInner(ctx, state) {
   applyRotationKeys(ctx);
   (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'budgets',
     A4_BUDGETS_FILE: ctx.config.budgetsFile }, to(60_000, 'W3'));
+  awaitWritersGone(ctx, cutoff(STEP_CUTOFFS.W3));
   if (monoMs() > cutoff(50_000)) return recover(ctx, state, 'W3_cutoff');
   for (const [step, script, env] of [
     ['W4', 'ops.mjs', { A4_OPERATION: 'custodian' }],
