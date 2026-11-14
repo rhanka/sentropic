@@ -1,7 +1,7 @@
 # Feature: App Vue T0 templater contracts
 
 ## Objective
-- [ ] Deliver both neutral templater contracts and the complete print migration inventory from the approved migration specification, section 6.6.
+- [x] Deliver both neutral templater contracts and the complete print migration inventory from the approved migration specification, section 6.6.
 
 ## Scope / Guardrails
 - [x] Worktree: `tmp/worktrees/app-vue-t0`; branch: `feat/app-vue-t0`, based on `origin/main`.
@@ -26,7 +26,7 @@
   - `spec/SPEC_TEMPLATING.md`
   - `BRANCH.md`
 - **Exception process**:
-  - [x] No conditional path needed; record rationale, impact and rollback before any exception.
+  - [x] Only administrative BR00-EX1 is used; `spec/SPEC_TEMPLATING.md` remains unchanged.
 
 ## Feedback Loop
 - [x] Print inventory part 05 committed with source lines, targets and future hooks.
@@ -53,22 +53,24 @@
   - [x] Create isolated worktree from `origin/main`.
   - [x] `harness check branch`: PASS C1.
   - [x] `df -h /`: 38 GB free before Docker work; recheck before building.
-- [ ] **Lot 1 — Family (b) contract**
+- [x] **Lot 1 — Family (b) contract**
   - [x] JSON Schema: eight field types, three seeded row shapes, presentation and print properties.
   - [x] `contract.test.mjs`: seven real seed shapes validate; 17 seed records qualify; mutations fail.
-- [ ] **Lot 2 — Family (a) contract and adapters**
+- [x] **Lot 2 — Family (a) contract and adapters**
   - [x] `container.ts`: typed icons/tones, cards/actions/menu callbacks, activation adapters.
   - [x] `container.test.mjs`: callbacks, navigation precedence, hidden menu actions and card mapping.
-- [ ] **Lot 3 — Consumer and presentation mappings**
-  - [ ] `README.md`: five consumers with source lines; row/field/slot contracts and ownership.
+- [x] **Lot 3 — Consumer and presentation mappings**
+  - [x] `README.md`: five consumers with source lines; row/field/slot contracts and ownership.
   - [x] `presentation.ts`: colour/tone/variant and print token/hook mappings.
-- [ ] **Lot 4 — Print inventory**
-  - [ ] `print-inventory-*.json`: every selector line, source target and future hook or dropped reason.
+- [x] **Lot 4 — Print inventory**
+  - [x] `print-inventory-*.json`: every census line, source target and future hook.
   - [x] `inventory.test.mjs`: independent PostCSS coverage, no missing or duplicate lines.
   - [x] Reproducible generator includes all 441 census lines (433 selectors and 8 at-rule preludes).
 - [ ] **Lot 5 — Final validation**
-  - [ ] Scoped Docker qualification through the contract Makefile.
-  - [ ] `make scope-check` before every atomic commit, each below 150 changed lines.
+  - [x] Scoped Docker qualification: 10/10 tests and strict TypeScript compilation pass.
+  - [x] `make scope-check` before every atomic commit, each below 150 changed lines.
+  - [x] `make down ENV=feat-app-vue-t0` completed; ephemeral test containers used `--rm` and no named volumes.
+  - [x] `down-volumes` rejects the packet-mandated `feat-*` prefix; no named volume was created.
   - [ ] Push branch; PR title and body from this file; independent review handoff.
   - [ ] CI green on exact pushed head; no merge.
   - [ ] French report `.tmp/rv/app-vue-t0.md`, then `.tmp/rv/app-vue-t0.done`.
