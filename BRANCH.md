@@ -126,6 +126,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Provide an offline psql stdin make helper; avoid db-query starting writers or interpolating SQL dollar quotes.
   - [x] Reproduce CI artifact-data-guard refusal of archive delete-all; retain archived receipts durably and qualify repeated rollback/resume without weakening the guard.
   - [x] Reconcile host recovery fixtures with keyset paging; reject malformed backend pages before bridge trimming and preserve retained-page resume assertions (artifacts-host-recovery.test.ts).
+  - [x] Rebase FIX R2 on origin/main c95ca6bb9 (#1032); merge-tree proved BRANCH.md modify/delete was the sole conflict, resolved by retaining this branch plan. Storage code, root locks and archive tuple are unchanged by the rebase; registry version gate rechecked.
   - [ ] Push verified head, await CI, append FIX R2 report and remove isolated volumes.
 - [ ] **Lot 7 — Rebase and qualify exact head (2026-11-13)**
   - [x] Rebase on origin/main; preserve prior uncommitted metadata in a stash.
