@@ -16,16 +16,23 @@ export function verificationFile(dir) {
   writeFileSync(path, `${verificationLine}\n`, { mode: 0o600 });
   return path;
 }
-export const observerProbes = (base = 'https://idp.test') => ({
-  restrictedProbes: ['S-1','S-2'].map((id,i) => ({ id,url: `${base}/restricted${i}`,expect: 401 })),
-  externalProbes: ['external-app','external-idp'].map(id => ({ id,url: `${base}/${id}`,expect: 200 })),
-});
-// Qualified paths on one synthetic origin; the trailing probe name keeps app and IdP replies apart.
-export function probeEndpoints(base = 'https://idp.test') {
+export const observerProbes = (base) => {
+  const appBase = base ?? 'https://app.test', idpBase = base ?? 'https://idp.test';
+  return {
+    restrictedProbes: [{ id: 'S-1', url: `${appBase}/restricted0`, expect: 401 },
+      { id: 'S-2', url: `${idpBase}/restricted1`, expect: 401 }],
+    externalProbes: [{ id: 'external-app', url: `${appBase}/external-app`, expect: 200 },
+      { id: 'external-idp', url: `${idpBase}/external-idp`, expect: 200 }],
+  };
+};
+// Qualified paths on synthetic product and IdP origins (or one loopback origin when passed).
+export function probeEndpoints(base) {
+  const appBase = base ?? 'https://app.test', idpBase = base ?? 'https://idp.test';
+  const app = new Set(['appHealth', 'appMe', 'emailApp']);
   return Object.fromEntries(Object.entries({ appHealth: '/api/v1/health', idpConfig: '/.well-known/openid-configuration',
     idpJwks: '/.well-known/jwks.json', s6Authorize: '/api/v1/auth/oauth/authorize', appMe: '/api/v1/me',
     idpMe: '/api/v1/auth/me', emailApp: '/api/v1/auth/email/verify-request', emailIdp: '/api/v1/auth/email/verify-request' })
-    .map(([name, path]) => [name, `${base}${path}?probe=${name}`]));
+    .map(([name, path]) => [name, `${app.has(name) ? appBase : idpBase}${path}?probe=${name}`]));
 }
 // Restricted routes behave as Traefik basicAuth does: without the exact credential the proxy answers
 // 401 with a Basic challenge and the request never reaches a workload. `open` is the state after the
