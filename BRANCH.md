@@ -10,7 +10,7 @@
 - [x] Reference `c40b8d1b56372fe1f2e8063ea6069e403dfe4942`; no reference repin.
 - [x] Documentation and fixtures only; no runtime, dependency, DS installation or V8 work.
 - [x] D1 and D2 are conductor-owned decide-and-trace defaults; other section-8 decisions remain open.
-- [x] Environment `feat-app-vue-c0`; reserved API/UI/Maildev ports `9400/5600/1500`; no service starts required.
+- [x] Environment `feat-app-vue-c0`; API/UI/Maildev ports `9400/5600/1500` checked unused; no service starts required.
 - [x] Make-only checks; Docker commands, if needed, use `docker-slot.sh`; check free disk before building.
 - [x] Selective staging, commits below 150 lines, `make commit`, no trailers; push and PR, no merge.
 - [x] No secrets, no Python, English repository documents.
@@ -38,6 +38,7 @@
 - [x] C0-F0: initial native scope check flagged the required `BRANCH.md` as unknown; commit already created. Corrected by declaring BR00-EX1 and rerunning the check; retain this process deviation.
 - [ ] C0-F1: DS session reviews the DS-usage column before acceptance; preserve its actual receipt, never self-approve.
 - [ ] C0-F2: designated conductor records the recalibration and lot evidence in Track; this lane never writes the shared journal.
+- [ ] C0-F3: native h2a_run MCP tool absent; required independent review cannot dispatch. Review dossier: `.tmp/app-vue-c0/review.md`; no consensus verdict; conductor resumes with the exposed tool.
 
 ## AI Flaky tests
 - [x] None: documentation-only audit, no AI-dependent test.
@@ -53,15 +54,15 @@
   - [x] Read MASTER, workflow, testing, COMMON-RULES, approved plan sections 1–5 and C0 row/detail.
   - [x] Confirm approved plan digest and `harness check branch` PASS.
   - [x] Preserve root checkout and isolate C0 on origin/main.
-- [ ] Lot 1 — Exhaustive ownership ledger
+- [x] Lot 1 — Exhaustive ownership ledger
   - [x] `spec/APP_VUE_C0_HOST_OWNERSHIP.md`: continuous source ranges covering all four pinned hosts, with package/host ownership and destination lot.
-  - [ ] Cross-check reference ranges against git blobs; account for current-main drift separately.
+  - [x] Cross-check reference ranges against git blobs; account for current-main drift separately.
 - [ ] Lot 2 — Behaviour, DOM and DS audit
   - [x] `spec/APP_VUE_C0_AUDIT.md`: three-column host/package/immo comparison, transfer list and compatibility requirements.
   - [x] `spec/APP_VUE_C0_DS_MAPPING.md`: all 24 views, utility dependence, primitives and recalibration method.
   - [ ] DS session review receipt and remaining props gaps recorded.
 - [ ] Lot 3 — Verification and handoff
-  - [ ] File-level checks: source hashes/counts, exact range partition, view inventory and ownership completeness; no runtime tests warranted.
+  - [x] File-level checks: source hashes/counts, 94 exact ranges covering 7,052 lines, 24 view metrics and ownership completeness; no runtime tests warranted.
   - [ ] Independent review reconciled against the audited sources.
   - [ ] Native harness scope check before each commit; final `git diff --check`.
   - [ ] Create PR with this file as its body and add its 3-step execution plan.
