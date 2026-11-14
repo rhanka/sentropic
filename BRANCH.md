@@ -35,6 +35,7 @@
 - [x] Removed cold Node startup overhead from the kubectl test double; actual process supervisors, hostile descendants, deadlines and all assertions remain exercised.
 - [x] R1: canonical effective ACLs sort grantor/grantee/privilege/delegation and normalize implicit defaults; restore fixture now includes reader USAGE on public.
 - [x] R2: tar must succeed and validate before transfer; gzip CRC and remote SHA must match before archive persistence and custody erasure.
+- [x] R5: offline authorization-code PKCE challenge contributes its own SHA; same-length challenge-only SQL mutation changes applicability.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
