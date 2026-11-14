@@ -4,6 +4,7 @@ import { execute, executionGrant, validateActionCommands } from './execution.mjs
 import { ops } from './ops.mjs';
 import { buildProbes, validateProbes } from './t3-lib.mjs';
 import { validateApplicability } from './t3-applicability.mjs';
+import { validateReceiptPolicy } from './t3-rehearsal.mjs';
 
 // Offline only. Never interprets a request template as observed fence evidence.
 export function preflight(config, read = privateInput) {
@@ -36,6 +37,11 @@ export function preflight(config, read = privateInput) {
     throw new Error('remote_digest_mismatch');
   }
   validateApplicability(JSON.parse(read(config.applicabilityBaselineFile)));
+  validateReceiptPolicy(config,grant,read);
+  const acl = JSON.parse(read(config.aclReceiptFile));
+  if (!/^[a-f0-9]{64}$/.test(acl.aclCatalogSha256) || acl.aclSqlSha256 !== digest(read(config.restoreAclFile))) {
+    throw new Error('acl_baseline_invalid');
+  }
   validateProbes(buildProbes(config).probes);
   if (!Array.isArray(config.externalProbes) || config.externalProbes.length < 2
     || config.externalProbes.some(p => !URL.canParse(p.url) || p.expect !== 200)) throw new Error('external_probes_missing');
