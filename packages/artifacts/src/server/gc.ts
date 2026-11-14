@@ -186,19 +186,20 @@ export function createPostgresDeletionClaimStore(client: FinalizeTxClient): Insp
   };
   const withDigestLock: DeletionClaimStore['withDigestLock'] = async (digest, action) => {
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`artifacts-blob:${digest}`]);
+    // Always acquire the digest lock before locking a reservation row.
+    // Re-check pending state here and persist retry rotation under that lock.
+    await client.query(`UPDATE artifacts.object_intents SET updated_at = clock_timestamp()
+      WHERE ${predicate}`, [digest]);
     return action(access);
   };
   return { ...access, withDigestLock,
     async listPendingKeys(prefix, limit) {
-      // Persist rotation even when every erasure fails and the host restarts.
+      // Enumeration must not lock rows: physical listing can reach the same keys.
       const { rows } = await client.query<{ key: string }>(
-        `WITH candidates AS (SELECT id FROM artifacts.object_intents
+        `SELECT payload->>'blobKey' AS key FROM artifacts.object_intents
          WHERE kind = 'delete-blob' AND state = 'pending' AND payload->>'deletionClaim' = 'true'
          AND starts_with(payload->>'blobKey', $1)
-         ORDER BY updated_at, id LIMIT $2 FOR UPDATE SKIP LOCKED)
-         UPDATE artifacts.object_intents AS intent SET updated_at = clock_timestamp()
-         FROM candidates WHERE intent.id = candidates.id
-         RETURNING intent.payload->>'blobKey' AS key`, [prefix, limit]);
+         ORDER BY updated_at, id LIMIT $2`, [prefix, limit]);
       return rows.map(row => row.key);
     },
     async listClaims() {
