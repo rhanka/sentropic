@@ -35,3 +35,13 @@ test('A4 wiring restates the base pod-template entries so the fenced wire reprod
   assert.match(read('deploy/k8s/components/a4-wiring/patch-api-a4.yaml'),
     /podAffinity:\n\s+preferredDuringSchedulingIgnoredDuringExecution:\n\s+- weight: 100\n[\s\S]+app\.kubernetes\.io\/component: postgres/);
 });
+test('prod-a4 names the T3 priority class on the three pod templates the window recreates', () => {
+  // k8s PriorityClass sentropic-t3-critical acts only on pods that name it. The fenced wire of the
+  // driver branch sets the same field on the live templates, so this apply rolls nothing.
+  const overlay = readFileSync(new URL('deploy/k8s/overlays/prod-a4/kustomization.yaml', root), 'utf8');
+  assert.match(overlay, /target:\n\s+kind: Deployment\n\s+name: \(api\|auth-idp\|ui\)\n/);
+  assert.match(overlay, /spec:\n\s+template:\n\s+spec:\n\s+priorityClassName: sentropic-t3-critical\n?$/);
+  for (const tier of ['prod', 'preprod', 'preprod-a4']) {
+    assert.doesNotMatch(readFileSync(new URL(`deploy/k8s/overlays/${tier}/kustomization.yaml`, root), 'utf8'), /priorityClassName/, tier);
+  }
+});
