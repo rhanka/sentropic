@@ -105,7 +105,9 @@ describe('composite blob placement', () => {
     const jobs = createArtifactHostJobs({ pool, blobs, authorize: async () => true, page: async () => ({ keys: [] }) });
     expect((await jobs.collect('scope-p')).failures).toHaveLength(1);
     expect(await blobs.listKeys('artifacts/scope-p/blobs/sha256/')).toEqual([]);
-    expect((await jobs.collect('scope-p')).deleted).toEqual([key]);
+    const restarted = createArtifactHostJobs({ pool, blobs, authorize: async () => true, page: async () => ({ keys: [] }) });
+    expect((await restarted.collect('other-scope')).deleted).toEqual([]);
+    expect((await restarted.collect('scope-p')).deleted).toEqual([key]);
     expect((await pool.query("SELECT state FROM artifacts.object_intents WHERE kind = 'delete-blob'")).rows)
       .toEqual([{ state: 'done' }]);
     const refs = createPostgresArtifactStore(pool);

@@ -118,6 +118,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Rebase on origin/main and reproduce exact/partial prefix failures; fix bounded S3/Postgres/SQLite prefix selection.
   - [x] Reuse cleanup transaction, enumerate both placements and resume persisted deletion debt (cmf-s2 regressions red before fixes, then green).
   - [x] Qualify collected-row placement migration and offline image rollback/resume; reject missing referenced, pinned or unproven blobs.
+  - [x] Local gates: API 80/80, package 59/59, tuple 5 passed/3 conditional skips, storage typecheck and lint (0 errors), packed consumer and artifact-data-guard PASS; synchronize archive integrity.
   - [ ] Push final head, await green CI, report FIX R3 and remove test volumes.
 - [ ] **Lot 8 — Astra FIX R2**
   - [x] Reproduce and fix partial deletion errors and maintenance enumeration across placement modes (composite-blob.test.ts).
