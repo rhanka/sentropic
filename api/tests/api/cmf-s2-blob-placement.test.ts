@@ -66,6 +66,77 @@ function hostWith(placementForSize?: (size: number) => 'db' | 'object', mode: 'd
 }
 
 describe('composite blob placement', () => {
+  it('closes reservations without deadlock across scopes with opposite candidate orders', async () => {
+    const memory = createMemoryBlobStore();
+    const hashes = ['1'.repeat(64), '2'.repeat(64)];
+    const prefix = (scope: string) => `artifacts/${scope}/blobs/sha256/`;
+    for (const scope of ['scope-a', 'scope-b']) {
+      for (const hash of hashes) await memory.putBlob(`${prefix(scope)}${hash}`, new Uint8Array([1]));
+    }
+    const reservationId = randomUUID();
+    await pool.query(`INSERT INTO artifacts.object_intents (id, kind, payload)
+      VALUES ($1, 'delete-blob', $2)`, [reservationId, JSON.stringify({ deletionClaim: true,
+      digest: `sha256:${hashes[1]}`, holder: 'gc', blobKey: `${prefix('scope-b')}${hashes[1]}` })]);
+    let releaseFirst!: () => void;
+    const firstAcquisitions = new Promise<void>(resolve => { releaseFirst = resolve; });
+    let aAcquired!: () => void;
+    const aReady = new Promise<void>(resolve => { aAcquired = resolve; });
+    let bRequested!: () => void;
+    const bReady = new Promise<void>(resolve => { bRequested = resolve; });
+    let bPid = 0;
+    let bAcquired = false;
+    const codes: string[] = [];
+    const executor = createPostgresCommitExecutor(pool);
+    const collector = (lane: 'a' | 'b') => createPostgresGcService({ ...executor,
+      async beginFinalization() {
+        const tx = await executor.beginFinalization();
+        await tx.query("SET LOCAL statement_timeout = '5s'", []);
+        if (lane === 'b') bPid = (await tx.query<{ pid: number }>('SELECT pg_backend_pid() AS pid', [])).rows[0]!.pid;
+        let first = true;
+        return { ...tx, commit: () => tx.commit(), rollback: () => tx.rollback(),
+          release: (error?: unknown) => tx.release(error), async query<T>(sql: string, params: readonly unknown[]) {
+          const firstLock = first && sql.includes('pg_advisory_xact_lock');
+          if (firstLock && lane === 'b') bRequested();
+          const result = await tx.query<T>(sql, params).catch(error => {
+            codes.push(error.code);
+            throw error;
+          });
+          if (firstLock) {
+            first = false;
+            if (lane === 'a') aAcquired();
+            else bAcquired = true;
+            await firstAcquisitions;
+          }
+          return result;
+        } };
+      },
+    }, client => createPostgresArtifactStore(client as unknown as Pool));
+    const physical = { ...memory, async listKeys(candidate: string) {
+      return (await memory.listKeys(candidate)).sort();
+    } };
+    const first = collector('a').collect(physical, prefix('scope-a'));
+    await aReady;
+    const second = collector('b').collect(physical, prefix('scope-b'));
+    await bReady;
+    // With global ordering B waits for A's first digest. Before the fix it
+    // acquires the other digest; release both first-acquisition barriers then.
+    try {
+      await vi.waitFor(async () => {
+        const { rows } = await pool.query('SELECT cardinality(pg_blocking_pids($1)) > 0 AS blocked', [bPid]);
+        expect(bAcquired || rows[0].blocked).toBe(true);
+      });
+    } finally { releaseFirst(); }
+    const reports = await Promise.all([first, second]);
+    expect(codes).not.toContain('40P01');
+    expect(codes).toEqual([]);
+    expect(reports.flatMap(report => report.failures)).toEqual([]);
+    expect(reports.flatMap(report => report.deleted)).toHaveLength(4);
+    expect(await memory.listKeys('artifacts/')).toEqual([]);
+    expect((await pool.query('SELECT state FROM artifacts.object_intents WHERE id = $1', [reservationId])).rows)
+      .toEqual([{ state: 'done' }]);
+    expect((await pool.query("SELECT id FROM artifacts.object_intents WHERE state = 'pending'")).rows).toEqual([]);
+  });
+
   it('closes a reservation durably when two collectors enumerate the same physical key', async () => {
     const bytes = new TextEncoder().encode('concurrent reservation');
     const key = keyFor(bytes);
