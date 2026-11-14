@@ -72,7 +72,7 @@ const blobs: PublicationBlobStore =
 const currentIdentity = createCurrentArtifactIdentity(resource);
 /** The builder's dependency cache objects live in the same dedicated private artifact storage. */
 export const productPrivateCacheBlobs: PrivateCacheBlobs = {
-  put: (key, bytes) => blobs.putBlob(key, bytes), get: key => blobs.getBlob(key), delete: key => blobs.deleteBlob(key),
+  put: (key, bytes) => objectBlobs.putBlob(key, bytes), get: key => objectBlobs.getBlob(key), delete: key => objectBlobs.deleteBlob(key),
 };
 export const productArtifactHost = createArtifactHost({ pool, blobs, quotaBytes, currentIdentity,
   placementForSize: (size) => placementForPut(placementMode, size, placementInlineMaxBytes) });
