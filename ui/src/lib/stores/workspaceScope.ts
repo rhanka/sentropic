@@ -97,17 +97,21 @@ export function getScopedWorkspaceIdForUser(): string | null {
   return id && id.trim() ? id : null;
 }
 
+let workspaceLoadGeneration = 0;
 export async function loadUserWorkspaces(): Promise<void> {
+  const generation = ++workspaceLoadGeneration;
   const s = get(session);
   if (!s.user) {
     workspaceScopeHydrated.set(false);
     return;
   }
+  const isCurrent = () => generation === workspaceLoadGeneration && get(session).user?.id === s.user?.id;
 
   workspaceScopeHydrated.set(false);
   workspaceScope.update((st) => ({ ...st, loading: true, error: null }));
   try {
     const data = await apiGet<{ items: UserWorkspace[] }>('/workspaces');
+    if (!isCurrent()) return;
     const rawItems = Array.isArray(data?.items) ? data.items : [];
     // Hidden workspaces are only visible to workspace admins (defensive client-side filter).
     const items = rawItems.filter((w) => !w.hiddenAt || w.role === 'admin');
@@ -135,6 +139,7 @@ export async function loadUserWorkspaces(): Promise<void> {
       return { ...st, loading: false, items, selectedId, error: null };
     });
   } catch (e: any) {
+    if (!isCurrent()) return;
     if (e instanceof ApiError && e.status === 409) {
       workspaceScope.update((st) => {
         if (browser) localStorage.removeItem(STORAGE_KEY);
@@ -144,7 +149,7 @@ export async function loadUserWorkspaces(): Promise<void> {
       workspaceScope.update((st) => ({ ...st, loading: false, error: e?.message ?? 'Erreur chargement workspaces' }));
     }
   } finally {
-    workspaceScopeHydrated.set(true);
+    if (isCurrent()) workspaceScopeHydrated.set(true);
   }
 }
 

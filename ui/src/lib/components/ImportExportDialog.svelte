@@ -11,6 +11,7 @@
     workspaceScope,
   } from '$lib/stores/workspaceScope';
   import { currentFolderId } from '$lib/stores/folders';
+  import { session } from '$lib/stores/session';
   import { Download, Upload, X } from '@lucide/svelte';
 
   // TODO Lot 10: remove 'usecase' once data migration is complete
@@ -304,6 +305,8 @@
   };
 
   const handleImport = async () => {
+    const initiatingUserId = get(session).user?.id;
+    if (!initiatingUserId) return;
     if (!selectedFile) {
       addToast({ type: 'error', message: $_('importExport.errors.selectZip') });
       return;
@@ -348,6 +351,7 @@
         throw new Error((data as any)?.message ?? $_('importExport.errors.import'));
       }
       const data = await res.json();
+      if (get(session).user?.id !== initiatingUserId) return;
       addToast({
         type: 'success',
         message: $_('importExport.toast.importDone', {
@@ -357,6 +361,8 @@
       const importedWorkspaceId = typeof data?.workspace_id === 'string' ? data.workspace_id : null;
       const importedFolderId = typeof data?.target_folder_id === 'string' ? data.target_folder_id : null;
       if (importedWorkspaceId) {
+        await loadUserWorkspaces();
+        if (get(session).user?.id !== initiatingUserId) return;
         if (isNewWorkspace() || importedWorkspaceId !== targetWorkspaceId) {
           setWorkspaceScope(importedWorkspaceId);
         }
