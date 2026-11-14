@@ -9,6 +9,7 @@ import { buildProbes, claimDead, claimRecovery, effectiveTimeout, monoMs, readRe
 import { ROTATED_KEYS, preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
 import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
 import { checkApplicability } from './t3-applicability.mjs';
+import { preflight } from './t3-preflight-static.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const TOTAL_BUDGET_MS = 300_000;
@@ -545,6 +546,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
     postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch, print: console.log };
   try {
+    if (!dryRun) preflight(config);
     ctx.initialState = initializeState(ctx);
     const watchdog = spawn(process.execPath, [join(HERE, 't3-watchdog.mjs'),
       '--state-dir', stateDir, '--config', configPath,

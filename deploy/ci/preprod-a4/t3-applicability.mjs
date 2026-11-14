@@ -28,9 +28,10 @@ export function inspectApplicability(ctx, query) {
 }
 
 export function checkApplicability(ctx, query, phase) {
+  const reference = ctx.dryRun && !ctx.probeReadOnly ? null
+    : validateApplicability(JSON.parse(readFileSync(ctx.config.applicabilityBaselineFile, 'utf8')));
   const current = inspectApplicability(ctx, query);
   if (!current) return;
-  const reference = JSON.parse(readFileSync(ctx.config.applicabilityBaselineFile, 'utf8'));
   assertStable(reference, current);
   if (phase === 'W5') {
     writeFileSync(`${ctx.stateDir}/applicability-review.json`, JSON.stringify({

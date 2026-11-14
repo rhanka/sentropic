@@ -31,7 +31,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read packet, all four Astra reviews, merged driver and constraints; mechanical branch PASS.
 - [ ] Lot 1: W0/W2/W5 stability gates wired; container-only actual legacy migration regression suite added.
-- [ ] Lot 2: offline preflight, explicit rearm, full transactional restore with exact ACL comparison.
+- [ ] Lot 2: offline input preflight implemented before watchdog/fence; rearm and transactional restore pending.
 - [ ] Lot 3: host guards and isolated restore routing; dedicated fixture tests.
 - [ ] Lot 4: v5 plan reconciliation, #1001 pins/switch, exact operator handoff.
 - [ ] Final validation: focused operator and PostgreSQL tests on final bytes; PR and exact-head CI green.
