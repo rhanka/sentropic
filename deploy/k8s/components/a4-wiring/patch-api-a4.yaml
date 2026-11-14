@@ -13,6 +13,19 @@ spec:
       securityContext:
         runAsUser: 0
         runAsGroup: 0
+      # Custody is ReadWriteOnce. Its consumers (custodian, then API) stay on the tenant database
+      # node, so the volume never moves between nodes inside the window. The custodian turns this
+      # preference into a hard node pin (deploy/ci/preprod-a4/ops.mjs).
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: sentropic
+                    app.kubernetes.io/component: postgres
       containers:
         - name: api
           command: ["node", "/run/cm-runtime/launch.mjs"]

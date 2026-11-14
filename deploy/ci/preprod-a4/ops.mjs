@@ -1,5 +1,6 @@
 import { pathToFileURL } from 'node:url';
 import { assertDigestOutput, assertRequest, canonical, digest, kubectl, podName, privateInput, tierOf, wiring } from './guards.mjs';
+import { chrono, chronoStart } from './t3-chrono.mjs';
 
 // Exact W3 wire vectors. The P-0.8 judge (t3-template-diff.mjs) replays the deployment ones offline.
 export const wireCommands = image => ['api', 'auth-idp'].flatMap(name => [
@@ -7,6 +8,20 @@ export const wireCommands = image => ['api', 'auth-idp'].flatMap(name => [
   ['patch', 'deployment', name, '--type=strategic', `--patch-file=${wiring}/patch-${name}-a4.yaml`],
   ['set', 'image', `deployment/${name}`, `${name}=${image}`]]);
 
+// Custody is ReadWriteOnce: a consumer scheduled on another node waits for a detach and a new
+// attach (21-23 s measured, against 4 s on the same node). The wired API template prefers the
+// tenant database node; the custodian is pinned to that node, so the volume stays where the API
+// will mount it. No fallback node: a second node would spend the W4 budget on the attach.
+function custodyNode(spec, k) {
+  const term = spec.affinity?.podAffinity?.preferredDuringSchedulingIgnoredDuringExecution?.[0]?.podAffinityTerm;
+  const labels = Object.entries(term?.labelSelector?.matchLabels ?? {});
+  if (term?.topologyKey !== 'kubernetes.io/hostname' || !labels.length) throw new Error('overlay_not_installed');
+  const pods = JSON.parse(k(['get', 'pods', '-l', labels.map(([key, value]) => `${key}=${value}`).join(','), '-o', 'json'])).items;
+  const nodes = new Set(pods.filter(pod => pod.status?.phase === 'Running' && !pod.metadata.deletionTimestamp)
+    .map(pod => pod.spec.nodeName));
+  if (nodes.size !== 1 || nodes.has(undefined)) throw new Error('custody_node_unresolved');
+  return [...nodes][0];
+}
 
 export function ops(env = process.env, call = kubectl, read = privateInput) {
   if (!['wire', 'budgets', 'custodian', 'stage'].includes(env.A4_OPERATION)
@@ -52,6 +67,8 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     const api = JSON.parse(k(['get', 'deployment', 'api', '-o', 'json']));
     if (api.spec.replicas !== 0 || (api.status?.replicas ?? 0) !== 0) throw new Error('api_not_quiesced');
     const spec = structuredClone(api.spec.template.spec);
+    spec.affinity = { nodeAffinity: { requiredDuringSchedulingIgnoredDuringExecution: { nodeSelectorTerms: [
+      { matchFields: [{ key: 'metadata.name', operator: 'In', values: [custodyNode(spec, k)] }] }] } } };
     const container = spec.containers.find(container => container.name === 'api');
     if (!container || container.command?.join(' ') !== 'node /run/cm-runtime/launch.mjs'
       || !spec.volumes?.some(volume => volume.configMap?.name === 'sentropic-a4-runtime')
@@ -73,8 +90,11 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     const pod = { apiVersion: 'v1', kind: 'Pod', metadata: { name: podName, namespace,
       labels: { 'app.kubernetes.io/name': 'sentropic', 'app.kubernetes.io/component': 'pgbackup' } }, spec };
     if (env.A4_DRY_RUN === '0') {
-      k(['create', '-f', '-'], JSON.stringify(pod));
-      k(['wait', '--for=condition=Ready', '--timeout=180s', `pod/${podName}`]);
+      const started = chronoStart();
+      try {
+        k(['create', '-f', '-'], JSON.stringify(pod));
+        k(['wait', '--for=condition=Ready', '--timeout=180s', `pod/${podName}`]);
+      } finally { chrono('custodyAttach', started); }
     }
     return `custodianManifestSha256=${digest(canonical(pod))}\n`;
   }
