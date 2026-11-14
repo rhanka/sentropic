@@ -15,21 +15,46 @@ Run from `e2e/tests/harness` through the repository's `docker-slot.sh`:
 make prepare API_PORT=9360 UI_PORT=5560 MAILDEV_UI_PORT=1460 ENV=feat-v8-spike
 ```
 
-Then, from `packages/cluster-mesh/tests/compile-spike`, run `make bundle probe adapter export ENV=feat-v8-spike`
-through the same slot wrapper. From the harness directory run
+Then, from `packages/cluster-mesh/tests/compile-spike`, run `make export ENV=feat-v8-spike`
+through the same slot wrapper. This builds the bootstrap, runs the compiler, adapter,
+adapter failure control, cancellation and closure probes, and writes their receipts to
+`results/`. Committed `evidence/` files are historical snapshots and are never overwritten
+by these targets. From the harness directory run
 `make test-e2e API_PORT=9360 UI_PORT=5560 MAILDEV_UI_PORT=1460 ENV=feat-v8-spike` through the wrapper.
 The compiler bootstrap must exist before compiler-worker tests. The committed
 tool lock and image digest freeze the local tools. Install scripts are disabled.
+New browser reports are `e2e/tests/harness/results/owned/playwright.json`, written
+as the host UID. Working directories live in the disposable container's `/tmp`.
 The prerelease Vue pin does not satisfy the DS package's stable `^3` peer range;
 `--legacy-peer-deps` is confined to these diagnostic tools and preserves that pin.
 No application or compiler bundle is fetched from a public CDN at runtime.
+
+On an authorized measurement resumption, the pod commands run from the compile-spike
+directory. Override `KUBECONFIG` when the existing local tenant credential is elsewhere:
+
+```sh
+make pod-start POD_SPEC=pod.yaml ENV=feat-v8-spike
+make pod-run SPIKE_SINGLE=1 ENV=feat-v8-spike
+make pod-results RESULT_NAME=isolate-500m-repeat ENV=feat-v8-spike
+make pod-delete ENV=feat-v8-spike
+```
+
+For the admission-default control use `POD_SPEC=pod-default-cpu.yaml` and a distinct
+`RESULT_NAME`; for no quota use `POD_SPEC=pod-unlimited.yaml`. Verify `cpuMax` in
+each receipt, not just the requested manifest. `SPIKE_SINGLE=1` is explicitly forwarded
+to the remote Node process and selects retained S/style only. The original 500m run
+used `SPIKE_SINGLE=0` and was stopped after its retained and fresh S/style records;
+it is not a completed cold/fresh/retained matrix. Replay results get distinct names,
+not replacements for those historical samples. End local use with the harness's
+`make down-volumes ENV=feat-v8-spike`; this target guards the lane name and removes
+only its tools volume. No compose stack is started by these probes.
 
 ## Sixteen-question ledger
 
 | Q | Observed result | Evidence and remaining requirement |
 |---|---|---|
 | 1 | Real addon loads in deployed sentropic API image, Node v24.22.1; Python, g++ and make absent at checked runtime paths | Image `sha256:a81f6db4db6ecd5f4c8aad05ca01c8bb13b5c4542c40118ea48b897ab4971c26`. Existing named immo kubeconfig returns Unauthorized; deployed immo image unverified. Local immo image cannot resolve addon from `/workspace`. Both-host exit condition remains open |
-| 2 | Shared browser compiler/Sucrase bundle executes in the real addon and actual SandboxRuntime for S/M/L | `bootstrap.mjs`, `packages/skills/tests/sandbox/v8-spike.mjs`; cold adapter probes N=1 per fixture are feasibility checks, not latency qualification. Full host/class memory and cold/warm matrix remains open |
+| 2 | Shared browser compiler/Sucrase bundle executes in the real addon and actual SandboxRuntime for S/M/L | `bootstrap.mjs`, `packages/skills/tests/sandbox/v8-spike.mjs`, `evidence/adapter.json`; cold adapter probes N=1 per fixture are feasibility checks, not latency qualification. The failure control records errors and requires a nonzero adapter exit. Full host/class memory and cold/warm matrix remains open |
 | 3 | Disposal interrupts loops of real parse/script/template/style/TypeScript work | `cancel-probe.mjs`, `evidence/cancel.json`: N=20 per stage, monotonic host clock from dispose through rejection. This does not prove the adapter's whole-request deadline or AbortSignal behavior |
 | 4 | Exact serialized output equality between real addon and all three browser workers for S/M/L; four NFC witnesses equal | `00-v8-compiler.spec.ts`; N=1 per fixture/engine. No claim of exhaustive Unicode equality; ASCII path restriction stays |
 | 5 | Relative rolled-up `.d.ts` resolves through virtual `fileExists/readFile`; bare package type import is refused by browser compiler | `evidence/compiler-probe.json`. A package-name map alone is insufficient: the host/linker must expose relative virtual type paths. DS delivery format is not frozen by this partial spike |
@@ -66,6 +91,11 @@ claim and receives no warm-live verdict. Omission of a CPU limit originally
 triggered namespace admission's 100m default; that series is preserved under
 its actual effective budget, not labeled unlimited. Explicit zero CPU quantities
 produced `cpu.max = max 100000` in the final disposable pod.
+
+In fresh/cold contexts there is no primed memo: even a style-input edit compiles
+the full SFC, intentionally exposing the cold cost. In retained contexts `whole`
+names the spec's script-or-crossing-edit budget class, not an instruction to discard
+valid block results: the unchanged template/style stay memoized on a plain script edit.
 
 Bootstrap durations are separate in the raw records (N=1 retained startup;
 N=200 for fresh contexts). Resident memory is a post-series observation, not
