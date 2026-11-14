@@ -55,7 +55,7 @@
   - [x] Land CM_FIRST_ARTIFACTS unchanged.
   - [x] Land V8 delivery unchanged.
   - [x] Land Vue Vapor migration unchanged.
-  - [ ] Land generic app context unchanged.
+  - [x] Land generic app context unchanged.
   - [ ] Land frozen GAS r3 unchanged.
 - [ ] **Lot 2 — Superseded builder specifications**
   - [ ] Land SLO with the requested supersession header and unchanged body.
