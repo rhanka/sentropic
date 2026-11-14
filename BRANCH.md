@@ -30,11 +30,12 @@
   - `packages/chat-ui/src/**`
   - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - None.
+  - `BRANCH.md` (branch control artifact required by the packet, BR00-EX1).
 - **Exception process**:
-  - [x] No implementation scope exception requested; `BRANCH.md` is the branch control artifact.
+  - [x] BR00-EX1: allow the required branch control artifact only; no implementation scope expansion; rollback restores the inherited branch file.
 
 ## Feedback Loop
+- [x] C0-F0: initial native scope check flagged the required `BRANCH.md` as unknown; commit already created. Corrected by declaring BR00-EX1 and rerunning the check; retain this process deviation.
 - [ ] C0-F1: DS session reviews the DS-usage column before acceptance; preserve its actual receipt, never self-approve.
 - [ ] C0-F2: designated conductor records the recalibration and lot evidence in Track; this lane never writes the shared journal.
 
