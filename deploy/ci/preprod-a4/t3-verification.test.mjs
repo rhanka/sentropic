@@ -4,9 +4,9 @@ import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateMiddleware } from './execution.mjs';
-import { canonical, digest } from './guards.mjs'; import { finishOpen } from './t3-finish-open.mjs';
+import { canonical, digest } from './guards.mjs'; import { finishOpen, reconcileRestrictSafe } from './t3-finish-open.mjs';
 import { buildProbes, validateObservers } from './t3-lib.mjs';
-import { maintenance } from './t3-maintenance.mjs'; import { checkVerification } from './t3-window-driver.mjs';
+import { maintenance } from './t3-maintenance.mjs'; import { checkVerification, drive } from './t3-window-driver.mjs';
 import { assertVerificationSecret, provisionVerification, verificationCredential, verificationSpecValid } from './verification-boundary.mjs';
 import { emailProbe, expectedSigningKid, observerProbes, probeEndpoints, probeReply, verificationFile, verificationHeader,
   verificationLine, verificationSecret, verificationSpec } from './t3-probe-fixture.mjs';
@@ -91,12 +91,60 @@ for (const [name, reply, error] of [
   });
 }
 
-test('should require both observers to expect the proxy refusal', () => {
-  assert.doesNotThrow(() => validateObservers({ ...observerProbes(), externalProbes: observerProbes().externalProbes }));
+test('should require both observers to expect the proxy refusal, use http(s) and cover both origins', async () => {
+  const twoOrigins = {
+    endpoints: { ...probeEndpoints('https://idp.test'), appHealth: 'https://app.test/api/v1/health',
+      appMe: 'https://app.test/api/v1/me', emailApp: 'https://app.test/api/v1/auth/email/verify-request' },
+    restrictedProbes: [{ id: 'S-1', url: 'https://app.test/restricted0', expect: 401 },
+      { id: 'S-2', url: 'https://idp.test/restricted1', expect: 401 }],
+    externalProbes: [{ id: 'external-app', url: 'https://app.test/ext', expect: 200 },
+      { id: 'external-idp', url: 'https://idp.test/ext', expect: 200 }],
+  };
+  assert.doesNotThrow(() => validateObservers(twoOrigins));
   for (const expect of [403, 200]) {
-    const config = observerProbes(); config.restrictedProbes[1].expect = expect;
+    const config = structuredClone(twoOrigins); config.restrictedProbes[1].expect = expect;
     assert.throws(() => validateObservers(config), /restricted_observer_missing/);
   }
+  const badProto = structuredClone(twoOrigins); badProto.restrictedProbes[0].url = 'ftp://app.test/restricted0';
+  assert.throws(() => validateObservers(badProto), /restricted_observer_missing/);
+  const badExtProto = structuredClone(twoOrigins); badExtProto.externalProbes[0].url = 'ftp://app.test/ext';
+  assert.throws(() => validateObservers(badExtProto), /external_probes_missing/);
+  const sameOrigin = structuredClone(twoOrigins); sameOrigin.restrictedProbes[1].url = 'https://app.test/restricted1';
+  assert.throws(() => validateObservers(sameOrigin), /restricted_observer_origin_mismatch/);
+  const extSameOrigin = structuredClone(twoOrigins); extSameOrigin.externalProbes[1].url = 'https://app.test/ext2';
+  assert.throws(() => validateObservers(extSameOrigin), /external_observer_origin_mismatch/);
+  const { ctx, writes, requests } = acceptance({ restrictedProbes: [] });
+  await assert.rejects(finishOpen(ctx), /restricted_observer_missing/);
+  assert.deepEqual([writes, requests], [[], []]);
+  const dir = mkdtempSync(join(tmpdir(), 't3-obs-init-'));
+  await assert.rejects(drive({ stateDir: dir, config: { endpoints: twoOrigins.endpoints, emailProbe, expectedSigningKid,
+    restrictedProbes: sameOrigin.restrictedProbes, externalProbes: twoOrigins.externalProbes },
+    call: () => assert.fail('Kubernetes called'), delivered: () => assert.fail('fence called') }), /restricted_observer_origin_mismatch/);
+});
+
+test('reconcileRestrictSafe validates middlewareSpec, compares canonically and replaces /spec via JSON Patch', () => {
+  for (const bad of [{}, { ipAllowList: { sourceRange: ['192.0.2.10/32'] } }, { basicAuth: { secret: 'a4-verification-auth' } }]) {
+    assert.throws(() => reconcileRestrictSafe({ call: () => assert.fail('cluster called'), dryRun: false },
+      { namespace: 'sentropic-preprod', middlewareSpec: bad }), /traffic_boundary_invalid/);
+  }
+  const reordered = { basicAuth: { removeHeader: true, secret: 'a4-verification-auth' } };
+  const ing = { metadata: { annotations: { 'traefik.ingress.kubernetes.io/router.middlewares': 'sentropic-preprod-a4-verification@kubernetescrd' } } };
+  const conformWrites = [];
+  reconcileRestrictSafe({ dryRun: false, call: args => {
+    if (args[0] !== 'get') conformWrites.push(args);
+    return args[1] === 'middleware' ? JSON.stringify({ spec: reordered }) : JSON.stringify(ing);
+  } }, { namespace: 'sentropic-preprod', middlewareSpec: verificationSpec });
+  assert.deepEqual(conformWrites, [], 'alphabetically ordered CRD keys must not trigger frontal scale-down');
+  const patches = [];
+  reconcileRestrictSafe({ dryRun: false, call: args => {
+    if (args[0] === 'patch') patches.push(args);
+    if (args[1] === 'pods') return '{"items":[]}';
+    if (args[1] === 'middleware') return JSON.stringify({ spec: { ...verificationSpec, ipAllowList: { sourceRange: ['192.0.2.10/32'] } } });
+    return JSON.stringify(ing);
+  } }, { namespace: 'sentropic-preprod', middlewareSpec: verificationSpec });
+  assert.equal(patches.length, 1);
+  assert.deepEqual(patches[0].slice(0, 5), ['patch', 'middleware', 'a4-verification', '--type=json', '-p']);
+  assert.deepEqual(JSON.parse(patches[0][5]), [{ op: 'replace', path: '/spec', value: verificationSpec }]);
 });
 
 test('should compare the cluster Secret with the local credential and refuse any other content', () => {

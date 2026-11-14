@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { buildProbes, claimDead, claimRecovery, effectiveTimeout, monoMs, readRecoveryClaim, releaseRecovery,
-  runKubectl, loadState, saveState, stepTimeoutMs, utcNow, validateProbes } from './t3-lib.mjs';
+  runKubectl, loadState, saveState, stepTimeoutMs, utcNow, validateObservers, validateProbes } from './t3-lib.mjs';
 import { ROTATED_KEYS, preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
 import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
 import { checkApplicability } from './t3-applicability.mjs';
@@ -458,7 +458,9 @@ export async function drive(ctx) {
 
 function initializeState(ctx) {
   assertPreviewSafe(ctx);
-  validateProbes(buildProbes(ctx.config).probes);
+  const built = buildProbes(ctx.config);
+  validateProbes(built.probes);
+  validateObservers(built);
   const state = { version: 1, step: 'W0', fenceStarted: false, startedAtUtc: utcNow(), driverPid: process.pid,
     watchdogPid: ctx.watchdogPid,
     childPid: process.pid, namespace: ctx.config.namespace, operationId: ctx.config.request?.operationId,

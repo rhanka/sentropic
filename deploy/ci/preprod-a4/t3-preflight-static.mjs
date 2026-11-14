@@ -46,18 +46,18 @@ export function preflight(config, read = privateInput) {
     || acl.aclSqlSha256 !== digest(read(config.restoreAclFile,64*1024*1024))) {
     throw new Error('acl_baseline_invalid');
   }
-  validateProbes(buildProbes(config).probes);
-  validateObservers(config);
-  verificationCredential(config.verificationCredentialFile, read);
   if (!URL.canParse(config.witness?.url) || typeof config.witness?.cookie !== 'string' || !config.witness.cookie.trim()
     || !(Date.parse(config.witness.expiresAt) > Date.now() + 7200000)) throw new Error('legacy_witness_invalid');
   if (config.tier === 'restore') {
-    for (const url of [...Object.values(config.endpoints), ...config.externalProbes.map(p => p.url),
-      ...config.restrictedProbes.map(p => p.url),
+    for (const url of [...Object.values(config.endpoints ?? {}), ...(config.externalProbes ?? []).map(p => p.url),
+      ...(config.restrictedProbes ?? []).map(p => p.url),
       ...(config.probes ?? []).map(p => p.url), config.witness.url]) {
-      if (!new URL(url).hostname.endsWith('.restore-a4.test')) throw new Error('fixture_http_not_isolated');
+      if (URL.canParse(url) && !new URL(url).hostname.endsWith('.restore-a4.test')) throw new Error('fixture_http_not_isolated');
     }
   }
+  validateProbes(buildProbes(config).probes);
+  validateObservers(config);
+  verificationCredential(config.verificationCredentialFile, read);
   assertBaselineAfterWitness(JSON.parse(read(config.applicabilityBaselineFile)), config.witness);
   for (const name of ['apiJwtSecretFile', 'secretEncryptionKeyFile', 'idpSessionJwtFile']) {
     if (!read(config.rotationKeyFiles?.[name]).trim()) throw new Error('rotation_key_empty');
