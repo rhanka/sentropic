@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { supervisedSync } from './t3-processes.mjs';
+import { chrono, chronoSince, chronoStart } from './t3-chrono.mjs';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -82,8 +83,11 @@ export function delivered(ctx, script, env, timeoutMs) {
       if (cur) { cur.childPid = process.pid; saveState(ctx.stateDir, cur); }
     }
   } catch { /* observability only */ }
+  const started = chronoStart();
+  const chronoEnv = { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE ?? (ctx.stateDir ? `${ctx.stateDir}/t3-chrono.jsonl` : '') };
   const res = supervisedSync('node', [join(HERE, script)],
-    { env: { ...process.env, ...env }, encoding: 'utf8', timeout: timeoutMs }, ctx.stateDir);
+    { env: { ...process.env, ...chronoEnv, ...env }, encoding: 'utf8', timeout: timeoutMs }, ctx.stateDir);
+  chrono('delivered', started, { script, operation: env.A4_OPERATION ?? env.A4_ACTION ?? env.A4_PHASE, status: res.status }, chronoEnv);
   try {
     if (ctx.stateDir) {
       const cur = loadState(ctx.stateDir);
@@ -101,12 +105,12 @@ export function psql(ctx, statement, timeoutMs = 30_000) {
     ctx.print(`# dry-run sql: ${statement.split('\n')[0]}...`);
     return '';
   }
-  const started = monoMs();
+  const started = chronoStart();
   // Explicit role: exec lands as OS root, which has no DB role (trust auth
   // admits the existing app role without a password).
   const out = ctx.call(['exec', ctx.postgresPod, '--',
     'psql', '-U', ctx.postgresUser ?? 'app', '-v', 'ON_ERROR_STOP=1', '-X', '-qAt'], statement);
-  if (ctx.probeReadOnly) ctx.print(`# ${(monoMs() - started)}ms psql ${statement.split('\n')[0]}...`);
+  if (ctx.probeReadOnly) ctx.print(`# ${chrono('psql', started, {}, {}).elapsedMs.toFixed(3)}ms psql ${statement.split('\n')[0]}...`);
   return out;
 }
 
@@ -164,6 +168,11 @@ export const STEP_CUTOFFS = { W1: 25_000, W2: 35_000, W3: 50_000, W4: 70_000,
 function heartbeat(ctx, state, step) {
   state.step = step;
   state.heartbeatMonoMs = monoMs();
+  // Step entry measured from the fence, on the same chronometer as every kubectl round trip.
+  if (state.t0MonoMs != null) {
+    chrono(`step:${step}`, chronoSince(state.heartbeatMonoMs - state.t0MonoMs), {},
+      { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE, T3_STATE_DIR: ctx.stateDir });
+  }
   state.stepDeadlineMonoMs = state.t0MonoMs != null && STEP_CUTOFFS[step] != null
     ? state.t0MonoMs + STEP_CUTOFFS[step]
     : monoMs() + 600_000;

@@ -13,7 +13,21 @@ export A4_VERIFY_PHASE ?= internal
 export A4_EXECUTION_FILE
 export A4_EXECUTION_SHA256
 export A4_ACTION
-export T3_ACTION T3_CONFIG T3_STATE_DIR
+export T3_ACTION T3_CONFIG T3_STATE_DIR T3_CHRONO_FILE
+# Every operator chronometer runs under the C numeric locale, whatever the caller exports:
+# a comma-decimal locale truncated /proc/uptime to whole seconds in rehearsal r8.
+k8s-t3-%: export override LC_ALL := C
+k8s-t3-%: export override LC_NUMERIC := C
+k8s-restore-a4-%: export override LC_ALL := C
+k8s-restore-a4-%: export override LC_NUMERIC := C
+k8s-preprod-a4-%: export override LC_ALL := C
+k8s-preprod-a4-%: export override LC_NUMERIC := C
+k8s-prod-a4-%: export override LC_ALL := C
+k8s-prod-a4-%: export override LC_NUMERIC := C
+.PHONY: k8s-t3-chrono
+k8s-t3-chrono: ## Summarize the protected chronometer file against the M-1 and M-4 thresholds
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/t3-chrono.mjs "$(or $(T3_CHRONO_FILE),$(T3_STATE_DIR)/t3-chrono.jsonl)"
 .PHONY: k8s-t3-qualify
 k8s-t3-qualify:
 	@case "$(ENV)" in test-*) ;; *) exit 1;; esac

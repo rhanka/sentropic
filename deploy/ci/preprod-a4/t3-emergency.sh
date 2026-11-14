@@ -5,6 +5,8 @@
 # legacy boot on a committed database.
 # Usage: t3-emergency.sh --state-dir DIR --config FILE [--finish-open] [--dry-run]
 set -eu
+# Recovery figures never depend on the operator locale (a comma-decimal locale truncates seconds).
+LC_ALL=C LC_NUMERIC=C; export LC_ALL LC_NUMERIC
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 STATE_DIR=""
 CONFIG=""
