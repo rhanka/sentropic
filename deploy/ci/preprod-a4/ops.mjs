@@ -3,10 +3,18 @@ import { assertDigestOutput, assertRequest, canonical, digest, kubectl, podName,
 import { chrono, chronoStart } from './t3-chrono.mjs';
 
 // Exact W3 wire vectors. The P-0.8 judge (t3-template-diff.mjs) replays the deployment ones offline.
-export const wireCommands = image => ['api', 'auth-idp'].flatMap(name => [
+// PriorityClass provided by the platform for the T3 window (queue priority, preemptionPolicy Never):
+// a pod recreated inside the window must not wait behind other tenants on full nodes. Prod tier only.
+// The wire sets the class on the three prod templates exactly as overlays/prod-a4 renders it, so the
+// later apply rolls nothing; the custodian carries it too.
+export const t3PriorityClass = 'sentropic-t3-critical';
+export const prioritized = tier => tier.tier === 'prod' ? ['api', 'auth-idp', 'ui'] : [];
+const priorityPatch = JSON.stringify({ spec: { template: { spec: { priorityClassName: t3PriorityClass } } } });
+export const wireCommands = (image, tier) => [...['api', 'auth-idp'].flatMap(name => [
   ['patch', 'configmap', name, '--type=merge', `--patch-file=${wiring}/patch-${name}-config.yaml`],
   ['patch', 'deployment', name, '--type=strategic', `--patch-file=${wiring}/patch-${name}-a4.yaml`],
-  ['set', 'image', `deployment/${name}`, `${name}=${image}`]]);
+  ['set', 'image', `deployment/${name}`, `${name}=${image}`]]),
+...prioritized(tier).map(name => ['patch', 'deployment', name, '--type=merge', '-p', priorityPatch])];
 // Claims the wired templates mount. The wire creates them first: a consumer never starts
 // against a missing claim (the legacy prod namespace has no IdP session claim).
 export const wireVolumes = ['deploy/ci/preprod-a4/custody-pvc.yaml', 'deploy/ci/preprod-a4/idp-session-pvc.yaml'];
@@ -59,7 +67,7 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     return `budgetsSha256=${digest(bytes)}\n`;
   }
   if (env.A4_OPERATION === 'wire') {
-    for (const name of ['api', 'auth-idp']) {
+    for (const name of new Set(['api', 'auth-idp', ...prioritized(tier)])) {
       const deployment = JSON.parse(k(['get', 'deployment', name, '-o', 'json']));
       if (deployment.spec.replicas !== 0 || (deployment.status?.replicas ?? 0) !== 0) throw new Error('consumer_not_quiesced');
     }
@@ -68,7 +76,7 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     if (env.A4_DRY_RUN === '0') {
       for (const file of wireVolumes) k(['apply', '-f', file]);
       k(['apply', '-f', '-'], runtime);
-      for (const args of wireCommands(request.candidateImage)) k(args);
+      for (const args of wireCommands(request.candidateImage, tier)) k(args);
     }
     return `runtimeManifestSha256=${digest(runtime)}\n`;
   }
@@ -94,11 +102,14 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     volume.persistentVolumeClaim.readOnly = false;
     container.volumeMounts.find(mount => mount.name === volume.name).readOnly = false;
     spec.containers = [container]; spec.initContainers = []; spec.restartPolicy = 'Never';
+    if (prioritized(tier).length) spec.priorityClassName = t3PriorityClass;
     spec.automountServiceAccountToken = false;
     spec.terminationGracePeriodSeconds = 1;
     container.securityContext = { allowPrivilegeEscalation: false, capabilities: { drop: ['ALL'] }, readOnlyRootFilesystem: true };
+    // The isolated restore namespace opens the backup storage egress only to pods carrying this label.
     const pod = { apiVersion: 'v1', kind: 'Pod', metadata: { name: podName, namespace,
-      labels: { 'app.kubernetes.io/name': 'sentropic', 'app.kubernetes.io/component': 'pgbackup' } }, spec };
+      labels: { 'app.kubernetes.io/name': 'sentropic', 'app.kubernetes.io/component': 'pgbackup',
+        ...(tier.destinationNamespace ? { component: 'backup-download' } : {}) } }, spec };
     if (env.A4_DRY_RUN === '0') {
       const started = chronoStart();
       try {

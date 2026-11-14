@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { canonical, digest } from './guards.mjs';
+import { canonical, digest, tiers } from './guards.mjs';
 import { wireCommands } from './ops.mjs';
 
 // Strategic-merge keys of the pod template lists (patchMergeKey in k8s.io/api core/v1).
@@ -66,7 +66,7 @@ export function wired(objects, image, annexCommands, run = local) {
     return Object.fromEntries(Object.entries(objects).map(([name, object]) => {
       const file = join(dir, `${name}.json`);
       let current = JSON.stringify(object);
-      for (const args of [...wireCommands(image), ...annexCommands]) {
+      for (const args of [...wireCommands(image, tiers.prod), ...annexCommands]) {
         const vector = args.slice(0, 3).join(' ') === `patch deployment ${name}` ? ['patch', '--local', '-f', file, ...args.slice(3)]
           : args.slice(0, 3).join(' ') === `set image deployment/${name}` ? ['set', 'image', '--local', '-f', file, args[3]] : null;
         if (!vector) continue;

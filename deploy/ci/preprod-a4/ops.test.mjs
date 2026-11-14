@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { custodianCpuLimit, ops } from './ops.mjs';
+import { custodianCpuLimit, ops, t3PriorityClass } from './ops.mjs';
 import { digest, privateInput } from './guards.mjs';
 import { approvedRequest, commit, image, sha } from './fixtures.mjs';
 import { approvalRef, compose, entrypoint } from '../../k8s/overlays/preprod/a4-runtime/launch.mjs';
@@ -92,6 +92,43 @@ test('should give the custodian its own CPU limit and inherit every other resour
     { requests: resources.requests, limits: { ...resources.limits, cpu: custodianCpuLimit } });
   assert.equal(custodianCpuLimit, '1500m');
   assert.deepEqual(template.containers[0].resources, resources);
+});
+// k8s gives the T3 window a PriorityClass (queue priority, no preemption). It only acts on pods that
+// name it: the three prod templates recreated in the window, through the wire, and the custodian.
+test('should name the T3 priority class on the prod wire and custodian, and on no preprod object', () => {
+  const template = { affinity: { podAffinity: { preferredDuringSchedulingIgnoredDuringExecution: [{ weight: 100,
+    podAffinityTerm: { topologyKey: 'kubernetes.io/hostname', labelSelector: { matchLabels: { 'app.kubernetes.io/component': 'postgres' } } } }] } },
+  containers: [{ name: 'api', command: ['node', '/run/cm-runtime/launch.mjs'], env: [], envFrom: [],
+    volumeMounts: [{ name: 'cm-cutover', mountPath: '/run/cm-cutover', readOnly: true }] }],
+  volumes: [{ name: 'cm-runtime', configMap: { name: 'sentropic-a4-runtime' } },
+    { name: 'cm-cutover', persistentVolumeClaim: { claimName: 'sentropic-a4-custody', readOnly: true } }] };
+  const run = (tier, operation, uiReplicas = 0) => {
+    const calls = [], prod = tier !== 'preprod';
+    const body = { ...request, format: `${prod ? 'prod' : 'preprod'}-a4-request/1`, namespace: prod ? 'sentropic' : 'sentropic-preprod',
+      emailCodeActiveKeyRef: `email-code-hmac:v1:${prod ? 'prod' : 'preprod'}:15c2f8b66073655a` };
+    ops({ ...env, A4_TIER: tier, A4_OPERATION: operation, A4_DRY_RUN: '0' }, (_config, args, input) => {
+      calls.push({ args, input });
+      if (args[0] === 'kustomize') return 'runtime';
+      return args[1] === 'deployment' ? JSON.stringify({ spec: { replicas: args[2] === 'ui' ? uiReplicas : 0,
+        template: { spec: template } } })
+        : args[1] === 'pods' ? JSON.stringify({ items: [{ metadata: {}, spec: { nodeName: 'node-a' }, status: { phase: 'Running' } }] }) : '';
+    }, path => path === env.A4_REQUEST_FILE ? JSON.stringify(body) : 'private');
+    return calls;
+  };
+  const priority = calls => calls.filter(({ args }) => args.includes('-p')).map(({ args }) => [args[2], JSON.parse(args.at(-1))]);
+  const patch = { spec: { template: { spec: { priorityClassName: 'sentropic-t3-critical' } } } };
+  for (const tier of ['prod', 'restore']) {
+    assert.deepEqual(priority(run(tier, 'wire')), ['api', 'auth-idp', 'ui'].map(name => [name, patch]), tier);
+    // The wire now patches the ui template: a ui that still runs would be rolled, so it is refused.
+    assert.throws(() => run(tier, 'wire', 1), /consumer_not_quiesced/);
+    const pod = JSON.parse(run(tier, 'custodian').find(({ args }) => args[0] === 'create').input);
+    assert.equal(pod.spec.priorityClassName, t3PriorityClass, tier);
+    // The isolated namespace opens the backup storage egress to this label only; prod has no such policy.
+    assert.equal(pod.metadata.labels.component, tier === 'restore' ? 'backup-download' : undefined);
+  }
+  assert.deepEqual(priority(run('preprod', 'wire', 1)), []);
+  const preprod = JSON.parse(run('preprod', 'custodian').find(({ args }) => args[0] === 'create').input);
+  assert.deepEqual([preprod.spec.priorityClassName, preprod.metadata.labels.component], [undefined, undefined]);
 });
 test('should refuse malformed keys, unexpected previous slots and incorrect active fingerprints', () => {
   const base = { CM_A4_NAMESPACE: 'sentropic-preprod', CM_IDENTITY_EMAIL_CODE_POLICY: 'hmac-sha256', CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF: approvalRef,
