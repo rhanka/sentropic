@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { COMMIT_CUTOFF_MS, FINISH_CUTOFF_MS, RBAC_COUNT, TOTAL_BUDGET_MS,
-  STEP_CUTOFFS, awaitWritersGone, buildProbes, checkRbac, classify, drive, loadSql, splitSql } from './t3-window-driver.mjs';
-import { loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
+  STEP_CUTOFFS, awaitWritersGone, buildProbes, checkRbac, checkVerification, classify, drive, loadSql, splitSql } from './t3-window-driver.mjs';
+import { isReadOnly, loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
 import { preCommitRollback } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
 import { emailProbe, expectedSigningKid, probeEndpoints, probeReply, observerProbes,
@@ -14,6 +14,7 @@ import { emailProbe, expectedSigningKid, probeEndpoints, probeReply, observerPro
 import { applicabilityFixture } from './t3-applicability.test.mjs';
 import { witnessBinding } from './t3-applicability.mjs';
 import { rehearsalFixture } from './t3-rehearsal-fixture.mjs';
+import { PROD_POSTGRES_IMAGE, PROD_POSTGRES_TOOL_IMAGE } from './t3-fixture.mjs';
 
 const CANDIDATE = `ghcr.io/rhanka/sentropic-api@sha256:${'e'.repeat(64)}`;
 const UI_IMAGE = 'ghcr.io/rhanka/sentropic-ui@sha256:ui';
@@ -66,6 +67,7 @@ export function makeCall(scenario = {}) {
       if (args.some(a => String(a).includes('/run/cm-cutover/snapshot.json'))) return JSON.stringify(scenario.snapshot);
       const statement = String(input ?? '');
       if (statement.includes('AS acl_sha256')) return 'a'.repeat(64);
+      if (statement.includes('SHOW server_version')) return `${scenario.postgresVersion ?? '17.11'}\n`;
       if (statement.includes('cutover-applicability-v1')) return JSON.stringify(applicabilityFixture());
       if (statement.includes('journal_present')) return scenario.journal === false ? 'f|0\n' : `t|${scenario.locks ?? 0}\n`;
       if (statement.includes('identity_committed')) return scenario.committed ? 't\n' : 'f\n';
@@ -117,8 +119,23 @@ export function makeCall(scenario = {}) {
       if (scenario.middlewareSpec === false) return '{}';
       return JSON.stringify({ spec: scenario.middlewareSpec ?? verificationSpec });
     }
+    if (cmd === 'create --dry-run=server -o json -f -') {
+      if (scenario.priorityAdmitted === false) throw new Error('kubectl_failed: create --dry-run=server -o');
+      const pod = JSON.parse(input);
+      scenario.priorityProbePod = pod;
+      return JSON.stringify(scenario.priorityAdmitted ?? pod);
+    }
+    if (cmd === 'get pod postgres-0 -o json') {
+      return JSON.stringify({ status: { containerStatuses: [{ name: 'postgres',
+        imageID: scenario.postgresImageID ?? `docker.io/library/${PROD_POSTGRES_IMAGE}` }] } });
+    }
+    if (cmd === 'get cronjob pgbackup -o json') {
+      return JSON.stringify({ spec: { suspend: true, jobTemplate: { spec: { template: { spec: {
+        initContainers: [{ name: 'dump', image: scenario.pgbackupImage ?? PROD_POSTGRES_TOOL_IMAGE }] } } } } } });
+    }
     if (cmd === 'get cronjob sentropic-idp-identity-export -o json') {
-      return JSON.stringify({ spec: { suspend: scenario.exportSuspended !== false } });
+      return JSON.stringify({ spec: { suspend: scenario.exportSuspended !== false, jobTemplate: { spec: { template: { spec: {
+        initContainers: [{ name: 'export-sql', image: scenario.identityExportImage ?? PROD_POSTGRES_TOOL_IMAGE }] } } } } } });
     }
     if (cmd.startsWith('patch cronjob sentropic-idp-identity-export')) {
       scenario.exportSuspended = true;
@@ -130,12 +147,12 @@ export function makeCall(scenario = {}) {
         : { spec: { replicas: 0 }, status: { replicas: 0 } }));
     }
     if (cmd === 'get deployment ui -o json') {
-      return JSON.stringify(scaled.ui ? readyDeploy('ui', UI_IMAGE) : { spec: { replicas: 0 }, status: { replicas: 0 } });
+      return JSON.stringify(scenario.ui ?? (scaled.ui ? readyDeploy('ui', UI_IMAGE) : { spec: { replicas: 0 }, status: { replicas: 0 } }));
     }
     if (cmd === 'get deployment auth-idp -o json') {
-      return JSON.stringify(scaled['auth-idp']
+      return JSON.stringify(scenario['auth-idp'] ?? (scaled['auth-idp']
         ? readyDeploy('auth-idp', CANDIDATE)
-        : { spec: { replicas: 0 }, status: { replicas: 0 } });
+        : { spec: { replicas: 0 }, status: { replicas: 0 } }));
     }
     if (/^scale deployment\/(\S+) --replicas=1$/.test(cmd)) {
       scaled[cmd.split('/')[1].split(' ')[0]] = true;
@@ -167,13 +184,15 @@ export function makeCtx(overrides = {}) {
   const witnessSalt = 'e'.repeat(64);
   const baselineBytes = JSON.stringify({ ...applicabilityFixture(), witnessSalt, witnessSha256: witnessBinding(witness, witnessSalt) });
   writeFileSync(applicabilityBaselineFile, baselineBytes);
-  const qualification = rehearsalFixture(keyDir,{ candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE,operationId: 'test' },baselineBytes);
+  const tier = overrides.tier ?? overrides.config?.tier ?? 'preprod';
+  const namespace = overrides.config?.namespace ?? 'sentropic-preprod';
+  const qualification = rehearsalFixture(keyDir,{ candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE,operationId: 'test',namespace },baselineBytes);
   scenario.snapshot = qualification.snapshot;
   return {
     ctx: {
       call, printed,
       print: line => printed.push(line),
-      dryRun: false, probeReadOnly: false, tier: 'preprod', postgresPod: 'postgres-0',
+      dryRun: false, probeReadOnly: false, tier, postgresPod: 'postgres-0',
       stateDir: mkdtempSync(join(tmpdir(), 't3-test-')),
       probe: async (url, options) => probeReply(url, options, boundary.open),
       verification: verificationHeader,
@@ -1153,4 +1172,118 @@ test('R8 the window sends the W0 credential on the W8 probes and accepts only af
   assert.equal(loadState(ctx.stateDir).substate, 'TWO_HOSTS_OPEN');
   assert.deepEqual(seen.slice(0, 2).map(([url, authorization]) => [url.slice(-11), authorization]), [['restricted0', null], ['restricted1', null]]);
   assert.ok(seen.filter(([url]) => url.includes('probe=')).every(([, authorization]) => authorization === verificationHeader));
+});
+
+test('R9 W0 checks server-side PriorityClass admission on prod and restore before any fence write', async () => {
+  assert.equal(isReadOnly(['create', '--dry-run=server', '-o', 'json', '-f', '-']), true);
+  assert.equal(isReadOnly(['create', '-f', '-']), false);
+  for (const [tier, namespace] of [['prod', 'sentropic'], ['restore', 'sentropic-restore-a4']]) {
+    const { ctx, calls } = makeCtx({ config: { tier, namespace }, scenario: { priorityAdmitted: false } });
+    ctx.delivered = () => assert.fail('fence started');
+    assert.equal(await drive(ctx), 1);
+    const state = loadState(ctx.stateDir);
+    assert.equal(state.refusalReason, 'throw:priority_class_unadmitted');
+    assert.equal(state.t0MonoMs, undefined);
+    assert.ok(calls.includes('create --dry-run=server -o json -f -'));
+    const okScenario = { committed: true, api: { spec: { replicas: 1, template: { spec: { containers: [{ name: 'api', image: CANDIDATE }] } } },
+      status: { replicas: 1, readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } } };
+    const ok = makeCtx({ config: { tier, namespace }, scenario: okScenario });
+    assert.equal(await drive(ok.ctx), 0);
+    assert.equal(okScenario.priorityProbePod?.spec?.priorityClassName, 'sentropic-t3-critical');
+  }
+  const preprod = makeCtx({ scenario: { priorityAdmitted: false } });
+  preprod.ctx.delivered = () => { throw new Error('stop_at_fence'); };
+  await drive(preprod.ctx);
+  assert.ok(!preprod.calls.includes('create --dry-run=server -o json -f -'));
+});
+
+test('R9 preCommitRollback undoes W3 template patches even before DeploymentController increments revision', async () => {
+  const unconciledUi = {
+    metadata: { annotations: { 'deployment.kubernetes.io/revision': '4' }, generation: 5 },
+    status: { replicas: 0, observedGeneration: 4 },
+    spec: { replicas: 0, template: { spec: { priorityClassName: 'sentropic-t3-critical' } } },
+  };
+  const { ctx, calls } = makeCtx({
+    config: { tier: 'prod', namespace: 'sentropic' },
+    scenario: { ui: unconciledUi },
+  });
+  await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, tier: 'prod' });
+  const undoIdx = calls.indexOf('rollout undo deployment/ui --to-revision=4');
+  const scaleIdx = calls.indexOf('scale deployment/ui --replicas=1');
+  assert.ok(undoIdx !== -1 && undoIdx < scaleIdx, 'rollout undo runs before scale-up despite unincremented revision');
+});
+
+test('R9 W0 checks live postgres server version and pinned client images before any fence write', async () => {
+  for (const drift of [
+    { postgresVersion: '17.12' },
+    { postgresImageID: `docker.io/library/postgres@sha256:${'d'.repeat(64)}` },
+    { pgbackupImage: 'postgres:17-alpine' },
+    { identityExportImage: 'postgres:17-alpine' },
+  ]) {
+    const { ctx } = makeCtx({ scenario: drift });
+    ctx.delivered = () => assert.fail('fence started');
+    assert.equal(await drive(ctx), 1, JSON.stringify(drift));
+    const state = loadState(ctx.stateDir);
+    assert.equal(state.refusalReason, 'throw:postgres_version_unqualified');
+    assert.equal(state.t0MonoMs, undefined);
+  }
+  const { ctx } = makeCtx();
+  writeFileSync(ctx.config.postgresVersionFile, JSON.stringify({ version: 't3-postgres-version/1', namespace: 'wrong' }));
+  ctx.delivered = () => assert.fail('fence started');
+  assert.equal(await drive(ctx), 1);
+  assert.equal(loadState(ctx.stateDir).refusalReason, 'throw:postgres_version_receipt_invalid');
+});
+
+test('R9 checkVerification runs under --dry-run --probe-readonly and skips plain --dry-run', () => {
+  const plain = makeCtx({ scenario: { verificationSecret: false } });
+  plain.ctx.dryRun = true; plain.ctx.probeReadOnly = false;
+  assert.equal(checkVerification(plain.ctx), null);
+  assert.equal(plain.calls.length, 0);
+
+  const probeOk = makeCtx();
+  probeOk.ctx.dryRun = true; probeOk.ctx.probeReadOnly = true;
+  assert.equal(checkVerification(probeOk.ctx), verificationHeader);
+  assert.deepEqual(probeOk.calls, ['get secret a4-verification-auth -o json']);
+
+  const probeBad = makeCtx({ scenario: { verificationSecret: false } });
+  probeBad.ctx.dryRun = true; probeBad.ctx.probeReadOnly = true;
+  assert.throws(() => checkVerification(probeBad.ctx), /verification_secret_missing/);
+});
+
+test('R9 a writer pod that overruns W3 or never leaves routes through drive without creating custodian', async () => {
+  assert.equal(STEP_CUTOFFS.W3, 50_000);
+  const realStart = monoMs();
+  {
+    let clock = 1_000;
+    const { ctx, calls } = makeCtx({ scenario: { writersTerminating: 6 } });
+    ctx.now = () => clock;
+    const inner = ctx.call, seen = [];
+    ctx.call = (args, input) => {
+      if (monoMs() - realStart > 3_000) throw new Error('clock_injection_ignored');
+      if (args.join(' ').includes('component=api')) clock += 10_000;
+      return inner(args, input);
+    };
+    ctx.delivered = (_c, _script, env) => { seen.push(env.A4_ACTION ?? env.A4_OPERATION ?? env.A4_PHASE); return ''; };
+    assert.equal(await drive(ctx), 3, 'late-draining writer routes to pre-commit rollback');
+    assert.ok(!seen.includes('custodian') && !seen.includes('snapshot'));
+    assert.equal(loadState(ctx.stateDir).recoveryReason, 'throw:pods_not_zero: api');
+    assert.ok(calls.includes('delete middleware a4-verification --ignore-not-found=true'));
+  }
+  {
+    let clock = 1_000;
+    const { ctx, calls } = makeCtx({ scenario: { writersTerminating: Infinity } });
+    ctx.now = () => clock;
+    const inner = ctx.call, seen = [];
+    ctx.call = (args, input) => {
+      if (monoMs() - realStart > 3_000) throw new Error('clock_injection_ignored');
+      if (args.join(' ').includes('component=api')) clock += 10_000;
+      return inner(args, input);
+    };
+    ctx.delivered = (_c, _script, env) => { seen.push(env.A4_ACTION ?? env.A4_OPERATION ?? env.A4_PHASE); return ''; };
+    await assert.rejects(drive(ctx), /pods_not_zero: api/);
+    assert.ok(!seen.includes('custodian') && !seen.includes('snapshot'));
+    assert.ok(!calls.includes('delete middleware a4-verification --ignore-not-found=true'));
+    assert.equal(loadState(ctx.stateDir).recoveryReason, 'throw:pods_not_zero: api');
+  }
+  assert.ok(monoMs() - realStart < 3_000);
 });
