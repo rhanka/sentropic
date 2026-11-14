@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.26.0-dev.27
+## 0.26.0-dev.28
 
 - T4a storage CMF-S1 structural blob bridge contract (`storage/artifact-blob.ts`):
   `ArtifactBlobPort` with buffer clone and SHA-256 pre-I/O check, conditional

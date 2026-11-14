@@ -82,6 +82,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- BRT4a-EX4 (FIX R3 rebase integration): CI 43581832180 proves cluster-mesh dev.27 now equals origin/main despite the storage src delta. Bump to dev.28, synchronize root/API locks and selected fixture, and regenerate the local P1 manifest. Impact: release metadata only. Rollback: revert this metadata commit; the version gate fails again.
 - BRT4a-R3 (package release follow-through): aligning the provider version changes the APP-P1 manifest digest. Reproduced locally: 23 registry tests refused the old 0.2.27 pin. Recompute the 0.2.28 manifest with the unchanged `mcp:tools:invoke` projection, update the API pin and installed/dispatch fixtures, retain historical digest assertions, and qualify registry tests before pushing.
 - BRT4a-R3 verification: registry 25/25, physical installed/bundled registry 2/2, workspace dispatch 14/14 PASS. APP-P1 digest computed from built 0.2.28: `b7d6d576986acc1256b6b23c988f70d5496eb9e93b7cb697cc37649b8bea5262`.
 - BRT4a-R2 (CI 43546569187, resolved in source): the packed consumer compared provider version 0.2.27 with package 0.2.28. Align `ARTIFACTS_PROVIDER_VERSION` to 0.2.28, rebuild the archive and regenerate its selected-fixture integrity. Verification: the existing packed-consumer probe, unchanged.
