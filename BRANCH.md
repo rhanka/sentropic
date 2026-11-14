@@ -75,6 +75,7 @@
 - [x] R6 P-0.8 operator judge: `k8s-t3-qualify T3_ACTION=template-diff` reads the live capture, the rendered overlay and the annex images offline, writes a protected receipt and refuses a non-zero diff.
 - [x] R6 timers: operator targets and the human emergency command force `LC_ALL=C` and `LC_NUMERIC=C` (a French caller locale truncated an awk reading of /proc/uptime to whole seconds; reproduced on the host, fixed targets read 10 ms). One chronometer times every kubectl round trip, delivered entry point, window step, custody attach and custody detach in milliseconds with three decimals; `k8s-t3-chrono` judges the 10 s, 6 s and 1.2 s thresholds.
 - [x] R6 tests, red before each fix: custodian pin (1), chronometer integration and locale (3), canonical template diff (six API env paths); the adapted delivered-ops test asserts the pinned Pod.
+- [x] CI failure 43618067877 (`changes`, check-image-registry): the legacy fixture quoted the retired registry host of the last-applied images. Replaced by a placeholder host; the guard is unchanged and the judged result is identical because apply reads only field ownership from that configuration.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
 - [x] No AI tests or flaky allowances.

@@ -6,7 +6,9 @@ const probe = (path, initialDelaySeconds, periodSeconds, failureThreshold) => ({
   ...(failureThreshold ? { failureThreshold } : {}), httpGet: { path, port: 'http' }, initialDelaySeconds, periodSeconds });
 const resources = (cpu, memory, cpuLimit, memoryLimit) => ({ limits: { cpu: cpuLimit, memory: memoryLimit }, requests: { cpu, memory } });
 const envFrom = config => [{ configMapRef: { name: config } }, { secretRef: { name: 'sentropic-api' } }];
-const registry = 'rg.fr-par.scw.cloud/nc-reg';
+// The applied images named the retired registry, which check-image-registry refuses in tracked
+// files. A placeholder host stands for it: apply reads only which fields that configuration owned.
+const registry = 'retired-registry.invalid/nc-reg';
 const applied = {
   api: { spec: { enableServiceLinks: false }, container: { envFrom: envFrom('api'), image: `${registry}/sentropic-api:main`,
     livenessProbe: probe('/api/v1/health', 20, 15), ports: [{ containerPort: 8787, name: 'http' }],
