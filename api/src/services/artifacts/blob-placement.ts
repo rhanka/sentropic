@@ -9,6 +9,7 @@
  */
 import type { Pool } from 'pg';
 import type { PublicationBlobStore } from '@sentropic/artifacts/server/publication';
+import type { FinalizeTxClient } from '@sentropic/artifacts/server/commit-contract';
 import { createPostgresDbBlobStore } from '@sentropic/artifacts/adapters/db-blob';
 import { createCompositeBlobStore, type CompositeBlobMode } from '@sentropic/artifacts/adapters/composite-blob';
 
@@ -49,7 +50,12 @@ export function createPostgresBlobPlacements(pool: Pool) {
 
 /** Digest lock shared with the package GC claim store (`artifacts-blob:<digest>`). */
 export function createBlobDigestLock(pool: Pool) {
-  return async (digest: string, work: () => Promise<void>): Promise<void> => {
+  return async (digest: string, work: () => Promise<void>, transaction?: FinalizeTxClient): Promise<void> => {
+    if (transaction) {
+      await transaction.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`artifacts-blob:${digest}`]);
+      await work();
+      return;
+    }
     const client = await pool.connect();
     try {
       await client.query('BEGIN');

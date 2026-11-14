@@ -12,6 +12,8 @@ import { createPostgresDbBlobStore } from '@sentropic/artifacts/adapters/db-blob
 import { listBlobKeysPaged } from '@sentropic/artifacts/server/blob-bridge';
 import { createGcService, createMemoryRefcountStore, createPostgresDeletionClaimStore } from '@sentropic/artifacts/server/gc';
 import { createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
+import { createPostgresCommitExecutor } from '@sentropic/artifacts/adapters/postgres-commit';
+import { createPostgresGcService } from '@sentropic/artifacts/server/gc';
 import { migrateCmFixtureDatabase as runMigrations } from '../utils/cm-fresh-database';
 import { createArtifactHost } from '../../src/services/artifacts/composition';
 import { createPlacementBlobStore, createPostgresBlobPlacements,
@@ -62,6 +64,25 @@ function hostWith(placementForSize?: (size: number) => 'db' | 'object', mode: 'd
 }
 
 describe('composite blob placement', () => {
+  it('collects inside the real owning transaction without reacquiring on another connection', async () => {
+    const bytes = new TextEncoder().encode('gc real begin');
+    const key = keyFor(bytes);
+    const db = createPostgresDbBlobStore(pool);
+    const s3 = createMemoryBlobStore();
+    await db.putBlob(key, bytes);
+    await s3.putBlob(key, bytes);
+    // Bound a regression instead of hanging the suite on the second connection.
+    const lockedPool = new Pool({ connectionString: pool.options.connectionString,
+      options: '-c lock_timeout=200ms -c statement_timeout=2000ms' });
+    try {
+      const store = createPlacementBlobStore({ pool: lockedPool, s3, mode: 's3', inlineMaxBytes: 8 });
+      const gc = createPostgresGcService(createPostgresCommitExecutor(lockedPool), () => createMemoryRefcountStore());
+      expect(await gc.collect(store, 'artifacts/scope-p/blobs/sha256/')).toEqual({ deleted: [key], retained: [], failures: [] });
+      expect(await db.getBlob(key)).toBeUndefined();
+      expect(await s3.getBlob(key)).toBeUndefined();
+    } finally { await lockedPool.end(); }
+  });
+
   it('parses placement env with fail-closed defaults', () => {
     expect(parseBlobPlacementMode(undefined)).toBe('s3');
     expect(parseBlobPlacementMode('')).toBe('s3');

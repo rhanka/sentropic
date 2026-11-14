@@ -37,6 +37,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - `packages/artifacts/src/adapters/composite-blob.ts`
   - `packages/artifacts/src/server/blob-bridge.ts`
   - `packages/artifacts/src/server/publication.ts`
+  - `packages/artifacts/src/server/gc.ts`
   - `packages/artifacts/src/mcp-core.ts`
   - `packages/artifacts/migrations/0014_db_blob_placement.sql`
   - `packages/artifacts/tests/**`
@@ -106,6 +107,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
 - [ ] **Lot 8 — Astra FIX R2**
   - [x] Reproduce and fix partial deletion errors and maintenance enumeration across placement modes (composite-blob.test.ts).
   - [ ] Qualify image rollback, real transactional GC, host paging, migration contention and process crash recovery.
+  - [x] Reproduce GC lock timeout inside BEGIN and pass the owning transaction through deletion.
   - [ ] Push verified head, await CI, append FIX R2 report and remove isolated volumes.
 - [ ] **Lot 7 — Rebase and qualify exact head (2026-11-13)**
   - [x] Rebase on origin/main; preserve prior uncommitted metadata in a stash.
