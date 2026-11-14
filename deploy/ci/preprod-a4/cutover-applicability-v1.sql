@@ -165,6 +165,8 @@ SELECT CASE
       'ok', true,
       'durableCutoverApplicabilitySha256', encode(sha256(convert_to(applicability_doc::text, 'UTF8')), 'hex'),
       'encryptedStoresSha256', encode(sha256(convert_to(encrypted_stores_doc::text, 'UTF8')), 'hex'),
+      'encryptedStoreFingerprints', (SELECT jsonb_object_agg(key,
+        encode(sha256(convert_to(value::text,'UTF8')),'hex')) FROM jsonb_each(encrypted_stores_doc)),
       'guards', (applicability_doc->'pre_cutover_guards') - 'legacy_foreign_keys'
     )::text
     FROM payload;
