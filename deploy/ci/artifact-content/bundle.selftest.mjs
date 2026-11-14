@@ -203,12 +203,12 @@ for (const tier of ['prod', 'preprod']) {
     const copy = structuredClone(objects); mutation(copy); assert.throws(() => qualify(copy));
   });
   deny('reader enabled by main deployment', o => { object(o, 'Deployment', 'api').spec.template.spec.containers[0].env.find(e => e.name === 'APP_ARTIFACT_READER_ENABLED').value = '1'; });
-  deny('live edge flag of the other tier', o => { object(o, 'ConfigMap', 'artifact-content').data.APP_ARTIFACT_LIVE_ENABLED = tier === 'prod' ? '1' : '0'; });
+  deny('live edge enabled without worker capacity', o => { object(o, 'ConfigMap', 'artifact-content').data.APP_ARTIFACT_LIVE_ENABLED = '1'; });
   const apiData = o => object(o, 'ConfigMap', 'api').data;
   deny('supervisor relay flag of the other tier', o => {
     object(o, 'ConfigMap', 'artifact-content').data.APP_ARTIFACT_SUPERVISOR_RELAY_ENABLED = tier === 'prod' ? '1' : '0';
   });
-  deny('builder flag of the other tier', o => { apiData(o).ARTIFACT_BUILDER_ENABLED = tier === 'prod' ? '1' : '0'; });
+  deny('builder enabled without worker capacity', o => { apiData(o).ARTIFACT_BUILDER_ENABLED = '1'; });
   deny('builder relay through the other environment', o => {
     apiData(o).ARTIFACT_SUPERVISOR_RELAY_URL = `http://artifact-content.${tier === 'prod' ? 'sentropic-preprod' : 'sentropic'}.svc.cluster.local:8791`;
   });
