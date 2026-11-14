@@ -17,6 +17,8 @@ export function inputs() {
       'start-api': [['scale','deployment/api','--replicas=1']],
       resume: [['patch','cronjob','pgbackup','--type=merge','-p','{"spec":{"suspend":false}}']],
       'open-traffic': [['annotate','ingress','sentropic','traefik.ingress.kubernetes.io/router.middlewares-']] } };
+  annex.middlewareSpec = { ipAllowList: { sourceRange: ['192.0.2.1/32'] } };
+  annex.middlewareSpecSha256 = digest(canonical(annex.middlewareSpec));
   const budgets = { qualificationReceiptRef: 'track:t3-qualified' };
   for (const name of ['reservation','deletion','diagnostic','read','workspace','replicaExport','replicaValidation','replicaSync']) {
     budgets[name] = { deadlineMs: 10000, maxAttempts: 1 };
