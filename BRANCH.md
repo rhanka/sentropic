@@ -4,7 +4,7 @@
 - [x] Deliver A-R3-5, T1-w9 and the design-system seed from the ratified App-to-cluster-mesh plan.
 
 ## Scope / Guardrails
-- [x] Worktree: `tmp/secret-keys-hardening-w9`; branch: `fix/secret-keys-hardening-w9`; base: `938709b08`.
+- [x] Worktree: `tmp/secret-keys-hardening-w9`; branch: `fix/secret-keys-hardening-w9`; base: `a627f54e5` after rebase.
 - [x] Environment: `test-cm-t1-w9`; API_PORT=9450, UI_PORT=5650, MAILDEV_UI_PORT=1550 (checked free).
 - [x] Make-only, Docker-first; no cluster/prod actions; no T3 changes; no merge.
 - [x] Keep OAuth KEK checks at resolver time; do not add a KEK boot gate (QA-8r2).
@@ -40,6 +40,7 @@
 - [x] No browser UAT: these are secret resolvers, bundle generation and database seed defaults; synthetic tests cover behavior without cluster access.
 - [x] Review corrections: reject the committed IdP KEK seed in deployed resolvers; only update a seeded client's tenant policy when explicitly declared (A-R3-3).
 - [x] Bundle review correction: preserve quoted hash/comment bytes and assert received synthetic key digests, including padding and equals signs.
+- [x] Rebase: merge-tree identified BRANCH.md as the sole conflict; rebase onto main preserved the exact Makefile/API diff SHA-256 `0fa346f4f278bb3f13e8fdcd46871254df757f881b380178ef5fae3ea33a4683`. No package source or version changed; package post-rebase bump gate is not applicable.
 
 ## AI Flaky tests
 - [x] No AI calls in scoped acceptance tests; no flaky allowance requested.
