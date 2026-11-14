@@ -73,7 +73,7 @@ test('restore preflight rejects production URLs in every observer and witness pa
     if (value.namespace) value.namespace = 'sentropic'; f.files[path] = JSON.stringify(value);
   }
   f.config.applicabilityReceiptPolicy.originalRehearsalSha256 = digest(f.files['/rehearsal']);
-  const annex = JSON.parse(f.files['/annex'].replaceAll('sentropic-preprod-a4-verification','sentropic-restore-a4-verification'));
+  const annex = JSON.parse(f.files['/annex'].replaceAll('sentropic-preprod-a4-verification','sentropic-restore-a4-a4-verification'));
   annex.format = 'prod-a4-execution/1'; annex.namespace = 'sentropic';
   annex.applicabilityReceiptPolicySha256 = digest(canonical(f.config.applicabilityReceiptPolicy));
   f.files['/annex'] = JSON.stringify(annex); f.config.executionSha256 = digest(f.files['/annex']);
