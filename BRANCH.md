@@ -47,6 +47,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - `packages/artifacts/src/server/blob-bridge.ts`
   - `packages/artifacts/src/server/publication.ts`
   - `packages/artifacts/src/server/gc.ts`
+  - `packages/artifacts/src/server/preparation-cleanup.ts`
   - `packages/artifacts/src/mcp-core.ts`
   - `packages/artifacts/migrations/0014_db_blob_placement.sql`
   - `packages/artifacts/tests/**`
@@ -116,7 +117,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
 - [ ] **Lot 9 — Astra FIX R3**
   - [x] Rebase on origin/main and reproduce exact/partial prefix failures; fix bounded S3/Postgres/SQLite prefix selection.
   - [x] Reuse cleanup transaction, enumerate both placements and resume persisted deletion debt (cmf-s2 regressions red before fixes, then green).
-  - [ ] Qualify collected-row placement migration and offline image rollback/resume.
+  - [x] Qualify collected-row placement migration and offline image rollback/resume; reject missing referenced, pinned or unproven blobs.
   - [ ] Push final head, await green CI, report FIX R3 and remove test volumes.
 - [ ] **Lot 8 — Astra FIX R2**
   - [x] Reproduce and fix partial deletion errors and maintenance enumeration across placement modes (composite-blob.test.ts).

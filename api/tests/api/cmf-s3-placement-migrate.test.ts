@@ -50,6 +50,52 @@ afterEach(async () => {
 afterAll(() => admin.end());
 
 describe('placement migration', () => {
+  it.each(['unproven', 'referenced', 'pinned'] as const)('refuses a missing %s blob instead of certifying collection', async protection => {
+    const bytes = new TextEncoder().encode(`missing ${protection}`);
+    const key = await seedDbBlob(bytes);
+    const digest = `sha256:${key.split('/').pop()}`;
+    const db = createPostgresDbBlobStore(pool);
+    await db.deleteBlob(key);
+    if (protection !== 'unproven') {
+      await pool.query(`INSERT INTO artifacts.object_intents (id, kind, state, payload)
+        VALUES ($1, 'delete-blob', 'done', $2::jsonb)`, [randomUUID(), JSON.stringify({ deletionClaim: true, digest, blobKey: key })]);
+      if (protection === 'referenced') await pool.query(
+        'INSERT INTO artifacts.blob_ref_holders (digest, holder) VALUES ($1, $2)', [digest, 'release']);
+      else await pool.query('INSERT INTO artifacts.blob_pins (digest, reason) VALUES ($1, $2)', [digest, 'upload']);
+    }
+    const s3 = createMemoryBlobStore();
+    const composite = createPlacementBlobStore({ pool, s3, mode: 'db', inlineMaxBytes: 8 });
+    await expect(migratePlacement({ pool, composite, db, s3, scope: SCOPE, to: 'object' }))
+      .rejects.toThrow(/blob missing/);
+    expect((await pool.query('SELECT placement FROM artifacts.blobs')).rows).toEqual([{ placement: 'db' }]);
+  });
+
+  it.each(['db', 'object'] as const)('migrates collected %s registry rows and completes image rollback/resume', async placement => {
+    const bytes = new TextEncoder().encode(`collected ${placement}`);
+    const key = await seedDbBlob(bytes, placement);
+    const db = createPostgresDbBlobStore(pool);
+    const s3 = createMemoryBlobStore();
+    if (placement === 'object') await s3.putBlob(key, bytes);
+    const composite = createPlacementBlobStore({ pool, s3, mode: 'db', inlineMaxBytes: 8 });
+    const { createArtifactHostJobs } = await import('../../src/services/artifacts/lifecycle');
+    const jobs = createArtifactHostJobs({ pool, blobs: composite, authorize: async () => true,
+      page: async () => ({ keys: [] }) });
+    expect((await jobs.collect(SCOPE)).deleted).toEqual([key]);
+    for (const to of ['db', 'object'] as const) {
+      expect((await migratePlacement({ pool, composite, db, s3, scope: SCOPE, to })).done).toBe(true);
+    }
+    const { readFileSync } = await import('node:fs');
+    const client = await pool.connect();
+    try {
+      await client.query(readFileSync(new URL('../../src/services/artifacts/image-rollback.sql', import.meta.url), 'utf8'));
+      const { installArtifactPackageAssets: previous } = await import('./artifacts-rollback-runner.fixture');
+      await previous(pool);
+      await client.query(readFileSync(new URL('../../src/services/artifacts/image-resume.sql', import.meta.url), 'utf8'));
+    } finally { await client.query('ROLLBACK'); client.release(); }
+    expect((await pool.query('SELECT placement FROM artifacts.blobs')).rows).toEqual([{ placement: 'object' }]);
+    expect(await composite.getBlob(key)).toBeUndefined();
+  });
+
   it('parses args with fail-closed bounds', () => {
     expect(parsePlacementMigrateArgs(['--scope', SCOPE, '--to', 'db'])).toMatchObject({ scope: SCOPE, to: 'db', batchSize: 100 });
     expect(() => parsePlacementMigrateArgs(['--scope', SCOPE, '--to', 'tape'])).toThrow(/--to db\|object/);
