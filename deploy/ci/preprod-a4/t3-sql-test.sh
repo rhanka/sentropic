@@ -49,7 +49,7 @@ sql -c "UPDATE control.connector_revocation_custody SET ciphertext='bbbb'"
 sql -c 'DELETE FROM control.connector_revocation_custody'
 echo 'PASS: all four encrypted stores detect same-length mutations'
 # Round-trip all schemas and real column/default ACLs through the delivered restore generator.
-sql -c 'CREATE ROLE t3_reader; GRANT SELECT (client_id) ON oauth_clients TO t3_reader; ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO t3_reader; CREATE SCHEMA artifacts; CREATE TABLE artifacts.t3_empty(id text)'
+sql -c 'CREATE ROLE t3_reader; GRANT USAGE ON SCHEMA public TO t3_reader; GRANT SELECT (client_id) ON oauth_clients TO t3_reader; ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO t3_reader; CREATE SCHEMA artifacts; CREATE TABLE artifacts.t3_empty(id text)'
 acl=$(sql -f /tests/t3-acl.sql)
 sed '/^SELECT encode/,$d' /tests/t3-acl.sql > /tmp/catalog.sql
 echo 'SELECT * FROM entries ORDER BY kind,name;' >> /tmp/catalog.sql
