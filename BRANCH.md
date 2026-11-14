@@ -11,6 +11,8 @@
   - `deploy/ci/artifact-content/bundle.selftest.mjs`
   - `deploy/ci/artifact-content/tests.mk`
   - `deploy/ci/preprod-a4/t3-iac.test.mjs`
+  - `deploy/k8s/components/a4-wiring/patch-api-a4.yaml`
+  - `deploy/k8s/components/a4-wiring/patch-auth-idp-a4.yaml`
   - `scripts/test-k8s-bundle-secret.sh`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -23,6 +25,9 @@
 - [x] BR1001-EX2: main c95ca6bb9 adds generic secret validator regressions; first verify the real T3 refusal before absent input/zero stub calls, then run every original validator case on a private Makefile copy with only the freeze line removed. No operator bypass or weakened assertion; rollback reverts the test adaptation.
 - [ ] P-0.8: operator must prove exact pod-template and key parity before convergence; no runtime evidence claimed.
 - [x] CI failure 43545717439: scoped content-test container omitted Makefile required by the new IaC tests; mount it read-only, preserving all assertions.
+- [x] R6 packet (rehearsal r8, P-0.8 non-zero diff) allows `deploy/**`: the two A4 wiring patches are byte-identical to the driver branch `fix/t3-driver-gaps` (sha256 c2f1d457…4e69 and a674058b…a92e), so both branches merge without conflict and this render is the one the fenced wire reproduces.
+- [x] R6 render effect: env, volume and mount order unchanged against head a24fbba71; the only pod-template addition is the API pod affinity (weight 100) toward the tenant database node. The canonical-diff gate and the operator judge live on the driver branch.
+- [x] R6 regression: `t3-iac.test.mjs` requires the restated base entries in base order, the IdP session volume and mount, and the placement preference; red on the previous wiring (172/173), green now (173/173).
 ## AI Flaky tests
 - [x] None.
 ## Orchestration Mode (AI-selected)
@@ -33,4 +38,5 @@
 - [x] Lot 0: rebase and mechanically verify branch.
 - [x] Lot 1: UI digest corrected, API/auth-idp T2 digest retained, unconditional restart removed, generic secret target frozen; regression tests added.
 - [x] Local validation: standalone Kustomize 5.7.1 renders prod/preprod/prod-a4/preprod-a4; bundle/topology checks and three IaC regression tests pass.
+- [x] Lot R6: A4 wiring aligned with the driver wire; `ENV=test-t3-r6`, API 9168, UI 5368, Maildev 1268; rendered-bundle gate 173/173 and identity-sync selftest 74 PASS.
 - [ ] Final validation: push #1001 and exact-head green CI; no merge.

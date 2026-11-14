@@ -1,3 +1,5 @@
+# The fenced wire applies this same file to the live legacy template (T3 P-0.8), so it restates
+# the base env, volume and mount entries (deploy/k8s/base/35-auth-idp.yaml) in rendered order.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,8 +29,20 @@ spec:
             - name: CM_IDENTITY_DELETION_BUDGETS_JSON
               valueFrom:
                 secretKeyRef: { name: sentropic-identity-budgets, key: CM_IDENTITY_DELETION_BUDGETS_JSON }
+            # Dedicated session key: clears a conflicting literal value on a legacy template.
+            - name: JWT_SECRET
+              value: null
+              valueFrom:
+                secretKeyRef: { name: auth-idp-session-signing, key: JWT_SECRET }
+            - name: REMOTE_ACTION_ROLE
+              value: auth-idp
+            - name: REMOTE_ACTION_SESSION_STATE_DIR
+              value: /var/lib/sentropic-idp/sessions
           volumeMounts:
             - { name: cm-runtime, mountPath: /run/cm-runtime, readOnly: true }
+            - { name: issuer-session-authority, mountPath: /var/lib/sentropic-idp/sessions }
       volumes:
         - name: cm-runtime
           configMap: { name: sentropic-a4-runtime, defaultMode: 0444 }
+        - name: issuer-session-authority
+          persistentVolumeClaim: { claimName: auth-idp-session-authority }
