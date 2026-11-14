@@ -25,7 +25,7 @@
   - `api/tests/unit/auth/oauth-client-seed.test.ts`
   - `scripts/test-k8s-bundle-secret.sh`
   - `api/tests/unit/k8s-bundle-secret.test.ts` (remove after migration to the shell gate)
-  - `Makefile` (BRT1-EX1 only)
+  - `Makefile` (BRT1-EX1: bundle and its shell regression gate)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -61,11 +61,12 @@
   - [x] `api/tests/unit/deployment-secrets.test.ts`: lengths 0/1/31/32, whitespace, public seeds, boot gates.
   - [x] `api/tests/unit/oauth-state-secret.test.ts`: production refusal in OAuth/Drive/JWKS, KEK precedence, empty dev fallback; existing Drive sealing checks retained.
 - [x] Lot 2 — Bundle JWT_SECRET and refuse incomplete deployed input before any kubectl apply (BRT1-EX1).
-  - [ ] `scripts/test-k8s-bundle-secret.sh`: real make target and fake kubectl; incomplete input, boundaries, exact received digests, all three names, no disclosed values.
+  - [x] `scripts/test-k8s-bundle-secret.sh`: 14 scenarios pass using the real make target and fake kubectl; incomplete input, boundaries, exact received digests, all three names, no disclosed values.
 - [x] Lot 3 — Explicit tenant-free design-system seed; preserve tenant requirement for other sample clients.
   - [x] `api/tests/unit/auth/oauth-client-seed.test.ts`: observe insert/update values without a live database.
 - [x] Lot 4 — Scoped local tests through make, independent review, scope gate, atomic commits below 150 lines.
-  - [x] 24 scoped deployment/OAuth/JWKS/DS/bundle assertions pass after review corrections; 3 existing Drive sealing assertions pass.
+  - [x] 16 scoped deployment/OAuth/JWKS/DS assertions and 3 existing Drive sealing assertions pass; bundle acceptance now runs 14 shell scenarios through make.
+  - [x] Canonical tag-input checks pass locally after removing the toolbox COPY; full retained-image checks require the CI-transported API image and remain a CI gate.
   - [x] ESLint passes for all five modified source files; repository config does not lint test files.
   - [x] An initial missing synthetic SCW_TEM_SECRET_KEY was added to the isolated test overlay; no real credentials loaded.
   - [x] The unfiltered Drive file needs Postgres for an unrelated callback-settings case; local acceptance targets sealing only, full file remains a CI gate.
