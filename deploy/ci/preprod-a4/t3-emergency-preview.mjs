@@ -12,8 +12,8 @@ const call = runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.n
   dryRun: true, print: console.log });
 console.log('# dry-run: would stop automation, claim lock, stop api, classify and require zero locks');
 console.log('# dry-run: pre-commit branch (only if committed=false and locks=0)');
-await preCommitRollback({ call, revisions: config.revisions, preCmDir: config.preCmDir,
-  tier: config.tier, dryRun: true, note: console.log });
+await preCommitRollback({ call, templateDigests: state.templateDigests ?? config.templateDigests,
+  preCmDir: config.preCmDir, dryRun: true, note: console.log });
 console.log('# dry-run: post-commit branch (only if committed=true and locks=0)');
 let qualified = true;
 const built = buildProbes(config);
