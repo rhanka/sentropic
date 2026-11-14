@@ -57,8 +57,8 @@
   - [x] `spec/APP_VUE_C0_HOST_OWNERSHIP.md`: continuous source ranges covering all four pinned hosts, with package/host ownership and destination lot.
   - [ ] Cross-check reference ranges against git blobs; account for current-main drift separately.
 - [ ] Lot 2 — Behaviour, DOM and DS audit
-  - [ ] `spec/APP_VUE_C0_AUDIT.md`: three-column host/package/immo comparison, transfer list and compatibility requirements.
-  - [ ] `spec/APP_VUE_C0_DS_MAPPING.md`: all 24 views, utility dependence, primitives and recalibration method.
+  - [x] `spec/APP_VUE_C0_AUDIT.md`: three-column host/package/immo comparison, transfer list and compatibility requirements.
+  - [x] `spec/APP_VUE_C0_DS_MAPPING.md`: all 24 views, utility dependence, primitives and recalibration method.
   - [ ] DS session review receipt and remaining props gaps recorded.
 - [ ] Lot 3 — Verification and handoff
   - [ ] File-level checks: source hashes/counts, exact range partition, view inventory and ownership completeness; no runtime tests warranted.
