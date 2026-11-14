@@ -2,7 +2,7 @@
 ## Objective
 - [ ] Correct #1001 against the merged driver and publication receipts; no cluster actions or merge.
 ## Scope / Guardrails
-- [x] Rebased `feat/t3-prod-a4-iac` on `origin/main` at `a627f54e5`; only BRANCH.md conflicted; tested deployment bytes are unchanged.
+- [x] Rebased `feat/t3-prod-a4-iac` on `origin/main` at `c95ca6bb9`; only BRANCH.md conflicted; deployment corrections replayed without a source conflict, targeted rendered-bundle and 3/3 IaC checks pass on this base.
 - [x] Worktree `tmp/t3-prod-a4-iac`; ENV=test-t3-iac, ports API 9166 / UI 5366 / Maildev 1266.
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -11,6 +11,7 @@
   - `deploy/ci/artifact-content/bundle.selftest.mjs`
   - `deploy/ci/artifact-content/tests.mk`
   - `deploy/ci/preprod-a4/t3-iac.test.mjs`
+  - `scripts/test-k8s-bundle-secret.sh`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
@@ -19,6 +20,7 @@
   - `Makefile`
 ## Feedback Loop
 - [x] BR1001-EX1: Makefile prod-a4 switch authorized by packet; remove forced restart and block generic secret regeneration. Impact: explicit pod-template convergence required. Rollback: revert this branch before apply.
+- [x] BR1001-EX2: main c95ca6bb9 adds generic secret validator regressions; first verify the real T3 refusal before absent input/zero stub calls, then run every original validator case on a private Makefile copy with only the freeze line removed. No operator bypass or weakened assertion; rollback reverts the test adaptation.
 - [ ] P-0.8: operator must prove exact pod-template and key parity before convergence; no runtime evidence claimed.
 - [x] CI failure 43545717439: scoped content-test container omitted Makefile required by the new IaC tests; mount it read-only, preserving all assertions.
 ## AI Flaky tests
