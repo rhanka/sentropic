@@ -9,7 +9,8 @@ import { COMMIT_CUTOFF_MS, FINISH_CUTOFF_MS, RBAC_COUNT, TOTAL_BUDGET_MS,
 import { loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
 import { preCommitRollback } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
-import { emailProbe, expectedSigningKid, probeEndpoints, probeReply, observerProbes } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, probeReply, observerProbes,
+  verificationFile, verificationHeader, verificationSecret, verificationSpec } from './t3-probe-fixture.mjs';
 import { applicabilityFixture } from './t3-applicability.test.mjs';
 import { witnessBinding } from './t3-applicability.mjs';
 import { rehearsalFixture } from './t3-rehearsal-fixture.mjs';
@@ -24,13 +25,14 @@ export function makeCall(scenario = {}) {
   const createdSecrets = {};
   let frontalPollsLeft = scenario.frontalTerminating ?? 0;
   let writerPollsLeft = scenario.writersTerminating ?? 0;
-  const scaled = {};
+  const scaled = {}, boundary = { open: false };
   const readyDeploy = (name, image) => ({ spec: { replicas: 1,
     template: { spec: { containers: [{ name, image }] } } },
     status: { replicas: 1, readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } });
   const call = (args, input) => {
     calls.push(args.join(' ') + (args[0] === 'exec' ? ` <<<${String(input ?? '').split('\n')[0].slice(0, 120)}` : ''));
     const cmd = args.join(' ');
+    if (cmd.startsWith('delete middleware a4-verification')) boundary.open = true;
     const patchPayload = () => {
       const at = args.indexOf('-p');
       if (at !== -1) return JSON.parse(args[at + 1]);
@@ -105,11 +107,15 @@ export function makeCall(scenario = {}) {
     if (cmd.startsWith('get secret ') && cmd.endsWith(' -o json')) {
       const name = cmd.split(' ')[2];
       if (name === 'sentropic-api') return JSON.stringify({ data: liveSecrets });
+      if (name === 'a4-verification-auth') {
+        if (scenario.verificationSecret === false) throw new Error('kubectl_failed: get secret a4-verification-auth');
+        return JSON.stringify(scenario.verificationSecret ?? verificationSecret);
+      }
       if (createdSecrets[name]) return JSON.stringify({ data: createdSecrets[name].data ?? {} });
     }
     if (cmd === 'get middleware a4-verification -o json') {
       if (scenario.middlewareSpec === false) return '{}';
-      return JSON.stringify({ spec: scenario.middlewareSpec ?? { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } });
+      return JSON.stringify({ spec: scenario.middlewareSpec ?? verificationSpec });
     }
     if (cmd === 'get cronjob sentropic-idp-identity-export -o json') {
       return JSON.stringify({ spec: { suspend: scenario.exportSuspended !== false } });
@@ -138,12 +144,12 @@ export function makeCall(scenario = {}) {
     if (/^get (deployment|middleware|ingress|cronjob) /.test(cmd)) return '{}';
     return '';
   };
-  return { call, calls };
+  return { call, calls, boundary };
 }
 
 export function makeCtx(overrides = {}) {
   const scenario = overrides.scenario ?? {};
-  const { call, calls } = makeCall(scenario);
+  const { call, calls, boundary } = makeCall(scenario);
   const printed = [];
   // Default rotation key material: every full drive poses the W3 keys, so
   // tests get files unless they opt out (rotationKeyFiles: undefined).
@@ -168,7 +174,8 @@ export function makeCtx(overrides = {}) {
       print: line => printed.push(line),
       dryRun: false, probeReadOnly: false, tier: 'preprod', postgresPod: 'postgres-0',
       stateDir: mkdtempSync(join(tmpdir(), 't3-test-')),
-      probe: async (url, options) => probeReply(url, options),
+      probe: async (url, options) => probeReply(url, options, boundary.open),
+      verification: verificationHeader,
       delivered: async () => '',
       config: {
         kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod', tier: 'preprod',
@@ -181,6 +188,7 @@ export function makeCtx(overrides = {}) {
         request: { format: 'x', operationId: 'test',candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE },
         rotationKeyFiles: defaultKeys,
         applicabilityBaselineFile,
+        verificationCredentialFile: verificationFile(keyDir),
         witness,
         ...qualification,
         ...(overrides.config ?? {}),
@@ -229,7 +237,7 @@ test('armed CLI hands a T+174s fault directly to one full-budget watchdog recove
   let clock = t0+174000;
   const state = { step: 'W8',t0MonoMs: t0,heartbeatMonoMs: monoMs(),namespace: 'sentropic-preprod',
     driverPid: process.pid,childPid: process.pid,watchdogPid: process.pid,watchdogArmed: true,
-    middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+    middlewareSpec: verificationSpec };
   const before = calls.length;
   assert.equal(await recover(ctx,state,'transient_at_174s'),5);
   assert.equal(calls.length,before,'no first recovery attempt or API stop in the driver');
@@ -288,7 +296,7 @@ test('RUN6 recovery stays inside the original fence deadline on both branches', 
     const t0 = monoMs() - 175_000;
     ctx.timeoutRef = {};
     await recover(ctx, { step: 'W8', t0MonoMs: t0, namespace: ctx.config.namespace,
-      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } }, 'run6-late-fault');
+      middlewareSpec: verificationSpec }, 'run6-late-fault');
     assert.ok(ctx.timeoutRef.deadlineMs <= t0 + TOTAL_BUDGET_MS, 'no recovery deadline extension');
     assert.equal(loadState(ctx.stateDir).step, 'DONE');
   }
@@ -320,7 +328,7 @@ test('RUN6 complete recovery paths consume the remaining fence budget through re
       return original(args, input);
     };
     const state = { step: 'W8', t0MonoMs: 0, namespace: ctx.config.namespace,
-      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+      middlewareSpec: verificationSpec };
     assert.equal(await recover(ctx, state, 'late-fault'), committed ? 4 : 3);
     assert.equal(loadState(ctx.stateDir).step, 'DONE');
     assert.ok(calls.includes('delete middleware a4-verification --ignore-not-found=true'));
@@ -573,7 +581,7 @@ test('kill after commit converges forward with no legacy boot', async () => {
   const readyApi = { spec: { replicas: 1, template: { spec: { containers: [{ name: 'api', image: CANDIDATE }] } } },
     status: { readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } };
   const { ctx, calls } = makeCtx({
-    config: { middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } },
+    config: { middlewareSpec: verificationSpec },
     scenario: { journal: true, committed: true, api: readyApi, deployReady: true },
   });
   let n = 0;
@@ -589,7 +597,7 @@ test('kill after commit converges forward with no legacy boot', async () => {
 
 test('committed but not ready api restarts without legacy boot (U2b)', async () => {
   const { ctx, calls } = makeCtx({
-    config: { middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } },
+    config: { middlewareSpec: verificationSpec },
     scenario: { journal: true, committed: true },
   });
   let n = 0;
@@ -648,12 +656,12 @@ test('watchdog enforces the total 300 s budget on a live driver', async () => {
 test('finishOpen patches an existing middleware instead of recreating it', async () => {
   const readyApi = { spec: { replicas: 1, template: { spec: { containers: [{ name: 'api', image: CANDIDATE }] } } },
     status: { replicas: 1, readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } };
-  const { ctx, calls } = makeCtx({ config: { middlewareSpec: { ipAllowList: { sourceRange: ['1.2.3.4/32'] } } },
-    scenario: { api: readyApi } });
+  const { ctx, calls } = makeCtx({ config: { middlewareSpec: verificationSpec },
+    scenario: { api: readyApi, middlewareSpec: { basicAuth: { secret: 'a4-verification-auth' } } } });
   const { finishOpen } = await import('./t3-finish-open.mjs');
   const state = { namespace: 'sentropic-preprod', middlewareSpec: ctx.config.middlewareSpec };
   const images = { candidate: CANDIDATE, ui: UI_IMAGE };
-  await finishOpen({ call: ctx.call, probe: ctx.probe, state,
+  await finishOpen({ call: ctx.call, probe: ctx.probe, verification: ctx.verification, state,
     save: next => Object.assign(state, next), images, probes: buildProbes(ctx.config).probes, externalProbes: [] });
   const joined = calls.join('\n');
   assert.ok(!joined.includes('create -f -'), 'no create over the existing middleware (no AlreadyExists)');
@@ -667,7 +675,7 @@ test('finishOpen resumes from ACCEPTED without replaying probes', async () => {
   const { ctx } = makeCtx({ scenario: { api: readyApi } });
   const { finishOpen } = await import('./t3-finish-open.mjs');
   const state = { namespace: 'sentropic-preprod', substate: 'ACCEPTED',
-    middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+    middlewareSpec: verificationSpec };
   const images = { candidate: CANDIDATE, ui: UI_IMAGE };
   const neverProbe = async () => { throw new Error('probe replayed after ACCEPTED'); };
   await finishOpen({ call: ctx.call, probe: neverProbe, state,
@@ -681,7 +689,7 @@ test('finishOpen resumes from BACKUP_RESUMED and ONE_HOST_OPEN', async () => {
     const { ctx } = makeCtx();
     const { finishOpen } = await import('./t3-finish-open.mjs');
     const state = { namespace: 'sentropic-preprod', substate,
-      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+      middlewareSpec: verificationSpec };
     const images = { candidate: CANDIDATE, ui: UI_IMAGE };
     await finishOpen({ call: ctx.call, probe: ctx.probe, state,
       save: next => Object.assign(state, next), images, probes: [], externalProbes: [] });
@@ -703,7 +711,7 @@ test('reconcile waits for terminating frontals instead of failing', async () => 
   const { ctx, calls } = makeCtx({ scenario: { frontalTerminating: 3 } });
   const { reconcileRestrictSafe } = await import('./t3-finish-open.mjs');
   const state = { namespace: 'sentropic-preprod',
-    middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+    middlewareSpec: verificationSpec };
   reconcileRestrictSafe({ call: ctx.call, dryRun: false }, state);
   const joined = calls.join('\n');
   assert.ok(joined.includes('scale deployment/ui --replicas=0'), 'frontal fenced first');
@@ -857,7 +865,7 @@ S="$FAKE_KUBECTL_STATE"
 A="$*"
 case "$A" in
   *"get pods"*) echo '{"items":[]}';;
-  *"get middleware"*) echo '{"spec":{"ipAllowList":{"sourceRange":["9.9.9.9/32"]}}}';;
+  *"get middleware"*) echo '{"spec":{"basicAuth":{"secret":"a4-verification-auth","removeHeader":true}}}';;
   *"get deployment api "*) if [ -f "$S/scaled-api" ]; then echo '{"spec":{"replicas":1,"template":{"spec":{"containers":[{"name":"api","image":"candidate-img"}]}}},"status":{"replicas":1,"readyReplicas":1,"observedGeneration":7},"metadata":{"generation":7}}'; else echo '{"spec":{"replicas":0},"status":{"replicas":0}}'; fi;;
   *"get deployment "*) N=$(printf '%s' "$A" | sed 's/.*get deployment \\([^ ]*\\).*/\\1/'); if [ -f "$S/scaled-$N" ]; then IMG="candidate-img"; [ "$N" = "ui" ] && IMG="ui-img"; echo "{\\"spec\\":{\\"replicas\\":1,\\"template\\":{\\"spec\\":{\\"containers\\":[{\\"name\\":\\"$N\\",\\"image\\":\\"$IMG\\"}]}}},\\"status\\":{\\"replicas\\":1,\\"readyReplicas\\":1,\\"observedGeneration\\":7},\\"metadata\\":{\\"generation\\":7}}"; else echo '{"spec":{"replicas":0},"status":{"replicas":0}}'; fi;;
   *"scale deployment/"*"--replicas=1") N=$(printf '%s' "$A" | sed 's/.*scale deployment\\/\\([^ ]*\\).*/\\1/'); touch "$S/scaled-$N";;
@@ -882,7 +890,7 @@ esac
     endpoints: probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`), emailProbe, expectedSigningKid,
     ...observerProbes(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`),
     revisions: { api: '12', 'auth-idp': '9', ui: '4' }, candidateImage: 'candidate-img',
-    middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } },
+    middlewareSpec: verificationSpec, verificationCredentialFile: verificationFile(dir),
     images: { candidate: 'candidate-img', ui: 'ui-img' } }));
   let out;
   try { out = execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
@@ -927,13 +935,13 @@ test('recover waits for advisory locks to drain instead of failing fast', async 
 
 test('finishOpen restarts a stopped api before opening traffic', async () => {
   const { ctx, calls } = makeCtx({
-    config: { middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } },
+    config: { middlewareSpec: verificationSpec },
     scenario: {},
   });
   const { finishOpen } = await import('./t3-finish-open.mjs');
-  const state = { namespace: 'sentropic-preprod', middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+  const state = { namespace: 'sentropic-preprod', middlewareSpec: verificationSpec };
   const images = { candidate: CANDIDATE, ui: UI_IMAGE };
-  await finishOpen({ call: ctx.call, probe: ctx.probe, state,
+  await finishOpen({ call: ctx.call, probe: ctx.probe, verification: ctx.verification, state,
     save: next => Object.assign(state, next), images, probes: buildProbes(ctx.config).probes, externalProbes: [] });
   const joined = calls.join('\n');
   assert.ok(joined.includes('scale deployment/api --replicas=1'), 'stopped api restarted before open');
@@ -982,7 +990,7 @@ test('RUN5 recover marks DONE so the watchdog never runs a second recovery', asy
     // Real recoveries carry the W1 middleware record; the post-commit branch
     // converges through it, so the test state must too.
     const state = { step: 'W7b', namespace: 'sentropic-preprod', t0MonoMs: monoMs(),
-      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+      middlewareSpec: verificationSpec };
     const code = await recover(ctx, state, 'run5-double-recover');
     assert.ok(code === 3 || code === 4, `recover exit, committed=${committed}`);
     const saved = loadState(ctx.stateDir);
@@ -996,7 +1004,7 @@ test('RUN5 finishOpen restarts a stopped api from ACCEPTED/BACKUP_RESUMED/ONE_HO
     const { ctx, calls } = makeCtx({ scenario: {} });
     const { finishOpen } = await import('./t3-finish-open.mjs');
     const state = { namespace: 'sentropic-preprod', substate,
-      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+      middlewareSpec: verificationSpec };
     const images = { candidate: CANDIDATE, ui: UI_IMAGE };
     await finishOpen({ call: ctx.call, probe: ctx.probe, state,
       save: next => Object.assign(state, next), images, probes: [], externalProbes: [] });
@@ -1109,4 +1117,39 @@ test('R7 W0 names a baseline made stale before the fence and never fences', asyn
   assert.equal(await drive(ctx), 1);
   assert.equal(loadState(ctx.stateDir).refusalReason,
     'throw:baseline_stale_before_fence: applicability_drift:durableCutoverApplicabilitySha256');
+});
+
+// R8: the load balancer hides the client address from Traefik, so the boundary is a credential.
+// W0 proves, before the fence, that the cluster Secret is the verifier of the local credential.
+test('R8 W0 refuses, before the fence, a verification Secret that is missing or not the local credential', async () => {
+  const other = { type: 'Opaque', data: { users: Buffer.from('t3-verify:{SHA}AAAAAAAAAAAAAAAAAAAAAAAAAAA=\n').toString('base64') } };
+  for (const [secret, reason] of [[false, 'verification_secret_missing'], [other, 'verification_secret_mismatch'],
+    [{ ...verificationSecret, type: 'kubernetes.io/basic-auth' }, 'verification_secret_mismatch']]) {
+    const { ctx, calls } = makeCtx({ scenario: { verificationSecret: secret } });
+    ctx.delivered = () => assert.fail('fence started');
+    assert.equal(await drive(ctx), 1);
+    const state = loadState(ctx.stateDir);
+    assert.equal(state.refusalReason, `throw:${reason}`);
+    assert.equal(state.t0MonoMs, undefined, 'the window clock never started');
+    assert.ok(calls.every(line => /^(auth can-i |exec |get secret a4-verification-auth )/.test(line)), 'read-only calls only');
+  }
+  const { ctx } = makeCtx();
+  delete ctx.config.verificationCredentialFile;
+  ctx.delivered = () => assert.fail('fence started');
+  assert.equal(await drive(ctx), 1);
+  assert.equal(loadState(ctx.stateDir).refusalReason, 'throw:verification_credential_missing');
+});
+
+test('R8 the window sends the W0 credential on the W8 probes and accepts only after the observer refusal', async () => {
+  const readyApi = { spec: { replicas: 1, template: { spec: { containers: [{ name: 'api', image: CANDIDATE }] } } },
+    status: { replicas: 1, readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } };
+  const { ctx } = makeCtx({ scenario: { committed: true, api: readyApi } });
+  delete ctx.verification;
+  const seen = [];
+  const probe = ctx.probe;
+  ctx.probe = (url, options) => { seen.push([url, new Headers(options.headers).get('authorization')]); return probe(url, options); };
+  assert.equal(await drive(ctx), 0);
+  assert.equal(loadState(ctx.stateDir).substate, 'TWO_HOSTS_OPEN');
+  assert.deepEqual(seen.slice(0, 2).map(([url, authorization]) => [url.slice(-11), authorization]), [['restricted0', null], ['restricted1', null]]);
+  assert.ok(seen.filter(([url]) => url.includes('probe=')).every(([, authorization]) => authorization === verificationHeader));
 });
