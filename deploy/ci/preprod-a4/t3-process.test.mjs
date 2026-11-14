@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, openSync, readFileSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { emailProbe, expectedSigningKid, probeEndpoints } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, observerProbes } from './t3-probe-fixture.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -35,6 +35,7 @@ for (const { mode, step, operation, substate, committed = false } of cases) {
     const endpoints = probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`);
     writeFileSync(config, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
       witness: { url: `${new URL(endpoints.appHealth).origin}/legacyWitness`,cookie: 'synthetic-witness' },
+      ...observerProbes(new URL(endpoints.appHealth).origin),
       endpoints, emailProbe, expectedSigningKid, images: { candidate: 'c', ui: 'u' }, revisions: {}, request: { operationId: 'process-test' } }));
     // The double needs no Node runtime. Keep real driver/watchdog/process-group
     // supervision while avoiding dozens of cold Node startups in each recovery.

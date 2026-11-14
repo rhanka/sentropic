@@ -9,7 +9,7 @@ import { COMMIT_CUTOFF_MS, FINISH_CUTOFF_MS, RBAC_COUNT, TOTAL_BUDGET_MS,
 import { loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
 import { preCommitRollback } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
-import { emailProbe, expectedSigningKid, probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, probeReply, observerProbes } from './t3-probe-fixture.mjs';
 import { applicabilityFixture } from './t3-applicability.test.mjs';
 import { rehearsalFixture } from './t3-rehearsal-fixture.mjs';
 
@@ -163,6 +163,7 @@ export function makeCtx(overrides = {}) {
         candidateImage: CANDIDATE, revisions: { api: '12', 'auth-idp': '9', ui: '4' },
         images: { candidate: CANDIDATE, ui: UI_IMAGE },
         endpoints: probeEndpoints(),
+        ...observerProbes(),
         emailProbe,
         expectedSigningKid,
         request: { format: 'x', operationId: 'test',candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE },
@@ -866,6 +867,7 @@ esac
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
     endpoints: probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`), emailProbe, expectedSigningKid,
+    ...observerProbes(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`),
     revisions: { api: '12', 'auth-idp': '9', ui: '4' }, candidateImage: 'candidate-img',
     middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } },
     images: { candidate: 'candidate-img', ui: 'ui-img' } }));
