@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { createServer } from 'node:http';
 import { finishOpen } from './t3-finish-open.mjs';
 import { buildProbes, monoMs, validateProbes } from './t3-lib.mjs';
-import { emailProbe, expectedSigningKid, probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, probeReply, verificationHeader } from './t3-probe-fixture.mjs';
 
 test('RUN9 refuses a recipient without room for the attempt tag before fence', () => {
   const config = { endpoints: probeEndpoints(), expectedSigningKid,
@@ -38,7 +38,7 @@ for (const fault of ['lost-second-response', 'crash-before-accepted-save']) {
     const endpoints = probeEndpoints(`http://127.0.0.1:${server.address().port}`);
     const deadlineMs = monoMs() + 300_000;
     const ctx = { ...buildProbes({ endpoints, emailProbe, expectedSigningKid }),
-      deadlineMs, images: { candidate: 'c', ui: 'u' }, probe: fetch,
+      deadlineMs, images: { candidate: 'c', ui: 'u' }, probe: fetch, verification: verificationHeader,
       save: state => {
         if (inject && fault === 'crash-before-accepted-save' && state.substate === 'ACCEPTED') {
           inject = false; throw new Error('crash_before_save');
@@ -68,7 +68,7 @@ for (const fault of ['lost-second-response', 'crash-before-accepted-save']) {
       for (const email of emitted) assert.match(email, /^cutover\+t3-[a-f0-9]{24}@example\.test$/);
       for (const status of [200, 200, 200, 429]) {
         const reply = await fetch(endpoints.emailApp, { method: 'POST',
-          headers: { 'content-type': 'application/json' }, body: JSON.stringify(emailProbe) });
+          headers: { 'content-type': 'application/json', authorization: verificationHeader }, body: JSON.stringify(emailProbe) });
         assert.equal(reply.status, status, 'protection still limits repeated use of one address');
         await reply.body.cancel();
       }
