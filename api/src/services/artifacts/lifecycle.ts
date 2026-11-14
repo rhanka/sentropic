@@ -101,7 +101,8 @@ export function createArtifactHostJobs(options: {
         // Preparation cleanup probes exact keys, never an unbounded bucket listing.
         if (!blobKey.test(key)) throw new Error('Invalid preparation blob key');
         await authorize(operation);
-        return (await options.page(key, 1)).keys.filter(candidate => candidate === key);
+        const result = await listBlobKeysPaged(options.blobs, key, { maxItems: 1, maxEncodedBytes: 256 });
+        return result.keys.filter(candidate => candidate === key);
       },
       ...(options.blobs.listKeysPaged === undefined ? {} : { async listKeysPaged(prefix: string, page: {
         maxItems: number; maxEncodedBytes: number; startAfter?: string;
@@ -127,7 +128,8 @@ export function createArtifactHostJobs(options: {
           // Intents/refs persist independently; only deletion claims share this item's transaction.
           await scheduleBoundedPreparationCleanup({ intents: { ...store,
             listPreparationIntents: async () => [candidate] }, refs: store,
-          blobs: guardedBlobs('cleanup'), claims: createPostgresDeletionClaimStore(client), cleanupBatchSize: 1 }, now);
+          blobs: guardedBlobs('cleanup'), claims: createPostgresDeletionClaimStore(client),
+          transaction: client, cleanupBatchSize: 1 }, now);
           await client.commit();
         } catch (error) {
           failure = error;
@@ -171,7 +173,9 @@ export function createArtifactHostJobs(options: {
       const page = listed ? { keys: listed.keys, cursor: listed.continuation } : await options.page(prefix, limit, cursor);
       validateKeys(page.keys);
       await authorize('collect');
-      const report = await gc.collect({ ...guardedBlobs('collect'), listKeys: async () => page.keys }, prefix);
+      const guarded = guardedBlobs('collect');
+      const report = await gc.collect({ ...guarded,
+        listKeys: async key => key === prefix ? page.keys : guarded.listKeys(key) }, prefix);
       return { ...report, cursor: page.cursor };
     },
     async recover(steps: {

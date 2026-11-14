@@ -97,7 +97,9 @@ export interface DeletionClaimStore {
   /** Share this exclusion across claims, reference/pin creation and erasure. */
   withDigestLock<T>(digest: string, action: (locked: DeletionClaimAccess) => Promise<T>): Promise<T>;
   /** Exclusive claim; throws when the digest is already claimed. */
-  claim(digest: string, holder: string): Promise<void>;
+  claim(digest: string, holder: string, blobKey?: string): Promise<void>;
+  /** Bounded recovery independent of the physical object listing. */
+  listPendingKeys?(prefix: string, limit: number): Promise<string[]>;
   /** Release the claim after the blob is gone (or the purge aborts). */
   releaseClaim(digest: string): Promise<void>;
   isClaimed(digest: string): Promise<boolean>;
@@ -170,11 +172,11 @@ export function createPostgresDeletionClaimStore(client: FinalizeTxClient): Insp
         `SELECT EXISTS (SELECT 1 FROM artifacts.object_intents WHERE ${predicate}) AS present`, [digest]);
       return rows[0]?.present === true;
     },
-    async claim(digest, holder) {
+    async claim(digest, holder, blobKey) {
       if (await access.isClaimed(digest)) throw new Error(`deletion already claimed: ${digest}`);
       await client.query(`INSERT INTO artifacts.object_intents (id, kind, payload)
         VALUES ($1, 'delete-blob', $2::jsonb)`,
-      [crypto.randomUUID(), JSON.stringify({ deletionClaim: true, digest, holder })]);
+      [crypto.randomUUID(), JSON.stringify({ deletionClaim: true, digest, holder, blobKey })]);
     },
     async releaseClaim(digest) {
       const { rowCount } = await client.query(
@@ -187,6 +189,13 @@ export function createPostgresDeletionClaimStore(client: FinalizeTxClient): Insp
     return action(access);
   };
   return { ...access, withDigestLock,
+    async listPendingKeys(prefix, limit) {
+      const { rows } = await client.query<{ key: string }>(
+        `SELECT payload->>'blobKey' AS key FROM artifacts.object_intents
+         WHERE kind = 'delete-blob' AND state = 'pending' AND payload->>'deletionClaim' = 'true'
+         AND starts_with(payload->>'blobKey', $1) ORDER BY created_at, id LIMIT $2`, [prefix, limit]);
+      return rows.map(row => row.key);
+    },
     async listClaims() {
       const { rows } = await client.query<{ id: string; state: 'pending' | 'done'; digest: string; holder: string }>(
         `SELECT id, state, payload->>'digest' AS digest, payload->>'holder' AS holder
@@ -194,7 +203,7 @@ export function createPostgresDeletionClaimStore(client: FinalizeTxClient): Insp
          AND payload->>'deletionClaim' = 'true' ORDER BY created_at, id`, []);
       return rows.map((row) => ({ claimId: row.id, digest: row.digest, holder: row.holder, state: row.state }));
     },
-    claim: (digest, holder) => withDigestLock(digest, (locked) => locked.claim(digest, holder)),
+    claim: (digest, holder, blobKey) => withDigestLock(digest, (locked) => locked.claim(digest, holder, blobKey)),
     releaseClaim: (digest) => withDigestLock(digest, (locked) => locked.releaseClaim(digest)) };
 }
 
@@ -265,7 +274,8 @@ export function createGcService(refs: RefcountStore): GcService {
       transaction?: FinalizeTxClient,
     ): Promise<GcReport> {
       const report: GcReport = { deleted: [], retained: [], failures: [] };
-      for (const key of await blobs.listKeys(prefix)) {
+      const pending = await claims.listPendingKeys?.(prefix, 100) ?? [];
+      for (const key of new Set([...pending, ...await blobs.listKeys(prefix)])) {
         let digest: string;
         try {
           digest = blobDigestOfKey(key);
@@ -280,7 +290,7 @@ export function createGcService(refs: RefcountStore): GcService {
         try {
           await claims.withDigestLock(digest, async (locked) => {
             const alreadyClaimed = await locked.isClaimed(digest);
-            if (!alreadyClaimed) await locked.claim(digest, 'gc');
+            if (!alreadyClaimed) await locked.claim(digest, 'gc', key);
             let deleted = false;
             let deleting = false;
             try {
@@ -289,7 +299,10 @@ export function createGcService(refs: RefcountStore): GcService {
                 return;
               }
               deleting = true;
-              await blobs.deleteBlob(key, transaction);
+              // Retry a lost DELETE response even when neither placement has bytes left.
+              if (!alreadyClaimed || (await blobs.listKeys(key)).includes(key)) {
+                await blobs.deleteBlob(key, transaction);
+              }
               deleted = true;
               report.deleted.push(key);
             } finally {

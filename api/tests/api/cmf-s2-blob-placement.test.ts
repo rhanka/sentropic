@@ -11,6 +11,7 @@ import { createArtifactHostJobs, createLazyArtifactBlobs, createPrivateArtifactS
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { createPostgresDbBlobStore } from '@sentropic/artifacts/adapters/db-blob';
+import { createPostgresArtifactStore } from '@sentropic/artifacts/adapters/postgres';
 import { listBlobKeysPaged } from '@sentropic/artifacts/server/blob-bridge';
 import { createGcService, createMemoryRefcountStore, createPostgresDeletionClaimStore } from '@sentropic/artifacts/server/gc';
 import { createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
@@ -66,6 +67,69 @@ function hostWith(placementForSize?: (size: number) => 'db' | 'object', mode: 'd
 }
 
 describe('composite blob placement', () => {
+  it.each([['db', 'db'], ['s3', 's3'], ['db', 's3'], ['s3', 'db']] as const)(
+    'cleans expired %s preparations in %s mode under the owning lock', async (placement, mode) => {
+    const bounded = new Pool({ connectionString: pool.options.connectionString,
+      options: '-c lock_timeout=200ms -c statement_timeout=2000ms' });
+    try {
+      const s3 = createMemoryBlobStore();
+      const blobs = createPlacementBlobStore({ pool: bounded, s3, mode, inlineMaxBytes: 8 });
+      const bytes = new TextEncoder().encode(`expired ${placement} in ${mode}`);
+      const key = keyFor(bytes);
+      await (placement === 'db' ? createPostgresDbBlobStore(bounded) : s3).putBlob(key, bytes);
+      const store = createPostgresArtifactStore(bounded);
+      const intent = await store.record('commit-release', { artifactId: 'artifact', attemptId: 'expired',
+        invocationId: 'expired', releaseId: 'expired', blobKeys: [key],
+        preparedAtMs: Date.now() - 20000, cleanupDeadlineMs: Date.now() - 10000 });
+      const jobs = createArtifactHostJobs({ pool: bounded, blobs, authorize: async () => true,
+        page: async prefix => ({ keys: await s3.listKeys(prefix) }) });
+      await jobs.cleanup();
+      expect(await blobs.getBlob(key)).toBeUndefined();
+      expect((await store.get(intent.intentId))?.payload.cleanupState).toBe('failed-cleaned');
+    } finally { await bounded.end(); }
+  });
+
+  it('resumes a deletion whose successful S3 response was lost and permits republication', async () => {
+    const db = createPostgresDbBlobStore(pool);
+    const s3 = createMemoryBlobStore();
+    const bytes = new TextEncoder().encode('lost delete response');
+    const key = keyFor(bytes);
+    await db.putBlob(key, bytes);
+    await s3.putBlob(key, bytes);
+    let lost = true;
+    const { createCompositeBlobStore } = await import('@sentropic/artifacts/adapters/composite-blob');
+    const blobs = createCompositeBlobStore({ db, s3: { ...s3, async deleteBlob(candidate) {
+      await s3.deleteBlob(candidate);
+      if (lost) { lost = false; throw new Error('response lost'); }
+    } }, mode: 'db', inlineMaxBytes: 8, placements: { getPlacement: async () => undefined } });
+    const jobs = createArtifactHostJobs({ pool, blobs, authorize: async () => true, page: async () => ({ keys: [] }) });
+    expect((await jobs.collect('scope-p')).failures).toHaveLength(1);
+    expect(await blobs.listKeys('artifacts/scope-p/blobs/sha256/')).toEqual([]);
+    expect((await jobs.collect('scope-p')).deleted).toEqual([key]);
+    expect((await pool.query("SELECT state FROM artifacts.object_intents WHERE kind = 'delete-blob'")).rows)
+      .toEqual([{ state: 'done' }]);
+    const refs = createPostgresArtifactStore(pool);
+    const { createPostgresClaimGuardedRefs } = await import('@sentropic/artifacts/server/gc');
+    await createPostgresClaimGuardedRefs(refs, createPostgresCommitExecutor(pool))
+      .pin(`sha256:${key.split('/').pop()}`, 'republish');
+    await blobs.putBlob(key, bytes);
+    expect(await blobs.getBlob(key)).toEqual(bytes);
+  });
+
+  it('pages exact and partial DB prefixes after earlier keys in the same scope', async () => {
+    const db = createPostgresDbBlobStore(pool);
+    const keys: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const bytes = new TextEncoder().encode(`prefix ${i}`);
+      await db.putBlob(keyFor(bytes), bytes);
+      keys.push(keyFor(bytes));
+    }
+    keys.sort();
+    for (const prefix of [keys[11]!, keys[11]!.slice(0, -1)]) {
+      expect((await listBlobKeysPaged(db, prefix, { maxItems: 1, maxEncodedBytes: 1000 })).keys).toEqual([keys[11]]);
+    }
+  });
+
   it.each(['db', 's3'] as const)('keeps a failed %s erasure pending until host GC retries', async failingSide => {
     const db = createPostgresDbBlobStore(pool);
     const s3 = createMemoryBlobStore();
@@ -111,7 +175,7 @@ describe('composite blob placement', () => {
     expect(first.keys).toEqual(keys.slice(0, 2));
     expect(first.continuation).toBeDefined();
     expect(send.mock.calls.filter(([command]) => command instanceof ListObjectsV2Command)).toHaveLength(1);
-    expect((send.mock.calls[1]![0] as ListObjectsV2Command).input).toMatchObject({ MaxKeys: 3, StartAfter: prefix });
+    expect((send.mock.calls[1]![0] as ListObjectsV2Command).input).toMatchObject({ MaxKeys: 3, StartAfter: undefined });
     const second = await listBlobKeysPaged(store, prefix, { maxItems: 2, maxEncodedBytes: 10000, continuation: first.continuation });
     expect(second.keys).toEqual(keys.slice(2, 4));
     expect(send.mock.calls.filter(([command]) => command instanceof ListObjectsV2Command)).toHaveLength(2);

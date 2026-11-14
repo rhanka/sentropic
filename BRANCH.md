@@ -115,7 +115,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
 ## Plan / Todo (lot-based)
 - [ ] **Lot 9 — Astra FIX R3**
   - [x] Rebase on origin/main and reproduce exact/partial prefix failures; fix bounded S3/Postgres/SQLite prefix selection.
-  - [ ] Reuse cleanup transaction, enumerate both placements and resume persisted deletion debt.
+  - [x] Reuse cleanup transaction, enumerate both placements and resume persisted deletion debt (cmf-s2 regressions red before fixes, then green).
   - [ ] Qualify collected-row placement migration and offline image rollback/resume.
   - [ ] Push final head, await green CI, report FIX R3 and remove test volumes.
 - [ ] **Lot 8 — Astra FIX R2**

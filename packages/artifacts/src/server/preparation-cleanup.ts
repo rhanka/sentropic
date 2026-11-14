@@ -1,6 +1,7 @@
 import type { ObjectIntent, PreparationIntentStore } from './object-intents.js';
 import { blobDigestOfKey, type PublicationBlobStore } from './publication.js';
 import type { DeletionClaimStore, RefcountStore } from './gc.js';
+import type { FinalizeTxClient } from './commit/types.js';
 
 export interface PreparationCleanupHost {
   readonly intents: PreparationIntentStore;
@@ -8,6 +9,7 @@ export interface PreparationCleanupHost {
   readonly refs: RefcountStore;
   /** PostgreSQL callers retain the transaction-scoped exclusion through DELETE. */
   readonly claims: DeletionClaimStore;
+  readonly transaction?: FinalizeTxClient;
   readonly cleanupBatchSize?: number;
 }
 export interface PreparationAttempt {
@@ -96,7 +98,7 @@ export async function scheduleBoundedPreparationCleanup(host: PreparationCleanup
           if (await claims.isClaimed(digest)) throw new Error('preparation cleanup blocked by deletion claim');
           await claims.claim(digest, `cleanup:${intent.intentId}`);
           try {
-            if ((await host.blobs.listKeys(key)).includes(key)) await host.blobs.deleteBlob(key);
+            if ((await host.blobs.listKeys(key)).includes(key)) await host.blobs.deleteBlob(key, host.transaction);
           } finally { await claims.releaseClaim(digest); }
         });
       }
