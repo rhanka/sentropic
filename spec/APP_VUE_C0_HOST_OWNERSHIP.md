@@ -102,3 +102,14 @@ Source keys: A = `ui/src/lib/components/chat/AppChatPanel.svelte` (3,478); W = `
 | P | 1 | 58 | host | A8a | Session/draft/comment bindings and exposed focus/select/new/delete forwards into AppChatPanel, inside package shell slot. |
 
 Every row has exactly one owner. Mixed host composition ranges assign adapter wiring to `host`; reusable algorithms and default views are assigned separately. Browser APIs do not by themselves justify app ownership: generic scroll, preview URL and clipboard lifecycles belong to the package composition, with injected transports/labels. Endpoint schemas, scopes, credentials, resource IDs and extension RPC remain host concerns.
+
+## Source verification receipt
+
+The 94 contiguous ranges account for 5,592 host-owned and 1,460 package-owned source lines, with zero unassigned lines and no overlap. This checks partition completeness, not behavioural equivalence or the DS verdict. The source hashes pin the bytes behind every citation:
+
+| Source | SHA-256 |
+|---|---|
+| A | `63590d84f4c35714f96914fc15e4b018cf413aa3a790a27fa81924296312b87c` |
+| W | `11c49ebb5e80c9615e0de4be9b9f19acf32cf1f9b57395dcef470affd5a8f63d` |
+| S | `6c2072eef67153e6b64dbb40fe7fe014cac56f46d01e368dd645fdd26c4f908b` |
+| P | `ab65852159c247472610362dce1028de05f3054061c551c2ede8a19176a0a4cd` |
