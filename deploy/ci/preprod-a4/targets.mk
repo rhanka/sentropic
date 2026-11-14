@@ -75,6 +75,10 @@ test-t3-sql: ## Exercise applicability and restore on a disposable PostgreSQL; n
 	docker run --rm --network none --tmpfs /tmp:rw,exec -v "$$template:/restore.sql:ro" -v "$(CURDIR)/api/drizzle:/migrations:ro" -v "$(CURDIR)/deploy/ci/preprod-a4:/tests:ro" --entrypoint sh postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 /tests/t3-sql-test.sh
 
 A4_TEST_IMAGE ?= $(API_TOOL_IMAGE)
+.PHONY: test-t3-rehearsal-contract
+test-t3-rehearsal-contract:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e T3_ZOD_PACKAGE=/tmp/t3-contract/package.json -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -ec 'node scripts/ci/locked-tools.mjs --prefix /tmp/t3-contract --ignore-scripts --no-audit --no-fund zod@4.6.6 >/dev/null; node deploy/ci/preprod-a4/t3-rehearsal-contract.selftest.mjs'
 .PHONY: test-preprod-a4-api
 test-preprod-a4-api: ## Run preparation tests in a cached API toolbox with container-only source overlay
 	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
