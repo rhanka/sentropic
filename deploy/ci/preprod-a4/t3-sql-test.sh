@@ -55,11 +55,23 @@ sql -c "UPDATE authorization_codes SET code_challenge='bbbb' WHERE code='t3-offl
 sql -c "DELETE FROM authorization_codes WHERE code='t3-offline'"
 echo 'PASS: offline PKCE-only mutation changes durable applicability'
 # Round-trip all schemas and real column/default ACLs through the delivered restore generator.
+# Prod schema shape (rehearsal r9): pg_trgm keeps its types in public, and pg_dump empties search_path
+# for the whole restore session, so a search_path-sensitive catalogue can never equal its P-0 capture.
+sql -c 'CREATE EXTENSION pg_trgm'
+# Objects that shadow pg_catalog when a session lists their schema first.
+sql -c 'CREATE SCHEMA t3_shadow; CREATE FUNCTION t3_shadow.sha256(bytea) RETURNS bytea LANGUAGE sql AS $f$ SELECT $1 $f$; CREATE FUNCTION t3_shadow.second(text,text) RETURNS text LANGUAGE sql AS $f$ SELECT $2 $f$; CREATE OPERATOR t3_shadow.|| (LEFTARG=text, RIGHTARG=text, FUNCTION=t3_shadow.second)'
 sql -c 'CREATE ROLE t3_reader; GRANT USAGE ON SCHEMA public TO t3_reader; GRANT SELECT (client_id) ON oauth_clients TO t3_reader; ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO t3_reader; CREATE SCHEMA artifacts; CREATE TABLE artifacts.t3_empty(id text)'
 acl=$(sql -f /tests/t3-acl.sql)
-sed '/^SELECT encode/,$d' /tests/t3-acl.sql > /tmp/catalog.sql
+for path in '' pg_catalog t3_shadow,pg_catalog,public; do
+  [ "$(PGOPTIONS="-c search_path=$path" sql -f /tests/t3-acl.sql)" = "$acl" ] || { echo "acl_catalogue_search_path_dependent: $path"; exit 1; }
+done
+echo 'PASS: ACL catalogue is identical under the default, empty, pinned and shadowing search paths'
+sed '/^SELECT pg_catalog\.encode/,$d' /tests/t3-acl.sql > /tmp/catalog.sql
 echo 'SELECT * FROM entries ORDER BY kind,name;' >> /tmp/catalog.sql
 sql -f /tmp/catalog.sql > /tmp/t3-catalog-before
+# Schema-only dump without the per-run restrict key and server-stamped column options.
+schema() { pg_dump --schema-only | sed '/^\\\(un\)\{0,1\}restrict /d; / SET (pg_attver=[0-9]*);$/d'; }
+schema > /tmp/t3-schema-before
 pg_dump --no-owner --no-privileges > /tmp/t3-source.sql
 # pg_dump emits these fixture ACL statements on single lines; production uses the quote-aware parser.
 pg_dump --schema-only | sed -n '/^ALTER .* OWNER TO /p; /^GRANT /p; /^REVOKE /p; /^ALTER DEFAULT PRIVILEGES /p' > /tmp/t3-acl.sql
@@ -67,7 +79,9 @@ sql -f /tests/t3-public-acl.sql >> /tmp/t3-acl.sql
 sql -c 'CREATE SCHEMA cm_identity; CREATE TABLE cm_identity.after_commit(id text)'
 sql --single-transaction -v baseline_acl="$acl" -f /restore.sql >/tmp/restore.log 2>&1 || { diff -u /tmp/t3-catalog-before /tmp/t3-catalog-after || :; tail -n 3 /tmp/restore.log; exit 1; }
 [ "$(sql -f /tests/t3-acl.sql)" = "$acl" ]
-echo 'PASS: full restore catalogue matches'
+schema > /tmp/t3-schema-after
+diff /tmp/t3-schema-before /tmp/t3-schema-after >/dev/null || { echo restored_schema_differs; exit 1; }
+echo 'PASS: full restore catalogue matches and the schema-only dump is identical'
 if sql --single-transaction -v baseline_acl="$(printf '%064d' 0)" -f /restore.sql >/tmp/refuse.log 2>&1; then exit 1; fi
 [ "$(sql -f /tests/t3-acl.sql)" = "$acl" ]
 echo 'PASS: full multi-schema restore, column/default ACL parity, atomic refusal on mismatch'
