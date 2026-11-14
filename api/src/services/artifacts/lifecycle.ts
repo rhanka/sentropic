@@ -80,7 +80,7 @@ export function createArtifactHostJobs(options: {
   }
   function guardedBlobs(operation: 'cleanup' | 'collect'): PublicationBlobStore {
     return { ...options.blobs,
-      async deleteBlob(key) { await authorize(operation); await options.blobs.deleteBlob(key); },
+      async deleteBlob(key, transaction) { await authorize(operation); await options.blobs.deleteBlob(key, transaction); },
       async listKeys(key) {
         // Preparation cleanup probes exact keys, never an unbounded bucket listing.
         if (!blobKey.test(key)) throw new Error('Invalid preparation blob key');

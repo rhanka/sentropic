@@ -84,6 +84,7 @@ export interface GcService {
     blobs: PublicationBlobStore,
     prefix: string,
     claims: DeletionClaimStore,
+    transaction?: FinalizeTxClient,
   ): Promise<GcReport>;
 }
 
@@ -126,7 +127,7 @@ export function createPostgresGcService(
       try {
         const refs = refsForTransaction(client);
         const claims = createPostgresDeletionClaimStore(client);
-        const report = await createGcService(refs).collect(blobs, prefix, claims);
+        const report = await createGcService(refs).collect(blobs, prefix, claims, client);
         await client.commit();
         return report;
       } catch (error) {
@@ -261,6 +262,7 @@ export function createGcService(refs: RefcountStore): GcService {
       blobs: PublicationBlobStore,
       prefix: string,
       claims: DeletionClaimStore,
+      transaction?: FinalizeTxClient,
     ): Promise<GcReport> {
       const report: GcReport = { deleted: [], retained: [], failures: [] };
       for (const key of await blobs.listKeys(prefix)) {
@@ -280,17 +282,19 @@ export function createGcService(refs: RefcountStore): GcService {
             const alreadyClaimed = await locked.isClaimed(digest);
             if (!alreadyClaimed) await locked.claim(digest, 'gc');
             let deleted = false;
+            let deleting = false;
             try {
               if ((await refs.count(digest)) !== 0 || (await refs.isPinned(digest))) {
                 report.retained.push(key);
                 return;
               }
-              await blobs.deleteBlob(key);
+              deleting = true;
+              await blobs.deleteBlob(key, transaction);
               deleted = true;
               report.deleted.push(key);
             } finally {
-              // Preserve a purge claim until erasure; always release our GC claim.
-              if (!alreadyClaimed || deleted) await locked.releaseClaim(digest);
+              // Failed erasure keeps durable debt for the next collection.
+              if (deleted || (!alreadyClaimed && !deleting)) await locked.releaseClaim(digest);
             }
           });
         } catch (error) {

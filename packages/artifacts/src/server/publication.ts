@@ -92,7 +92,7 @@ export interface PublicationBlobStore {
    */
   listKeysPaged?(prefix: string, page: BlobKeyPage): Promise<BlobKeyPageResult>;
   /** Delete a key (strict: unknown keys fail so callers notice). */
-  deleteBlob(key: string): Promise<void>;
+  deleteBlob(key: string, transaction?: import('./commit/types.js').FinalizeTxClient): Promise<void>;
 }
 
 /** Derive the `sha256:<hex>` digest from a digest-addressed blob key. */

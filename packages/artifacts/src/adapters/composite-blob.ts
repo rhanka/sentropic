@@ -11,6 +11,7 @@
  * (`listKeysPaged`, CR-4) so no side is ever bulk-loaded.
  */
 import type { BlobKeyPage, BlobKeyPageResult, PublicationBlobStore } from '../server/publication.js';
+import type { FinalizeTxClient } from '../server/commit/types.js';
 
 export type CompositeBlobMode = 'db' | 's3' | 'db+s3';
 export type RegisteredBlobPlacement = 'db' | 'object';
@@ -28,7 +29,7 @@ export interface CompositeBlobOptions {
   readonly inlineMaxBytes: number;
   readonly placements: CompositeBlobPlacements;
   /** Runs work under the digest lock shared with GC; direct when absent. */
-  readonly withDigestLock?: (digest: string, work: () => Promise<void>) => Promise<void>;
+  readonly withDigestLock?: (digest: string, work: () => Promise<void>, transaction?: FinalizeTxClient) => Promise<void>;
 }
 
 function digestOfKey(key: string): string {
@@ -102,7 +103,7 @@ export function createCompositeBlobStore(options: CompositeBlobOptions): Publica
       const hasMore = fetched.some((result) => result.hasMore) || union.length > page.maxItems;
       return { keys, hasMore };
     },
-    async deleteBlob(key: string): Promise<void> {
+    async deleteBlob(key: string, transaction?: FinalizeTxClient): Promise<void> {
       await lock(digestOfKey(key), async () => {
         // Deferred per side: a synchronously-throwing store (unknown key)
         // must settle as a rejection inside allSettled, never escape during
@@ -121,7 +122,7 @@ export function createCompositeBlobStore(options: CompositeBlobOptions): Publica
         if (outcomes.every((outcome) => outcome.status === 'rejected')) {
           throw (outcomes[0] as PromiseRejectedResult).reason;
         }
-      });
+      }, transaction);
     },
   };
 }
