@@ -66,6 +66,34 @@ function hostWith(placementForSize?: (size: number) => 'db' | 'object', mode: 'd
 }
 
 describe('composite blob placement', () => {
+  it.each(['db', 's3'] as const)('keeps a failed %s erasure pending until host GC retries', async failingSide => {
+    const db = createPostgresDbBlobStore(pool);
+    const s3 = createMemoryBlobStore();
+    const bytes = new TextEncoder().encode('durable partial erasure');
+    const key = keyFor(bytes);
+    await db.putBlob(key, bytes);
+    await s3.putBlob(key, bytes);
+    const side = failingSide === 'db' ? db : s3;
+    let denied = true;
+    const failing = { ...side, async deleteBlob(candidate: string) {
+      if (denied) throw new Error('AccessDenied');
+      await side.deleteBlob(candidate);
+    } };
+    const { createCompositeBlobStore } = await import('@sentropic/artifacts/adapters/composite-blob');
+    const blobs = createCompositeBlobStore({ db: failingSide === 'db' ? failing : db,
+      s3: failingSide === 's3' ? failing : s3, mode: 'db+s3', inlineMaxBytes: 8,
+      placements: { getPlacement: async () => undefined } });
+    const jobs = createArtifactHostJobs({ pool, blobs, authorize: async () => true,
+      page: async () => { throw new Error('unexpected legacy enumeration'); } });
+    const failed = await jobs.collect('scope-p');
+    expect(failed.deleted).toEqual([]);
+    expect(failed.failures).toEqual([{ key, error: 'Error: AccessDenied' }]);
+    expect((await pool.query("SELECT state FROM artifacts.object_intents WHERE kind = 'delete-blob'")).rows).toEqual([{ state: 'pending' }]);
+    denied = false;
+    expect((await jobs.collect('scope-p')).deleted).toEqual([key]);
+    expect((await pool.query("SELECT state FROM artifacts.object_intents WHERE kind = 'delete-blob'")).rows).toEqual([{ state: 'done' }]);
+  });
+
   it('bounds S3 calls through both host wrappers and resumes by key', async () => {
     const prefix = 'artifacts/scope-p/blobs/sha256/';
     const keys = [1, 2, 3, 4, 5].map(n => `${prefix}${String(n).padStart(64, '0')}`);
