@@ -24,27 +24,32 @@ export function run(env = process.env, call = kubectl, read = privateInput) {
     phase: workerPhase, dryRun: workerDryRun, requestSha256: digest(requestBytes),
     ...(backupKey ? { backupKey, stateSha256 } : {}) })));
   fence();
-  // Full bundle-side preflight precedes every permitted Kubernetes write.
-  let output = worker(phase, true);
-  if (dryRun === '1') { fence(); return output; }
-  if (phase === 'snapshot') {
-    const stateSha256 = digest(canonical(Object.fromEntries(output.trim().split('\n').map(line => line.split('=')))));
-    const name = `pgbackup-a4-${request.operationId}`;
-    // Clone the reviewed tenant template exactly. No custom dump/upload path or credential.
-    k(['create', '-f', '-'], JSON.stringify({ apiVersion: 'batch/v1', kind: 'Job',
-      metadata: { name, namespace }, spec: cron.spec.jobTemplate.spec }));
-    k(['wait', '--for=condition=complete', '--timeout=180s', `job/${name}`]);
-    const pods = json(['get', 'pods', '-l', `batch.kubernetes.io/job-name=${name}`, '-o', 'json']).items;
-    const succeeded = pods.filter(pod => pod.status?.phase === 'Succeeded');
-    if (succeeded.length !== 1) throw new Error('backup_job_invalid');
-    const log = k(['logs', succeeded[0].metadata.name, '-c', 'dump']);
-    const timestamps = [...log.matchAll(/^dumping app DB at ([0-9]{8}T[0-9]{6}Z)\s*$/gm)];
-    if (timestamps.length !== 1) throw new Error('backup_key_unresolved');
+  // Each worker invocation loads the whole API bundle. The checkpoint worker validates custody,
+  // state, backup and rehearsal before its only write (a custody file), and no Kubernetes write
+  // follows it: one invocation, dry or real, is the complete bundle-side preflight.
+  if (phase === 'checkpoint') {
+    const checkpoint = worker('checkpoint', dryRun === '1');
     fence();
-    output = worker('snapshot', false, `pg/${timestamps[0][1]}.sql.gz`, stateSha256);
-  } else {
-    output = worker('checkpoint', false);
+    return checkpoint;
   }
+  // Snapshot: the bundle-side preflight precedes the only Kubernetes write (the backup Job) and
+  // yields the pre-backup state the second invocation must find unchanged.
+  const preflight = worker('snapshot', true);
+  if (dryRun === '1') { fence(); return preflight; }
+  const stateSha256 = digest(canonical(Object.fromEntries(preflight.trim().split('\n').map(line => line.split('=')))));
+  const name = `pgbackup-a4-${request.operationId}`;
+  // Clone the reviewed tenant template exactly. No custom dump/upload path or credential.
+  k(['create', '-f', '-'], JSON.stringify({ apiVersion: 'batch/v1', kind: 'Job',
+    metadata: { name, namespace }, spec: cron.spec.jobTemplate.spec }));
+  k(['wait', '--for=condition=complete', '--timeout=180s', `job/${name}`]);
+  const pods = json(['get', 'pods', '-l', `batch.kubernetes.io/job-name=${name}`, '-o', 'json']).items;
+  const succeeded = pods.filter(pod => pod.status?.phase === 'Succeeded');
+  if (succeeded.length !== 1) throw new Error('backup_job_invalid');
+  const log = k(['logs', succeeded[0].metadata.name, '-c', 'dump']);
+  const timestamps = [...log.matchAll(/^dumping app DB at ([0-9]{8}T[0-9]{6}Z)\s*$/gm)];
+  if (timestamps.length !== 1) throw new Error('backup_key_unresolved');
+  fence();
+  const output = worker('snapshot', false, `pg/${timestamps[0][1]}.sql.gz`, stateSha256);
   fence();
   return output;
 }
