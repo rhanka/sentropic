@@ -2,7 +2,7 @@ import { writeFileSync } from 'node:fs';
 import { checkRbac, psql } from './t3-window-driver.mjs';
 import { inspectApplicability } from './t3-applicability.mjs';
 import { privateInput, tierOf } from './guards.mjs';
-import { runKubectl, loadState, monoMs, effectiveTimeout } from './t3-lib.mjs';
+import { PROBE_PATHS, runKubectl, loadState, monoMs, effectiveTimeout } from './t3-lib.mjs';
 import { digest } from './guards.mjs';
 import { fixture } from './t3-fixture.mjs';
 import { executionGrant } from './execution.mjs';
@@ -23,7 +23,8 @@ export async function qualify(action, config, dependencies = {}) {
     const deadlineMs = state.t0MonoMs+(state.recoveryReason ? 300000 : 175000);
     for (const name of ['app','idp']) {
       const w = witnesses.find(w => w.name === name), url = config.endpoints[`${name}Me`];
-      if (!w || w.url !== url || !w.expectedUserId || (config.tier === 'restore'
+      if (!w || w.url !== url || !w.expectedUserId || !URL.canParse(url)
+        || new URL(url).pathname !== PROBE_PATHS[name === 'app' ? 'S-7' : 'S-8'] || (config.tier === 'restore'
         && !new URL(url).hostname.endsWith('.restore-a4.test'))) throw new Error('qualification_witness_binding');
       const response = await (dependencies.probe ?? fetch)(url,{ redirect: 'error',
         headers: { cookie: read(w.cookieFile).trim() },signal: AbortSignal.timeout(effectiveTimeout(5000,{deadlineMs},now())) });

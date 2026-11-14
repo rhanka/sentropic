@@ -116,6 +116,16 @@ export function validateObservers(config) {
     || config.externalProbes.some(p => !URL.canParse(p.url) || p.expect !== 200)) throw new Error('external_probes_missing');
 }
 
+// Qualified probe paths (plan section 4, corrected by rehearsal r9). The product origin answers
+// /api/v1/me and the IdP /api/v1/auth/me; both issue email codes on /api/v1/auth/email/verify-request.
+// The earlier literal URLs (/api/v1/auth/me on the product, /api/v1/auth/email/send-code) return 404
+// on the candidate: W8 could then never reach ACCEPTED after COMMIT. Refused here, before the fence.
+export const PROBE_PATHS = Object.freeze({ 'S-3': '/api/v1/health', 'S-4': '/.well-known/openid-configuration',
+  'S-5': '/.well-known/jwks.json', 'S-6': '/api/v1/auth/oauth/authorize', 'S-7': '/api/v1/me',
+  'S-8': '/api/v1/auth/me', 'S-9a': '/api/v1/auth/email/verify-request', 'S-9b': '/api/v1/auth/email/verify-request' });
+// Product-origin probes, then IdP-origin probes: each group targets one origin.
+export const PROBE_ORIGINS = Object.freeze([['S-3', 'S-7', 'S-9a'], ['S-4', 'S-5', 'S-6', 'S-8', 'S-9b']]);
+
 export function validateProbes(probes) {
   const required = { 'S-3': 200, 'S-4': 200, 'S-5': 200, 'S-6': 302,
     'S-7': 401, 'S-8': 401, 'S-9a': 200, 'S-9b': 200 };
@@ -124,12 +134,18 @@ export function validateProbes(probes) {
     if (!p || p.expect !== status || !URL.canParse(p.url) || !['http:', 'https:'].includes(new URL(p.url).protocol)) {
       throw new Error(`mandatory_probes_missing: ${id}`);
     }
+    if (new URL(p.url).pathname !== PROBE_PATHS[id]) throw new Error(`probe_path_unqualified: ${id}`);
     if (id.startsWith('S-9')) {
       let email;
       try { email = JSON.parse(p.options?.body).email; } catch { /* invalid input */ }
       if (p.options?.method !== 'POST' || new Headers(p.options?.headers).get('content-type') !== 'application/json'
         || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
         || Buffer.byteLength(email.split('@')[0]) > 36 || Buffer.byteLength(email) > 226) throw new Error(`email_probe_input: ${id}`);
+    }
+  }
+  for (const group of PROBE_ORIGINS) {
+    if (new Set(group.map(id => new URL(probes.find(p => p.id === id).url).origin)).size !== 1) {
+      throw new Error(`probe_origin_mixed: ${group.join(',')}`);
     }
   }
   if (!probes.find(p => p.id === 'S-5')?.signingKid) throw new Error('signing_kid_missing');
