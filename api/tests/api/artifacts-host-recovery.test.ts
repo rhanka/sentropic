@@ -33,8 +33,16 @@ afterAll(() => admin.end());
 
 function fixture(allow = true) {
   const blobs = createMemoryBlobStore();
-  const page = vi.fn(async (prefix: string, limit: number, _cursor?: string): Promise<ArtifactBlobPage> =>
-    ({ keys: (await blobs.listKeys(prefix)).slice(0, limit) }));
+  const upstreamPage = blobs.listKeysPaged!;
+  const page = vi.fn(async (prefix: string, limit: number, cursor?: string): Promise<ArtifactBlobPage> => {
+    const result = await upstreamPage(prefix, { maxItems: limit, maxEncodedBytes: limit * 256,
+      ...(cursor === undefined ? {} : { startAfter: cursor }) });
+    return { keys: result.keys, cursor: result.hasMore ? result.keys.at(-1) : undefined };
+  });
+  blobs.listKeysPaged = async (prefix, request) => {
+    const result = await page(prefix, request.maxItems, request.startAfter);
+    return { keys: result.keys, hasMore: result.cursor !== undefined };
+  };
   const authorize = vi.fn(async () => allow);
   const jobs = createArtifactHostJobs({ pool, blobs, page, authorize, batchSize: 2 });
   return { blobs, page, authorize, jobs, store: createPostgresArtifactStore(pool) };
@@ -169,7 +177,7 @@ describe('artifact host recovery', () => {
     const first = await jobs.collect(scope);
     page.mockResolvedValueOnce({ keys: [key('b')] });
     expect((await jobs.collect(scope, first.cursor)).deleted).toEqual([key('b')]);
-    expect(page).toHaveBeenLastCalledWith(`artifacts/${scope}/blobs/sha256/`, 2, 'next');
+    expect(page).toHaveBeenLastCalledWith(`artifacts/${scope}/blobs/sha256/`, 2, key('a'));
   });
 
   it('should deny erasure when maintenance authority is revoked during a digest wait', async () => {
