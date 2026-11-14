@@ -49,6 +49,7 @@
 - [x] Added qualification refusal tests (401, wrong identity, late completion, incomplete window), plus fixture SA/logical-verifier/TEM assertions.
 - [x] Added explicit production-URL refusal across restore observer/witness paths and human-emergency DONE/commitVerified=false assertion.
 - [x] Human recovery records its reason, and committed finish-open persists DONE so authenticated qualification uses the correct recovery envelope.
+- [x] Protected ACL SQL capture accepts the full reviewed schema inventory, with a 64 MiB bound rather than the small JSON-input bound.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
