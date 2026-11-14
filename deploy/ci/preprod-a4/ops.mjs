@@ -4,7 +4,7 @@ import { assertDigestOutput, assertRequest, canonical, digest, kubectl, podName,
 export function ops(env = process.env, call = kubectl, read = privateInput) {
   if (!['wire', 'budgets', 'custodian', 'stage'].includes(env.A4_OPERATION)
     || !['0', '1'].includes(env.A4_DRY_RUN ?? '1')) throw new Error('arguments_invalid');
-  const tier = tierOf(env), { namespace } = tier;
+  const tier = tierOf(env), namespace = tier.destinationNamespace ?? tier.namespace;
   read(env.A4_KUBECONFIG_FILE);
   const requestBytes = read(env.A4_REQUEST_FILE), request = JSON.parse(requestBytes);
   assertRequest(request, tier);
@@ -32,7 +32,8 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
       const deployment = JSON.parse(k(['get', 'deployment', name, '-o', 'json']));
       if (deployment.spec.replicas !== 0 || (deployment.status?.replicas ?? 0) !== 0) throw new Error('consumer_not_quiesced');
     }
-    const runtime = k(['kustomize', 'deploy/k8s/overlays/preprod/a4-runtime']);
+    const runtime = k(['kustomize', tier.destinationNamespace ? 'deploy/k8s/overlays/restore-a4/runtime'
+      : 'deploy/k8s/overlays/preprod/a4-runtime']);
     if (env.A4_DRY_RUN === '0') {
       k(['apply', '-f', 'deploy/ci/preprod-a4/custody-pvc.yaml']);
       k(['apply', '-f', '-'], runtime);
@@ -65,6 +66,7 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     container.volumeMounts.find(mount => mount.name === volume.name).readOnly = false;
     spec.containers = [container]; spec.initContainers = []; spec.restartPolicy = 'Never';
     spec.automountServiceAccountToken = false;
+    spec.terminationGracePeriodSeconds = 1;
     container.securityContext = { allowPrivilegeEscalation: false, capabilities: { drop: ['ALL'] }, readOnlyRootFilesystem: true };
     const pod = { apiVersion: 'v1', kind: 'Pod', metadata: { name: podName, namespace,
       labels: { 'app.kubernetes.io/name': 'sentropic', 'app.kubernetes.io/component': 'pgbackup' } }, spec };

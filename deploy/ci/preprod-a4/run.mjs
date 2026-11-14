@@ -3,7 +3,8 @@ import { assertDigestOutput, assertFence, assertRequest, canonical, digest,
   kubectl, podName, privateInput, tierOf } from './guards.mjs';
 
 export function run(env = process.env, call = kubectl, read = privateInput) {
-  const phase = env.A4_PHASE ?? 'checkpoint', dryRun = env.A4_DRY_RUN ?? '1', tier = tierOf(env), { namespace } = tier;
+  const phase = env.A4_PHASE ?? 'checkpoint', dryRun = env.A4_DRY_RUN ?? '1', tier = tierOf(env);
+  const namespace = tier.destinationNamespace ?? tier.namespace;
   if (!['inspect', 'snapshot', 'checkpoint'].includes(phase) || !['0', '1'].includes(dryRun)
     || !env.A4_KUBECONFIG_FILE) throw new Error('arguments_invalid');
   read(env.A4_KUBECONFIG_FILE); // Owner-only file; contents are never forwarded or printed.

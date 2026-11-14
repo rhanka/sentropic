@@ -8,7 +8,7 @@ import { validateApplicability } from './t3-applicability.mjs';
 // Offline only. Never interprets a request template as observed fence evidence.
 export function preflight(config, read = privateInput) {
   const tier = tierOf({ A4_TIER: config.tier });
-  if (config.namespace !== tier.namespace || config.candidateImage !== config.images?.candidate
+  if (config.namespace !== (tier.destinationNamespace ?? tier.namespace) || config.candidateImage !== config.images?.candidate
     || config.request?.candidateImage !== config.candidateImage) throw new Error('config_binding_invalid');
   const env = { A4_TIER: config.tier, A4_DRY_RUN: '1', A4_KUBECONFIG_FILE: config.kubeconfigFile,
     A4_AUTHORIZATION_FILE: config.authorizationFile, A4_EXECUTION_FILE: config.executionFile,
@@ -27,6 +27,11 @@ export function preflight(config, read = privateInput) {
   }
   validateApplicability(JSON.parse(read(config.applicabilityBaselineFile)));
   validateProbes(buildProbes(config).probes);
+  if (config.tier === 'restore') {
+    for (const url of Object.values(config.endpoints)) {
+      if (!new URL(url).hostname.endsWith('.restore-a4.test')) throw new Error('fixture_http_not_isolated');
+    }
+  }
   for (const name of ['apiJwtSecretFile', 'secretEncryptionKeyFile', 'idpSessionJwtFile']) {
     if (!read(config.rotationKeyFiles?.[name]).trim()) throw new Error('rotation_key_empty');
   }
