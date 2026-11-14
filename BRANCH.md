@@ -28,4 +28,5 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: rebase and mechanically verify branch.
 - [x] Lot 1: UI digest corrected, API/auth-idp T2 digest retained, unconditional restart removed, generic secret target frozen; regression tests added.
-- [ ] Final validation: local rendering and scoped tests; push #1001 and exact-head green CI.
+- [x] Local validation: standalone Kustomize 5.7.1 renders prod/preprod/prod-a4/preprod-a4; bundle/topology checks and three IaC regression tests pass.
+- [ ] Final validation: push #1001 and exact-head green CI; no merge.
