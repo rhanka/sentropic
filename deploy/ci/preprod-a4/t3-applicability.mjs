@@ -2,10 +2,14 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 export const applicabilitySql = () => readFileSync(new URL('./cutover-applicability-v1.sql', import.meta.url), 'utf8');
 const hashes = ['durableCutoverApplicabilitySha256', 'encryptedStoresSha256'];
+const stores = ['settings_enc','document_connector_accounts_enc','llm_provider_accounts_enc','connector_revocation_custody_enc'];
 
 export function validateApplicability(value) {
   if (value?.version !== 'cutover-applicability-v1' || value.ok !== true
     || hashes.some(key => !/^[a-f0-9]{64}$/.test(value[key] ?? ''))) throw new Error('applicability_invalid');
+  if (stores.some(key => !/^[a-f0-9]{64}$/.test(value.encryptedStoreFingerprints?.[key] ?? ''))) {
+    throw new Error('encrypted_store_fingerprints_invalid');
+  }
   const g = value.guards;
   if (!g || g.cm_identity_schema_present !== false || g.live_federation_flow_states !== 0
     || g.non_null_identity_token_secrets !== 0 || ['cm_identity_invitations', 'cm_identity_import_receipts',
@@ -17,6 +21,9 @@ export function assertStable(reference, current) {
   validateApplicability(reference);
   validateApplicability(current);
   for (const key of hashes) if (reference[key] !== current[key]) throw new Error(`applicability_drift:${key}`);
+  for (const key of stores) if (reference.encryptedStoreFingerprints[key] !== current.encryptedStoreFingerprints[key]) {
+    throw new Error(`encrypted_store_drift:${key}`);
+  }
 }
 
 export function inspectApplicability(ctx, query) {
