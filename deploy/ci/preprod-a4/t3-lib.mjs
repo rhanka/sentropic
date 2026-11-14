@@ -242,3 +242,52 @@ export function claimDead(claim) {
 export function stepTimeoutMs(requestedMs, deadlineMonoMs, nowMs = monoMs()) {
   return effectiveTimeout(requestedMs, { deadlineMs: deadlineMonoMs }, nowMs);
 }
+
+// Traefik v3 EndpointSlice/Ingress/Middleware informers converge asynchronously
+// (< 3 s M-6 budget). Retries stay inside existing step/recovery deadlines and
+// never retry application JSON errors, redirects or non-Basic 401/403/5xx refusals.
+export const TRAEFIK_SYNC_MS = 3_000;
+const TRAEFIK_RETRY_DELAY_MS = 50;
+const TRAEFIK_MAX_RETRIES = Math.ceil(TRAEFIK_SYNC_MS / TRAEFIK_RETRY_DELAY_MS);
+
+export function traefikSyncDeadline(opts = {}, now = opts?.now ?? monoMs) {
+  return Math.min(opts?.deadlineMs ?? Infinity, now() + TRAEFIK_SYNC_MS);
+}
+
+function isStaleTraefikResponse(res, expectRefusal) {
+  const json = /^application\/json(?:;|$)/i.test(res.headers?.get('content-type') ?? '');
+  if (!json && (res.status === 404 || res.status === 502 || res.status === 503)) return true;
+  return !expectRefusal && res.status === 401 && /^Basic\b/i.test(res.headers?.get('www-authenticate') ?? '');
+}
+
+function isRetryableTransportError(err) {
+  if (!err || err.message === 'budget_exhausted') return false;
+  return !/redirect/i.test(`${err.message ?? ''} ${err.cause?.message ?? ''}`);
+}
+
+export async function probeWithTraefikRetry(send, opts = {}) {
+  const now = opts.now ?? monoMs;
+  const retryUntilMs = opts.retryUntilMs ?? null;
+  for (let retries = 0; ; retries += 1) {
+    let res;
+    try {
+      res = await send();
+    } catch (err) {
+      if (retryUntilMs == null || retries >= TRAEFIK_MAX_RETRIES
+        || !isRetryableTransportError(err) || now() >= retryUntilMs) throw err;
+      effectiveTimeout(1, opts, now());
+      const waitMs = Math.min(TRAEFIK_RETRY_DELAY_MS, retryUntilMs - now());
+      if (waitMs > 0 && now === monoMs) await new Promise(resolve => setTimeout(resolve, waitMs));
+      continue;
+    }
+    if (retryUntilMs != null && retries < TRAEFIK_MAX_RETRIES
+      && isStaleTraefikResponse(res, opts.refusal === true) && now() < retryUntilMs) {
+      await res.body?.cancel?.();
+      effectiveTimeout(1, opts, now());
+      const waitMs = Math.min(TRAEFIK_RETRY_DELAY_MS, retryUntilMs - now());
+      if (waitMs > 0 && now === monoMs) await new Promise(resolve => setTimeout(resolve, waitMs));
+      continue;
+    }
+    return res;
+  }
+}

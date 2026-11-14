@@ -1,4 +1,5 @@
-import { effectiveTimeout, monoMs, podLabels, recoveryDeadline, runKubectl, loadState, saveState } from './t3-lib.mjs';
+import { effectiveTimeout, monoMs, podLabels, probeWithTraefikRetry, recoveryDeadline,
+  runKubectl, loadState, saveState, traefikSyncDeadline } from './t3-lib.mjs';
 import { t3PriorityClass } from './ops.mjs';
 import { readFileSync } from 'node:fs';
 
@@ -100,14 +101,35 @@ export async function preCommitRollback(ctx) {
 }
 
 async function verifyService(probe, ctx) {
-  const signal = () => AbortSignal.timeout(effectiveTimeout(30_000, ctx, (ctx.now ?? monoMs)()));
+  const clock = ctx.now ?? monoMs;
+  const retryUntilMs = traefikSyncDeadline(ctx, clock);
+  const signal = () => AbortSignal.timeout(effectiveTimeout(30_000, ctx, clock()));
   for (const url of [ctx.healthUrl, ctx.jwksUrl]) {
-    const res = await probe(url, { redirect: 'error', signal: signal() });
+    let res;
+    try {
+      res = await probeWithTraefikRetry(() => probe(url, { redirect: 'error', signal: signal() }),
+        { retryUntilMs, deadlineMs: ctx.deadlineMs, now: clock });
+    } catch (err) {
+      if (/redirect/i.test(`${err?.message ?? ''} ${err?.cause?.message ?? ''}`)) {
+        throw new Error(`rollback_verify_failed: ${url}`);
+      }
+      throw err;
+    }
     await res.body?.cancel?.();
     if (res.status !== 200) throw new Error(`rollback_verify_failed: ${url}`);
   }
   if (ctx.witness) {
-    const res = await probe(ctx.witness.url, { redirect: 'error',headers: { cookie: ctx.witness.cookie }, signal: signal() });
+    let res;
+    try {
+      res = await probeWithTraefikRetry(
+        () => probe(ctx.witness.url, { redirect: 'error', headers: { cookie: ctx.witness.cookie }, signal: signal() }),
+        { retryUntilMs, deadlineMs: ctx.deadlineMs, now: clock });
+    } catch (err) {
+      if (/redirect/i.test(`${err?.message ?? ''} ${err?.cause?.message ?? ''}`)) {
+        throw new Error('rollback_witness_failed');
+      }
+      throw err;
+    }
     await res.body?.cancel?.();
     if (res.status !== 200) throw new Error('rollback_witness_failed');
   }

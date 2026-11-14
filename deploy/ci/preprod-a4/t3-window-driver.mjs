@@ -639,7 +639,7 @@ async function driveInner(ctx, state) {
   const { probes, externalProbes, restrictedProbes } = buildProbes(ctx.config);
   await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print, verification: verificationOf(ctx),
     save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes,restrictedProbes,
-    deadlineMs: t0 + FINISH_CUTOFF_MS });
+    deadlineMs: t0 + FINISH_CUTOFF_MS, now });
   heartbeat(ctx, state, 'W9');
   if (now() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
   state.step = 'DONE';
