@@ -10,9 +10,9 @@ export function parseOriginalRehearsal(value) {
   const fields = ['format',...refs,'candidateCommit','candidateImage',...STATE_HASHES,'restoredBackupSha256',...flags];
   if (!value || typeof value !== 'object' || Object.keys(value).sort().join(',') !== fields.sort().join(',')
     || !['prod-a4-rehearsal/2','preprod-a4-rehearsal/2'].includes(value.format)
-    || !/^[a-f0-9]{40}$/.test(value.candidateCommit ?? '') || value.candidateCommit === '0'.repeat(40)
-    || !/^ghcr\.io\/rhanka\/sentropic-api@sha256:[a-f0-9]{64}$/.test(value.candidateImage ?? '')
-    || [...STATE_HASHES,'restoredBackupSha256'].some(key => !/^[a-f0-9]{64}$/.test(value[key] ?? ''))
+    || typeof value.candidateCommit !== 'string' || !/^[a-f0-9]{40}$/.test(value.candidateCommit) || value.candidateCommit === '0'.repeat(40)
+    || typeof value.candidateImage !== 'string' || !/^ghcr\.io\/rhanka\/sentropic-api@sha256:[a-f0-9]{64}$/.test(value.candidateImage)
+    || [...STATE_HASHES,'restoredBackupSha256'].some(key => typeof value[key] !== 'string' || !/^[a-f0-9]{64}$/.test(value[key]))
     || flags.some(key => value[key] !== true)
     || refs.some(key => typeof value[key] !== 'string' || !value[key].trim() || value[key].trim().length > 512
       || /placeholder|<|>|TODO|example|pending/i.test(value[key]))) throw new Error('original_rehearsal_invalid');

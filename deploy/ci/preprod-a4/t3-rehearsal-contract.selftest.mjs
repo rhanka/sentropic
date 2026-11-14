@@ -29,4 +29,9 @@ for (const patch of [{ extra: true },{ isolatedRestoreRef: 'pending' },{ restore
   assert.equal(schema.safeParse({ ...original,...patch }).success,false);
   assert.throws(() => parseOriginalRehearsal({ ...original,...patch }));
 }
+for (const key of ['candidateCommit','candidateImage','restoredBackupSha256',...Object.keys(original).filter(k => k.endsWith('Sha256') || k === 'remoteSnapshotDigest')]) {
+  const malformed = { ...original,[key]: [original[key]] };
+  assert.equal(schema.safeParse(malformed).success,false,key);
+  assert.throws(() => parseOriginalRehearsal(malformed),key);
+}
 console.log('PASS: complete original and fenced receipts accepted by the actual W6 Zod schema; all missing fields refused before fence');
