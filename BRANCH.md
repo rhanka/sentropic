@@ -115,13 +115,14 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
 ## Plan / Todo (lot-based)
 - [ ] **Lot 8 — Astra FIX R2**
   - [x] Reproduce and fix partial deletion errors and maintenance enumeration across placement modes (composite-blob.test.ts).
-  - [ ] Qualify image rollback, real transactional GC, host paging, migration contention and process crash recovery.
+  - [x] Qualify image rollback, real transactional GC, host paging, migration contention and process crash recovery.
   - [x] Reproduce GC lock timeout inside BEGIN and pass the owning transaction through deletion.
   - [x] Freeze a627f54e5 migration runner; reproduce its startup failure with 0009-0014 receipts.
   - [x] Replace the claimed mid-batch test with an actual SIGKILL after durable verified copies, before the switch; resume without a cursor (cmf-s3-placement-migrate.test.ts).
   - [x] Reproduce unbounded host S3 requests and S3-only maintenance enumeration; delegate keyset pages through both wrappers and collect both configured stores.
   - [x] Qualify offline data-preserving image rollback/resume and bounded migration DDL under contention (artifacts-host-migrations.test.ts).
   - [x] Qualify durable failed-erasure claims and successful host retry in both directions; align gc-races.test.ts with retained debt.
+  - [x] Local gates: API 49/49, package 59/59, tuple 5 passed/3 conditional skips; scoped API typecheck and lint (0 errors), package build/typecheck and packed consumer PASS. Registry artifacts 0.2.27 < candidate 0.2.28; archive sha256 e44635f919187a237793b4c75a610c7324868d46ae85b17ab0fa8c60720f6fcd; selected SRI regenerated.
   - [ ] Push verified head, await CI, append FIX R2 report and remove isolated volumes.
 - [ ] **Lot 7 — Rebase and qualify exact head (2026-11-13)**
   - [x] Rebase on origin/main; preserve prior uncommitted metadata in a stash.
