@@ -67,6 +67,8 @@
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [x] R6 packet (rehearsal r8 findings) allows `deploy/**`; `patch-api-a4.yaml` joins the allowed paths.
 - [x] R6 P-0.8: A4 wiring restates the base env, volume and mount entries in rendered order; the fenced wire of the legacy template then gives the rendered pod templates and the later apply starts no rollout.
+- [x] R6 P-0.8 gate: target `test-t3-template-diff`, a prerequisite of `test-preprod-a4`, replays the wire vectors with the pinned kubectl on the legacy prod templates and requires a zero canonical diff against the rendered prod-a4 overlay; red on the six missing API env entries before the wiring fix.
+- [x] R6 P-0.8 operator judge: `k8s-t3-qualify T3_ACTION=template-diff` reads the live capture, the rendered overlay and the annex images offline, writes a protected receipt and refuses a non-zero diff.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
 - [x] No AI tests or flaky allowances.
