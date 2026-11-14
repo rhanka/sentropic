@@ -24,13 +24,26 @@ if [ "$mode" = create ]; then printf '{}'; else cat >/dev/null; fi
 STUB
 chmod +x "$TEST_DIR/bin/kubectl"
 
+BUNDLE_MAKEFILE="$ROOT/Makefile"
 run_bundle() {
   : > "$T1_CALLS"
-  PATH="$TEST_DIR/bin:$PATH" make --no-print-directory -s -C "$ROOT" k8s-bundle-secret \
+  PATH="$TEST_DIR/bin:$PATH" make --no-print-directory -s -C "$ROOT" -f "$BUNDLE_MAKEFILE" k8s-bundle-secret \
     K8S_ENV_FILE="$TEST_DIR/input.env" K8S_NAMESPACE=synthetic-preprod \
     KUBECONFIG="$TEST_DIR/no-cluster-access" API_PORT=9450 UI_PORT=5650 MAILDEV_UI_PORT=1550 \
     ENV=test-cm-t1-w9 > "$TEST_DIR/output" 2>&1
 }
+if grep -Fq 'generic secret regeneration is frozen after T3' "$BUNDLE_MAKEFILE"; then
+  # The real recipe must refuse even before the synthetic input file exists.
+  if run_bundle; then echo 'FAIL: frozen secret recipe succeeded' >&2; exit 1; fi
+  grep -Fq 'generic secret regeneration is frozen after T3' "$TEST_DIR/output"
+  test ! -s "$T1_CALLS"
+  if grep -Fq 'missing ' "$TEST_DIR/output"; then echo 'FAIL: file check preceded freeze' >&2; exit 1; fi
+  # Exercise every validator case on a private copy; the operator has no bypass.
+  awk 'index($0, "generic secret regeneration is frozen after T3") == 0' \
+    "$BUNDLE_MAKEFILE" > "$TEST_DIR/Makefile"
+  BUNDLE_MAKEFILE="$TEST_DIR/Makefile"
+  echo 'PASS: T3 freeze precedes input reads and every cluster command'
+fi
 write_env() {
   printf 'JWT_SECRET="%s"\nSECRET_ENCRYPTION_KEY="%s"\nOAUTH_SIGNING_KEK=synthetic-bundle-kek\n' \
     "$1" "$2" > "$TEST_DIR/input.env"
