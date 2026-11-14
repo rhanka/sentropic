@@ -108,6 +108,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Reproduce and fix partial deletion errors and maintenance enumeration across placement modes (composite-blob.test.ts).
   - [ ] Qualify image rollback, real transactional GC, host paging, migration contention and process crash recovery.
   - [x] Reproduce GC lock timeout inside BEGIN and pass the owning transaction through deletion.
+  - [x] Freeze a627f54e5 migration runner; reproduce its startup failure with 0009-0014 receipts.
   - [ ] Push verified head, await CI, append FIX R2 report and remove isolated volumes.
 - [ ] **Lot 7 — Rebase and qualify exact head (2026-11-13)**
   - [x] Rebase on origin/main; preserve prior uncommitted metadata in a stash.
