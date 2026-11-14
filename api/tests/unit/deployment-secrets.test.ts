@@ -8,6 +8,7 @@ import {
   assertDeploymentSecrets,
   DEVELOPMENT_EMAIL_TICKET_SEED,
   DEVELOPMENT_SECRET_SEED,
+  isProvisionedDeploymentSecret,
   MissingDeploymentSecretError,
   resolveDeploymentSecret,
 } from '../../src/config/deployment-secrets';
@@ -51,9 +52,19 @@ describe('deployment secrets — fail-closed in a deployed runtime', () => {
     expect(resolveEmailVerificationTokenSecret()).toBe(` ${PROVISIONED} `);
   });
 
+  it('should require 32 trimmed characters and reject public seeds', () => {
+    for (const value of [undefined, '', 'x', 'x'.repeat(31), ` ${'x'.repeat(31)} `,
+      ' '.repeat(32), DEVELOPMENT_SECRET_SEED, DEVELOPMENT_EMAIL_TICKET_SEED,
+      'dev-idp-jwt-secret-change-in-production']) {
+      expect(isProvisionedDeploymentSecret(value)).toBe(false);
+    }
+    expect(isProvisionedDeploymentSecret('x'.repeat(32))).toBe(true);
+    expect(isProvisionedDeploymentSecret(` ${'x'.repeat(32)}\n`)).toBe(true);
+  });
+
   it('refuses an unset, blank or public-seed value in a deployed runtime, naming only the variable', () => {
     deployed();
-    for (const value of [undefined, '', '   ', DEVELOPMENT_SECRET_SEED, DEVELOPMENT_EMAIL_TICKET_SEED,
+    for (const value of [undefined, '', '   ', 'x', 'x'.repeat(31), DEVELOPMENT_SECRET_SEED, DEVELOPMENT_EMAIL_TICKET_SEED,
       'dev-idp-jwt-secret-change-in-production', ` ${DEVELOPMENT_SECRET_SEED}\n`]) {
       mutable.JWT_SECRET = value;
       mutable.SECRET_ENCRYPTION_KEY = value;
