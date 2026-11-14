@@ -33,8 +33,13 @@ test('restore covers all application schemas, invalidates OAuth and aborts befor
   assert.equal(out.match(/CREATE SCHEMA public/g).length, 1);
   assert.match(out, /oauth_refresh_invalidate_restore/);
   assert.match(out, /DELETE FROM public.oauth_tokens/);
-  assert.match(out, /SELECT 1 \/ \(\(:'acl_sha256'/);
-  assert.ok(out.indexOf('GRANT SELECT') < out.indexOf('SELECT 1 /'));
+  assert.match(out, /SELECT 1 OPERATOR\(pg_catalog\.\/\) \(\(:'acl_sha256' OPERATOR\(pg_catalog\.=\)/);
+  assert.ok(out.indexOf('GRANT SELECT') < out.indexOf('SELECT 1 OPERATOR(pg_catalog./)'));
+  // The catalogue runs under the empty search_path left by the dump preamble: nothing in it may follow that path.
+  assert.doesNotMatch(out, /pg_get_function_identity_arguments\(/);
+  assert.match(out, /pg_catalog\.unnest\(p\.proargtypes/);
+  assert.match(restoreSql('-- dump without the public schema', '', 'a'.repeat(64)),
+    /CREATE SCHEMA public;\nCOMMENT ON SCHEMA public IS 'standard public schema';/);
   assert.throws(() => restoreSql('', '', "'injection"));
 });
 
