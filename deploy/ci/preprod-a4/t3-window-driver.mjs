@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { buildProbes, claimDead, claimRecovery, effectiveTimeout, monoMs, readRecoveryClaim, releaseRecovery,
   runKubectl, loadState, saveState, stepTimeoutMs, utcNow, validateObservers, validateProbes } from './t3-lib.mjs';
-import { ROTATED_KEYS, preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
+import { ROTATED_KEYS, preCommitRollback, templateDigest, waitZeroPods } from './t3-rollback.mjs';
 import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
 import { checkApplicability } from './t3-applicability.mjs';
 import { preflight } from './t3-preflight-static.mjs';
@@ -303,8 +303,9 @@ export async function recover(ctx, state, reason) {
       ctx.print?.(`# recover: missing artifact relations: ${missingRelations.map(r => r.name).join(',')}`);
     }
     if (!info.committed) {
-      await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir,
-        tier: ctx.tier ?? ctx.config?.tier, dryRun: ctx.dryRun, note: ctx.print, probe: ctx.probe,
+      await preCommitRollback({ call: ctx.call,
+        templateDigests: state.templateDigests ?? ctx.config.templateDigests, preCmDir: ctx.config.preCmDir,
+        dryRun: ctx.dryRun, probeReadOnly: ctx.probeReadOnly, note: ctx.print, probe: ctx.probe,
         healthUrl: ctx.config.endpoints?.appHealth, jwksUrl: ctx.config.endpoints?.idpJwks,
         witness: ctx.config.witness,
         deadlineMs,
@@ -493,6 +494,27 @@ export function checkPriorityAdmission(ctx) {
   if (admitted.spec?.priorityClassName !== t3PriorityClass) throw new Error('priority_class_unadmitted');
 }
 
+export function checkTemplateDigests(ctx, state) {
+  if (ctx.dryRun && !ctx.probeReadOnly) {
+    ctx.print?.('# dry-run: deployment template digests');
+    return;
+  }
+  const configured = ctx.config.templateDigests;
+  const recorded = {};
+  for (const deploy of ['api', 'auth-idp', 'ui']) {
+    const expected = configured?.[deploy];
+    if (!/^[a-f0-9]{64}$/.test(String(expected ?? ''))) throw new Error(`template_digest_missing: ${deploy}`);
+    const live = JSON.parse(ctx.call(['get', 'deployment', deploy, '-o', 'json']) || '{}');
+    const actual = templateDigest(live.spec?.template);
+    if (actual !== expected) throw new Error(`template_digest_stale_before_fence: ${deploy}`);
+    recorded[deploy] = actual;
+  }
+  if (state) {
+    state.templateDigests = recorded;
+    saveState(ctx.stateDir, state);
+  }
+}
+
 // The watchdog and the recovery start from the configuration alone: same private file, read again.
 const verificationOf = ctx => ctx.verification
   ?? (ctx.dryRun ? null : verificationCredential(ctx.config.verificationCredentialFile, ctx.read).header);
@@ -541,6 +563,7 @@ async function driveInner(ctx, state) {
   ctx.verification = checkVerification(ctx);
   checkPostgresVersion(ctx, psql);
   checkPriorityAdmission(ctx);
+  checkTemplateDigests(ctx, state);
   const t0 = now();
   state.t0MonoMs = t0;
   const cutoff = ms => t0 + ms;
