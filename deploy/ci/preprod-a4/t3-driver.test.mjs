@@ -180,6 +180,34 @@ test('RBAC matrix covers exactly 50 couples', () => {
   assert.equal(RBAC_COUNT, 50);
 });
 
+test('W5 allows session-only source drift and stages the fenced seven-hash receipt before checkpoint', async () => {
+  const { ctx } = makeCtx({ scenario: { committed: true } });
+  let staged;
+  ctx.delivered = (_ctx,_script,env) => {
+    if (env.A4_STAGE === 'rehearsal') staged = JSON.parse(readFileSync(env.A4_REHEARSAL_FILE,'utf8'));
+    if (env.A4_PHASE === 'checkpoint') {
+      assert.equal(staged.sourceContentSha256,'b'.repeat(64));
+      for (const key of ['schemaSha256','journalSha256','remoteSnapshotDigest','mappingSha256','identityAssetSha256','connectorAssetSha256']) {
+        assert.equal(staged[key],'a'.repeat(64));
+      }
+    }
+    return '';
+  };
+  await drive(ctx);
+  assert.ok(staged);
+  assert.equal(JSON.parse(readFileSync(ctx.config.rehearsalFile)).sourceContentSha256,'a'.repeat(64));
+});
+
+test('W5 ACL drift refuses before staging rehearsal or starting the candidate', async () => {
+  const { ctx } = makeCtx();
+  const original = ctx.call,operations = [];
+  ctx.call = (args,input) => String(input).includes('AS acl_sha256') ? 'c'.repeat(64) : original(args,input);
+  ctx.delivered = (_ctx,_script,env) => { operations.push(env.A4_STAGE ?? env.A4_ACTION ?? env.A4_PHASE); return ''; };
+  assert.equal(await drive(ctx),3);
+  assert.ok(!operations.includes('rehearsal'));
+  assert.ok(!operations.includes('start-api'));
+});
+
 test('armed CLI hands a T+174s fault directly to one full-budget watchdog recovery', async () => {
   const { recover } = await import('./t3-window-driver.mjs');
   const { ctx, calls } = makeCtx({ scenario: { committed: true } });

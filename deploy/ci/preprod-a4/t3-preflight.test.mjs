@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { preflight } from './t3-preflight-static.mjs';
 import { approvedRequest, image } from './fixtures.mjs';
-import { digest } from './guards.mjs';
+import { digest, canonical } from './guards.mjs';
+import { STATE_HASHES } from './t3-rehearsal.mjs';
 import { applicabilityFixture } from './t3-applicability.test.mjs';
 import { emailProbe, expectedSigningKid, probeEndpoints } from './t3-probe-fixture.mjs';
 
@@ -22,10 +23,19 @@ export function inputs() {
   }
   const files = { '/annex': JSON.stringify(annex), '/authorization': JSON.stringify(authorization),
     '/remote': '{}', '/baseline': JSON.stringify(applicabilityFixture()), '/budgets': JSON.stringify(budgets) };
+  files['/rehearsal'] = JSON.stringify({ format: 'preprod-a4-rehearsal/2',candidateCommit: approvedRequest.candidateCommit,
+    candidateImage: image,candidateBootPassed: true,functionalAuthPassed: true,d11Passed: true,
+    ...Object.fromEntries(STATE_HASHES.map(key => [key,'a'.repeat(64)])) });
+  files['/acl'] = '-- synthetic ACL';
+  files['/acl-receipt'] = JSON.stringify({ aclCatalogSha256: 'a'.repeat(64),aclSqlSha256: digest(files['/acl']) });
+  const policy = { originalRehearsalSha256: digest(files['/rehearsal']),baselineSha256: digest(files['/baseline']),
+    reviewRef: 'track:qualified-applicability',allowedChanges: ['sourceContentSha256'] };
+  annex.applicabilityReceiptPolicySha256 = digest(canonical(policy)); files['/annex'] = JSON.stringify(annex);
   const config = { tier: 'preprod', namespace: 'sentropic-preprod', candidateImage: image,
     request: approvedRequest, images: { candidate: image, ui }, executionFile: '/annex',
     executionSha256: digest(files['/annex']), authorizationFile: '/authorization', kubeconfigFile: '/kube',
     remoteFile: '/remote', budgetsFile: '/budgets', applicabilityBaselineFile: '/baseline',
+    rehearsalFile: '/rehearsal',aclReceiptFile: '/acl-receipt',restoreAclFile: '/acl',applicabilityReceiptPolicy: policy,
     endpoints: probeEndpoints(), emailProbe, expectedSigningKid, initialSecretKeyNames: ['EMAIL_VERIFICATION_PEPPER'],
     externalProbes: [{ id: 'external-app',url: 'https://app.test/',expect: 200 },
       { id: 'external-idp',url: 'https://idp.test/.well-known/openid-configuration',expect: 200 }],
@@ -37,6 +47,17 @@ export function inputs() {
 test('offline preflight accepts complete bound inputs without invoking Kubernetes', () => {
   const f = inputs();
   assert.equal(preflight(f.config,f.read).namespace,'sentropic-preprod');
+});
+
+test('offline preflight refuses each missing annex action and a changed receipt policy', () => {
+  for (const action of ['fence','restrict','delete-custodian','start-api','resume','open-traffic']) {
+    const f = inputs(), annex = JSON.parse(f.files['/annex']);
+    delete annex.actions[action]; f.files['/annex'] = JSON.stringify(annex);
+    f.config.executionSha256 = digest(f.files['/annex']);
+    assert.throws(() => preflight(f.config,f.read),/action_not_authorized/);
+  }
+  const f = inputs(); f.config.applicabilityReceiptPolicy.allowedChanges.push('schemaSha256');
+  assert.throws(() => preflight(f.config,f.read),/receipt_policy/);
 });
 test('offline preflight refuses annex, baseline, keys, remote and budget drift', () => {
   for (const mutate of [
