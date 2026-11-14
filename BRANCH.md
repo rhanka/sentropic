@@ -29,6 +29,7 @@
   - [x] No conditional path needed; record rationale, impact and rollback before any exception.
 
 ## Feedback Loop
+- [x] Print inventory part 05 committed with source lines, targets and future hooks.
 - [x] Print inventory part 04 committed with source lines, targets and future hooks.
 - [x] Print inventory part 03 committed with source lines, targets and future hooks.
 - [x] Print inventory part 02 committed with source lines, targets and future hooks.
