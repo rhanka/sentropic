@@ -25,6 +25,7 @@
 - [x] SQL qualification detected ambiguous PostgreSQL internal-char concatenation in default ACL names; explicit text cast applied.
 - [x] ACL mismatch now raises an SQL error inside the transaction, rather than relying on psql quit status; round-trip refusal rechecked.
 - [x] Actual restore exposed global default ACL leakage during reload; reset inherited defaults before recreating objects, then replay original ACLs.
+- [x] Capture initdb public-schema owner/ACL from the catalogue because pg_dump may omit it; verify exact parity.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests

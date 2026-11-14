@@ -18,7 +18,8 @@ export function privateBytes(path) {
 export function captureAcl(ctx, dir) {
   const dump = ctx.call(['exec', ctx.config.postgresPod ?? 'postgres-0', '--',
     'pg_dump', '-U', ctx.config.postgresUser ?? 'app', '--schema-only']);
-  const sql = aclStatements(dump), hash = pg(ctx, aclSql()).trim();
+  const sql = aclStatements(dump) + pg(ctx, readFileSync(new URL('./t3-public-acl.sql', import.meta.url), 'utf8'));
+  const hash = pg(ctx, aclSql()).trim();
   if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('acl_capture_invalid');
   writeFileSync(`${dir}/acl.sql`, sql, { mode: 0o600 });
   const receipt = { aclCatalogSha256: hash, aclSqlSha256: digest(sql) };
