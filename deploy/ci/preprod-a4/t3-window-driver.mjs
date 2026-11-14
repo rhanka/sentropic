@@ -13,6 +13,9 @@ import { checkApplicability } from './t3-applicability.mjs';
 import { preflight } from './t3-preflight-static.mjs';
 import { prepareFencedReceipt } from './t3-rehearsal.mjs';
 import { VERIFICATION_SECRET, assertVerificationSecret, verificationCredential } from './verification-boundary.mjs';
+import { tierOf } from './guards.mjs';
+import { prioritized, t3PriorityClass } from './ops.mjs';
+import { inspectPostgresVersion, validatePostgresVersionReceipt } from './t3-fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const TOTAL_BUDGET_MS = 300_000;
@@ -167,8 +170,9 @@ export const STEP_CUTOFFS = { W1: 25_000, W2: 35_000, W3: 50_000, W4: 70_000,
 // phases (W0 matrix, rollout waits) legitimately block heartbeats, so staleness
 // alone is not a fault — staleness past the deadline is.
 function heartbeat(ctx, state, step) {
+  const now = ctx.now ?? monoMs;
   state.step = step;
-  state.heartbeatMonoMs = monoMs();
+  state.heartbeatMonoMs = now();
   // Step entry measured from the fence, on the same chronometer as every kubectl round trip.
   if (state.t0MonoMs != null) {
     chrono(`step:${step}`, chronoSince(state.heartbeatMonoMs - state.t0MonoMs), {},
@@ -176,7 +180,7 @@ function heartbeat(ctx, state, step) {
   }
   state.stepDeadlineMonoMs = state.t0MonoMs != null && STEP_CUTOFFS[step] != null
     ? state.t0MonoMs + STEP_CUTOFFS[step]
-    : monoMs() + 600_000;
+    : now() + 600_000;
   saveState(ctx.stateDir, state);
   if (ctx.timeoutRef) ctx.timeoutRef.deadlineMs = state.stepDeadlineMonoMs;
 }
@@ -263,7 +267,7 @@ export async function recover(ctx, state, reason) {
     } catch (err) {
       ctx.print?.(`# scale api 0 failed: ${err.message}`);
     }
-    waitZeroPods(ctx.call, Math.min(deadlineMs, monoMs() + 40_000), ['api']);
+    waitZeroPods(ctx.call, Math.min(deadlineMs, now() + 40_000), ['api'], now);
     let info;
     if (ctx.dryRun && !ctx.probeReadOnly) {
       // Pure dry-run executes nothing, not even reads: simulate the
@@ -300,7 +304,7 @@ export async function recover(ctx, state, reason) {
     }
     if (!info.committed) {
       await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir,
-        dryRun: ctx.dryRun, note: ctx.print, probe: ctx.probe,
+        tier: ctx.tier ?? ctx.config?.tier, dryRun: ctx.dryRun, note: ctx.print, probe: ctx.probe,
         healthUrl: ctx.config.endpoints?.appHealth, jwksUrl: ctx.config.endpoints?.idpJwks,
         witness: ctx.config.witness,
         deadlineMs,
@@ -414,7 +418,7 @@ export function awaitWritersGone(ctx, deadlineMs) {
   }
   const started = chronoStart();
   try {
-    waitZeroPods(ctx.call, deadlineMs);
+    waitZeroPods(ctx.call, deadlineMs, undefined, ctx.now ?? monoMs);
   } finally {
     chrono('writersGone', started, {}, { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE, T3_STATE_DIR: ctx.stateDir });
   }
@@ -424,7 +428,7 @@ export function awaitWritersGone(ctx, deadlineMs) {
 // With a missing or different Secret the restricted routers answer nothing useful after COMMIT,
 // when only the probes can accept the candidate; refused here, nothing is written.
 export function checkVerification(ctx) {
-  if (ctx.dryRun) {
+  if (ctx.dryRun && !ctx.probeReadOnly) {
     ctx.print?.(`# dry-run: secret ${VERIFICATION_SECRET} not compared with the local verification credential`);
     return null;
   }
@@ -434,6 +438,59 @@ export function checkVerification(ctx) {
   catch { throw new Error('verification_secret_missing'); }
   assertVerificationSecret(secret, users);
   return header;
+}
+
+export function checkPostgresVersion(ctx, psqlFn) {
+  if (ctx.dryRun && !ctx.probeReadOnly) {
+    ctx.print?.('# dry-run: postgres-version server and client pins');
+    return;
+  }
+  let receipt;
+  try {
+    const raw = ctx.read ? ctx.read(ctx.config.postgresVersionFile)
+      : readFileSync(ctx.config.postgresVersionFile, 'utf8');
+    receipt = JSON.parse(raw);
+  } catch {
+    throw new Error('postgres_version_receipt_invalid');
+  }
+  validatePostgresVersionReceipt(receipt, ctx.config.namespace);
+  inspectPostgresVersion(ctx, psqlFn);
+}
+
+export function checkPriorityAdmission(ctx) {
+  const tierName = ctx.tier ?? ctx.config?.tier;
+  if (!tierName && ctx.dryRun && !ctx.probeReadOnly) return;
+  const tier = tierOf({ A4_TIER: tierName });
+  if (!prioritized(tier).length) return;
+  if (ctx.dryRun && !ctx.probeReadOnly) {
+    ctx.print?.(`# dry-run: priority class ${t3PriorityClass} server admission`);
+    return;
+  }
+  const pod = {
+    apiVersion: 'v1',
+    kind: 'Pod',
+    metadata: { name: 'sentropic-t3-priority-probe', namespace: ctx.config.namespace },
+    spec: {
+      priorityClassName: t3PriorityClass,
+      automountServiceAccountToken: false,
+      restartPolicy: 'Never',
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: 'RuntimeDefault' } },
+      containers: [{
+        name: 'probe',
+        image: ctx.config.candidateImage,
+        command: ['true'],
+        resources: { requests: { cpu: '10m', memory: '32Mi' }, limits: { cpu: '50m', memory: '64Mi' } },
+        securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ['ALL'] }, readOnlyRootFilesystem: true },
+      }],
+    },
+  };
+  let admitted;
+  try {
+    admitted = JSON.parse(ctx.call(['create', '--dry-run=server', '-o', 'json', '-f', '-'], JSON.stringify(pod)) || '{}');
+  } catch {
+    throw new Error('priority_class_unadmitted');
+  }
+  if (admitted.spec?.priorityClassName !== t3PriorityClass) throw new Error('priority_class_unadmitted');
 }
 
 // The watchdog and the recovery start from the configuration alone: same private file, read again.
@@ -478,17 +535,20 @@ function assertPreviewSafe(ctx) {
 }
 
 async function driveInner(ctx, state) {
+  const now = ctx.now ?? monoMs;
   checkRbac(ctx);
   checkApplicability(ctx, psql, 'W0');
   ctx.verification = checkVerification(ctx);
-  const t0 = monoMs();
+  checkPostgresVersion(ctx, psql);
+  checkPriorityAdmission(ctx);
+  const t0 = now();
   state.t0MonoMs = t0;
   const cutoff = ms => t0 + ms;
-  const left = () => cutoff(TOTAL_BUDGET_MS) - monoMs();
+  const left = () => cutoff(TOTAL_BUDGET_MS) - now();
   // Per-command timeout: never outlive the current step's hard cutoff nor
   // the total budget. A sub-command that cannot finish in time fails fast
   // and routes to recovery instead of overrunning the step.
-  const to = (ms, step) => Math.min(stepTimeoutMs(ms, t0 + STEP_CUTOFFS[step]), left());
+  const to = (ms, step) => Math.min(stepTimeoutMs(ms, t0 + STEP_CUTOFFS[step], now()), left());
   heartbeat(ctx, state, 'W1');
   // Injected executors own their mutation boundary; real execution records
   // it inside t3-fence after authorization validation, before kubectl.
@@ -497,7 +557,7 @@ async function driveInner(ctx, state) {
     A4_AUTHORIZATION_FILE: ctx.config.authorizationFile,
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(30_000, 'W1'));
   state.fenceStarted = loadState(ctx.stateDir)?.fenceStarted === true;
-  if (monoMs() > cutoff(25_000)) return recover(ctx, state, 'W1_cutoff');
+  if (now() > cutoff(25_000)) return recover(ctx, state, 'W1_cutoff');
   heartbeat(ctx, state, 'W2');
   writeFileSync(`${ctx.stateDir}/request.json`, JSON.stringify(ctx.config.request), { mode: 0o600 });
   // B3: restrict only AFTER request.json exists (it asserts legacyWritersStopped).
@@ -522,7 +582,7 @@ async function driveInner(ctx, state) {
   }
   checkApplicability(ctx, psql, 'W2');
   saveState(ctx.stateDir, state);
-  if (monoMs() > cutoff(35_000)) return recover(ctx, state, 'W2_cutoff');
+  if (now() > cutoff(35_000)) return recover(ctx, state, 'W2_cutoff');
   heartbeat(ctx, state, 'W3');
   ctx.d3 = (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'wire',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(60_000, 'W3'));
@@ -530,7 +590,7 @@ async function driveInner(ctx, state) {
   (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'budgets',
     A4_BUDGETS_FILE: ctx.config.budgetsFile }, to(60_000, 'W3'));
   awaitWritersGone(ctx, cutoff(STEP_CUTOFFS.W3));
-  if (monoMs() > cutoff(50_000)) return recover(ctx, state, 'W3_cutoff');
+  if (now() > cutoff(50_000)) return recover(ctx, state, 'W3_cutoff');
   for (const [step, script, env] of [
     ['W4', 'ops.mjs', { A4_OPERATION: 'custodian' }],
     ['W5', 'run.mjs', { A4_PHASE: 'snapshot' }],
@@ -550,10 +610,10 @@ async function driveInner(ctx, state) {
         A4_STAGE: step === 'W4' ? 'inputs' : 'rehearsal',
         A4_REMOTE_FILE: ctx.config.remoteFile, A4_REHEARSAL_FILE: rehearsalFile }, to(30_000, step));
     }
-    if (monoMs() > cutoff(STEP_CUTOFFS[step])) return recover(ctx, state, `${step}_cutoff`);
+    if (now() > cutoff(STEP_CUTOFFS[step])) return recover(ctx, state, `${step}_cutoff`);
   }
   heartbeat(ctx, state, 'W7b');
-  if (monoMs() > cutoff(COMMIT_CUTOFF_MS)) return recover(ctx, state, 'W7_cutoff');
+  if (now() > cutoff(COMMIT_CUTOFF_MS)) return recover(ctx, state, 'W7_cutoff');
   (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'start-api',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(120_000, 'W7b'));
   let info;
@@ -575,16 +635,16 @@ async function driveInner(ctx, state) {
   if (!info.committed) return recover(ctx, state, 'commit_unverified');
   if (!info.apiReady) return recover(ctx, state, 'api_not_ready');
   heartbeat(ctx, state, 'W8');
-  if (monoMs() > cutoff(FINISH_CUTOFF_MS)) return recover(ctx, state, 'W8_cutoff');
+  if (now() > cutoff(FINISH_CUTOFF_MS)) return recover(ctx, state, 'W8_cutoff');
   const { probes, externalProbes, restrictedProbes } = buildProbes(ctx.config);
   await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print, verification: verificationOf(ctx),
     save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes,restrictedProbes,
     deadlineMs: t0 + FINISH_CUTOFF_MS });
   heartbeat(ctx, state, 'W9');
-  if (monoMs() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
+  if (now() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
   state.step = 'DONE';
   state.watchdogDone = true;
-  state.heartbeatMonoMs = monoMs();
+  state.heartbeatMonoMs = now();
   saveState(ctx.stateDir, state);
   return 0;
 }
