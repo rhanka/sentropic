@@ -175,6 +175,10 @@ describe('sqlite db blob store', () => {
         startAfter = result.keys[result.keys.length - 1];
       }
       expect(seen).toEqual(expected);
+      for (const selected of [expected[4]!, expected[4]!.slice(0, -1)]) {
+        expect(await listBlobKeysPaged(store, selected, { maxItems: 1, maxEncodedBytes: 1000 }))
+          .toEqual({ keys: [expected[4]] });
+      }
       await expect(store.listKeysPaged(prefix, {
         maxItems: 2, maxEncodedBytes: 1_000_000, startAfter: 'artifacts/foreign/blobs/sha256/' + 'f'.repeat(64),
       })).rejects.toThrow(/resume key/);

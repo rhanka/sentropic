@@ -139,7 +139,7 @@ export function createS3BlobStore(options: S3BlobStoreOptions): PublicationBlobS
       const maxKeys = Math.min(page.maxItems + 1, PAGE_FETCH_CAP);
       const out = await options.client.send(
         new ListObjectsV2Command({ Bucket: options.bucket, Prefix: prefix,
-          StartAfter: page.startAfter ?? prefix, MaxKeys: maxKeys }),
+          StartAfter: page.startAfter, MaxKeys: maxKeys }),
       );
       const keys = (out.Contents ?? []).flatMap((entry) => entry.Key === undefined ? [] : [entry.Key])
         .filter((key) => key.startsWith(prefix))
