@@ -38,6 +38,7 @@
 - [x] R5: offline authorization-code PKCE challenge contributes its own SHA; same-length challenge-only SQL mutation changes applicability.
 - [x] R5-B1: armed CLI delegates recovery immediately to the watchdog; no 60-second attempt precedes the full-budget recovery. Composite T+174s regression added.
 - [x] R5-B2/M3: bind original rehearsal and P-0 baseline to the annex policy; derive the final fenced receipt only after applicability/ACL equality and preserve both originals.
+- [x] W5 now validates applicability and ACLs before staging its derived receipt; driver doubles use a real original/fenced receipt pair.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests

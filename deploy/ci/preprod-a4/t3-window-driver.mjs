@@ -10,6 +10,7 @@ import { ROTATED_KEYS, preCommitRollback, waitZeroPods } from './t3-rollback.mjs
 import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
 import { checkApplicability } from './t3-applicability.mjs';
 import { preflight } from './t3-preflight-static.mjs';
+import { prepareFencedReceipt } from './t3-rehearsal.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const TOTAL_BUDGET_MS = 300_000;
@@ -488,13 +489,15 @@ async function driveInner(ctx, state) {
     heartbeat(ctx, state, step);
     (ctx.delivered ?? delivered)(ctx, script, { ...baseEnv(ctx), ...env,
       A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(120_000, step));
+    let rehearsalFile = ctx.config.rehearsalFile;
+    if (step === 'W5') {
+      checkApplicability(ctx, psql, 'W5');
+      rehearsalFile = prepareFencedReceipt(ctx,psql);
+    }
     if (step === 'W4' || step === 'W5') {
       (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'stage',
         A4_STAGE: step === 'W4' ? 'inputs' : 'rehearsal',
-        A4_REMOTE_FILE: ctx.config.remoteFile, A4_REHEARSAL_FILE: ctx.config.rehearsalFile }, to(30_000, step));
-    }
-    if (step === 'W5') {
-      checkApplicability(ctx, psql, 'W5');
+        A4_REMOTE_FILE: ctx.config.remoteFile, A4_REHEARSAL_FILE: rehearsalFile }, to(30_000, step));
     }
     if (monoMs() > cutoff(STEP_CUTOFFS[step])) return recover(ctx, state, `${step}_cutoff`);
   }

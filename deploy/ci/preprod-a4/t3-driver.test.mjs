@@ -11,6 +11,7 @@ import { preCommitRollback } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
 import { emailProbe, expectedSigningKid, probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
 import { applicabilityFixture } from './t3-applicability.test.mjs';
+import { rehearsalFixture } from './t3-rehearsal-fixture.mjs';
 
 const CANDIDATE = 'ghcr.io/rhanka/sentropic-api@sha256:candidate';
 const UI_IMAGE = 'ghcr.io/rhanka/sentropic-ui@sha256:ui';
@@ -58,7 +59,9 @@ export function makeCall(scenario = {}) {
     }
     if (cmd.startsWith('auth can-i')) return 'yes';
     if (args[0] === 'exec') {
+      if (args.some(a => String(a).includes('/run/cm-cutover/snapshot.json'))) return JSON.stringify(scenario.snapshot);
       const statement = String(input ?? '');
+      if (statement.includes('AS acl_sha256')) return 'a'.repeat(64);
       if (statement.includes('cutover-applicability-v1')) return JSON.stringify(applicabilityFixture());
       if (statement.includes('journal_present')) return scenario.journal === false ? 'f|0\n' : `t|${scenario.locks ?? 0}\n`;
       if (statement.includes('identity_committed')) return scenario.committed ? 't\n' : 'f\n';
@@ -129,7 +132,8 @@ export function makeCall(scenario = {}) {
 }
 
 export function makeCtx(overrides = {}) {
-  const { call, calls } = makeCall(overrides.scenario ?? {});
+  const scenario = overrides.scenario ?? {};
+  const { call, calls } = makeCall(scenario);
   const printed = [];
   // Default rotation key material: every full drive poses the W3 keys, so
   // tests get files unless they opt out (rotationKeyFiles: undefined).
@@ -144,6 +148,8 @@ export function makeCtx(overrides = {}) {
   writeFileSync(defaultKeys.idpSessionJwtFile, 'test-idp-jwt');
   const applicabilityBaselineFile = join(keyDir, 'baseline.json');
   writeFileSync(applicabilityBaselineFile, JSON.stringify(applicabilityFixture()));
+  const qualification = rehearsalFixture(keyDir,{ candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE,operationId: 'test' },JSON.stringify(applicabilityFixture()));
+  scenario.snapshot = qualification.snapshot;
   return {
     ctx: {
       call, printed,
@@ -159,9 +165,10 @@ export function makeCtx(overrides = {}) {
         endpoints: probeEndpoints(),
         emailProbe,
         expectedSigningKid,
-        request: { format: 'x', operationId: 'test' },
+        request: { format: 'x', operationId: 'test',candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE },
         rotationKeyFiles: defaultKeys,
         applicabilityBaselineFile,
+        ...qualification,
         ...(overrides.config ?? {}),
       },
     },
