@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
 import { assertAuthorization, assertRequest, canonical, digest, kubectl, privateInput, tierOf } from './guards.mjs';
-import { assertTrafficRestriction } from './verification-boundary.mjs';
+import { assertTrafficRestriction, verificationSpecValid } from './verification-boundary.mjs';
 import { chrono, chronoStart } from './t3-chrono.mjs';
 
 export function executionGrant(env, request, read = privateInput, tier = tierOf(env)) {
@@ -16,9 +16,7 @@ export function executionGrant(env, request, read = privateInput, tier = tierOf(
 
 export function validateMiddleware(grant) {
   const spec = grant.middlewareSpec;
-  if (!spec || digest(canonical(spec)) !== grant.middlewareSpecSha256
-    || Object.keys(spec).join(',') !== 'ipAllowList' || Object.keys(spec.ipAllowList).join(',') !== 'sourceRange'
-    || !spec.ipAllowList.sourceRange?.length || !spec.ipAllowList.sourceRange.every(range => /\/(32|128)$/.test(range))) {
+  if (!spec || digest(canonical(spec)) !== grant.middlewareSpecSha256 || !verificationSpecValid(spec)) {
     throw new Error('traffic_boundary_invalid');
   }
   return spec;
