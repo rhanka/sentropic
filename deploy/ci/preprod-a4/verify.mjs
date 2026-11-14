@@ -6,7 +6,7 @@ import { executionGrant } from './execution.mjs';
 export async function verify(env = process.env, call = kubectl, read = privateInput, probe = fetch) {
   const phase = env.A4_VERIFY_PHASE ?? 'internal';
   if (!['internal', 'http'].includes(phase)) throw new Error('phase_invalid');
-  const tier = tierOf(env), { namespace } = tier, health = `${tier.origin}/api/v1/health`;
+  const tier = tierOf(env), namespace = tier.destinationNamespace ?? tier.namespace, health = `${tier.origin}/api/v1/health`;
   read(env.A4_KUBECONFIG_FILE);
   const request = JSON.parse(read(env.A4_REQUEST_FILE)); assertRequest(request, tier);
   const k = args => call(env.A4_KUBECONFIG_FILE, args, undefined, namespace);
