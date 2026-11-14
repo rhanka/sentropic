@@ -71,6 +71,8 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- BRT4a-R3 (package release follow-through): aligning the provider version changes the APP-P1 manifest digest. Reproduced locally: 23 registry tests refused the old 0.2.27 pin. Recompute the 0.2.28 manifest with the unchanged `mcp:tools:invoke` projection, update the API pin and installed/dispatch fixtures, retain historical digest assertions, and qualify registry tests before pushing.
+- BRT4a-R3 verification: registry 25/25, physical installed/bundled registry 2/2, workspace dispatch 14/14 PASS. APP-P1 digest computed from built 0.2.28: `b7d6d576986acc1256b6b23c988f70d5496eb9e93b7cb697cc37649b8bea5262`.
 - BRT4a-R2 (CI 43546569187, resolved in source): the packed consumer compared provider version 0.2.27 with package 0.2.28. Align `ARTIFACTS_PROVIDER_VERSION` to 0.2.28, rebuild the archive and regenerate its selected-fixture integrity. Verification: the existing packed-consumer probe, unchanged.
 - BRT4a-R2 verification: `make probe-artifacts-packed-consumer` PASS (packed example, core, consumer and adapters); guarded archive sha256 `047e744b9d4593e2f49293df87eb610b8d01b2667a4361ee5e92534171c4b831`.
 - BRT4a-R1 (rebase integration, resolved): main added a private builder cache using UUID manifest keys under `builder-cache/`, while the placement composite only accepts artifact digest keys. Keep `productPrivateCacheBlobs` on the existing private object store; artifact DB/S3 placement remains scoped to artifact blobs. Evidence: `cache-storage.ts` writes a UUID manifest and `createPostgresBlobPlacements` refuses that key.
