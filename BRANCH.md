@@ -25,10 +25,13 @@
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `BRANCH.md`
   - `package-lock.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `.github/workflows/**`
 - **Exception process**:
   - [x] BR21-EX1: BRANCH.md is required execution metadata; impact limited to this branch plan; rollback by removing it before integration.
   - [x] BR21-EX2: synchronize only cluster-mesh version metadata in package-lock.json through Make; required by the failing CI train lock-sync gate; no dependency resolution changes; rollback with the package version bump.
+  - [x] BR21-EX3: synchronize only cluster-mesh candidate version metadata in the two selected packaging fixture manifests; lazy/source CI fails on the stale local dev.26 archive; no dependency or integrity changes; rollback with the package version bump.
 
 ## Feedback Loop
 - [ ] Conductor owns Track writes and DS/h2a consumer receipts; questions recorded in .tmp/rv/v8-contract-questions.md.
@@ -37,6 +40,8 @@
 - [x] Sandbox qualification: 193/193 tests pass with a 4 GiB tmpfs at /tmp; default overlay storage still times out on durable custody revocation; no threshold increased.
 - [x] Review R2: independent correctness/interop and security legs APPROVE code HEAD 197f6a6b9; external consumer gates remain pending.
 - [x] CI 43533595879 found the missing root lock version synchronization; BR21-EX2 bounds its correction to package version metadata.
+- [x] CI 43533848425 lazy/source failures identify stale dev.26 fixture archive references; BR21-EX3 bounds their synchronization to the dev.27 candidate.
+- [x] Packaging verification after fixture synchronization: tests/packaging source mode passes 92 with 60 installed-only skips; test-lazy-package passes all 143 installed-consumer tests using tmpfs without increasing timeouts.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests or flaky exceptions.
