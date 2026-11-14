@@ -54,7 +54,7 @@
   - [x] Confirm approved plan digest and `harness check branch` PASS.
   - [x] Preserve root checkout and isolate C0 on origin/main.
 - [ ] Lot 1 — Exhaustive ownership ledger
-  - [ ] `spec/APP_VUE_C0_HOST_OWNERSHIP.md`: continuous source ranges covering all four pinned hosts, with package/host ownership and destination lot.
+  - [x] `spec/APP_VUE_C0_HOST_OWNERSHIP.md`: continuous source ranges covering all four pinned hosts, with package/host ownership and destination lot.
   - [ ] Cross-check reference ranges against git blobs; account for current-main drift separately.
 - [ ] Lot 2 — Behaviour, DOM and DS audit
   - [ ] `spec/APP_VUE_C0_AUDIT.md`: three-column host/package/immo comparison, transfer list and compatibility requirements.
