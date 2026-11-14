@@ -111,6 +111,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Freeze a627f54e5 migration runner; reproduce its startup failure with 0009-0014 receipts.
   - [x] Replace the claimed mid-batch test with an actual SIGKILL after durable verified copies, before the switch; resume without a cursor (cmf-s3-placement-migrate.test.ts).
   - [x] Reproduce unbounded host S3 requests and S3-only maintenance enumeration; delegate keyset pages through both wrappers and collect both configured stores.
+  - [x] Qualify offline data-preserving image rollback/resume and bounded migration DDL under contention (artifacts-host-migrations.test.ts).
   - [ ] Push verified head, await CI, append FIX R2 report and remove isolated volumes.
 - [ ] **Lot 7 — Rebase and qualify exact head (2026-11-13)**
   - [x] Rebase on origin/main; preserve prior uncommitted metadata in a stash.
