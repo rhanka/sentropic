@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
@@ -17,8 +18,12 @@ const bundle = (jwt: string | undefined, encryption: string | undefined) => {
     encryption === undefined ? '' : `SECRET_ENCRYPTION_KEY="${encryption}"`,
     'OAUTH_SIGNING_KEK=synthetic-kek-for-bundle-only'].join('\n'));
   writeFileSync(join(dir, 'kubectl'), `#!/usr/bin/env node
-import('node:fs').then(fs => {
-  const args = process.argv.slice(2).map(arg => arg.startsWith('--from-literal=') ? arg.split('=')[1] : arg);
+Promise.all([import('node:fs'), import('node:crypto')]).then(([fs, crypto]) => {
+  const args = process.argv.slice(2).map(arg => {
+    if (!arg.startsWith('--from-literal=')) return arg;
+    const [name, ...parts] = arg.slice('--from-literal='.length).split('=');
+    return name + ':sha256:' + crypto.createHash('sha256').update(parts.join('=')).digest('hex');
+  });
   fs.appendFileSync(process.env.T1_CALLS, JSON.stringify(args) + '\\n');
   if (args.includes('create')) process.stdout.write('{}');
   else process.stdin.resume();
@@ -56,9 +61,22 @@ describe('k8s secret bundle preflight', () => {
     const encryption = 'e'.repeat(32);
     const result = bundle(jwt, encryption);
     expect(result.status).toBe(0);
+    for (const [name, value] of [['JWT_SECRET', jwt], ['SECRET_ENCRYPTION_KEY', encryption]]) {
+      expect(result.calls).toContain(`${name}:sha256:${createHash('sha256').update(value).digest('hex')}`);
+    }
     for (const name of ['JWT_SECRET', 'SECRET_ENCRYPTION_KEY', 'OAUTH_SIGNING_KEK']) expect(result.calls).toContain(name);
     expect(result.calls).toContain('apply');
     expect(result.output + result.calls).not.toContain(jwt);
     expect(result.output + result.calls).not.toContain(encryption);
+  });
+
+  it('should preserve spaces and comment characters inside quoted provisioned keys', () => {
+    const jwt = ` ${'j'.repeat(32)} #literal-suffix= `;
+    const encryption = ` ${'e'.repeat(32)} #other-suffix= `;
+    const result = bundle(jwt, encryption);
+    expect(result.status).toBe(0);
+    for (const [name, value] of [['JWT_SECRET', jwt], ['SECRET_ENCRYPTION_KEY', encryption]]) {
+      expect(result.calls).toContain(`${name}:sha256:${createHash('sha256').update(value).digest('hex')}`);
+    }
   });
 });

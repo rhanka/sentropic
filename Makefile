@@ -4222,9 +4222,12 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 			sub(/^[[:space:]]*export[[:space:]]+/, "", line); \
 			if (index(line, key "=") == 1) { \
 				value = substr(line, length(key) + 2); \
-				sub(/[[:space:]]+#.*$$/, "", value); \
-				gsub(/^"/, "", value); \
-				gsub(/"$$/, "", value); \
+				if (value ~ /^"/) { \
+					sub(/^"/, "", value); \
+					sub(/"[[:space:]]*(#.*)?$$/, "", value); \
+				} else { \
+					sub(/[[:space:]]+#.*$$/, "", value); \
+				} \
 			} \
 		} \
 		END { printf "%s", value }' "$(K8S_ENV_FILE)" ; } ; \

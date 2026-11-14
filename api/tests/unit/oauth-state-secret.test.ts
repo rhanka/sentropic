@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 
 import { createOAuthHmacStateCodec, type OAuthContinuationState } from '@sentropic/auth-hono';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -54,7 +54,8 @@ describe('OAuth continuation state key separation', () => {
 
   it('should refuse short, blank and public keys in deployed OAuth, Drive and JWKS resolvers', () => {
     Object.assign(mutable, { NODE_ENV: 'production', DISABLE_RATE_LIMIT: 'false', ADMIN_EMAIL: 'deployed@example.test' });
-    for (const value of ['', 'x', 'x'.repeat(31), ' '.repeat(32), DEVELOPMENT_SECRET_SEED]) {
+    for (const value of [undefined, '', 'x', 'x'.repeat(31), ' '.repeat(32), DEVELOPMENT_SECRET_SEED,
+      'dev-idp-signing-kek-change-in-production']) {
       env.OAUTH_SIGNING_KEK = value;
       env.JWT_SECRET = value;
       expect(() => createSentropicOAuthOptions()).toThrow(/provisioned/);
@@ -65,12 +66,15 @@ describe('OAuth continuation state key separation', () => {
 
   it('should select a provisioned JWT for state but never for deployed JWKS', async () => {
     Object.assign(mutable, { NODE_ENV: 'production', DISABLE_RATE_LIMIT: 'false', ADMIN_EMAIL: 'deployed@example.test' });
-    env.OAUTH_SIGNING_KEK = 'short';
     env.JWT_SECRET = 'j'.repeat(32);
-    const state = await createSentropicOAuthOptions().stateCodec.seal(statePayload);
-    await expect(createOAuthHmacStateCodec({ secret: env.JWT_SECRET }).unseal(state)).resolves.toEqual(statePayload);
-    expect(() => createGoogleDriveOAuthState({ userId: 'u', workspaceId: 'w' })).not.toThrow();
-    expect(() => createJwksAdapter()).toThrow(/OAUTH_SIGNING_KEK/);
+    for (const value of ['short', ' dev-idp-signing-kek-change-in-production ']) {
+      env.OAUTH_SIGNING_KEK = value;
+      const state = await createSentropicOAuthOptions().stateCodec.seal(statePayload);
+      await expect(createOAuthHmacStateCodec({ secret: env.JWT_SECRET }).unseal(state)).resolves.toEqual(statePayload);
+      const [payload, signature] = createGoogleDriveOAuthState({ userId: 'u', workspaceId: 'w' }).state.split('.');
+      expect(signature).toBe(createHmac('sha256', env.JWT_SECRET).update(payload).digest('base64url'));
+      expect(() => createJwksAdapter()).toThrow(/OAUTH_SIGNING_KEK/);
+    }
     env.OAUTH_SIGNING_KEK = 'k'.repeat(32);
     expect(() => createJwksAdapter()).not.toThrow();
   });
@@ -80,6 +84,17 @@ describe('OAuth continuation state key separation', () => {
     env.OAUTH_SIGNING_KEK = '';
     env.JWT_SECRET = '';
     expect(() => createJwksAdapter({ oauthSigningKek: '' })).not.toThrow();
+  });
+
+  it('should preserve the provisioned KEK bytes and precedence in deployed state codecs', async () => {
+    Object.assign(mutable, { NODE_ENV: 'production', DISABLE_RATE_LIMIT: 'false', ADMIN_EMAIL: 'deployed@example.test' });
+    env.OAUTH_SIGNING_KEK = ` ${'k'.repeat(32)} `;
+    env.JWT_SECRET = 'j'.repeat(32);
+    const state = await createSentropicOAuthOptions().stateCodec.seal(statePayload);
+    await expect(createOAuthHmacStateCodec({ secret: env.OAUTH_SIGNING_KEK }).unseal(state)).resolves.toEqual(statePayload);
+    await expect(createOAuthHmacStateCodec({ secret: env.JWT_SECRET }).unseal(state)).resolves.toBeNull();
+    const [payload, signature] = createGoogleDriveOAuthState({ userId: 'u', workspaceId: 'w' }).state.split('.');
+    expect(signature).toBe(createHmac('sha256', env.OAUTH_SIGNING_KEK).update(payload).digest('base64url'));
   });
 });
 

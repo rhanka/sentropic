@@ -13,6 +13,7 @@ const PUBLIC_SEEDS: ReadonlySet<string> = new Set([
   DEVELOPMENT_EMAIL_TICKET_SEED,
   // The standalone IdP dev compose default (docker-compose.idp.yml).
   'dev-idp-jwt-secret-change-in-production',
+  'dev-idp-signing-kek-change-in-production',
 ]);
 
 export type DeploymentSecretName = 'JWT_SECRET' | 'SECRET_ENCRYPTION_KEY';

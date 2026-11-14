@@ -92,7 +92,7 @@ export const seedOAuthClients = async (): Promise<SeededOAuthClient[]> => {
           name: values.name,
           redirectUris: values.redirectUris,
           requirePkce: values.requirePkce,
-          requireTenant: values.requireTenant,
+          ...(client.requireTenant === undefined ? {} : { requireTenant: client.requireTenant }),
           responseTypes: values.responseTypes,
           tokenEndpointAuthMethod: values.tokenEndpointAuthMethod,
           updatedAt: now,

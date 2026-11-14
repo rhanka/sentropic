@@ -38,6 +38,8 @@
 - [x] BRT1-EX1 — Authorized by cm-t1-w9 packet: change only k8s-bundle-secret to deliver JWT_SECRET and reject short/blank JWT_SECRET or SECRET_ENCRYPTION_KEY before any apply. Impact: incomplete deployed bundles fail closed. Rollback: revert this branch's bundle hunk; preserve provisioned cluster secrets. Local scope-check may use the installed host harness via an ignored make overlay, avoiding a tooling rebuild.
 - [x] Track: update this mergeable source artifact; conductor imports it as the designated single writer. No concurrent .track writes.
 - [x] No browser UAT: these are secret resolvers, bundle generation and database seed defaults; synthetic tests cover behavior without cluster access.
+- [x] Review corrections: reject the committed IdP KEK seed in deployed resolvers; only update a seeded client's tenant policy when explicitly declared (A-R3-3).
+- [x] Bundle review correction: preserve quoted hash/comment bytes and assert received synthetic key digests, including padding and equals signs.
 
 ## AI Flaky tests
 - [x] No AI calls in scoped acceptance tests; no flaky allowance requested.
@@ -46,7 +48,7 @@
 - [x] Mono-branch; independent code review before final push.
 
 ## UAT Management (in orchestration context)
-- [ ] Synthetic acceptance only; do not alter live secrets or existing design-system registrations.
+- [x] Synthetic acceptance only; do not alter live secrets or existing design-system registrations.
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — Read rules, ratified plan and A-R3-5/w9 criteria; mechanically check branch and isolate ports.
@@ -58,6 +60,10 @@
 - [x] Lot 3 — Explicit tenant-free design-system seed; preserve tenant requirement for other sample clients.
   - [x] `api/tests/unit/auth/oauth-client-seed.test.ts`: observe insert/update values without a live database.
 - [ ] Lot 4 — Scoped local tests through make, independent review, scope gate, atomic commits below 150 lines.
+  - [x] 24 scoped deployment/OAuth/JWKS/DS/bundle assertions pass after review corrections; 3 existing Drive sealing assertions pass.
+  - [x] ESLint passes for all five modified source files; repository config does not lint test files.
+  - [x] An initial missing synthetic SCW_TEM_SECRET_KEY was added to the isolated test overlay; no real credentials loaded.
+  - [x] The unfiltered Drive file needs Postgres for an unrelated callback-settings case; local acceptance targets sealing only, full file remains a CI gate.
 - [ ] Lot 5 — Push, PR with this document as body, exact-head green CI, report and done marker; no merge.
 
 ## Deferred to conductor

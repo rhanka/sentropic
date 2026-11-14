@@ -21,6 +21,8 @@ describe('OAuth client seed tenant policy', () => {
       { clientId: 'example-dpop-rp', requireTenant: true },
       { clientId: 'design-system', requireTenant: false },
     ]);
-    expect(observed.updates.map(row => row.requireTenant)).toEqual([true, true, false]);
+    expect(observed.updates[0]).not.toHaveProperty('requireTenant');
+    expect(observed.updates[1]).not.toHaveProperty('requireTenant');
+    expect(observed.updates[2]).toHaveProperty('requireTenant', false);
   });
 });
