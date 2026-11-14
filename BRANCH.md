@@ -1,61 +1,90 @@
-# Feature: Disable artifact builds and live workers without capacity
+# Feature: VD-2.0 V8 artifact delivery spike
 
 ## Objective
-- [x] Apply the owner directive to stop using removed build capacity; preserve builder code until V8 step 7.
+- [ ] Answer all sixteen questions of spec section 8.2 with executable evidence.
 
 ## Scope / Guardrails
-- [x] Worktree: `tmp/worktrees/builder-gate-off`; branch: `fix/artifact-builder-gate-off`, based on `origin/main`.
-- [x] Make-only, Docker-first; no cluster access, deployment, merge, secrets or package changes.
-- [x] Environment: `fix-builder-gate-off`; API_PORT=9860, UI_PORT=6060, MAILDEV_UI_PORT=1960; verified free with `ss -ltn`.
-- [x] Manifest target rejects `ENV=fix-builder-gate-off` with `ERROR: use ENV=test-*`; use isolated `ENV=test-fix-builder-gate-off` for that target without bypassing its guard.
-- [x] Free disk before testing: 35 GB (minimum 30 GB).
+- [x] Build the approved VD-2.0 lot; no production implementation.
+- [x] Worktree: `tmp/worktrees/v8-spike`; branch: `feat/v8-vd-2-0-spike`.
+- [x] Docker-first; make-only; no Python; no secrets in evidence.
+- [x] Environment: `feat-v8-spike`; API_PORT=9360; UI_PORT=5560; MAILDEV_UI_PORT=1460.
+- [x] Ports checked free before startup; root dev environment reserved.
+- [x] Stop Docker builds below 30 GB free; use docker-slot.sh per command.
+- [x] Keep latency targets unchanged; report N, p50, p95 and clock.
+- [x] Re-read VD-2.0 before each commit; commits below 150 changed lines.
+- [x] No package source changes or version bumps.
+- [x] Push and open PR; do not merge; wait for CI on exact head.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `deploy/k8s/overlays/**`
-  - `deploy/ci/artifact-content/**`
-  - `BRANCH.md`
+  - `packages/cluster-mesh/tests/compile-spike/**`
+  - `packages/skills/tests/sandbox/**`
+  - `e2e/tests/harness/**`
+  - `spec/SPEC_EVOL_V8_ARTIFACT_DELIVERY.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `api/**`
-  - `packages/**`
-  - `.track/**`
+  - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `deploy/k8s/base/**` (only if needed)
+  - `BRANCH.md`
+  - `api/drizzle/*.sql`
   - `.github/workflows/**`
-- **Exception process**:
-  - [x] No exceptions needed; report any blocking scope change before editing.
+- [x] The spec allowance covers section 8 only; preserve other sections.
+- [x] Exceptions require BRxx-EXn with rationale, impact and rollback before editing.
 
 ## Feedback Loop
-- [x] Track imports belong to the conductor as designated single writer; this branch provides the mergeable request and lot source.
-- [x] Bundle assertions: 211 pass. Full target fails A4 process observation deadlines; serial execution also fails and was reverted. No timeout or test weakened; exact-head CI remains required.
-- [x] Shared disk fell below 30 GB after tests; no new local image build permitted. Cleanup requested for this lane only.
-- [x] Astra found no configuration defect; P2 requires complete passing manifest/A4 validation. Keep PR draft until exact-head CI resolves this gate.
+- [x] BR00-EX1: branch metadata only. Reason: the packet mandates BRANCH.md; impact: no runtime change; rollback: delete BRANCH.md at branch closure.
+- [ ] Track import belongs to the conductor, the designated single writer.
+- [ ] Region harness, immo production image and node flavor need verified receipts.
 
 ## AI Flaky tests
-- [x] No provider-dependent tests or flaky acceptance.
+- [x] No AI-provider calls in this spike; no flaky acceptance or timeout increase.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; one configuration fix and its regression checks.
+- [x] Mono-branch; dedicated D6-A branch slot, independent of VD-2.1.
+- [x] No integration or merge of the sibling contract lane.
 
 ## UAT Management (in orchestration context)
-- [x] No interactive UAT: no application code changes and cluster access is prohibited.
+- [x] Browser qualification runs in Docker on the spike's independent origin.
+- [x] No root dev/UAT stack changes.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and constraints**
-  - [x] Read rules, common packet, branch template and the builder/live composition.
-  - [x] Create isolated worktree and pass mechanical `harness check branch`.
-- [x] **Lot 1 — Close capacity gates**
-  - [x] Disable preprod `ARTIFACT_BUILDER_ENABLED` in `deploy/k8s/overlays/preprod/patch-api-config.yaml`.
-  - [x] Disable preprod `APP_ARTIFACT_LIVE_ENABLED` in `deploy/k8s/overlays/preprod/patch-artifact-content-config.yaml`.
-  - [x] Confirm prod builder absent and prod live closed; preserve published content and builder code.
-  - [x] Update tier expectations and negative mutations in `deploy/ci/artifact-content/bundle-checks.mjs` and `bundle.selftest.mjs`.
-- [ ] **Lot 2 — Validation and handoff**
-  - [x] Run manifest/bundle checks through the existing make target, including both tiers and A4 overlays; record A4 process failures without accepting them.
-  - [x] Complete independent code review and mechanical scope verification before commit; retain the unresolved P2 validation finding above.
-  - [ ] Push branch and create PR using this file as its body; post the execution checklist.
-  - [ ] Confirm CI green on exact head; do not merge or deploy.
-  - [ ] Write `.tmp/rv/builder-gate-off.md` with consumer impact and residual platform references, then `.done`.
-  - [x] Clean the isolated environment with `make down-volumes`; `make disk-hygiene` reclaimed 0 B.
+  - [x] Read rules, packet, spec architecture, VD-2.0 row and sixteen questions.
+  - [x] Create isolated worktree from origin/main at e44e2e2bf.
+  - [x] Mechanical `harness check branch` passes.
+  - [x] Check disk and isolated ports.
+- [ ] **Lot 1 — Preview probe first (Q6)**
+  - [x] Add `e2e/tests/harness/00-v8-preview.spec.ts` and isolated runner.
+  - [x] Load exact MapLibre 6.4.1, 6.14.0 and PDF.js 4.10.38 closures.
+  - [x] Measure real module workers in Chromium, Firefox and WebKit.
+  - [ ] Assert worker-relative imports, import-map control and opaque-frame control.
+- [ ] **Lot 2 — Compiler and isolate (Q1–5, Q8, Q11–14)**
+  - [x] Commit F-LIVE-S/M/L and block dependency edit matrix.
+  - [x] Load pinned bootstrap and exercise the block memo in the real addon.
+  - [x] Exercise pinned bootstrap via SandboxRuntime and isolated-vm adapter.
+  - [x] Open D12 on S/style under 500m/512Mi (N=200, p50=1.680124 ms, p95=4.267401 ms); no target relaxed.
+  - [x] Compare memo/whole bytes on 21 crossing cases and dispose real compiler loops at five stages.
+  - [ ] Compare bytes, imported types, CSS passes, syntax and closure sizes.
+  - [ ] Measure cold/fresh/retained contexts, pod limits, memory and cancellation.
+- [ ] **Lot 3 — Browser runtime (Q7, Q9–10, Q14–16)**
+  - [x] Probe import-map integrity, held imports and page clock in three engines; 24 local checks pass.
+  - [x] Qualify functional Vapor rerender/recreation and sibling state paths in all three engines (24 checks); latency gate remains open.
+  - [x] Verify byte equality and NFC witnesses between isolate and three browser workers on S/M/L (9 checks).
+  - [x] Compare CSS/import/font witnesses against Vite in three engines; record the published DS theme build refusal separately.
+  - [ ] Probe import-map integrity, CSS/font parity and Vapor hot replacement.
+  - [ ] Record setup/render wrappers, state witnesses and swap spans.
+  - [ ] Measure worker compiles, pre-armed import and network/clock uncertainty.
+- [ ] **Lot 4 — Evidence and review**
+  - [x] Pass all 69 browser probes with host-UID output and readonly tools; preserve the original 66-check snapshot.
+  - [x] Receive APPROVE_DIAGNOSTIC_ONLY from independent Astra follow-up; no VD-2.0 gate approval or generic MCP consensus claimed.
+  - [x] Verify MapLibre constructor hooks and reject an empty-worker control in all engines (18 targeted checks).
+  - [x] Address independent audit findings on adapter failure propagation and explicit evidence-generation recipes.
+  - [x] Record all sixteen question statuses and raw evidence; the exit gate remains unqualified.
+  - [x] Preserve 500m, admitted 100m and verified unlimited cgroup measurements for D12.
+  - [ ] Record sixteen answers and exact commands; open D12/D13 on measured misses.
+  - [ ] Independent review and reconcile findings.
+  - [ ] Scope-check before every selective-stage make commit.
+  - [ ] Push, PR with this file as body, exact-head green CI; no merge.
+  - [ ] Tear down environment volumes and write report and completion marker.
