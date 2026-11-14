@@ -27,14 +27,18 @@ export function compileCanonicalJson(value: unknown): string {
     ancestors.add(input);
     let encoded: string;
     if (Array.isArray(input)) {
-      if (Object.keys(input).length !== input.length) return fail();
-      encoded = '[' + input.map(item => encode(item, depth + 1)).join(',') + ']';
+      if (Reflect.ownKeys(input).length !== input.length + 1) return fail();
+      encoded = '[' + Array.from({ length: input.length }, (_, index) => {
+        const descriptor = Object.getOwnPropertyDescriptor(input, String(index));
+        if (!descriptor?.enumerable || !('value' in descriptor)) return fail();
+        return encode(descriptor.value, depth + 1);
+      }).join(',') + ']';
     } else {
       if (Object.getPrototypeOf(input) !== Object.prototype && Object.getPrototypeOf(input) !== null) return fail();
       if (Object.getOwnPropertySymbols(input).length) return fail();
-      encoded = '{' + Object.keys(input).sort().map(key => {
+      encoded = '{' + Object.getOwnPropertyNames(input).sort().map(key => {
         const descriptor = Object.getOwnPropertyDescriptor(input, key)!;
-        if (!('value' in descriptor)) return fail();
+        if (!descriptor.enumerable || !('value' in descriptor)) return fail();
         return scalarString(key) + ':' + encode(descriptor.value, depth + 1);
       }).join(',') + '}';
     }
