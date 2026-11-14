@@ -102,11 +102,49 @@ describe('graceful shutdown', () => {
     expect(calls.filter((call) => call === 'close')).toHaveLength(1);
   });
 
+  it('should run onStop hooks once on signal to clear intervals and pause background workers', () => {
+    const proc = fakeProcess();
+    const { server } = fakeServer(false);
+    const controller = installGracefulShutdown({ log, proc });
+    let ticks = 0;
+    const interval = setInterval(() => { ticks += 1; }, 1_000);
+    const pauseQueue = vi.fn();
+    controller.onStop(() => {
+      clearInterval(interval);
+      pauseQueue();
+      return Promise.reject(new Error('non-fatal stop error'));
+    });
+    controller.attach(server);
+
+    vi.advanceTimersByTime(2_000);
+    expect(ticks).toBe(2);
+
+    proc.emit('SIGTERM');
+    proc.emit('SIGINT');
+    expect(pauseQueue).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(SHUTDOWN_DRAIN_MS);
+    expect(ticks).toBe(2);
+    expect(proc.exit).toHaveBeenCalledTimes(1);
+  });
+
   it('should be installed by both server entry points and attached to their listeners', () => {
     for (const entry of ['../../src/index.ts', '../../../apps/auth-idp/index.ts']) {
       const source = readFileSync(fileURLToPath(new URL(entry, import.meta.url)), 'utf8');
       expect(source).toContain("const shutdown = installGracefulShutdown({ log: logger, drainMs: env.NODE_ENV === 'production' ? undefined : 0 });");
       expect(source).toMatch(/shutdown\.attach\(serve\(\{ fetch: app\.fetch, port \}\)\);/);
     }
+  });
+
+  it('should stop every periodic sweep interval and pause QueueManager on API shutdown', () => {
+    const source = readFileSync(fileURLToPath(new URL('../../src/index.ts', import.meta.url)), 'utf8');
+    const allIntervals = source.match(/\bsetInterval\(/g) ?? [];
+    const trackedIntervals = source.match(/trackSweep\(setInterval\(/g) ?? [];
+    expect(allIntervals.length).toBeGreaterThanOrEqual(6);
+    expect(trackedIntervals.length).toBe(allIntervals.length);
+    expect(source).toContain('shutdown.onStop(');
+    expect(source).toMatch(/loadedQueueManager\?\.pause\(\)/);
+    expect(source).toContain('reservationReaper.stop()');
+    expect(source).toContain('outboxDispatcher.stop()');
   });
 });

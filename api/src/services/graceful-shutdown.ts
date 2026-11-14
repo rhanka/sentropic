@@ -33,6 +33,7 @@ const SIGNALS: readonly NodeJS.Signals[] = ['SIGTERM', 'SIGINT'];
 export function installGracefulShutdown(options: GracefulShutdownOptions) {
   const proc: ShutdownProcess = options.proc ?? process;
   const drainMs = options.drainMs ?? SHUTDOWN_DRAIN_MS;
+  const stopHooks: Array<() => unknown> = [];
   let server: ClosableServer | null = null;
   let stopping = false;
 
@@ -40,6 +41,13 @@ export function installGracefulShutdown(options: GracefulShutdownOptions) {
     if (stopping) return;
     stopping = true;
     options.log.info(`${signal} received, shutting down`);
+    for (const hook of stopHooks.splice(0)) {
+      try {
+        Promise.resolve(hook()).catch(() => {});
+      } catch {
+        // Best-effort cleanup on shutdown signal.
+      }
+    }
     const current = server;
     if (!current) {
       proc.exit(0);
@@ -66,6 +74,9 @@ export function installGracefulShutdown(options: GracefulShutdownOptions) {
   return {
     attach(next: ClosableServer) {
       server = next;
+    },
+    onStop(hook: () => unknown) {
+      stopHooks.push(hook);
     },
   };
 }
