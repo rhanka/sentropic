@@ -72,7 +72,7 @@ export function preflight(config, read = privateInput) {
     if (!read(config.rotationKeyFiles?.[name]).trim()) throw new Error('rotation_key_empty');
   }
   for (const name of ['api', 'auth-idp', 'ui']) {
-    if (!/^[1-9][0-9]*$/.test(String(config.revisions?.[name]))) throw new Error('revision_missing');
+    if (!/^[a-f0-9]{64}$/.test(String(config.templateDigests?.[name] ?? ''))) throw new Error('template_digest_missing');
   }
   read(`${config.preCmDir}/pre-cm-api.yaml`);
   read(`${config.preCmDir}/pre-cm-auth-idp.yaml`);

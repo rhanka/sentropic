@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { COMMIT_CUTOFF_MS, FINISH_CUTOFF_MS, RBAC_COUNT, TOTAL_BUDGET_MS,
   STEP_CUTOFFS, awaitWritersGone, buildProbes, checkRbac, checkVerification, classify, drive, loadSql, splitSql } from './t3-window-driver.mjs';
 import { isReadOnly, loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
-import { preCommitRollback } from './t3-rollback.mjs';
+import { preCommitRollback, templateDigest } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
 import { emailProbe, expectedSigningKid, probeEndpoints, probeReply, observerProbes,
   verificationFile, verificationHeader, verificationSecret, verificationSpec } from './t3-probe-fixture.mjs';
@@ -18,6 +18,8 @@ import { PROD_POSTGRES_IMAGE, PROD_POSTGRES_TOOL_IMAGE } from './t3-fixture.mjs'
 
 const CANDIDATE = `ghcr.io/rhanka/sentropic-api@sha256:${'e'.repeat(64)}`;
 const UI_IMAGE = 'ghcr.io/rhanka/sentropic-ui@sha256:ui';
+const LEGACY_API = `ghcr.io/rhanka/sentropic-api@sha256:${'1'.repeat(64)}`;
+const LEGACY_UI = 'ghcr.io/rhanka/sentropic-ui@sha256:legacy-ui';
 
 // Fault-injectable kubectl double: canned reads, recorded writes.
 export function makeCall(scenario = {}) {
@@ -27,6 +29,11 @@ export function makeCall(scenario = {}) {
   let frontalPollsLeft = scenario.frontalTerminating ?? 0;
   let writerPollsLeft = scenario.writersTerminating ?? 0;
   const scaled = {}, boundary = { open: false };
+  const legacyTemplates = {
+    api: scenario.legacyTemplates?.api ?? scenario.api?.spec?.template ?? { spec: { containers: [{ name: 'api', image: LEGACY_API }] } },
+    'auth-idp': scenario.legacyTemplates?.['auth-idp'] ?? scenario['auth-idp']?.spec?.template ?? { spec: { containers: [{ name: 'auth-idp', image: LEGACY_API }] } },
+    ui: scenario.legacyTemplates?.ui ?? scenario.ui?.spec?.template ?? { spec: { containers: [{ name: 'ui', image: LEGACY_UI }] } },
+  };
   const readyDeploy = (name, image) => ({ spec: { replicas: 1,
     template: { spec: { containers: [{ name, image }] } } },
     status: { replicas: 1, readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } });
@@ -141,18 +148,35 @@ export function makeCall(scenario = {}) {
       scenario.exportSuspended = true;
       return '';
     }
+    if (cmd.startsWith('get replicasets -l app.kubernetes.io/name=sentropic')) {
+      const component = cmd.match(/component=([a-z-]+)/)?.[1];
+      return JSON.stringify(scenario.replicasets?.[component] ?? { items: [{
+        metadata: { annotations: { 'deployment.kubernetes.io/revision': '4' },
+          ownerReferences: [{ kind: 'Deployment', name: component }] },
+        spec: { template: { metadata: { labels: { 'pod-template-hash': 'legacy' } }, ...legacyTemplates[component] } },
+      }] });
+    }
+    if (cmd.startsWith('rollout undo deployment/')) {
+      const deploy = args[2].split('/')[1];
+      if (scenario[deploy]) {
+        scenario[deploy] = { ...scenario[deploy], spec: { ...scenario[deploy].spec, template: legacyTemplates[deploy] } };
+      }
+      return '';
+    }
     if (cmd === 'get deployment api -o json') {
       return JSON.stringify(scenario.api ?? (scaled.api
         ? readyDeploy('api', CANDIDATE)
-        : { spec: { replicas: 0 }, status: { replicas: 0 } }));
+        : { spec: { replicas: 0, template: legacyTemplates.api }, status: { replicas: 0 } }));
     }
     if (cmd === 'get deployment ui -o json') {
-      return JSON.stringify(scenario.ui ?? (scaled.ui ? readyDeploy('ui', UI_IMAGE) : { spec: { replicas: 0 }, status: { replicas: 0 } }));
+      return JSON.stringify(scenario.ui ?? (scaled.ui
+        ? readyDeploy('ui', UI_IMAGE)
+        : { spec: { replicas: 0, template: legacyTemplates.ui }, status: { replicas: 0 } }));
     }
     if (cmd === 'get deployment auth-idp -o json') {
       return JSON.stringify(scenario['auth-idp'] ?? (scaled['auth-idp']
         ? readyDeploy('auth-idp', CANDIDATE)
-        : { spec: { replicas: 0 }, status: { replicas: 0 } }));
+        : { spec: { replicas: 0, template: legacyTemplates['auth-idp'] }, status: { replicas: 0 } }));
     }
     if (/^scale deployment\/(\S+) --replicas=1$/.test(cmd)) {
       scaled[cmd.split('/')[1].split(' ')[0]] = true;
@@ -161,12 +185,12 @@ export function makeCall(scenario = {}) {
     if (/^get (deployment|middleware|ingress|cronjob) /.test(cmd)) return '{}';
     return '';
   };
-  return { call, calls, boundary };
+  return { call, calls, boundary, legacyTemplates };
 }
 
 export function makeCtx(overrides = {}) {
   const scenario = overrides.scenario ?? {};
-  const { call, calls, boundary } = makeCall(scenario);
+  const { call, calls, boundary, legacyTemplates } = makeCall(scenario);
   const printed = [];
   // Default rotation key material: every full drive poses the W3 keys, so
   // tests get files unless they opt out (rotationKeyFiles: undefined).
@@ -199,7 +223,8 @@ export function makeCtx(overrides = {}) {
       delivered: async () => '',
       config: {
         kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod', tier: 'preprod',
-        candidateImage: CANDIDATE, revisions: { api: '12', 'auth-idp': '9', ui: '4' },
+        candidateImage: CANDIDATE,
+        templateDigests: Object.fromEntries(['api', 'auth-idp', 'ui'].map(n => [n, templateDigest(legacyTemplates[n])])),
         images: { candidate: CANDIDATE, ui: UI_IMAGE },
         endpoints: probeEndpoints(),
         ...observerProbes(),
@@ -478,14 +503,14 @@ test('post-rollback verification fails the rollback on bad health', async () => 
   const { ctx } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' } } });
   const badProbe = async () => ({ status: 500, body: { cancel: async () => {} } });
   await assert.rejects(
-    preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, probe: badProbe,
+    preCommitRollback({ call: ctx.call, templateDigests: ctx.config.templateDigests, probe: badProbe,
       healthUrl: 'https://app/health', jwksUrl: 'https://idp/jwks' }),
     /rollback_verify_failed/);
 });
 
 test('rollback forces identity-export suspension and still reopens ingress', async () => {
   const { ctx, calls } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' }, exportSuspended: false } });
-  const out = await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions });
+  const out = await preCommitRollback({ call: ctx.call, templateDigests: ctx.config.templateDigests });
   assert.deepEqual(out.removedKeys.sort(), ['JWT_SECRET', 'SECRET_ENCRYPTION_KEY']);
   const joined = calls.join('\n');
   assert.ok(joined.includes('patch cronjob sentropic-idp-identity-export'), 'guard forced back on');
@@ -495,7 +520,7 @@ test('rollback forces identity-export suspension and still reopens ingress', asy
 
 test('pre-commit rollback removes both rotated keys before any scale-up', async () => {
   const { ctx, calls } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' } } });
-  const out = await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions });
+  const out = await preCommitRollback({ call: ctx.call, templateDigests: ctx.config.templateDigests });
   assert.deepEqual(out.removedKeys.sort(), ['JWT_SECRET', 'SECRET_ENCRYPTION_KEY']);
   const joined = calls.join('\n');
   assert.match(joined, /patch secret sentropic-api/);
@@ -741,7 +766,7 @@ test('reconcile waits for terminating frontals instead of failing', async () => 
 test('dry-run prints the key-removal patch even with no keys present', async () => {
   const { ctx, calls } = makeCtx({ scenario: { secretData: {} } });
   const { preCommitRollback } = await import('./t3-rollback.mjs');
-  await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, dryRun: true });
+  await preCommitRollback({ call: ctx.call, templateDigests: ctx.config.templateDigests, dryRun: true });
   assert.ok(calls.some(c => c.startsWith('patch secret sentropic-api')), 'patch printed in dry-run');
 });
 
@@ -842,7 +867,7 @@ test('emergency command prints the rollback plan in dry-run', () => {
   const dir = mkdtempSync(join(tmpdir(), 't3-emg-'));
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube',
-    namespace: 'sentropic-preprod', revisions: { api: '12', 'auth-idp': '9', ui: '4' } }));
+    namespace: 'sentropic-preprod', templateDigests: { api: 'a'.repeat(64), 'auth-idp': 'b'.repeat(64), ui: 'c'.repeat(64) } }));
   const out = execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
     '--state-dir', dir, '--config', cfg, '--dry-run'], { encoding: 'utf8' });
   assert.match(out, /scale deployment\/api --replicas=0/);
@@ -852,7 +877,7 @@ test('emergency preview preserves another live recovery lock', () => {
   const dir = mkdtempSync(join(tmpdir(), 't3-emg-'));
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube',
-    namespace: 'sentropic-preprod', revisions: {} }));
+    namespace: 'sentropic-preprod', templateDigests: {} }));
   writeFileSync(join(dir, 't3-recovering.lock'), `other-pid-${process.pid}|${monoMs()}`);
   const before = readFileSync(join(dir, 't3-recovering.lock'), 'utf8');
   execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
@@ -864,7 +889,7 @@ test('emergency classifies after stopping api and passes pre-cm-dir to rollback'
   const dir = mkdtempSync(join(tmpdir(), 't3-emg-'));
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
-    revisions: { api: '12', 'auth-idp': '9', ui: '4' }, preCmDir: '/pre-cm' }));
+    templateDigests: { api: 'a'.repeat(64), 'auth-idp': 'b'.repeat(64), ui: 'c'.repeat(64) }, preCmDir: '/pre-cm' }));
   const out = execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
     '--state-dir', dir, '--config', cfg, '--dry-run'], { encoding: 'utf8' });
   const stopped = out.indexOf('would stop automation');
@@ -909,7 +934,7 @@ esac
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
     endpoints: probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`), emailProbe, expectedSigningKid,
     ...observerProbes(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`),
-    revisions: { api: '12', 'auth-idp': '9', ui: '4' }, candidateImage: 'candidate-img',
+    templateDigests: { api: 'a'.repeat(64), 'auth-idp': 'b'.repeat(64), ui: 'c'.repeat(64) }, candidateImage: 'candidate-img',
     middlewareSpec: verificationSpec, verificationCredentialFile: verificationFile(dir),
     images: { candidate: 'candidate-img', ui: 'ui-img' } }));
   let out;
@@ -1205,9 +1230,9 @@ test('R9 preCommitRollback undoes W3 template patches even before DeploymentCont
   };
   const { ctx, calls } = makeCtx({
     config: { tier: 'prod', namespace: 'sentropic' },
-    scenario: { ui: unconciledUi },
+    scenario: { ui: unconciledUi, legacyTemplates: { ui: { spec: { containers: [{ name: 'ui', image: LEGACY_UI }] } } } },
   });
-  await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, tier: 'prod' });
+  await preCommitRollback({ call: ctx.call, templateDigests: ctx.config.templateDigests });
   const undoIdx = calls.indexOf('rollout undo deployment/ui --to-revision=4');
   const scaleIdx = calls.indexOf('scale deployment/ui --replicas=1');
   assert.ok(undoIdx !== -1 && undoIdx < scaleIdx, 'rollout undo runs before scale-up despite unincremented revision');

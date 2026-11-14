@@ -124,7 +124,7 @@ test('RUN8 partially applied delivered fence persists intent and still recovers 
   const { ctx, writes } = acceptanceContext();
   ctx.stateDir = mkdtempSync(join(tmpdir(), 't3-partial-fence-'));
   ctx.print = () => {};
-  ctx.config.revisions = {};
+  ctx.config.templateDigests = {};
   const state = { ...ctx.state, step: 'W1', fenceStarted: false };
   saveState(ctx.stateDir, state);
   const env = { A4_TIER: 'preprod', A4_ACTION: 'fence', A4_DRY_RUN: '0', T3_STATE_DIR: ctx.stateDir };
