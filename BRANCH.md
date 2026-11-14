@@ -1,7 +1,7 @@
 # Fix: Harden deployment secrets and complete T1 w9
 
 ## Objective
-- [ ] Deliver A-R3-5, T1-w9 and the design-system seed from the ratified App-to-cluster-mesh plan.
+- [x] Deliver A-R3-5, T1-w9 and the design-system seed from the ratified App-to-cluster-mesh plan.
 
 ## Scope / Guardrails
 - [x] Worktree: `tmp/secret-keys-hardening-w9`; branch: `fix/secret-keys-hardening-w9`; base: `938709b08`.
@@ -59,11 +59,12 @@
   - [x] `api/tests/unit/k8s-bundle-secret.test.ts`: fake kubectl only; incomplete input, boundaries, all three names, no disclosed values. All 7 cases pass.
 - [x] Lot 3 — Explicit tenant-free design-system seed; preserve tenant requirement for other sample clients.
   - [x] `api/tests/unit/auth/oauth-client-seed.test.ts`: observe insert/update values without a live database.
-- [ ] Lot 4 — Scoped local tests through make, independent review, scope gate, atomic commits below 150 lines.
+- [x] Lot 4 — Scoped local tests through make, independent review, scope gate, atomic commits below 150 lines.
   - [x] 24 scoped deployment/OAuth/JWKS/DS/bundle assertions pass after review corrections; 3 existing Drive sealing assertions pass.
   - [x] ESLint passes for all five modified source files; repository config does not lint test files.
   - [x] An initial missing synthetic SCW_TEM_SECRET_KEY was added to the isolated test overlay; no real credentials loaded.
   - [x] The unfiltered Drive file needs Postgres for an unrelated callback-settings case; local acceptance targets sealing only, full file remains a CI gate.
+  - [x] Two independent Astra high code reviews approve `41c4d691c` after all P1/P2 findings were corrected; final change is progress documentation only.
 - [ ] Lot 5 — Push, PR with this document as body, exact-head green CI, report and done marker; no merge.
 
 ## Deferred to conductor
