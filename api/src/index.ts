@@ -104,7 +104,8 @@ if (process.argv.includes('--secret-reencrypt')) {
 }
 
 // A served process exits on SIGTERM instead of holding its pod Terminating for the whole grace period.
-const shutdown = installGracefulShutdown({ log: logger });
+// Outside production nothing is drained: a development reload must not wait for open event streams.
+const shutdown = installGracefulShutdown({ log: logger, drainMs: env.NODE_ENV === 'production' ? undefined : 0 });
 
 // Fail closed before serving: a deployed runtime never signs or seals with a missing or public key.
 try {
