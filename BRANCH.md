@@ -21,6 +21,10 @@
   - `ui/src/lib/stores/workspaceScope.ts`
   - `ui/src/lib/components/ImportExportDialog.svelte`
   - `ui/tests/stores/workspaceScope.test.ts`
+  - `api/src/services/graceful-shutdown.ts`
+  - `api/src/index.ts`
+  - `apps/auth-idp/index.ts`
+  - `api/tests/unit/graceful-shutdown.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -84,6 +88,8 @@
 - [x] R7-2 local measure on the pinned candidate image (bundle load until the command is refused, six samples per limit): 0.5 CPU 2.98-3.40 s, 1 CPU 1.49-1.58 s, 1.5 CPU 1.03-1.11 s, 2 CPU 0.88-1.00 s. Checkpoint worker time: two loads at 0.5 CPU (6.3 s) become one load at 1.5 CPU (1.06 s). The cluster measured 8.9-9.4 s at 500m, about 2.9 times the local 0.5 CPU value.
 - [ ] R7-2 operator: verify the prod LimitRange maximum and the CPU-limit quota (database 500m + custodian 1500m + backup Job 300m against 2500m) before the window, then replay M-2 and M-3; cluster timings remain unverified.
 - [x] R7-3 (r9 fence-to-W5 race: the fence returns in 1.6 s, the legacy api and auth-idp pods stay Terminating about 31 s): at the end of W3 the driver waits for zero api, auth-idp and ui pods (`awaitWritersGone`, existing `waitZeroPods`), bounded by the W3 cutoff of T+50 s; no cutoff or budget changed. A pod that never leaves, or an unreadable pod list, routes to the pre-commit rollback before any custodian. The wait is timed as `writersGone` in the chronometer file. Red before (custodian created with zero pod reads), green after.
+- [x] BRT3-EX4 (R7 packet item 3): allow the API and IdP entry points, one new service module and its unit test. Reason: Node as PID 1 ignores SIGTERM without a handler, so a stopped pod stays Terminating for its whole grace period; the pinned candidate image ships no init binary (no tini, checked), so an init is not available without a new image. Impact: both processes stop accepting connections on SIGTERM or SIGINT, drain in-flight requests for at most 5 s, close the remaining connections and exit 0; before the listener exists they exit at once. Effective from the next image build only: the T3 legacy and candidate images are unchanged, the driver wait covers them. Rollback reverts the four files.
+- [x] R7-3 local proof on the candidate image: Node as PID 1 without a handler used the whole 8 s grace of the test (8.6 s), with a handler 0.4 s; the delivered handler exits in 0.3 s idle and 5.0 s with an open stream. Unit test (7 cases) passes; red before by construction (module and wiring absent).
 - [ ] Operator: the prod and restore quotas must admit one more 1Gi claim; the first IdP start now provisions and attaches that volume inside W8 and must be measured (M-5, M-7).
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
