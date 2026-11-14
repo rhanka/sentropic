@@ -17,14 +17,14 @@ export const openFlags = {
   prod: {},
   preprod: { 'artifact-content': ['APP_ARTIFACT_CONTENT_ENABLED'] },
 };
-// GB4 preprod (owner GO 2026-11-07): supervisor relay and builder composition exist in preprod only; prod declares none.
+// GB4 configuration remains preprod-only; builder capacity was removed on 2026-11-13.
 // The relay key is the public half of the api's ARTIFACT_SUPERVISOR_SIGNING_KEY_JSON (kid sentropic-preprod-supervisor-1).
 const internal = 'http://artifact-content.sentropic-preprod.svc.cluster.local:8791';
 export const preprodRelay = { APP_ARTIFACT_SUPERVISOR_RELAY_ENABLED: '1',
   APP_ARTIFACT_SUPERVISOR_PUBLIC_KEYS: 'MCowBQYDK2VwAyEA9PIIB+0LkY47bMnczyWol6Swl8UeFepUjNjg+lxZFbY=',
   APP_ARTIFACT_LIVE_BUILDER_NAMESPACE: 'sentropic-artifact-builders' };
 export const preprodBuilder = {
-  ARTIFACT_BUILDER_ENABLED: '1', ARTIFACT_BUILDER_NAMESPACE: 'sentropic-artifact-builders',
+  ARTIFACT_BUILDER_ENABLED: '0', ARTIFACT_BUILDER_NAMESPACE: 'sentropic-artifact-builders',
   ARTIFACT_BUILDER_SERVICE_DOMAIN: 'sentropic-artifact-builders.svc.cluster.local', ARTIFACT_BUILDER_NODE: 'd2-4-preprod',
   ARTIFACT_SUPERVISOR_RELAY_URL: internal, ARTIFACT_LIVE_EDGE_INTERNAL_URL: internal,
   ARTIFACT_BUILDER_REMOTE_HOST_URL: 'https://preprod.immo.sent-tech.ca/api/v1/artifacts',
@@ -84,10 +84,9 @@ export function checkWorkload(objects, tier, preservedImages) {
   // tier stays on the instance.ts closed default: no per-tenant artifact quota.
   const apiCm = object(objects, 'ConfigMap', 'api');
   assert.equal(apiCm.data.APP_ARTIFACT_QUOTA_BYTES, undefined, 'closed tiers declare no api artifact quota');
-  // Live edge (W9): prod stays inert with placeholders; preprod arms it (GB4) and composes inside
-  // the content serving opened on this tier (#953).
+  // No worker capacity remains: both live edges stay closed, independently of content serving.
   const live = tier === 'prod' ? ['0', 'pages.immo.sent-tech.ca=immo-prod-live-1', 'sentropic-prod-live-1']
-    : ['1', 'pages.preprod.immo.sent-tech.ca=immo-preprod-live-1', 'sentropic-preprod-live-1'];
+    : ['0', 'pages.preprod.immo.sent-tech.ca=immo-preprod-live-1', 'sentropic-preprod-live-1'];
   assert.deepEqual([cm.data.APP_ARTIFACT_LIVE_ENABLED, cm.data.APP_ARTIFACT_LIVE_PAGES_DOMAINS, cm.data.APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS],
     live, 'live edge flag, pages domain and kids per tier');
   assert.deepEqual(pick(cm.data, /^APP_ARTIFACT_(SUPERVISOR_|LIVE_BUILDER_NAMESPACE$)/), tier === 'prod' ? {} : preprodRelay,
