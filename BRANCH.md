@@ -16,6 +16,9 @@
   - `docs/runbooks/t3-*`
   - `.github/workflows/ci.yml`
   - `BRANCH.md`
+  - `ui/src/lib/stores/workspaceScope.ts`
+  - `ui/src/lib/components/ImportExportDialog.svelte`
+  - `ui/tests/stores/workspaceScope.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -23,6 +26,9 @@
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 ## Feedback Loop
+- [x] BRT3-EX2: exact-head CI exposed import workspace selection overwritten by a stale membership refresh; allow the two UI files and focused store regression only. Impact: refresh after committed import, ignore superseded responses/errors. Rollback reverts this bounded correction; no timeout/retry or gate changes.
+- [x] CI import failure reproduced by a deferred stale response (1 failure before correction); focused workspace store suite now passes 11/11, including stale 409/500 errors, in a disposable locked-dependency container without an image build.
+- [x] UI review hardening: bind import continuation to its initiating user, refuse mutations after a session change during membership refresh; actual-handler tests exercise account switch and logout without changing timeouts.
 - [x] BRT3-EX1: add scoped operator/PostgreSQL jobs to existing validate-idp-sync CI gate; impact limited to T3 validation, rollback removes the two steps.
 - [x] SQL qualification detected ambiguous PostgreSQL internal-char concatenation in default ACL names; explicit text cast applied.
 - [x] ACL mismatch now raises an SQL error inside the transaction, rather than relying on psql quit status; round-trip refusal rechecked.
