@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ops } from './ops.mjs';
+import { custodianCpuLimit, ops } from './ops.mjs';
 import { digest, privateInput } from './guards.mjs';
 import { approvedRequest, commit, image, sha } from './fixtures.mjs';
 import { approvalRef, compose, entrypoint } from '../../k8s/overlays/preprod/a4-runtime/launch.mjs';
@@ -70,6 +70,28 @@ test('should pin the custodian to the tenant database node, where custody stays 
     assert.throws(() => custodian(pods, template, refused), error);
     assert(!refused.some(call => call.args[0] === 'create'));
   }
+});
+// The worker loads the API bundle on every invocation: under the API limit of 500m that load took
+// about 9 s (rehearsal r9). The custodian gets its own CPU limit; requests and other limits are inherited.
+test('should give the custodian its own CPU limit and inherit every other resource of the API template', () => {
+  const resources = { requests: { cpu: '100m', memory: '256Mi', 'ephemeral-storage': '64Mi' },
+    limits: { cpu: '500m', memory: '512Mi', 'ephemeral-storage': '1Gi' } };
+  const template = { affinity: { podAffinity: { preferredDuringSchedulingIgnoredDuringExecution: [{ weight: 100, podAffinityTerm: {
+    topologyKey: 'kubernetes.io/hostname', labelSelector: { matchLabels: { 'app.kubernetes.io/component': 'postgres' } } } }] } },
+  containers: [{ name: 'api', command: ['node', '/run/cm-runtime/launch.mjs'], env: [], envFrom: [], resources,
+    volumeMounts: [{ name: 'cm-cutover', mountPath: '/run/cm-cutover', readOnly: true }] }],
+  volumes: [{ name: 'cm-runtime', configMap: { name: 'sentropic-a4-runtime' } },
+    { name: 'cm-cutover', persistentVolumeClaim: { claimName: 'sentropic-a4-custody', readOnly: true } }] };
+  let created;
+  ops({ ...env, A4_OPERATION: 'custodian', A4_DRY_RUN: '0' }, (_config, args, input) => {
+    if (args[0] === 'create') created = JSON.parse(input);
+    return args[1] === 'deployment' ? JSON.stringify({ spec: { replicas: 0, template: { spec: template } } })
+      : args[1] === 'pods' ? JSON.stringify({ items: [{ metadata: {}, spec: { nodeName: 'node-a' }, status: { phase: 'Running' } }] }) : '';
+  }, path => path === env.A4_REQUEST_FILE ? JSON.stringify(request) : 'private');
+  assert.deepEqual(created.spec.containers[0].resources,
+    { requests: resources.requests, limits: { ...resources.limits, cpu: custodianCpuLimit } });
+  assert.equal(custodianCpuLimit, '1500m');
+  assert.deepEqual(template.containers[0].resources, resources);
 });
 test('should refuse malformed keys, unexpected previous slots and incorrect active fingerprints', () => {
   const base = { CM_A4_NAMESPACE: 'sentropic-preprod', CM_IDENTITY_EMAIL_CODE_POLICY: 'hmac-sha256', CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF: approvalRef,
