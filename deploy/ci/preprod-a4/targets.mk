@@ -78,7 +78,7 @@ A4_TEST_IMAGE ?= $(API_TOOL_IMAGE)
 .PHONY: test-t3-rehearsal-contract
 test-t3-rehearsal-contract:
 	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e T3_ZOD_PACKAGE=/tmp/t3-contract/package.json -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -ec 'node scripts/ci/locked-tools.mjs --prefix /tmp/t3-contract --ignore-scripts --no-audit --no-fund zod@4.6.6 >/dev/null; node deploy/ci/preprod-a4/t3-rehearsal-contract.selftest.mjs'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e T3_ZOD_PACKAGE=/tmp/t3-contract/package.json -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -ec 'node scripts/ci/locked-tools.mjs --prefix /tmp/t3-contract --ignore-scripts --no-audit --no-fund @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 @types/node hono@4.10.7 jose@5.10.0 typescript@5.4.5 zod@4.6.7 >/dev/null; node deploy/ci/preprod-a4/t3-rehearsal-contract.selftest.mjs'
 .PHONY: test-preprod-a4-api
 test-preprod-a4-api: ## Run preparation tests in a cached API toolbox with container-only source overlay
 	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac

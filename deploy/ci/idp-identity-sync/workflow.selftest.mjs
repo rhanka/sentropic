@@ -130,6 +130,9 @@ export function workflowTests(check, load) {
       'make test-idp-sync-selftest ENV=test-idp-sync',
       'make test-artifact-content-manifests ENV=test-app-w3d',
       'make test-idp-sync-sql ENV=test-idp-sync',
+      'make test-preprod-a4 ENV=test-t3-gaps',
+      'make test-t3-sql ENV=test-t3-gaps',
+      'make test-t3-rehearsal-contract ENV=test-t3-gaps',
     ]);
   });
   check('bootstrap delegates only tenant resources and two existing Secrets', () => {
