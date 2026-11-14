@@ -32,6 +32,28 @@ export function restoreSql(dump, acl, expectedHash) {
 WHERE datname=current_database() AND pid<>pg_backend_pid();
 SELECT format('DROP SCHEMA %I CASCADE;',nspname) FROM pg_namespace
 WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY nspname \\gexec
+-- Global default ACLs survive DROP SCHEMA and would grant privileges while loading.
+DO $reset_defaults$
+DECLARE d record; g record; object_type text;
+BEGIN
+  FOR d IN SELECT x.*,r.rolname FROM pg_default_acl x JOIN pg_roles r ON r.oid=x.defaclrole
+    WHERE x.defaclnamespace=0
+  LOOP
+    object_type := CASE d.defaclobjtype WHEN 'r' THEN 'TABLES' WHEN 'S' THEN 'SEQUENCES'
+      WHEN 'f' THEN 'FUNCTIONS' WHEN 'T' THEN 'TYPES' WHEN 'n' THEN 'SCHEMAS' END;
+    IF object_type IS NULL THEN RAISE EXCEPTION 'unsupported default ACL'; END IF;
+    FOR g IN SELECT DISTINCT grantee FROM aclexplode(d.defaclacl) LOOP
+      EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I REVOKE ALL ON %s FROM %s',
+        d.rolname,object_type,CASE WHEN g.grantee=0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(g.grantee)) END);
+    END LOOP;
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I GRANT ALL ON %s TO %I',d.rolname,object_type,d.rolname);
+    IF d.defaclobjtype='f' THEN
+      EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I GRANT EXECUTE ON FUNCTIONS TO PUBLIC',d.rolname);
+    ELSIF d.defaclobjtype='T' THEN
+      EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I GRANT USAGE ON TYPES TO PUBLIC',d.rolname);
+    END IF;
+  END LOOP;
+END $reset_defaults$;
 ${/^CREATE SCHEMA public;/m.test(dump) ? '' : 'CREATE SCHEMA public;'}
 ${dump}
 ${acl}

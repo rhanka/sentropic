@@ -32,14 +32,14 @@ sql -c "INSERT INTO control.event_outbox VALUES ('t3','connector_grant_events','
 # Round-trip all schemas and real column/default ACLs through the delivered restore generator.
 sql -c 'CREATE ROLE t3_reader; GRANT SELECT (client_id) ON oauth_clients TO t3_reader; ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO t3_reader; CREATE SCHEMA artifacts; CREATE TABLE artifacts.t3_empty(id text)'
 acl=$(sql -f /tests/t3-acl.sql)
+sed '/^SELECT encode/,$d' /tests/t3-acl.sql > /tmp/catalog.sql
+echo 'SELECT * FROM entries ORDER BY kind,name;' >> /tmp/catalog.sql
+sql -f /tmp/catalog.sql > /tmp/t3-catalog-before
 pg_dump --no-owner --no-privileges > /tmp/t3-source.sql
-# Fixture grants are intentionally narrow: production capture uses t3-acl.mjs.
-cat > /tmp/t3-acl.sql <<'ACL'
-GRANT SELECT (client_id) ON public.oauth_clients TO t3_reader;
-ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO t3_reader;
-ACL
+# pg_dump emits these fixture ACL statements on single lines; production uses the quote-aware parser.
+pg_dump --schema-only | sed -n '/^ALTER .* OWNER TO /p; /^GRANT /p; /^REVOKE /p; /^ALTER DEFAULT PRIVILEGES /p' > /tmp/t3-acl.sql
 sql -c 'CREATE SCHEMA cm_identity; CREATE TABLE cm_identity.after_commit(id text)'
-sql --single-transaction -v baseline_acl="$acl" -f /restore.sql >/tmp/restore.log 2>&1 || { cat /tmp/restore.log; exit 1; }
+sql --single-transaction -v baseline_acl="$acl" -f /restore.sql >/tmp/restore.log 2>&1 || { diff -u /tmp/t3-catalog-before /tmp/t3-catalog-after || :; tail -n 3 /tmp/restore.log; exit 1; }
 [ "$(sql -f /tests/t3-acl.sql)" = "$acl" ]
 echo 'PASS: full restore catalogue matches'
 if sql --single-transaction -v baseline_acl="$(printf '%064d' 0)" -f /restore.sql >/tmp/refuse.log 2>&1; then exit 1; fi
