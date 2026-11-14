@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
 import { assertAuthorization, digest, privateInput, tierOf } from './guards.mjs';
-import { execute, executionGrant } from './execution.mjs';
+import { execute, executionGrant, validateActionCommands } from './execution.mjs';
 import { ops } from './ops.mjs';
 import { buildProbes, validateProbes } from './t3-lib.mjs';
 import { validateApplicability } from './t3-applicability.mjs';
@@ -20,6 +20,10 @@ export function preflight(config, read = privateInput) {
   if (['authorizationRef','operationId','candidateCommit','candidateImage']
     .some(name => config.request[name] !== authorization[name])) throw new Error('request_authorization_mismatch');
   const grant = executionGrant(env, authorization, read, tier);
+  for (const action of ['fence','restrict','delete-custodian','start-api','resume','open-traffic']) {
+    validateActionCommands(grant,config.request,action,config.namespace);
+  }
+  for (const action of Object.keys(grant.actions)) validateActionCommands(grant,config.request,action,config.namespace);
   if (config.images.ui !== grant.uiImage) throw new Error('ui_binding_invalid');
   if (!Array.isArray(config.initialSecretKeyNames)
     || config.initialSecretKeyNames.some(name => ['JWT_SECRET','SECRET_ENCRYPTION_KEY'].includes(name))) {
