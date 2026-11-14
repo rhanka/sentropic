@@ -24,9 +24,11 @@
   - `plan/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `BRANCH.md`
+  - `package-lock.json`
   - `.github/workflows/**`
 - **Exception process**:
   - [x] BR21-EX1: BRANCH.md is required execution metadata; impact limited to this branch plan; rollback by removing it before integration.
+  - [x] BR21-EX2: synchronize only cluster-mesh version metadata in package-lock.json through Make; required by the failing CI train lock-sync gate; no dependency resolution changes; rollback with the package version bump.
 
 ## Feedback Loop
 - [ ] Conductor owns Track writes and DS/h2a consumer receipts; questions recorded in .tmp/rv/v8-contract-questions.md.
@@ -34,6 +36,7 @@
 - [x] Review R1: enforce ASCII source paths, fatal UTF-8 entry decoding and safe diagnostic paths/messages; 123 compile tests pass.
 - [x] Sandbox qualification: 193/193 tests pass with a 4 GiB tmpfs at /tmp; default overlay storage still times out on durable custody revocation; no threshold increased.
 - [x] Review R2: independent correctness/interop and security legs APPROVE code HEAD 197f6a6b9; external consumer gates remain pending.
+- [x] CI 43533595879 found the missing root lock version synchronization; BR21-EX2 bounds its correction to package version metadata.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests or flaky exceptions.
