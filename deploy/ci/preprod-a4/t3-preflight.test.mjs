@@ -6,7 +6,7 @@ import { digest } from './guards.mjs';
 import { applicabilityFixture } from './t3-applicability.test.mjs';
 import { emailProbe, expectedSigningKid, probeEndpoints } from './t3-probe-fixture.mjs';
 
-function inputs() {
+export function inputs() {
   const ui = `ghcr.io/rhanka/sentropic-ui@sha256:${'c'.repeat(64)}`;
   const authorization = { ...approvedRequest, format: 'preprod-a4-authorization/1' };
   const annex = { ...approvedRequest, format: 'preprod-a4-execution/1', uiImage: ui,

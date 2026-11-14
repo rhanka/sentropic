@@ -17,6 +17,8 @@ export function preflight(config, read = privateInput) {
   const localRead = path => path === 'request-template' ? JSON.stringify(config.request) : read(path);
   const authorization = JSON.parse(read(config.authorizationFile));
   assertAuthorization(authorization, tier);
+  if (['authorizationRef','operationId','candidateCommit','candidateImage']
+    .some(name => config.request[name] !== authorization[name])) throw new Error('request_authorization_mismatch');
   const grant = executionGrant(env, authorization, read, tier);
   if (config.images.ui !== grant.uiImage) throw new Error('ui_binding_invalid');
   if (!Array.isArray(config.initialSecretKeyNames)
