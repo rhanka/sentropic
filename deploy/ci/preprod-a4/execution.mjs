@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { assertAuthorization, assertRequest, canonical, digest, kubectl, privateInput, tierOf } from './guards.mjs';
 import { assertTrafficRestriction } from './verification-boundary.mjs';
+import { chrono, chronoStart } from './t3-chrono.mjs';
 
 export function executionGrant(env, request, read = privateInput, tier = tierOf(env)) {
   const bytes = read(env.A4_EXECUTION_FILE);
@@ -71,7 +72,12 @@ export function execute(env = process.env, call = kubectl, read = privateInput) 
     if (env.A4_DRY_RUN === '0') k(['create', '-f', '-'], JSON.stringify({ apiVersion: 'traefik.io/v1alpha1',
       kind: 'Middleware', metadata: { name: 'a4-verification', namespace }, spec }));
   }
-  if (env.A4_DRY_RUN === '0') for (const args of commands) k(args);
+  if (env.A4_DRY_RUN === '0') for (const args of commands) {
+    const started = chronoStart();
+    try { k(args); } finally {
+      if (args.join(' ').startsWith('delete pod sentropic-a4-custodian ')) chrono('custodyDetach', started);
+    }
+  }
   return `executionSha256=${digest(canonical({ annex: env.A4_EXECUTION_SHA256, action, commands }))}\n`;
 }
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
