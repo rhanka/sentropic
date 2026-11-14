@@ -124,6 +124,8 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Qualify durable failed-erasure claims and successful host retry in both directions; align gc-races.test.ts with retained debt.
   - [x] Local gates: API 49/49, package 59/59, tuple 5 passed/3 conditional skips; scoped API typecheck and lint (0 errors), package build/typecheck and packed consumer PASS. Registry artifacts 0.2.27 < candidate 0.2.28; archive sha256 e44635f919187a237793b4c75a610c7324868d46ae85b17ab0fa8c60720f6fcd; selected SRI regenerated.
   - [x] Provide an offline psql stdin make helper; avoid db-query starting writers or interpolating SQL dollar quotes.
+  - [x] Reproduce CI artifact-data-guard refusal of archive delete-all; retain archived receipts durably and qualify repeated rollback/resume without weakening the guard.
+  - [x] Reconcile host recovery fixtures with keyset paging; reject malformed backend pages before bridge trimming and preserve retained-page resume assertions (artifacts-host-recovery.test.ts).
   - [ ] Push verified head, await CI, append FIX R2 report and remove isolated volumes.
 - [ ] **Lot 7 — Rebase and qualify exact head (2026-11-13)**
   - [x] Rebase on origin/main; preserve prior uncommitted metadata in a stash.
