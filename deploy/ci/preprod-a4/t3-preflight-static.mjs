@@ -19,6 +19,10 @@ export function preflight(config, read = privateInput) {
   assertAuthorization(authorization, tier);
   const grant = executionGrant(env, authorization, read, tier);
   if (config.images.ui !== grant.uiImage) throw new Error('ui_binding_invalid');
+  if (!Array.isArray(config.initialSecretKeyNames)
+    || config.initialSecretKeyNames.some(name => ['JWT_SECRET','SECRET_ENCRYPTION_KEY'].includes(name))) {
+    throw new Error('rotation_baseline_not_absent');
+  }
   const noCalls = () => { throw new Error('offline_preflight_attempted_cluster_access'); };
   execute({ ...env, A4_ACTION: 'fence' }, noCalls, localRead);
   ops(env, noCalls, localRead);

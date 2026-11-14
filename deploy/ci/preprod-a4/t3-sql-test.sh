@@ -38,6 +38,7 @@ sql -f /tmp/catalog.sql > /tmp/t3-catalog-before
 pg_dump --no-owner --no-privileges > /tmp/t3-source.sql
 # pg_dump emits these fixture ACL statements on single lines; production uses the quote-aware parser.
 pg_dump --schema-only | sed -n '/^ALTER .* OWNER TO /p; /^GRANT /p; /^REVOKE /p; /^ALTER DEFAULT PRIVILEGES /p' > /tmp/t3-acl.sql
+sql -f /tests/t3-public-acl.sql >> /tmp/t3-acl.sql
 sql -c 'CREATE SCHEMA cm_identity; CREATE TABLE cm_identity.after_commit(id text)'
 sql --single-transaction -v baseline_acl="$acl" -f /restore.sql >/tmp/restore.log 2>&1 || { diff -u /tmp/t3-catalog-before /tmp/t3-catalog-after || :; tail -n 3 /tmp/restore.log; exit 1; }
 [ "$(sql -f /tests/t3-acl.sql)" = "$acl" ]
