@@ -24,7 +24,7 @@ const make = async isolate => {
   await context.eval('globalThis.session = spike.createSession()');
   return { context, startup: performance.now() - start };
 };
-for (const size of ['S', 'M', 'L']) for (const kind of ['style', 'template', 'whole']) {
+series: for (const size of ['S', 'M', 'L']) for (const kind of ['style', 'template', 'whole']) {
   const source = fixture(size), changed = edits[kind](source);
   for (const state of ['retained', 'fresh', 'cold']) {
     let isolate = new ivm.Isolate({ memoryLimit: 256 });
@@ -52,5 +52,6 @@ for (const size of ['S', 'M', 'L']) for (const kind of ['style', 'template', 'wh
     writeFileSync(new URL('./isolate-results.json', import.meta.url), JSON.stringify(result));
     console.log(JSON.stringify({ ...row, samples: undefined }));
     isolate.dispose();
+    if (process.env.SPIKE_SINGLE === '1') break series;
   }
 }

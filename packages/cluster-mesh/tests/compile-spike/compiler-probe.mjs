@@ -18,8 +18,12 @@ for (const size of ['S', 'M', 'L']) {
     results.checks[size] = { success: true, bytes: JSON.stringify(output).length };
     for (const [kind, edit] of Object.entries(edits)) {
       const next = await context.eval(`spike.compile(${JSON.stringify(edit(source))})`, { copy: true, timeout: 5000 });
+      const memo = await context.eval(`(() => {const s=spike.createSession();s.compile(${JSON.stringify(source)});return {output:s.compile(${JSON.stringify(edit(source))}),counters:s.counters}})()`, { copy: true, timeout: 5000 });
+      assert.deepEqual(memo.output, next, `block memo differs from whole compile: ${size}/${kind}`);
       results.checks[`${size}/${kind}`] = Object.fromEntries(['script', 'template', 'styles'].map(key => [key,
         JSON.stringify(next[key]) !== JSON.stringify(output[key])]));
+      results.checks[`${size}/${kind}`].memoEqualsWhole = true;
+      results.checks[`${size}/${kind}`].counters = memo.counters;
     }
   } catch (error) { results.checks[size] = { success: false, error: String(error) }; }
 }
@@ -35,7 +39,19 @@ try {
   results.syntax = await context.eval(`spike.transform('import type { T } from "./types.js"; import v from "./v.json" assert {type:"json"}; const x:T = v;', {transforms:['typescript']})`, { copy: true });
 } catch (error) { results.syntax = { error: String(error) }; }
 results.nfc = await context.eval(`['e\\u0301','A\\u030a','\\u212b','\\u1100\\u1161'].map(s=>s.normalize('NFC'))`, { copy: true });
+results.importedTypes = {};
+for (const specifier of ['./types', 'spike-types']) {
+  const source = `<script setup lang="ts">import type { Props } from '${specifier}'; defineProps<Props>();</script><template>{{title}}</template>`;
+  try {
+    results.importedTypes[specifier] = await context.eval(`(() => {
+      const d=spike.compiler.parse(${JSON.stringify(source)},{filename:'/virtual/View.vue'}).descriptor;
+      const files={'/virtual/types.d.ts':'export interface Props {title:string}'};
+      return spike.compiler.compileScript(d,{id:'types',fs:{fileExists:p=>p in files,readFile:p=>files[p]}}).content;
+    })()`, { copy: true });
+  } catch (error) { results.importedTypes[specifier] = { error: String(error) }; }
+}
 results.heap = isolate.getHeapStatisticsSync();
 isolate.dispose();
 writeFileSync('/tools/spike/compiler-probe.json', JSON.stringify(results, null, 2));
 console.log(JSON.stringify(results, null, 2));
+if (['S', 'M', 'L'].some(size => !results.checks[size].success)) process.exitCode = 1;
