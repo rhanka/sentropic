@@ -1028,6 +1028,8 @@ jobs:
         run: make test-preprod-a4 ENV=test-t3-gaps
       - name: Gate T3 applicability and transactional restore
         run: make test-t3-sql ENV=test-t3-gaps
+      - name: Gate the actual T3 checkpoint receipt schema
+        run: make test-t3-rehearsal-contract ENV=test-t3-gaps
 
   # BR80-EX1: immutable archives and preparation, never a shared mutable workspace.
   package-candidates:
