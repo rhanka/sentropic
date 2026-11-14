@@ -14,6 +14,10 @@ export A4_EXECUTION_FILE
 export A4_EXECUTION_SHA256
 export A4_ACTION
 export T3_ACTION T3_CONFIG T3_STATE_DIR
+.PHONY: k8s-t3-qualify
+k8s-t3-qualify:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/t3-qualify.mjs "$(T3_ACTION)" "$(T3_CONFIG)"
 .PHONY: k8s-t3-maintenance k8s-t3-window k8s-t3-preview
 k8s-t3-maintenance:
 	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
