@@ -59,7 +59,8 @@
   - [x] `presentation.ts`: colour/tone/variant and print token/hook mappings.
 - [ ] **Lot 4 — Print inventory**
   - [ ] `print-inventory-*.json`: every selector line, source target and future hook or dropped reason.
-  - [ ] `inventory.test.mjs`: exact source coverage, no missing or duplicate lines.
+  - [x] `inventory.test.mjs`: independent PostCSS coverage, no missing or duplicate lines.
+  - [x] Reproducible generator includes all 441 census lines (433 selectors and 8 at-rule preludes).
 - [ ] **Lot 5 — Final validation**
   - [ ] Scoped Docker qualification through the contract Makefile.
   - [ ] `make scope-check` before every atomic commit, each below 150 changed lines.
