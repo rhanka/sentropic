@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://sentropic.dev/schemas/templater/descriptor.json",
+  "title": "Stored family (b) view-template descriptor",
+  "type": "object",
+  "required": ["tabs"],
+  "properties": {
+    "tabs": { "type": "array", "items": { "$ref": "#/definitions/tab" } }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "print": {
+      "type": "object",
+      "properties": {
+        "printClass": { "type": "string" },
+        "printGridClass": { "type": "string" },
+        "pageBreakBefore": { "enum": ["auto", "always", "avoid", "left", "right"] },
+        "pageBreakAfter": { "enum": ["auto", "always", "avoid", "left", "right"] },
+        "pageBreakInside": { "enum": ["auto", "avoid"] },
+        "printOnly": { "type": "boolean" },
+        "screenOnly": { "type": "boolean" },
+        "pageContext": { "type": "string" }
+      }
+    },
+    "field": {
+      "allOf": [{ "$ref": "#/definitions/print" }],
+      "type": "object",
+      "required": ["key", "type"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "type": { "enum": ["scores-summary", "text", "list", "scores", "child-list", "chart", "component", "entity-loop"] },
+        "color": { "type": "string" },
+        "variant": { "enum": ["colored", "plain", "bordered"] },
+        "span": { "type": "integer", "minimum": 1 },
+        "id": { "type": "string" },
+        "hideExcerptInPrint": { "type": "boolean" },
+        "collection": { "type": "string", "minLength": 1 },
+        "templateRef": { "type": "string", "minLength": 1 }
+      },
+      "if": { "properties": { "type": { "const": "entity-loop" } } },
+      "then": { "required": ["collection", "templateRef"] }
+    },
+    "group": {
+      "allOf": [{ "$ref": "#/definitions/print" }],
+      "type": "object",
+      "required": ["fields"],
+      "properties": {
+        "columns": { "type": "integer", "minimum": 1 },
+        "span": { "type": "integer", "minimum": 1 },
+        "fields": { "type": "array", "items": { "$ref": "#/definitions/field" } }
+      }
+    },
+    "row": {
+      "allOf": [{ "$ref": "#/definitions/print" }],
+      "type": "object",
+      "properties": {
+        "columns": { "type": "integer", "minimum": 1 },
+        "fields": { "type": "array", "items": { "$ref": "#/definitions/field" } },
+        "main": { "$ref": "#/definitions/group" },
+        "sidebar": { "$ref": "#/definitions/group" }
+      },
+      "oneOf": [
+        { "required": ["fields"], "not": { "anyOf": [{ "required": ["main"] }, { "required": ["sidebar"] }] } },
+        { "required": ["main", "sidebar"], "not": { "required": ["fields"] } }
+      ]
+    },
+    "tab": {
+      "type": "object",
+      "required": ["key", "rows"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "label": { "type": "string" },
+        "always": { "type": "boolean" },
+        "showWhen": { "type": "string" },
+        "rows": { "type": "array", "items": { "$ref": "#/definitions/row" } }
+      }
+    }
+  }
+}

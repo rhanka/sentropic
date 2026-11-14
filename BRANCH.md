@@ -49,7 +49,7 @@
   - [x] `harness check branch`: PASS C1.
   - [x] `df -h /`: 38 GB free before Docker work; recheck before building.
 - [ ] **Lot 1 — Family (b) contract**
-  - [ ] JSON Schema: eight field types, three row shapes, presentation and print properties.
+  - [x] JSON Schema: eight field types, three seeded row shapes, presentation and print properties.
   - [ ] `contract.test.mjs`: seven real seed shapes validate; 17 seed records qualify; mutations fail.
 - [ ] **Lot 2 — Family (a) contract and adapters**
   - [ ] `container.ts`: typed icons/tones, cards/actions/menu callbacks, activation adapters.
