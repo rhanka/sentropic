@@ -1,4 +1,8 @@
 # Tenant provisions custody and qualified budgets before the authorized API boot.
+# The fenced wire applies this same file to the live legacy template (T3 P-0.8), so it restates
+# the base env entries in rendered order: the wired template then equals the rendered one and the
+# later overlay apply starts no rollout. t3-template-diff.selftest.mjs refuses a restated entry that
+# differs from the base.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -9,6 +13,19 @@ spec:
       securityContext:
         runAsUser: 0
         runAsGroup: 0
+      # Custody is ReadWriteOnce. Its consumers (custodian, then API) stay on the tenant database
+      # node, so the volume never moves between nodes inside the window. The custodian turns this
+      # preference into a hard node pin (deploy/ci/preprod-a4/ops.mjs).
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: sentropic
+                    app.kubernetes.io/component: postgres
       containers:
         - name: api
           command: ["node", "/run/cm-runtime/launch.mjs"]
@@ -34,6 +51,21 @@ spec:
             - name: CM_IDENTITY_DELETION_BUDGETS_JSON
               valueFrom:
                 secretKeyRef: { name: sentropic-identity-budgets, key: CM_IDENTITY_DELETION_BUDGETS_JSON }
+            # Base entries (deploy/k8s/base/30-api.yaml), restated for the legacy template.
+            - name: JEV_API_KEY
+              valueFrom:
+                secretKeyRef: { name: sentropic-api, key: JEV_API_KEY, optional: true }
+            - name: DECISION_EXECUTION_PROFILE
+              valueFrom:
+                secretKeyRef: { name: sentropic-api, key: DECISION_EXECUTION_PROFILE, optional: true }
+            - name: REMOTE_ACTION_ROLE
+              value: product
+            - name: APP_ARTIFACT_HOST_ENABLED
+              value: "0"
+            - name: APP_ARTIFACT_CONTENT_ENABLED
+              value: "0"
+            - name: APP_ARTIFACT_READER_ENABLED
+              value: "0"
           volumeMounts:
             - { name: cm-cutover, mountPath: /run/cm-cutover, readOnly: true }
             - { name: cm-runtime, mountPath: /run/cm-runtime, readOnly: true }
