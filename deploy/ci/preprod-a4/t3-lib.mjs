@@ -110,13 +110,27 @@ export function buildProbes(config) {
 // S-1/S-2: a request without the verification credential is refused by Traefik itself, which answers
 // basicAuth with 401 and a Basic challenge (the former 403 was the answer of the source-range rule).
 export const OBSERVER_REFUSAL = 401;
+const isHttpUrl = url => URL.canParse(url) && ['http:', 'https:'].includes(new URL(url).protocol);
 export function validateObservers(config) {
+  const restricted = [];
   for (const id of ['S-1','S-2']) {
-    const p = config.restrictedProbes?.find(p => p.id === id);
-    if (!p || p.expect !== OBSERVER_REFUSAL || !URL.canParse(p.url)) throw new Error('restricted_observer_missing');
+    const p = config?.restrictedProbes?.find(p => p.id === id);
+    if (!p || p.expect !== OBSERVER_REFUSAL || !isHttpUrl(p.url)) throw new Error('restricted_observer_missing');
+    restricted.push(p);
   }
-  if (!Array.isArray(config.externalProbes) || config.externalProbes.length < 2
-    || config.externalProbes.some(p => !URL.canParse(p.url) || p.expect !== 200)) throw new Error('external_probes_missing');
+  if (!Array.isArray(config?.externalProbes) || config.externalProbes.length < 2
+    || config.externalProbes.some(p => !isHttpUrl(p.url) || p.expect !== 200)) throw new Error('external_probes_missing');
+  const probes = config?.probes ?? (config?.endpoints ? buildProbes(config).probes : []);
+  const s3 = probes.find(p => p.id === 'S-3'), s4 = probes.find(p => p.id === 'S-4');
+  if (s3 && s4 && isHttpUrl(s3.url) && isHttpUrl(s4.url)) {
+    const want = new Set([new URL(s3.url).origin, new URL(s4.url).origin]);
+    const got = new Set(restricted.map(p => new URL(p.url).origin));
+    if (got.size !== want.size || [...want].some(origin => !got.has(origin))) {
+      throw new Error('restricted_observer_origin_mismatch');
+    }
+    const ext = new Set(config.externalProbes.map(p => new URL(p.url).origin));
+    if ([...want].some(origin => !ext.has(origin))) throw new Error('external_observer_origin_mismatch');
+  }
 }
 
 // Qualified probe paths (plan section 4, corrected by rehearsal r9). The product origin answers

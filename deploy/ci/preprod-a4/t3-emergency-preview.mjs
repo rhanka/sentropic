@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { buildProbes, loadState, runKubectl, validateProbes } from './t3-lib.mjs';
+import { buildProbes, loadState, runKubectl, validateObservers, validateProbes } from './t3-lib.mjs';
 import { preCommitRollback } from './t3-rollback.mjs';
 import { finishOpen } from './t3-finish-open.mjs';
 
@@ -16,9 +16,10 @@ await preCommitRollback({ call, revisions: config.revisions, preCmDir: config.pr
   dryRun: true, note: console.log });
 console.log('# dry-run: post-commit branch (only if committed=true and locks=0)');
 let qualified = true;
-try { validateProbes(buildProbes(config).probes); }
+const built = buildProbes(config);
+try { validateProbes(built.probes); validateObservers(built); }
 catch (err) { qualified = false; console.log(`# dry-run: cannot accept post-commit: ${err.message}`); }
 if (qualified) await finishOpen({ call, state: { ...state, namespace: config.namespace,
   middlewareSpec: state.middlewareSpec ?? config.middlewareSpec },
   images: config.images ?? { candidate: '<candidate-image>', ui: '<ui-image>' },
-  ...buildProbes(config), save: () => {}, dryRun: true, print: console.log });
+  ...built, save: () => {}, dryRun: true, print: console.log });

@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { canonical } from './guards.mjs';
 import { buildProbes, effectiveTimeout, loadState, monoMs, podLabels, recoveryDeadline, runKubectl, saveState, validateProbes, validateObservers } from './t3-lib.mjs';
-import { verificationCredential } from './verification-boundary.mjs';
+import { verificationCredential, verificationSpecValid } from './verification-boundary.mjs';
 
 // Post-commit convergence, idempotent across restarts (Astra v2 M3).
 // States: POSTCOMMIT_RESTRICTED -> ACCEPTED -> BACKUP_RESUMED ->
@@ -47,6 +48,8 @@ export function ensureStarted(call, deploy, image, opts = {}) {
 export function reconcileRestrictSafe(ctx, state) {
   const call = ctx.call;
   const mw = state.middlewareSpec;
+  if (!mw && !ctx.dryRun) throw new Error('middleware_spec_missing');
+  if (mw && !verificationSpecValid(mw)) throw new Error('traffic_boundary_invalid');
   const want = `${state.namespace}-a4-verification@kubernetescrd`;
   const key = 'traefik.ingress.kubernetes.io/router.middlewares';
   let existing = null;
@@ -58,7 +61,8 @@ export function reconcileRestrictSafe(ctx, state) {
   for (const name of ['sentropic', 'auth-idp']) {
     ingresses[name] = JSON.parse(call(['get', 'ingress', name, '-o', 'json']) || '{}');
   }
-  const conform = existing && JSON.stringify(existing) === JSON.stringify(mw)
+  const sameSpec = Boolean(existing && mw) && canonical(existing) === canonical(mw);
+  const conform = sameSpec
     && Object.values(ingresses).every(i => i.metadata?.annotations?.[key] === want);
   if (conform) return;
   for (const component of ['ui', 'auth-idp']) {
@@ -74,12 +78,12 @@ export function reconcileRestrictSafe(ctx, state) {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
     }
   }
-  if (!mw && !ctx.dryRun) throw new Error('middleware_spec_missing');
   if (!existing) {
     call(['create', '-f', '-'], JSON.stringify({ apiVersion: 'traefik.io/v1alpha1', kind: 'Middleware',
-      metadata: { name: 'a4-verification', namespace: state.namespace }, spec: mw }));
-  } else if (JSON.stringify(existing) !== JSON.stringify(mw)) {
-    call(['patch', 'middleware', 'a4-verification', '--type=merge', '-p', JSON.stringify({ spec: mw })]);
+      metadata: { name: 'a4-verification', namespace: state.namespace }, spec: mw ?? {} }));
+  } else if (!sameSpec) {
+    call(['patch', 'middleware', 'a4-verification', '--type=json', '-p',
+      JSON.stringify([{ op: 'replace', path: '/spec', value: mw }])]);
   }
   for (const name of ['sentropic', 'auth-idp']) {
     if (ingresses[name].metadata?.annotations?.[key] !== want) {
@@ -95,6 +99,7 @@ export async function finishOpen(ctx) {
   effectiveTimeout(1, ctx, (ctx.now ?? monoMs)());
   if (state.substate === 'POSTCOMMIT_RESTRICTED' || !state.substate) {
     validateProbes(probes);
+    validateObservers({ probes, restrictedProbes, externalProbes });
     // Acceptance crosses the restricted Ingresses: without the credential no probe can pass.
     if (!dry.dryRun && !ctx.verification) throw new Error('verification_credential_missing');
     reconcileRestrictSafe(ctx, state);
@@ -232,12 +237,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const fromEndpoints = buildProbes(config);
   const probes = config.probes ?? fromEndpoints.probes;
   const externalProbes = config.externalProbes ?? fromEndpoints.externalProbes;
+  const restrictedProbes = config.restrictedProbes ?? fromEndpoints.restrictedProbes;
   try {
-    if (!dryRun) validateObservers(config);
+    if (!dryRun) validateObservers({ probes, restrictedProbes, externalProbes });
     const verification = dryRun ? null : verificationCredential(config.verificationCredentialFile).header;
     const done = await finishOpen({ call, probe: fetch, state, verification,
       save: dryRun ? () => {} : next => saveState(stateDir, next), images: config.images,
-      probes, externalProbes, restrictedProbes: fromEndpoints.restrictedProbes, deadlineMs,
+      probes, externalProbes, restrictedProbes, deadlineMs,
       dryRun, print: console.log });
     if (!dryRun) {
       Object.assign(done,{ step: 'DONE',watchdogDone: true,commitVerified: true }); saveState(stateDir,done);
