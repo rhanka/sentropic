@@ -107,17 +107,36 @@ export async function migratePlacement(options: PlacementMigrationOptions): Prom
     for (const row of rows) {
       if (!DIGEST_PATTERN.test(row.digest)) throw new Error(`refusing unparseable digest: ${row.digest}`);
       const key = blobKey(options.scope, row.digest);
+      const reconcileCollected = async () => {
+        const { rows: evidence } = await options.pool.query<{ collected: boolean }>(
+          `SELECT EXISTS (SELECT 1 FROM artifacts.object_intents WHERE kind = 'delete-blob'
+           AND state = 'done' AND payload->>'deletionClaim' = 'true' AND payload->>'digest' = $1
+           AND (payload->>'blobKey' IS NULL OR payload->>'blobKey' = $2))
+           AND NOT EXISTS (SELECT 1 FROM artifacts.blob_ref_holders WHERE digest = $1)
+           AND NOT EXISTS (SELECT 1 FROM artifacts.blob_pins WHERE digest = $1) AS collected`, [row.digest, key]);
+        if (!evidence[0]?.collected || await options.db.getBlob(key) !== undefined ||
+          await options.s3.getBlob(key) !== undefined) return false;
+        if (row.placement !== options.to) switched.push(row.digest);
+        alreadyPlaced += 1;
+        return true;
+      };
       if (row.placement === options.to) {
         // Already placed: verify the target still serves the bytes, copy nothing.
         const present = await target.getBlob(key);
-        if (present === undefined) throw new Error(`placed blob missing in target: ${key}`);
+        if (present === undefined) {
+          if (await reconcileCollected()) continue;
+          throw new Error(`placed blob missing in target: ${key}`);
+        }
         verifyBytesForKey(key, present);
         if (present.byteLength !== row.size) throw new Error(`placed blob size mismatch: ${key}`);
         alreadyPlaced += 1;
         continue;
       }
       const content = await options.composite.getBlob(key);
-      if (content === undefined) throw new Error(`blob missing in current placement: ${key}`);
+      if (content === undefined) {
+        if (await reconcileCollected()) continue;
+        throw new Error(`blob missing in current placement: ${key}`);
+      }
       verifyBytesForKey(key, content);
       if (content.byteLength !== row.size) throw new Error(`blob size mismatch: ${key}`);
       await target.putBlob(key, content);
