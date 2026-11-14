@@ -91,4 +91,13 @@ for (const objects of [prod, prodA4]) {
   assert.equal(object(objects, 'ConfigMap', 'api').data.OAUTH_SERVICE_RESOURCE_URI, 'https://sentropic.sent-tech.ca');
 }
 console.log('PASS: prod unchanged outside prod-a4 except the declared S2S issuer and resource');
+// T3 window: the pods the cutover recreates name the platform PriorityClass (queue priority, no
+// preemption), which only acts on pods that name it. No other tier and no other workload names it.
+const priority = (objects, kind = 'Deployment') => Object.fromEntries(objects.filter(item => item.kind === kind)
+  .map(item => [item.metadata.name, (item.spec.jobTemplate?.spec ?? item.spec).template.spec.priorityClassName]));
+const named = Object.entries(priority(prodA4)).filter(([, value]) => value !== undefined);
+assert.deepEqual(named, ['api', 'auth-idp', 'ui'].map(name => [name, 'sentropic-t3-critical']));
+for (const kind of ['StatefulSet', 'CronJob']) assert.deepEqual(Object.values(priority(prodA4, kind)).filter(Boolean), [], kind);
+for (const objects of [base, preprod, prod]) assert.deepEqual(Object.values(priority(objects)).filter(Boolean), []);
+console.log('PASS: prod-a4 names the T3 priority class on api, auth-idp and ui only');
 await verifyRenderedSequence(preprod, 'preprod'); await verifyRenderedSequence(prodA4, 'prod');
