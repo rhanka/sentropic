@@ -4,6 +4,7 @@ import { STATE_HASHES } from './t3-rehearsal.mjs';
 export function rehearsalFixture(dir,config,baselineBytes) {
   const original = { format: 'preprod-a4-rehearsal/2',receiptRef: 'track:qualified-rehearsal',
     applicabilityReviewRef: 'track:prior-review',candidateBootPassed: true,functionalAuthPassed: true,d11Passed: true,
+    restoredBackupSha256: 'd'.repeat(64),isolatedRestoreRef: 'track:qualified-isolated-restore',
     candidateCommit: config.candidateCommit,candidateImage: config.candidateImage,
     ...Object.fromEntries(STATE_HASHES.map(key => [key,'a'.repeat(64)])) };
   const bytes = JSON.stringify(original), aclBytes = '-- fixture acl\n';

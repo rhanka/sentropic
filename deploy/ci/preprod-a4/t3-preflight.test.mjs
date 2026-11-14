@@ -26,6 +26,8 @@ export function inputs() {
   const files = { '/annex': JSON.stringify(annex), '/authorization': JSON.stringify(authorization),
     '/remote': '{}', '/baseline': JSON.stringify(applicabilityFixture()), '/budgets': JSON.stringify(budgets) };
   files['/rehearsal'] = JSON.stringify({ format: 'preprod-a4-rehearsal/2',candidateCommit: approvedRequest.candidateCommit,
+    receiptRef: 'track:qualified-rehearsal',applicabilityReviewRef: 'track:prior-review',
+    restoredBackupSha256: 'd'.repeat(64),isolatedRestoreRef: 'track:qualified-isolated-restore',
     candidateImage: image,candidateBootPassed: true,functionalAuthPassed: true,d11Passed: true,
     ...Object.fromEntries(STATE_HASHES.map(key => [key,'a'.repeat(64)])) });
   files['/acl'] = '-- synthetic ACL';

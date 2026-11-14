@@ -13,7 +13,7 @@ import { emailProbe, expectedSigningKid, probeEndpoints, probeReply, observerPro
 import { applicabilityFixture } from './t3-applicability.test.mjs';
 import { rehearsalFixture } from './t3-rehearsal-fixture.mjs';
 
-const CANDIDATE = 'ghcr.io/rhanka/sentropic-api@sha256:candidate';
+const CANDIDATE = `ghcr.io/rhanka/sentropic-api@sha256:${'e'.repeat(64)}`;
 const UI_IMAGE = 'ghcr.io/rhanka/sentropic-ui@sha256:ui';
 
 // Fault-injectable kubectl double: canned reads, recorded writes.
