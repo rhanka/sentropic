@@ -50,13 +50,13 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — Read rules, ratified plan and A-R3-5/w9 criteria; mechanically check branch and isolate ports.
-- [ ] Lot 1 — Minimum trimmed length 32; deployed OAuth/Drive/JWKS resolver validation; retain development behavior and key bytes.
-  - [ ] `api/tests/unit/deployment-secrets.test.ts`: lengths 0/1/31/32, whitespace, public seeds, boot gates.
-  - [ ] `api/tests/unit/oauth-state-secret.test.ts`, `google-drive-oauth.test.ts`, `auth/jwks-adapter.test.ts`: production refusal, KEK precedence, empty dev fallback.
+- [x] Lot 1 — Minimum trimmed length 32; deployed OAuth/Drive/JWKS resolver validation; retain development behavior and key bytes.
+  - [x] `api/tests/unit/deployment-secrets.test.ts`: lengths 0/1/31/32, whitespace, public seeds, boot gates.
+  - [x] `api/tests/unit/oauth-state-secret.test.ts`: production refusal in OAuth/Drive/JWKS, KEK precedence, empty dev fallback; existing Drive sealing checks retained.
 - [ ] Lot 2 — Bundle JWT_SECRET and refuse incomplete deployed input before any kubectl apply (BRT1-EX1).
   - [ ] `api/tests/unit/k8s-bundle-secret.test.ts`: fake kubectl only; incomplete input, boundaries, all three names, no disclosed values.
-- [ ] Lot 3 — Explicit tenant-free design-system seed; preserve tenant requirement for other sample clients.
-  - [ ] `api/tests/unit/auth/oauth-client-seed.test.ts`: observe insert/update values without a live database.
+- [x] Lot 3 — Explicit tenant-free design-system seed; preserve tenant requirement for other sample clients.
+  - [x] `api/tests/unit/auth/oauth-client-seed.test.ts`: observe insert/update values without a live database.
 - [ ] Lot 4 — Scoped local tests through make, independent review, scope gate, atomic commits below 150 lines.
 - [ ] Lot 5 — Push, PR with this document as body, exact-head green CI, report and done marker; no merge.
 
