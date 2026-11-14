@@ -124,7 +124,9 @@ data:
   # préprod »). PREPROD ONLY. ARTIFACT_BUILDER_ENABLED=1 is fail-closed: with the flag on, a missing or invalid value
   # below refuses the builder gracefully (#954: `artifact_builder_refused`, builder routes 503, api process up). Secrets (handoff, receipt, supervisor, live controller and dependency cache keys) stay in
   # Secret sentropic-api. A ConfigMap change restarts nothing: it is read at the next api rollout.
-  ARTIFACT_BUILDER_ENABLED: "1"
+  # Build capacity was removed (owner directive 2026-11-13). Keep routes on 503
+  # builder_unavailable instead of creating pods with no matching worker nodes.
+  ARTIFACT_BUILDER_ENABLED: "0"
   # Worker placement (placement.ts): pods and their Services live in the per-environment builder namespace.
   ARTIFACT_BUILDER_NAMESPACE: "sentropic-artifact-builders"
   ARTIFACT_BUILDER_SERVICE_DOMAIN: "sentropic-artifact-builders.svc.cluster.local"

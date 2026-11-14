@@ -9,9 +9,9 @@ data:
   # rank BELOW explicit env; this key is the matching inspection value so the rendered
   # ConfigMap does not claim the tier is closed while its deployment serves content.
   APP_ARTIFACT_CONTENT_ENABLED: "1"
-  # Live edge (README « Live edge »), GB4 preprod (owner GO 2026-11-07 « Oui, GB4 GO préprod »): armed here, active
-  # with content serving open on this tier (#953). Key material lives in the Secret.
-  APP_ARTIFACT_LIVE_ENABLED: "1"
+  # Worker capacity was removed (owner directive 2026-11-13). Close the live edge
+  # together with the builder; published content serving stays enabled.
+  APP_ARTIFACT_LIVE_ENABLED: "0"
   APP_ARTIFACT_LIVE_PAGES_DOMAINS: "pages.preprod.immo.sent-tech.ca=immo-preprod-live-1"
   APP_ARTIFACT_LIVE_CONTROLLER_KEY_IDS: "sentropic-preprod-live-1"
   # Supervisor relay (README « Supervisor relay », A-LIVE §8.1): the workers' only ingress, independent of the content
