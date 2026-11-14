@@ -76,8 +76,17 @@ k8s-preprod-a4-prepare: ## Prepare the owner-authorized A4 evidence; dry-run by 
 	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
 	@node deploy/ci/preprod-a4/run.mjs
 
+.PHONY: test-t3-template-diff
+test-t3-template-diff: ## P-0.8: wired legacy prod templates equal the prod-a4 render; pinned kubectl, no cluster, no network
+	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
+	@set -eu; tools="$$(mktemp -d)"; id="$$(docker create $(IDP_SYNC_KUBECTL_IMAGE))"; \
+	trap 'docker rm "$$id" >/dev/null; rm -rf "$$tools"' EXIT; docker cp "$$id:/bin/kubectl" "$$tools/kubectl"; \
+	docker run --rm --network none -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" \
+		-v "$$tools/kubectl:/usr/local/bin/kubectl:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		node deploy/ci/preprod-a4/t3-template-diff.selftest.mjs
+
 A4_TEST_FILES ?= deploy/ci/preprod-a4/*.test.mjs
-test-preprod-a4: ## Scoped operator, secret-composition and bundle preparation tests; no cluster
+test-preprod-a4: test-t3-template-diff ## Scoped operator, secret-composition and bundle preparation tests; no cluster
 	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test --test-concurrency=1 $(A4_TEST_FILES)
 
