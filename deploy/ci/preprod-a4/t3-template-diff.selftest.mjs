@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { legacy } from './t3-legacy-fixture.mjs';
-import { deployments, judge, templateDiff } from './t3-template-diff.mjs';
+import { wireVolumes } from './ops.mjs';
+import { deployments, judge, manifests, templateDiff } from './t3-template-diff.mjs';
 
 // Hermetic P-0.8: real kubectl (kustomize, patch --local, set image --local), no cluster, no network.
 function render(overlay) {
@@ -29,6 +31,18 @@ const drift = judge({ live, rendered, image, annexCommands: [['set', 'image', 'd
 assert.deepEqual(drift.deployments.ui.diff, ['/spec/containers/ui/image']);
 assert.equal(drift.strictZero, false);
 console.log('PASS: an unwired template and an annex image off the rendered pin are reported');
+
+// A wired template must never start against a missing claim: the wire creates every claim the
+// rendered consumers mount, and the one the overlay also owns is byte-for-byte the rendered claim.
+const claims = wireVolumes.map(file => manifests(readFileSync(file, 'utf8'))[0]);
+const mounted = ['api', 'auth-idp'].flatMap(name => pins[name].spec.template.spec.volumes)
+  .flatMap(volume => volume.persistentVolumeClaim ? [volume.persistentVolumeClaim.claimName] : []);
+assert.deepEqual(mounted.sort(), claims.map(claim => claim.metadata.name).sort());
+const owned = manifests(rendered).filter(object => object.kind === 'PersistentVolumeClaim'
+  && mounted.includes(object.metadata.name));
+assert.deepEqual(owned.map(claim => claim.metadata.name), ['auth-idp-session-authority']);
+assert.deepEqual(claims.find(claim => claim.metadata.name === owned[0].metadata.name).spec, owned[0].spec);
+console.log('PASS: the wire creates every claim mounted by the wired templates, identical to the rendered claim');
 
 // The wiring restates base entries for the legacy template. It must never override or outlive
 // them: the A4 overlay renders every base entry unchanged and adds only its own names.
