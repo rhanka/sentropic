@@ -33,6 +33,7 @@
 - [x] Review R1: reject hidden properties, sparse arrays, accessors and symbols before canonical identity encoding; regression cases reproduced.
 - [x] Review R1: enforce ASCII source paths, fatal UTF-8 entry decoding and safe diagnostic paths/messages; 123 compile tests pass.
 - [x] Sandbox qualification: 193/193 tests pass with a 4 GiB tmpfs at /tmp; default overlay storage still times out on durable custody revocation; no threshold increased.
+- [x] Review R2: independent correctness/interop and security legs APPROVE code HEAD 197f6a6b9; external consumer gates remain pending.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests or flaky exceptions.
@@ -57,7 +58,7 @@
   - [x] Pin recipe-key golden vector independently checked with Node crypto; add identity mutation and closed-option tests.
   - [x] Add packages/cluster-mesh/tests/compile/output.spec.ts for every shared diagnostic code, first-error preservation, manifest/SRI corruption and no partial refusals; initial 107 tests pass.
   - [x] Add packages/cluster-mesh/tests/compile/canonical-input.spec.ts and validation.spec.ts for all reproduced R1 blockers.
-- [ ] Lot 4: run scoped make test-cluster-mesh, typecheck-cluster-mesh and independent code review; resolve findings.
-- [ ] Lot 5: bump/export cluster-mesh after registry check; make scope-check before every commit.
-- [ ] Lot 6: push, open PR with this plan, wait for exact-head green CI; do not merge.
-- [ ] Lot 7: make down-volumes for test environment; write report with file:line evidence, PR and CI; then completion marker.
+- [x] Lot 4: run scoped make test-cluster-mesh, typecheck-cluster-mesh and independent code review; resolve findings; 123 tests, lint and both typechecks pass.
+- [x] Lot 5: bump/export cluster-mesh after registry check; make scope-check before every commit.
+- [x] Lot 6: prepare reviewed delivery head; push, PR and exact-head CI receipts are recorded in .tmp/rv/v8-contract.md after completion; no merge.
+- [x] Lot 7: make down-volumes and make ps confirm no services; report and completion marker are finalized after CI settles.
