@@ -54,11 +54,18 @@ test('fixture drops external policies and secrets, isolates HTTP and keeps postg
     metadata: { name, namespace: 'sentropic' }, spec: { template: { spec: { containers: [] } } },
   }));
   objects.push({ kind: 'NetworkPolicy', metadata: { name: 'allow-public' }, spec: { egress: [{}] } });
+  objects.push({ kind: 'ServiceAccount',metadata: { name: 'sentropic-app' } });
+  objects.push({ kind: 'ConfigMap',metadata: { name: 'api' },data: {
+    WEBAUTHN_RP_ID: 'sent-tech.ca',WEBAUTHN_ORIGIN: 'https://sentropic.sent-tech.ca',SCW_TEM_API_BASE_URL: 'https://api.scaleway.com' } });
   objects.push({ kind: 'Ingress', metadata: { name: 'sentropic' }, spec: { host: 'sentropic.sent-tech.ca' } });
   const out = fixture(objects);
   assert.ok(out.items.every(o => o.metadata.namespace === RESTORE_NS));
   assert.ok(!out.items.some(o => o.metadata.name === 'allow-public'));
-  assert.doesNotMatch(JSON.stringify(out), /sentropic\.sent-tech\.ca/);
+  assert.equal(out.items.find(o => o.kind === 'Ingress').spec.host,'app.restore-a4.test');
+  assert.ok(out.items.some(o => o.kind === 'ServiceAccount' && o.metadata.name === 'sentropic-app'));
+  const cm = out.items.find(o => o.kind === 'ConfigMap');
+  assert.equal(cm.data.WEBAUTHN_ORIGIN,'https://sentropic.sent-tech.ca');
+  assert.equal(cm.data.SCW_TEM_API_BASE_URL,'http://tem.sentropic-restore-sinks.svc.cluster.local:8080');
   assert.throws(() => fixture([...objects, { kind: 'Secret' }]));
   assert.throws(() => fixture([]));
 });

@@ -21,6 +21,7 @@ export function validateReceiptPolicy(config, grant, read) {
 }
 
 export function fencedReceipt(original,snapshot,policy) {
+  if (JSON.stringify(policy?.allowedChanges) !== '["sourceContentSha256"]' || !policy.reviewRef) throw new Error('receipt_policy_invalid');
   for (const key of STATE_HASHES) {
     if (!/^[a-f0-9]{64}$/.test(original[key] ?? '') || !/^[a-f0-9]{64}$/.test(snapshot[key] ?? '')) {
       throw new Error('receipt_hash_missing');
@@ -43,6 +44,7 @@ export function prepareFencedReceipt(ctx,query) {
   const config = ctx.config, originalBytes = readFileSync(config.rehearsalFile,'utf8');
   const original = JSON.parse(originalBytes), policy = config.applicabilityReceiptPolicy;
   if (digest(originalBytes) !== policy?.originalRehearsalSha256) throw new Error('original_rehearsal_changed');
+  if (digest(readFileSync(config.applicabilityBaselineFile)) !== policy.baselineSha256) throw new Error('applicability_baseline_changed');
   const snapshot = JSON.parse(ctx.call(['exec','sentropic-a4-custodian','-c','custodian','--','node','-e',
     "process.stdout.write(require('node:fs').readFileSync('/run/cm-cutover/snapshot.json','utf8'))"]));
   if (snapshot.operationId !== config.request.operationId || snapshot.candidateCommit !== config.request.candidateCommit
