@@ -17,7 +17,13 @@ for (const size of ['S', 'M', 'L']) {
     assert.match(output.template, /vue/);
     results.checks[size] = { success: true, bytes: JSON.stringify(output).length };
     for (const [kind, edit] of Object.entries(edits)) {
-      const next = await context.eval(`spike.compile(${JSON.stringify(edit(source))})`, { copy: true, timeout: 5000 });
+      const freshIsolate = new ivm.Isolate({ memoryLimit: 256 });
+      let next;
+      try {
+        const freshContext = await freshIsolate.createContext();
+        await freshContext.eval(bootstrap);
+        next = await freshContext.eval(`spike.compile(${JSON.stringify(edit(source))})`, { copy: true, timeout: 5000 });
+      } finally { freshIsolate.dispose(); }
       const memo = await context.eval(`(() => {const s=spike.createSession();s.compile(${JSON.stringify(source)});return {output:s.compile(${JSON.stringify(edit(source))}),counters:s.counters}})()`, { copy: true, timeout: 5000 });
       assert.deepEqual(memo.output, next, `block memo differs from whole compile: ${size}/${kind}`);
       results.checks[`${size}/${kind}`] = Object.fromEntries(['script', 'template', 'styles'].map(key => [key,

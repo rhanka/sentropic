@@ -77,6 +77,8 @@
   - [ ] Record setup/render wrappers, state witnesses and swap spans.
   - [ ] Measure worker compiles, pre-armed import and network/clock uncertainty.
 - [ ] **Lot 4 — Evidence and review**
+  - [x] Record all sixteen question statuses and raw evidence; the exit gate remains unqualified.
+  - [x] Preserve 500m, admitted 100m and verified unlimited cgroup measurements for D12.
   - [ ] Record sixteen answers and exact commands; open D12/D13 on measured misses.
   - [ ] Independent review and reconcile findings.
   - [ ] Scope-check before every selective-stage make commit.
