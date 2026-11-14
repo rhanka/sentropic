@@ -190,10 +190,15 @@ export function createPostgresDeletionClaimStore(client: FinalizeTxClient): Insp
   };
   return { ...access, withDigestLock,
     async listPendingKeys(prefix, limit) {
+      // Persist rotation even when every erasure fails and the host restarts.
       const { rows } = await client.query<{ key: string }>(
-        `SELECT payload->>'blobKey' AS key FROM artifacts.object_intents
+        `WITH candidates AS (SELECT id FROM artifacts.object_intents
          WHERE kind = 'delete-blob' AND state = 'pending' AND payload->>'deletionClaim' = 'true'
-         AND starts_with(payload->>'blobKey', $1) ORDER BY created_at, id LIMIT $2`, [prefix, limit]);
+         AND starts_with(payload->>'blobKey', $1)
+         ORDER BY updated_at, id LIMIT $2 FOR UPDATE SKIP LOCKED)
+         UPDATE artifacts.object_intents AS intent SET updated_at = clock_timestamp()
+         FROM candidates WHERE intent.id = candidates.id
+         RETURNING intent.payload->>'blobKey' AS key`, [prefix, limit]);
       return rows.map(row => row.key);
     },
     async listClaims() {

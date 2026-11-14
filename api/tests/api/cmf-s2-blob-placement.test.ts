@@ -12,7 +12,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { createPostgresDbBlobStore } from '@sentropic/artifacts/adapters/db-blob';
 import { createPostgresArtifactStore } from '@sentropic/artifacts/adapters/postgres';
-import { listBlobKeysPaged } from '@sentropic/artifacts/server/blob-bridge';
+import { createVerifiedBlobStore, listBlobKeysPaged } from '@sentropic/artifacts/server/blob-bridge';
 import { createGcService, createMemoryRefcountStore, createPostgresDeletionClaimStore } from '@sentropic/artifacts/server/gc';
 import { createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
 import { createPostgresCommitExecutor } from '@sentropic/artifacts/adapters/postgres-commit';
@@ -54,8 +54,7 @@ afterEach(async () => {
 
 afterAll(() => admin.end());
 
-function hostWith(placementForSize?: (size: number) => 'db' | 'object', mode: 'db' | 's3' | 'db+s3' = 'db') {
-  const s3 = createMemoryBlobStore();
+function hostWith(placementForSize?: (size: number) => 'db' | 'object', mode: 'db' | 's3' | 'db+s3' = 'db', s3 = createMemoryBlobStore()) {
   const blobs = createPlacementBlobStore({ pool, s3, mode, inlineMaxBytes: 64 });
   return { host: createArtifactHost({ pool, blobs, quotaBytes: 262144, placementForSize,
     async currentIdentity(client, claims) {
@@ -67,6 +66,56 @@ function hostWith(placementForSize?: (size: number) => 'db' | 'object', mode: 'd
 }
 
 describe('composite blob placement', () => {
+  it('recovers byte-free debt beyond 100 permanently failing reservations after restart', async () => {
+    const prefix = 'artifacts/scope-p/blobs/sha256/';
+    const keys = Array.from({ length: 101 }, (_, i) => `${prefix}${String(i).padStart(64, '0')}`);
+    for (const [i, key] of keys.entries()) {
+      await pool.query(`INSERT INTO artifacts.object_intents (id, kind, payload, created_at, updated_at)
+        VALUES ($1, 'delete-blob', $2, now() + $3 * interval '1 millisecond', now() + $3 * interval '1 millisecond')`,
+      [randomUUID(), JSON.stringify({ deletionClaim: true, digest: `sha256:${key.split('/').pop()}`,
+        holder: 'gc', blobKey: key }), i - 1000]);
+    }
+    const physical = createMemoryBlobStore();
+    for (const key of keys.slice(0, 100)) await physical.putBlob(key, new Uint8Array([1]));
+    const blobs = { ...physical,
+      async deleteBlob() { throw new Error('AccessDenied'); } };
+    const jobs = () => createArtifactHostJobs({ pool, blobs, authorize: async () => true,
+      page: async () => ({ keys: [] }) });
+    expect((await jobs().collect('scope-p')).failures).toHaveLength(100);
+    expect((await jobs().collect('scope-p')).deleted).toContain(keys[100]);
+    expect((await pool.query(`SELECT state, count(*)::int AS n FROM artifacts.object_intents
+      WHERE kind = 'delete-blob' GROUP BY state ORDER BY state`)).rows)
+      .toEqual([{ state: 'done', n: 1 }, { state: 'pending', n: 100 }]);
+  });
+
+  it.each(['db', 's3'] as const)('republishes a collected %s digest after changing write mode', async initialMode => {
+    const first = hostWith(() => initialMode === 'db' ? 'db' : 'object', initialMode);
+    const text = '<h1>collected and republished</h1>';
+    const publish = async (host: typeof first.host) => {
+      const bound = await host.bind(identity, 'workspace-a');
+      const ensured = await bound.http({ method: 'POST', path: '/ensure',
+        body: { bindingName: randomUUID(), idempotencyKey: randomUUID() } });
+      return bound.http({ method: 'POST', path: '/publish', body: {
+        artifactId: (ensured.body as { artifactId: string }).artifactId, idempotencyKey: randomUUID(),
+        files: [{ path: 'index.html', mimeType: 'text/html', text }] } });
+    };
+    expect((await publish(first.host)).status).toBe(201);
+    const { storage_scope_id: scope, digest } = (await pool.query('SELECT storage_scope_id, digest FROM artifacts.blobs')).rows[0];
+    // Model a released digest while retaining its registration and publication history.
+    await pool.query('DELETE FROM artifacts.blob_ref_holders WHERE digest = $1', [digest]);
+    await pool.query('DELETE FROM artifacts.blob_pins WHERE digest = $1', [digest]);
+    const old = createPlacementBlobStore({ pool, s3: first.s3, mode: initialMode, inlineMaxBytes: 64 });
+    const key = `artifacts/${scope}/blobs/sha256/${digest.slice(7)}`;
+    const jobs = createArtifactHostJobs({ pool, blobs: old, authorize: async () => true, page: async () => ({ keys: [] }) });
+    expect((await jobs.collect(scope)).deleted).toContain(key);
+    expect(await old.getBlob(key)).toBeUndefined();
+    const mode = initialMode === 'db' ? 's3' : 'db';
+    const next = hostWith(() => mode === 'db' ? 'db' : 'object', mode, first.s3);
+    expect((await publish(next.host)).status).toBe(201);
+    const current = createPlacementBlobStore({ pool, s3: first.s3, mode, inlineMaxBytes: 64 });
+    expect(await current.getBlob(key)).toEqual(new TextEncoder().encode(text));
+  });
+
   it.each([['db', 'db'], ['s3', 's3'], ['db', 's3'], ['s3', 'db']] as const)(
     'cleans expired %s preparations in %s mode under the owning lock', async (placement, mode) => {
     const bounded = new Pool({ connectionString: pool.options.connectionString,
@@ -205,7 +254,7 @@ describe('composite blob placement', () => {
     expect(await s3.getBlob(keyFor(b))).toBeUndefined();
   });
 
-  it('collects inside the real owning transaction without reacquiring on another connection', async () => {
+  it.each([false, true])('collects inside the owning transaction with verification wrapper=%s', async verified => {
     const bytes = new TextEncoder().encode('gc real begin');
     const key = keyFor(bytes);
     const db = createPostgresDbBlobStore(pool);
@@ -218,7 +267,10 @@ describe('composite blob placement', () => {
     try {
       const store = createPlacementBlobStore({ pool: lockedPool, s3, mode: 's3', inlineMaxBytes: 8 });
       const gc = createPostgresGcService(createPostgresCommitExecutor(lockedPool), () => createMemoryRefcountStore());
-      expect(await gc.collect(store, 'artifacts/scope-p/blobs/sha256/')).toEqual({ deleted: [key], retained: [], failures: [] });
+      expect(await gc.collect(verified ? createVerifiedBlobStore(store) : store, 'artifacts/scope-p/blobs/sha256/'))
+        .toEqual({ deleted: [key], retained: [], failures: [] });
+      expect((await pool.query("SELECT state FROM artifacts.object_intents WHERE kind = 'delete-blob'")).rows)
+        .toEqual([{ state: 'done' }]);
       expect(await db.getBlob(key)).toBeUndefined();
       expect(await s3.getBlob(key)).toBeUndefined();
     } finally { await lockedPool.end(); }

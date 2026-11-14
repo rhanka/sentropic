@@ -115,6 +115,13 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Switch back to worktree after UAT.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot 10 — Astra FIX R4**
+  - [x] Add PostgreSQL regressions for reservation starvation, verified GC transaction forwarding and full republication after collection in both placement directions.
+  - [x] Rotate persisted reservation attempts independently of physical listing and host restarts.
+  - [x] Preserve the owning deletion transaction through the verification wrapper.
+  - [x] Rewrite registered digests into their existing placement before republication.
+  - [x] Reproduce four failing PostgreSQL cases before fixes, then pass 84/84 API regressions, 59/59 package tests and package build/typecheck.
+  - [ ] Keep prior storage regressions green; qualify package archive and exact-head CI, then report and remove test volumes.
 - [ ] **Lot 9 — Astra FIX R3**
   - [x] Rebase on origin/main and reproduce exact/partial prefix failures; fix bounded S3/Postgres/SQLite prefix selection.
   - [x] Reuse cleanup transaction, enumerate both placements and resume persisted deletion debt (cmf-s2 regressions red before fixes, then green).
