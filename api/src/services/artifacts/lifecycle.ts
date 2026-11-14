@@ -6,9 +6,24 @@ import { createPostgresCommitExecutor } from '@sentropic/artifacts/adapters/post
 import { createPostgresDeletionClaimStore, createPostgresGcService } from '@sentropic/artifacts/server/gc';
 import { scheduleBoundedPreparationCleanup } from '@sentropic/artifacts/server/object-intents';
 import type { PublicationBlobStore } from '@sentropic/artifacts/server/publication';
+import { listBlobKeysPaged } from '@sentropic/artifacts/server/blob-bridge';
 
 export interface ArtifactBlobPage { keys: string[]; cursor?: string }
 export type ArtifactBlobPageReader = (prefix: string, limit: number, cursor?: string) => Promise<ArtifactBlobPage>;
+/** Lazy host wrapper; initialization and privacy enforcement stay in the supplied factory. */
+export function createLazyArtifactBlobs(load: () => Promise<{ blobs: PublicationBlobStore }>): PublicationBlobStore {
+  return {
+    putBlob: async (key, bytes) => (await load()).blobs.putBlob(key, bytes),
+    getBlob: async key => (await load()).blobs.getBlob(key),
+    deleteBlob: async (key, transaction) => (await load()).blobs.deleteBlob(key, transaction),
+    listKeys: async prefix => (await load()).blobs.listKeys(prefix),
+    listKeysPaged: async (prefix, page) => {
+      const blobs = (await load()).blobs;
+      if (!blobs.listKeysPaged) throw new Error('Bounded artifact object listing required');
+      return blobs.listKeysPaged(prefix, page);
+    },
+  };
+}
 const blobKey = /^artifacts\/[A-Za-z0-9_-]+\/blobs\/sha256\/[0-9a-f]{64}$/;
 function bound(limit: number): number {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) throw new Error('Invalid artifact maintenance bound');
@@ -39,6 +54,7 @@ export async function createPrivateArtifactStorage(options: { client: S3Client; 
     async getBlob(key) { await assertPrivate(); return upstream.getBlob(key); },
     async deleteBlob(key) { await assertPrivate(); await upstream.deleteBlob(key); },
     async listKeys(prefix) { await assertPrivate(); return upstream.listKeys(prefix); },
+    async listKeysPaged(prefix, page) { await assertPrivate(); return upstream.listKeysPaged!(prefix, page); },
   };
   const page: ArtifactBlobPageReader = async (prefix, limit, cursor) => {
     bound(limit);
@@ -140,7 +156,9 @@ export function createArtifactHostJobs(options: {
       await authorize('collect');
       if (!/^[A-Za-z0-9_-]+$/.test(storageScopeId)) throw new Error('Invalid artifact storage scope');
       const prefix = `artifacts/${storageScopeId}/blobs/sha256/`;
-      const page = await options.page(prefix, limit, cursor);
+      const listed = options.blobs.listKeysPaged === undefined ? undefined : await listBlobKeysPaged(options.blobs, prefix,
+        { maxItems: limit, maxEncodedBytes: limit * 256, ...(cursor === undefined ? {} : { continuation: cursor }) });
+      const page = listed ? { keys: listed.keys, cursor: listed.continuation } : await options.page(prefix, limit, cursor);
       if (page.keys.length > limit || page.keys.some(key => !key.startsWith(prefix) || !blobKey.test(key))) {
         throw new Error('Invalid artifact collection page');
       }

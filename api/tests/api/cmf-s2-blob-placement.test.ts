@@ -5,7 +5,9 @@
  * round-trips bytes and coordinates deletes.
  */
 import { seedCmArtifactIdentity } from '../utils/cm-artifact-fixture';
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { GetPublicAccessBlockCommand, ListObjectsV2Command, type S3Client } from '@aws-sdk/client-s3';
+import { createArtifactHostJobs, createLazyArtifactBlobs, createPrivateArtifactStorage } from '../../src/services/artifacts/lifecycle';
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { createPostgresDbBlobStore } from '@sentropic/artifacts/adapters/db-blob';
@@ -64,6 +66,51 @@ function hostWith(placementForSize?: (size: number) => 'db' | 'object', mode: 'd
 }
 
 describe('composite blob placement', () => {
+  it('bounds S3 calls through both host wrappers and resumes by key', async () => {
+    const prefix = 'artifacts/scope-p/blobs/sha256/';
+    const keys = [1, 2, 3, 4, 5].map(n => `${prefix}${String(n).padStart(64, '0')}`);
+    const send = vi.fn(async (command: unknown) => {
+      if (command instanceof GetPublicAccessBlockCommand) return { PublicAccessBlockConfiguration: {
+        BlockPublicAcls: true, IgnorePublicAcls: true, BlockPublicPolicy: true, RestrictPublicBuckets: true } };
+      if (!(command instanceof ListObjectsV2Command)) throw new Error('unexpected S3 command');
+      const remaining = keys.filter(key => key > (command.input.StartAfter ?? prefix));
+      const page = remaining.slice(0, command.input.MaxKeys ?? remaining.length);
+      return { Contents: page.map(Key => ({ Key })), IsTruncated: page.length < remaining.length };
+    });
+    const storage = await createPrivateArtifactStorage({ bucket: 'private-artifacts', client: { send } as unknown as S3Client });
+    const store = createPlacementBlobStore({ pool, s3: createLazyArtifactBlobs(async () => storage), mode: 's3', inlineMaxBytes: 8 });
+    const first = await listBlobKeysPaged(store, prefix, { maxItems: 2, maxEncodedBytes: 10000 });
+    expect(first.keys).toEqual(keys.slice(0, 2));
+    expect(first.continuation).toBeDefined();
+    expect(send.mock.calls.filter(([command]) => command instanceof ListObjectsV2Command)).toHaveLength(1);
+    expect((send.mock.calls[1]![0] as ListObjectsV2Command).input).toMatchObject({ MaxKeys: 3, StartAfter: prefix });
+    const second = await listBlobKeysPaged(store, prefix, { maxItems: 2, maxEncodedBytes: 10000, continuation: first.continuation });
+    expect(second.keys).toEqual(keys.slice(2, 4));
+    expect(send.mock.calls.filter(([command]) => command instanceof ListObjectsV2Command)).toHaveLength(2);
+    expect((send.mock.calls[2]![0] as ListObjectsV2Command).input).toMatchObject({ MaxKeys: 3, StartAfter: keys[1] });
+  });
+
+  it.each(['s3', 'db'] as const)('host maintenance collects old placements in %s mode', async mode => {
+    const db = createPostgresDbBlobStore(pool);
+    const s3 = createMemoryBlobStore();
+    const a = new TextEncoder().encode('old db placement');
+    const b = new TextEncoder().encode('old s3 placement');
+    await db.putBlob(keyFor(a), a);
+    await s3.putBlob(keyFor(b), b);
+    const blobs = createPlacementBlobStore({ pool, s3, mode, inlineMaxBytes: 8 });
+    const jobs = createArtifactHostJobs({ pool, blobs, batchSize: 1, authorize: async () => true,
+      page: async () => { throw new Error('S3-only enumeration bypasses composite'); } });
+    const first = await jobs.collect('scope-p');
+    expect(first.failures).toEqual([]);
+    expect(first.deleted).toHaveLength(1);
+    expect(first.cursor).toBeDefined();
+    const second = await jobs.collect('scope-p', first.cursor);
+    expect(second.failures).toEqual([]);
+    expect([...first.deleted, ...second.deleted].sort()).toEqual([keyFor(a), keyFor(b)].sort());
+    expect(await db.getBlob(keyFor(a))).toBeUndefined();
+    expect(await s3.getBlob(keyFor(b))).toBeUndefined();
+  });
+
   it('collects inside the real owning transaction without reacquiring on another connection', async () => {
     const bytes = new TextEncoder().encode('gc real begin');
     const key = keyFor(bytes);
