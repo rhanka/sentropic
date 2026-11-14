@@ -113,6 +113,11 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Switch back to worktree after UAT.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot 9 — Astra FIX R3**
+  - [x] Rebase on origin/main and reproduce exact/partial prefix failures; fix bounded S3/Postgres/SQLite prefix selection.
+  - [ ] Reuse cleanup transaction, enumerate both placements and resume persisted deletion debt.
+  - [ ] Qualify collected-row placement migration and offline image rollback/resume.
+  - [ ] Push final head, await green CI, report FIX R3 and remove test volumes.
 - [ ] **Lot 8 — Astra FIX R2**
   - [x] Reproduce and fix partial deletion errors and maintenance enumeration across placement modes (composite-blob.test.ts).
   - [x] Qualify image rollback, real transactional GC, host paging, migration contention and process crash recovery.

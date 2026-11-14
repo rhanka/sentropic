@@ -91,11 +91,10 @@ export function createSqliteDbBlobStore(db: SqliteDatabase): PublicationBlobStor
       const limit = Math.min(page.maxItems + 1, PAGE_FETCH_CAP);
       const { rows } = runQuery<{ digest: string }>(
         db,
-        after === undefined
-          ? 'SELECT digest FROM blob_bytes WHERE storage_scope_id = $1 ORDER BY digest LIMIT $2'
-          : `SELECT digest FROM blob_bytes WHERE storage_scope_id = $1 AND digest > $2
-             ORDER BY digest LIMIT $3`,
-        after === undefined ? [match[1], limit] : [match[1], after, limit],
+        `SELECT digest FROM blob_bytes WHERE storage_scope_id = $1
+         AND substr(digest, 1, length($2)) = $2
+         AND ($3 IS NULL OR digest > $3) ORDER BY digest LIMIT $4`,
+        [match[1], `sha256:${prefix.slice(match[0].length)}`, after ?? null, limit],
       );
       const keys = rows.map((row) => `artifacts/${match[1]}/blobs/sha256/${row.digest.slice('sha256:'.length)}`)
         .filter((key) => key.startsWith(prefix))
