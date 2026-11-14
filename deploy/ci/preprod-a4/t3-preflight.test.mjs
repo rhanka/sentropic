@@ -5,7 +5,7 @@ import { approvedRequest, image } from './fixtures.mjs';
 import { digest, canonical } from './guards.mjs';
 import { STATE_HASHES } from './t3-rehearsal.mjs';
 import { applicabilityFixture } from './t3-applicability.test.mjs';
-import { emailProbe, expectedSigningKid, probeEndpoints } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, observerProbes } from './t3-probe-fixture.mjs';
 
 export function inputs() {
   const ui = `ghcr.io/rhanka/sentropic-ui@sha256:${'c'.repeat(64)}`;
@@ -39,6 +39,7 @@ export function inputs() {
     remoteFile: '/remote', budgetsFile: '/budgets', applicabilityBaselineFile: '/baseline',
     rehearsalFile: '/rehearsal',aclReceiptFile: '/acl-receipt',restoreAclFile: '/acl',applicabilityReceiptPolicy: policy,
     endpoints: probeEndpoints(), emailProbe, expectedSigningKid, initialSecretKeyNames: ['EMAIL_VERIFICATION_PEPPER'],
+    restrictedProbes: observerProbes().restrictedProbes,
     externalProbes: [{ id: 'external-app',url: 'https://app.test/',expect: 200 },
       { id: 'external-idp',url: 'https://idp.test/.well-known/openid-configuration',expect: 200 }],
     witness: { url: 'https://app.test/api/v1/auth/me',cookie: 'synthetic-witness',expiresAt: new Date(Date.now()+86400000).toISOString() },

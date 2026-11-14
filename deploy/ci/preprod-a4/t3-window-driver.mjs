@@ -305,14 +305,14 @@ export async function recover(ctx, state, reason) {
       saveState(ctx.stateDir, state);
       return 3;
     }
-    const { probes, externalProbes } = buildProbes(ctx.config);
+    const { probes, externalProbes, restrictedProbes } = buildProbes(ctx.config);
     // The api was frozen above, so a committed database always restarts the
     // api here before converging. Never boots a legacy image: ensureStarted
     // pins the candidate image.
     ctx.print?.('# recover: restarting committed api before finish-open');
     ensureStarted(ctx.call, 'api', ctx.config.images.candidate, { dryRun: ctx.dryRun, print: ctx.print });
     await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
-      save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes, deadlineMs, now });
+      save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes, restrictedProbes, deadlineMs, now });
     // Same single-writer guard on the post-commit branch.
     state.step = 'DONE';
     state.watchdogDone = true;
@@ -525,9 +525,9 @@ async function driveInner(ctx, state) {
   if (!info.apiReady) return recover(ctx, state, 'api_not_ready');
   heartbeat(ctx, state, 'W8');
   if (monoMs() > cutoff(FINISH_CUTOFF_MS)) return recover(ctx, state, 'W8_cutoff');
-  const { probes, externalProbes } = buildProbes(ctx.config);
+  const { probes, externalProbes, restrictedProbes } = buildProbes(ctx.config);
   await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
-    save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes,
+    save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes,restrictedProbes,
     deadlineMs: t0 + FINISH_CUTOFF_MS });
   heartbeat(ctx, state, 'W9');
   if (monoMs() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
