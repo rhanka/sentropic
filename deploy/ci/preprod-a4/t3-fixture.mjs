@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 export const RESTORE_NS = 'sentropic-restore-a4';
 export const SINK_NS = 'sentropic-restore-sinks';
 const names = new Set(['api', 'auth-idp', 'ui', 'postgres', 'pgbackup', 'sentropic-idp-identity-export',
-  'sentropic', 'sentropic-api', 'sentropic-a4-custody']);
+  'sentropic', 'sentropic-api', 'sentropic-app', 'sentropic-a4-custody']);
 const hosts = { 'sentropic.sent-tech.ca': 'app.restore-a4.test', 'auth.sent-tech.ca': 'auth.restore-a4.test' };
 
 // Input: reviewed rendered/live object list, without Secret data. Output is inert JSON.
@@ -31,7 +31,7 @@ export function fixture(objects) {
       if (subject.kind === 'ServiceAccount') subject.namespace = RESTORE_NS;
     }
     if (clean.kind === 'ConfigMap' && ['api','auth-idp'].includes(clean.metadata.name)) {
-      Object.assign(clean.data, { SCW_TEM_ENDPOINT: `http://tem.${SINK_NS}.svc.cluster.local:8080`,
+      Object.assign(clean.data, { SCW_TEM_API_BASE_URL: `http://tem.${SINK_NS}.svc.cluster.local:8080`,
         SMTP_HOST: `mail.${SINK_NS}.svc.cluster.local`, SMTP_PORT: '1025',
         ARTIFACT_BUILD_BACKEND: 'disabled', ARTIFACT_LIVE_ENABLED: 'false' });
     }
