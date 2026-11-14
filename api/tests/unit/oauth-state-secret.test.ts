@@ -4,12 +4,17 @@ import { createOAuthHmacStateCodec, type OAuthContinuationState } from '@sentrop
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { env } from '../../src/config/env';
+import { DEVELOPMENT_SECRET_SEED } from '../../src/config/deployment-secrets';
 import { createSentropicOAuthOptions, resolveSessionTokenSecret } from '../../src/routes/auth/oauth';
+import { createJwksAdapter } from '../../src/services/auth/jwks-adapter';
+import { createGoogleDriveOAuthState } from '../../src/services/google-drive-oauth';
 
 const LEGACY_LITERAL = 'dev-secret-key-change-in-production-please';
 
 const originalJwtSecret = env.JWT_SECRET;
 const originalOAuthSigningKek = env.OAUTH_SIGNING_KEK;
+const mutable = env as unknown as Record<string, unknown>;
+const originalRuntime = { NODE_ENV: env.NODE_ENV, DISABLE_RATE_LIMIT: env.DISABLE_RATE_LIMIT, ADMIN_EMAIL: env.ADMIN_EMAIL };
 
 const statePayload: OAuthContinuationState = {
   clientId: 'secret-separation-client',
@@ -29,6 +34,7 @@ describe('OAuth continuation state key separation', () => {
   afterEach(() => {
     env.JWT_SECRET = originalJwtSecret;
     env.OAUTH_SIGNING_KEK = originalOAuthSigningKek;
+    Object.assign(mutable, originalRuntime);
   });
 
   it('uses the OAuth signing KEK when JWT_SECRET is also configured', async () => {
@@ -44,6 +50,36 @@ describe('OAuth continuation state key separation', () => {
 
     await expect(oauthKekCodec.unseal(sealedState)).resolves.toEqual(statePayload);
     await expect(jwtCodec.unseal(sealedState)).resolves.toBeNull();
+  });
+
+  it('should refuse short, blank and public keys in deployed OAuth, Drive and JWKS resolvers', () => {
+    Object.assign(mutable, { NODE_ENV: 'production', DISABLE_RATE_LIMIT: 'false', ADMIN_EMAIL: 'deployed@example.test' });
+    for (const value of ['', 'x', 'x'.repeat(31), ' '.repeat(32), DEVELOPMENT_SECRET_SEED]) {
+      env.OAUTH_SIGNING_KEK = value;
+      env.JWT_SECRET = value;
+      expect(() => createSentropicOAuthOptions()).toThrow(/provisioned/);
+      expect(() => createGoogleDriveOAuthState({ userId: 'u', workspaceId: 'w' })).toThrow(/provisioned/);
+      expect(() => createJwksAdapter()).toThrow(/provisioned/);
+    }
+  });
+
+  it('should select a provisioned JWT for state but never for deployed JWKS', async () => {
+    Object.assign(mutable, { NODE_ENV: 'production', DISABLE_RATE_LIMIT: 'false', ADMIN_EMAIL: 'deployed@example.test' });
+    env.OAUTH_SIGNING_KEK = 'short';
+    env.JWT_SECRET = 'j'.repeat(32);
+    const state = await createSentropicOAuthOptions().stateCodec.seal(statePayload);
+    await expect(createOAuthHmacStateCodec({ secret: env.JWT_SECRET }).unseal(state)).resolves.toEqual(statePayload);
+    expect(() => createGoogleDriveOAuthState({ userId: 'u', workspaceId: 'w' })).not.toThrow();
+    expect(() => createJwksAdapter()).toThrow(/OAUTH_SIGNING_KEK/);
+    env.OAUTH_SIGNING_KEK = 'k'.repeat(32);
+    expect(() => createJwksAdapter()).not.toThrow();
+  });
+
+  it('should treat empty JWKS keys as absent in development', () => {
+    mutable.NODE_ENV = 'test';
+    env.OAUTH_SIGNING_KEK = '';
+    env.JWT_SECRET = '';
+    expect(() => createJwksAdapter({ oauthSigningKek: '' })).not.toThrow();
   });
 });
 

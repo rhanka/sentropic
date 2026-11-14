@@ -266,7 +266,7 @@ const stateSecret = (): string => {
   if (secret) return secret;
   if (deployed) {
     throw new Error(
-      'OAUTH_SIGNING_KEK or JWT_SECRET must be provisioned to seal Google Drive OAuth state in production.',
+      'A provisioned OAUTH_SIGNING_KEK or JWT_SECRET is required to seal Google Drive OAuth state in production.',
     );
   }
   return DEVELOPMENT_SECRET_SEED;
