@@ -1,6 +1,13 @@
 import { pathToFileURL } from 'node:url';
 import { assertDigestOutput, assertRequest, canonical, digest, kubectl, podName, privateInput, tierOf, wiring } from './guards.mjs';
 
+// Exact W3 wire vectors. The P-0.8 judge (t3-template-diff.mjs) replays the deployment ones offline.
+export const wireCommands = image => ['api', 'auth-idp'].flatMap(name => [
+  ['patch', 'configmap', name, '--type=merge', `--patch-file=${wiring}/patch-${name}-config.yaml`],
+  ['patch', 'deployment', name, '--type=strategic', `--patch-file=${wiring}/patch-${name}-a4.yaml`],
+  ['set', 'image', `deployment/${name}`, `${name}=${image}`]]);
+
+
 export function ops(env = process.env, call = kubectl, read = privateInput) {
   if (!['wire', 'budgets', 'custodian', 'stage'].includes(env.A4_OPERATION)
     || !['0', '1'].includes(env.A4_DRY_RUN ?? '1')) throw new Error('arguments_invalid');
@@ -37,12 +44,7 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     if (env.A4_DRY_RUN === '0') {
       k(['apply', '-f', 'deploy/ci/preprod-a4/custody-pvc.yaml']);
       k(['apply', '-f', '-'], runtime);
-      k(['patch', 'configmap', 'api', '--type=merge', `--patch-file=${wiring}/patch-api-config.yaml`]);
-      k(['patch', 'deployment', 'api', '--type=strategic', `--patch-file=${wiring}/patch-api-a4.yaml`]);
-      k(['set', 'image', 'deployment/api', `api=${request.candidateImage}`]);
-      k(['patch', 'configmap', 'auth-idp', '--type=merge', `--patch-file=${wiring}/patch-auth-idp-config.yaml`]);
-      k(['patch', 'deployment', 'auth-idp', '--type=strategic', `--patch-file=${wiring}/patch-auth-idp-a4.yaml`]);
-      k(['set', 'image', 'deployment/auth-idp', `auth-idp=${request.candidateImage}`]);
+      for (const args of wireCommands(request.candidateImage)) k(args);
     }
     return `runtimeManifestSha256=${digest(runtime)}\n`;
   }
