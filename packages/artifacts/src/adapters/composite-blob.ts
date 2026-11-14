@@ -1,8 +1,9 @@
 /**
  * CMF-S2 — composite `db+s3` blob adapter.
  *
- * Routes `putBlob` by mode and size (`db`: always DB, `s3`: always object,
- * `db+s3`: DB at or below the inline threshold, object above), resolves reads
+ * Routes new `putBlob` keys by mode and size (`db`: DB, `s3`: object,
+ * `db+s3`: DB at or below the inline threshold, object above), preserves
+ * registered placement on rewrites, and resolves reads
  * through the registered `artifacts.blobs.placement` (probing DB then object
  * for prepared-but-unfinalized blobs), and coordinates `deleteBlob` across
  * both sides under the caller's digest lock so neither an orphan DB row nor
@@ -53,7 +54,9 @@ export function createCompositeBlobStore(options: CompositeBlobOptions): Publica
   const lock = options.withDigestLock ?? (async (_digest, work) => { await work(); });
   return {
     async putBlob(key: string, bytes: Uint8Array): Promise<void> {
-      const target = placementForPut(mode, bytes.byteLength, inlineMaxBytes) === 'db' ? db : s3;
+      // Registration survives collection; retries must restore its readable side.
+      const placement = await placements.getPlacement(key) ?? placementForPut(mode, bytes.byteLength, inlineMaxBytes);
+      const target = placement === 'db' ? db : s3;
       await target.putBlob(key, bytes);
     },
     async getBlob(key: string): Promise<Uint8Array | undefined> {
