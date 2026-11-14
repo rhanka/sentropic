@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, openSync, readFileSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { emailProbe, expectedSigningKid, probeEndpoints, observerProbes } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, observerProbes, verificationFile, verificationSpec } from './t3-probe-fixture.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -30,12 +30,12 @@ for (const { mode, step, operation, substate, committed = false } of cases) {
   test(`RUN6 actual driver child watchdog eliminates TERM-resistant descendants: ${mode} ${operation ?? step} ${substate ?? ''}`, async () => {
     const dir = mkdtempSync(join(tmpdir(), 't3-process-'));
     const config = join(dir, 'config.json');
-    const http = spawn(process.execPath, [`${here}t3-probe-fixture.mjs`, join(dir, 'port')], { stdio: 'ignore' });
+    const http = spawn(process.execPath, [`${here}t3-probe-fixture.mjs`, join(dir, 'port'), join(dir, 'open')], { stdio: 'ignore' });
     await until(() => existsSync(join(dir, 'port')));
     const endpoints = probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`);
     writeFileSync(config, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
       witness: { url: `${new URL(endpoints.appHealth).origin}/legacyWitness`,cookie: 'synthetic-witness' },
-      ...observerProbes(new URL(endpoints.appHealth).origin),
+      ...observerProbes(new URL(endpoints.appHealth).origin), verificationCredentialFile: verificationFile(dir),
       endpoints, emailProbe, expectedSigningKid, images: { candidate: 'c', ui: 'u' }, revisions: {}, request: { operationId: 'process-test' } }));
     // The double needs no Node runtime. Keep real driver/watchdog/process-group
     // supervision while avoiding dozens of cold Node startups in each recovery.
@@ -58,10 +58,11 @@ case "$a" in *'scale deployment/'*)
   name=\${a#*scale deployment/}; name=\${name%% *}
   replicas=\${a##*--replicas=}
   printf '%s' "$replicas" > '${dir}/replicas-'"$name";; esac
+case "$a" in *'delete middleware a4-verification'*) : > '${dir}/open';; esac
 case "$a" in
   *'get pods'*) echo '{"items":[]}';;
   *'get cronjob sentropic-idp-identity-export'*) echo '{"spec":{"suspend":true}}';;
-  *'get middleware'*) echo '{"spec":{"ipAllowList":{"sourceRange":["9.9.9.9/32"]}}}';;
+  *'get middleware'*) echo '{"spec":${JSON.stringify(verificationSpec)}}';;
   *'get deployment '*)
     name=\${a#*get deployment }; name=\${name%% *}
     replicas=0; [ ! -r '${dir}/replicas-'"$name" ] || replicas=$(cat '${dir}/replicas-'"$name")
@@ -84,7 +85,7 @@ esac
       import { delivered, drive } from '${here}t3-window-driver.mjs';
       const dir = ${JSON.stringify(dir)};
       if (!${JSON.stringify(operation ?? null)}) saveState(dir, { step:${JSON.stringify(step ?? 'W0')}, substate:${JSON.stringify(substate ?? null)},
-        middlewareSpec:{ipAllowList:{sourceRange:['9.9.9.9/32']}}, namespace:'sentropic-preprod', driverPid:process.pid, childPid:process.pid,
+        middlewareSpec:${JSON.stringify(verificationSpec)}, namespace:'sentropic-preprod', driverPid:process.pid, childPid:process.pid,
         heartbeatMonoMs:monoMs(), t0MonoMs:monoMs(), stepDeadlineMonoMs:monoMs()+${mode === 'emergency' ? 30000 : 500} });
       const w = spawn(process.execPath, ['${here}t3-watchdog.mjs','--state-dir',dir,'--config','${config}'],
         { detached:true, stdio:'ignore' });

@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { buildProbes, effectiveTimeout, loadState, monoMs, podLabels, recoveryDeadline, runKubectl, saveState, validateProbes, validateObservers } from './t3-lib.mjs';
+import { verificationCredential } from './verification-boundary.mjs';
 
 // Post-commit convergence, idempotent across restarts (Astra v2 M3).
 // States: POSTCOMMIT_RESTRICTED -> ACCEPTED -> BACKUP_RESUMED ->
@@ -94,6 +95,8 @@ export async function finishOpen(ctx) {
   effectiveTimeout(1, ctx, (ctx.now ?? monoMs)());
   if (state.substate === 'POSTCOMMIT_RESTRICTED' || !state.substate) {
     validateProbes(probes);
+    // Acceptance crosses the restricted Ingresses: without the credential no probe can pass.
+    if (!dry.dryRun && !ctx.verification) throw new Error('verification_credential_missing');
     reconcileRestrictSafe(ctx, state);
     // The emergency classifier stops api before reading the truth: a committed
     // database must restart the candidate api here before any opening, or the
@@ -101,8 +104,11 @@ export async function finishOpen(ctx) {
     ensureStarted(call, 'api', images.candidate, dry);
     ensureStarted(call, 'ui', images.ui, dry);
     ensureStarted(call, 'auth-idp', images.candidate, dry);
-    for (const p of restrictedProbes) await runProbe(probe,p,dry);
-    for (const p of probes) await runProbe(probe, p, dry);
+    // Observers are sent bare (no credential, no caller option); the functional probes carry it.
+    for (const p of restrictedProbes) {
+      await runProbe(probe, { id: p.id, url: p.url, expect: p.expect, timeoutMs: p.timeoutMs }, { ...dry, refusal: true });
+    }
+    for (const p of probes) await runProbe(probe, p, { ...dry, verification: ctx.verification });
     state.substate = 'ACCEPTED';
     state.acceptedSha256 = createHash('sha256').update(JSON.stringify(probes.map(p => p.id))).digest('hex');
     save(state);
@@ -166,9 +172,15 @@ async function runProbe(probe, p, opts = {}) {
     options = { ...options, body: JSON.stringify({ ...body,
       email: `${local}+t3-${randomBytes(12).toString('hex')}@${domain}` }) };
   }
+  if (opts.verification) options = { ...options, headers: { ...options?.headers, authorization: opts.verification } };
   const res = await probe(p.url, { ...options, redirect: 'manual', signal: AbortSignal.timeout(
     effectiveTimeout(p.timeoutMs ?? 5000, opts, (opts.now ?? monoMs)())) });
   if (res.status !== p.expect) throw new Error(`probe_failed: ${p.id}`);
+  // The refusal must come from the boundary: Traefik answers with a Basic challenge, which an
+  // application 401 never carries.
+  if (opts.refusal && !/^Basic\b/i.test(res.headers?.get('www-authenticate') ?? '')) {
+    throw new Error(`probe_failed: ${p.id} boundary_challenge`);
+  }
   if (p.id === 'S-6') {
     const location = res.headers?.get('location');
     const login = location && URL.canParse(location, p.url) ? new URL(location, p.url) : null;
@@ -222,7 +234,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const externalProbes = config.externalProbes ?? fromEndpoints.externalProbes;
   try {
     if (!dryRun) validateObservers(config);
-    const done = await finishOpen({ call, probe: fetch, state,
+    const verification = dryRun ? null : verificationCredential(config.verificationCredentialFile).header;
+    const done = await finishOpen({ call, probe: fetch, state, verification,
       save: dryRun ? () => {} : next => saveState(stateDir, next), images: config.images,
       probes, externalProbes, restrictedProbes: fromEndpoints.restrictedProbes, deadlineMs,
       dryRun, print: console.log });

@@ -5,6 +5,7 @@ import { ops } from './ops.mjs';
 import { buildProbes, validateProbes, validateObservers } from './t3-lib.mjs';
 import { assertBaselineAfterWitness, validateApplicability } from './t3-applicability.mjs';
 import { validateReceiptPolicy } from './t3-rehearsal.mjs';
+import { verificationCredential } from './verification-boundary.mjs';
 
 // Offline only. Never interprets a request template as observed fence evidence.
 export function preflight(config, read = privateInput) {
@@ -45,6 +46,7 @@ export function preflight(config, read = privateInput) {
   }
   validateProbes(buildProbes(config).probes);
   validateObservers(config);
+  verificationCredential(config.verificationCredentialFile, read);
   if (!URL.canParse(config.witness?.url) || typeof config.witness?.cookie !== 'string' || !config.witness.cookie.trim()
     || !(Date.parse(config.witness.expiresAt) > Date.now() + 7200000)) throw new Error('legacy_witness_invalid');
   if (config.tier === 'restore') {

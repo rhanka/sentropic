@@ -10,16 +10,17 @@ import { drive, recover } from './t3-window-driver.mjs';
 import { fence } from './t3-fence.mjs';
 import { digest } from './guards.mjs';
 import { approvedRequest } from './fixtures.mjs';
-import { emailProbe, probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
+import { emailProbe, probeEndpoints, probeReply, verificationHeader } from './t3-probe-fixture.mjs';
 import { finishOpen } from './t3-finish-open.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
 function acceptanceContext() {
   const config = { endpoints: probeEndpoints(), emailProbe, expectedSigningKid: 'qualified-kid', images: { candidate: 'c', ui: 'u' } };
   const writes = [], saved = [], seen = [];
-  const ctx = { config, images: config.images, ...buildProbes(config),
+  const ctx = { config, images: config.images, ...buildProbes(config), verification: verificationHeader,
     state: { namespace: 'sentropic-preprod', middlewareSpec: {} }, save: s => saved.push({ ...s }),
-    probe: async (url, options) => { seen.push(url); return probeReply(url, options); },
+    probe: async (url, options) => { seen.push(url);
+      return probeReply(url, options, writes.some(write => write.startsWith('delete middleware a4-verification'))); },
     call: args => {
       if (args[0] !== 'get') { writes.push(args.join(' ')); return ''; }
       if (args[1] === 'deployment') {
