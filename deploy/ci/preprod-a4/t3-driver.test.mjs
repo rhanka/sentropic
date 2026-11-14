@@ -531,7 +531,7 @@ test('delivered timeouts never outlive the step cutoff', async () => {
 });
 
 test('probe URLs are operator inputs, never invented by the driver', () => {
-  assert.deepEqual(buildProbes({}), { probes: [], externalProbes: [] });
+  assert.deepEqual(buildProbes({}), { probes: [], externalProbes: [],restrictedProbes: [] });
   const { probes } = buildProbes({ endpoints: {
     appHealth: 'https://app/health', idpConfig: 'https://idp/.well-known/openid-configuration',
     idpJwks: 'https://idp/jwks.json', appMe: 'https://app/me', idpMe: 'https://idp/me',
