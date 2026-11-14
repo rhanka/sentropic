@@ -18,7 +18,7 @@ WITH entries AS (
   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
   WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'
   UNION ALL
-  SELECT 'default', r.rolname||'.'||coalesce(n.nspname,'')||'.'||d.defaclobjtype,
+  SELECT 'default', r.rolname||'.'||coalesce(n.nspname,'')||'.'||d.defaclobjtype::text,
     to_jsonb(d.defaclacl::text)
   FROM pg_default_acl d JOIN pg_roles r ON r.oid=d.defaclrole
   LEFT JOIN pg_namespace n ON n.oid=d.defaclnamespace
