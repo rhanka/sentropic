@@ -52,11 +52,11 @@
   - [x] JSON Schema: eight field types, three seeded row shapes, presentation and print properties.
   - [ ] `contract.test.mjs`: seven real seed shapes validate; 17 seed records qualify; mutations fail.
 - [ ] **Lot 2 — Family (a) contract and adapters**
-  - [ ] `container.ts`: typed icons/tones, cards/actions/menu callbacks, activation adapters.
+  - [x] `container.ts`: typed icons/tones, cards/actions/menu callbacks, activation adapters.
   - [ ] `container.test.mjs`: callbacks, navigation precedence, disabled menu actions and card mapping.
 - [ ] **Lot 3 — Consumer and presentation mappings**
   - [ ] `README.md`: five consumers with source lines; row/field/slot contracts and ownership.
-  - [ ] `presentation.ts`: colour/tone/variant and print token/hook mappings.
+  - [x] `presentation.ts`: colour/tone/variant and print token/hook mappings.
 - [ ] **Lot 4 — Print inventory**
   - [ ] `print-inventory-*.json`: every selector line, source target and future hook or dropped reason.
   - [ ] `inventory.test.mjs`: exact source coverage, no missing or duplicate lines.
