@@ -38,11 +38,7 @@ ${acl}
 SELECT public.oauth_refresh_invalidate_restore();
 DELETE FROM public.oauth_tokens;
 ${aclSql().replace(/;\s*$/, ' \\gset')}
-SELECT :'acl_sha256' = '${expectedHash}' AS acl_matches \\gset
-\\if :acl_matches
-\\else
-\\quit 3
-\\endif
+SELECT 1 / ((:'acl_sha256' = '${expectedHash}')::int);
 `;
 }
 

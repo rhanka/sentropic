@@ -33,8 +33,8 @@ test('restore covers all application schemas, invalidates OAuth and aborts befor
   assert.equal(out.match(/CREATE SCHEMA public/g).length, 1);
   assert.match(out, /oauth_refresh_invalidate_restore/);
   assert.match(out, /DELETE FROM public.oauth_tokens/);
-  assert.match(out, /\\quit 3/);
-  assert.ok(out.indexOf('GRANT SELECT') < out.indexOf('AS acl_matches'));
+  assert.match(out, /SELECT 1 \/ \(\(:'acl_sha256'/);
+  assert.ok(out.indexOf('GRANT SELECT') < out.indexOf('SELECT 1 /'));
   assert.throws(() => restoreSql('', '', "'injection"));
 });
 
