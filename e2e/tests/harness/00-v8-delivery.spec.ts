@@ -39,7 +39,7 @@ test('should measure import-map integrity enforcement with an altered module con
   const errors: string[] = [];
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   await page.goto(`${origin}/?integrity=bad`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
   const enforced = await page.evaluate(() => (window as any).result !== 42);
   await info.attach('integrity-capability', { body: JSON.stringify({ N: 1, good: true, alteredRefused: enforced, errors }), contentType: 'application/json' });
   // A probe records missing platform support; it never silently grants integrity.
@@ -86,4 +86,18 @@ test('should report the page clock resolution under unchanged application header
   expect(result.N).toBeGreaterThan(0);
   expect(result.resolutionMs).toBeGreaterThan(0);
   await info.attach('page-clock', { body: JSON.stringify(result), contentType: 'application/json' });
+});
+
+test('should evaluate an import held beyond the edge ten-second window', async ({ page }, info) => {
+  await page.goto(origin);
+  const query = '?revision=long-hold';
+  await page.evaluate(query => { (window as any).patch = import(`/patch.mjs${query}`); }, query);
+  await expect.poll(() => pending.has(query)).toBe(true);
+  // Intentional protocol stimulus: the production edge timeout is ten seconds.
+  // This direct-origin test isolates the browser and leaves real-edge renewal open.
+  await new Promise(resolve => setTimeout(resolve, 12000));
+  pending.get(query)!();
+  expect(await page.evaluate(async () => (await (window as any).patch).default)).toBe(42);
+  await info.attach('long-hold', { body: JSON.stringify({ N: 1, holdMs: 12000,
+    evaluated: true, productionEdge: 'not measured' }), contentType: 'application/json' });
 });

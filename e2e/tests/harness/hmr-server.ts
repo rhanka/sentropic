@@ -34,6 +34,7 @@ export async function startHmrServer(source: string, vaporParent: boolean) {
     'lucide-vue-next': '/node_modules/lucide-vue-next/dist/esm/lucide-vue-next.js' } });
   const hash = `'sha256-${createHash('sha256').update(imports).digest('base64')}'`;
   const entry = `import {createApp,createVaporApp,vaporInteropPlugin,nextTick} from 'vue';
+    performance.setResourceTimingBufferSize(10000);
     window.marks=[]; let depth=0;
     window.wrap = fn => new Proxy(fn, {apply(target,self,args) {
       const outer=depth++===0; if(outer)window.marks.push(['f0',performance.now()]);
