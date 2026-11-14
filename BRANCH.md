@@ -50,10 +50,10 @@
   - [x] `df -h /`: 38 GB free before Docker work; recheck before building.
 - [ ] **Lot 1 — Family (b) contract**
   - [x] JSON Schema: eight field types, three seeded row shapes, presentation and print properties.
-  - [ ] `contract.test.mjs`: seven real seed shapes validate; 17 seed records qualify; mutations fail.
+  - [x] `contract.test.mjs`: seven real seed shapes validate; 17 seed records qualify; mutations fail.
 - [ ] **Lot 2 — Family (a) contract and adapters**
   - [x] `container.ts`: typed icons/tones, cards/actions/menu callbacks, activation adapters.
-  - [ ] `container.test.mjs`: callbacks, navigation precedence, disabled menu actions and card mapping.
+  - [x] `container.test.mjs`: callbacks, navigation precedence, hidden menu actions and card mapping.
 - [ ] **Lot 3 — Consumer and presentation mappings**
   - [ ] `README.md`: five consumers with source lines; row/field/slot contracts and ownership.
   - [x] `presentation.ts`: colour/tone/variant and print token/hook mappings.
