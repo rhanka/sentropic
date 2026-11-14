@@ -16,6 +16,7 @@ import { OPS_SWEEP_INTERVAL_MS, runOpsNotificationSweepSafe } from './services/n
 import { objectTypeRegistry } from './services/object-registry';
 import { ensureOpportunityTypeRegistered } from './services/object-registry/opportunity-type';
 import { createJwksAdapter } from './services/auth/jwks-adapter';
+import { installGracefulShutdown } from './services/graceful-shutdown';
 import { lt } from 'drizzle-orm';
 
 const port = env.PORT;
@@ -101,6 +102,9 @@ if (process.argv.includes('--secret-reencrypt')) {
   await runSecretReencryptCli();
   process.exit(process.exitCode ?? 0);
 }
+
+// A served process exits on SIGTERM instead of holding its pod Terminating for the whole grace period.
+const shutdown = installGracefulShutdown({ log: logger });
 
 // Fail closed before serving: a deployed runtime never signs or seals with a missing or public key.
 try {
@@ -300,5 +304,5 @@ const [{ serve }, { app }] = await Promise.all([
   import('./app')
 ]);
 
-serve({ fetch: app.fetch, port });
+shutdown.attach(serve({ fetch: app.fetch, port }));
 logger.info(`API server listening on http://0.0.0.0:${port}`);
