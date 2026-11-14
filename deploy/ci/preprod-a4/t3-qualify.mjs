@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { checkRbac, psql } from './t3-window-driver.mjs';
-import { inspectApplicability, witnessBinding } from './t3-applicability.mjs';
+import { inspectApplicability, newWitnessSalt, witnessBinding } from './t3-applicability.mjs';
 import { privateInput, tierOf } from './guards.mjs';
 import { PROBE_PATHS, runKubectl, loadState, monoMs, effectiveTimeout } from './t3-lib.mjs';
 import { digest } from './guards.mjs';
@@ -85,7 +85,8 @@ export async function qualify(action, config, dependencies = {}) {
       headers: { cookie: witness.cookie },signal: AbortSignal.timeout(10000) });
     await response.body?.cancel?.();
     if (response.status !== 200) throw new Error('baseline_witness_not_authenticated');
-    write(config.applicabilityBaselineFile,{ ...inspectApplicability(ctx,psql),witnessSha256: witnessBinding(witness) });
+    const witnessSalt = newWitnessSalt();
+    write(config.applicabilityBaselineFile,{ ...inspectApplicability(ctx,psql),witnessSalt,witnessSha256: witnessBinding(witness,witnessSalt) });
     return { baselineWritten: true };
   }
   throw new Error('qualification_action_invalid');

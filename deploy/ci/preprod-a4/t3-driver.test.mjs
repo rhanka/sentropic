@@ -164,7 +164,8 @@ export function makeCtx(overrides = {}) {
   writeFileSync(defaultKeys.idpSessionJwtFile, 'test-idp-jwt');
   const applicabilityBaselineFile = join(keyDir, 'baseline.json');
   const witness = { url: 'https://idp.test/legacyWitness', cookie: 'synthetic-witness' };
-  const baselineBytes = JSON.stringify({ ...applicabilityFixture(), witnessSha256: witnessBinding(witness) });
+  const witnessSalt = 'e'.repeat(64);
+  const baselineBytes = JSON.stringify({ ...applicabilityFixture(), witnessSalt, witnessSha256: witnessBinding(witness, witnessSalt) });
   writeFileSync(applicabilityBaselineFile, baselineBytes);
   const qualification = rehearsalFixture(keyDir,{ candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE,operationId: 'test' },baselineBytes);
   scenario.snapshot = qualification.snapshot;
