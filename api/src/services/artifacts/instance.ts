@@ -8,7 +8,7 @@ import { resolveOAuthIssuer } from '../../routes/auth/oauth';
 import { isOriginAllowed, parseAllowedOrigins } from '../../utils/cors';
 import { resolveCmTenant } from '../identity/cm-tenancy';
 import { createArtifactHost } from './composition';
-import { createPrivateArtifactStorage } from './lifecycle';
+import { createLazyArtifactBlobs, createPrivateArtifactStorage } from './lifecycle';
 import { createPlacementBlobStore, parseBlobInlineMaxBytes, parseBlobPlacementMode } from './blob-placement';
 import { artifactCredential, ARTIFACT_SESSION_CLIENT, createCurrentArtifactIdentity } from './credentials';
 import { createArtifactTransport } from './transport';
@@ -50,18 +50,14 @@ function s3EnvConfigured(): boolean {
 if ((placementMode === 's3' || placementMode === 'db+s3') && artifactHostEnabled() && !s3EnvConfigured()) {
   throw new Error(`Artifact blob placement mode '${placementMode}' requires object-store env (APP_ARTIFACT_S3_*)`);
 }
-const objectBlobs: PublicationBlobStore = {
-  putBlob: async (key, bytes) => (await privateStorage()).blobs.putBlob(key, bytes),
-  getBlob: async key => (await privateStorage()).blobs.getBlob(key),
-  deleteBlob: async key => (await privateStorage()).blobs.deleteBlob(key),
-  listKeys: async prefix => (await privateStorage()).blobs.listKeys(prefix),
-};
+const objectBlobs = createLazyArtifactBlobs(privateStorage);
 /** Inert object side for `db` mode without object-store env: reads miss, lists empty, deletes no-op. */
 const inertObjectBlobs: PublicationBlobStore = {
   putBlob: async (key) => { throw new Error(`Object placement not configured (put ${key})`); },
   getBlob: async () => undefined,
   getBlobRange: async () => undefined,
   listKeys: async () => [],
+  listKeysPaged: async () => ({ keys: [], hasMore: false }),
   deleteBlob: async () => {},
 };
 const objectSide: PublicationBlobStore = s3EnvConfigured() ? objectBlobs : inertObjectBlobs;
