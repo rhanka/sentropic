@@ -48,6 +48,12 @@ sql -c "UPDATE control.connector_revocation_custody SET ciphertext='bbbb'"
 [ "$(inspect)" != "$original" ]
 sql -c 'DELETE FROM control.connector_revocation_custody'
 echo 'PASS: all four encrypted stores detect same-length mutations'
+sql -c "SET session_replication_role=replica; INSERT INTO authorization_codes(code,client_id,user_id,redirect_uri,scope,code_challenge,code_challenge_method,expires_at) VALUES ('t3-offline','t3-client','t3-user','https://app.restore-a4.test/callback','offline_access','aaaa','S256',now()+interval '1 hour')"
+original=$(inspect)
+sql -c "UPDATE authorization_codes SET code_challenge='bbbb' WHERE code='t3-offline'"
+[ "$(inspect)" != "$original" ]
+sql -c "DELETE FROM authorization_codes WHERE code='t3-offline'"
+echo 'PASS: offline PKCE-only mutation changes durable applicability'
 # Round-trip all schemas and real column/default ACLs through the delivered restore generator.
 sql -c 'CREATE ROLE t3_reader; GRANT USAGE ON SCHEMA public TO t3_reader; GRANT SELECT (client_id) ON oauth_clients TO t3_reader; ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO t3_reader; CREATE SCHEMA artifacts; CREATE TABLE artifacts.t3_empty(id text)'
 acl=$(sql -f /tests/t3-acl.sql)

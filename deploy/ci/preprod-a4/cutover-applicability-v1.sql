@@ -78,6 +78,7 @@ SELECT CASE
             SELECT coalesce(jsonb_agg(
               (to_jsonb(ac) - 'code' - 'code_challenge' - 'payload') || jsonb_build_object(
                 'code_sha256', encode(sha256(convert_to(ac.code, 'UTF8')), 'hex'),
+                'code_challenge_sha256', encode(sha256(convert_to(ac.code_challenge, 'UTF8')), 'hex'),
                 'payload_sha256', encode(sha256(convert_to(ac.payload::text, 'UTF8')), 'hex')
               ) ORDER BY encode(sha256(convert_to(ac.code, 'UTF8')), 'hex') COLLATE "C"
             ), '[]'::jsonb)
