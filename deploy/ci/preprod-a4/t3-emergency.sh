@@ -80,5 +80,5 @@ else
   HEALTH_ARG=""
   [ -n "$HEALTH_URL" ] && [ -n "$JWKS_URL" ] && HEALTH_ARG="--health-url $HEALTH_URL --jwks-url $JWKS_URL"
   # shellcheck disable=SC2086
-  exec node "$HERE/t3-rollback.mjs" --kubeconfig-file "$KUBECONFIG_FILE" --namespace "$NAMESPACE" --revisions-json "$REVISIONS" $PRE_CM_ARG $HEALTH_ARG $DRYRUN
+  exec node "$HERE/t3-rollback.mjs" --config "$CONFIG" --kubeconfig-file "$KUBECONFIG_FILE" --namespace "$NAMESPACE" --revisions-json "$REVISIONS" $PRE_CM_ARG $HEALTH_ARG $DRYRUN
 fi
