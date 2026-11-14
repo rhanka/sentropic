@@ -5,6 +5,8 @@ import { privateInput, tierOf } from './guards.mjs';
 import { runKubectl, loadState, monoMs, effectiveTimeout } from './t3-lib.mjs';
 import { digest } from './guards.mjs';
 import { fixture } from './t3-fixture.mjs';
+import { executionGrant } from './execution.mjs';
+import { judge } from './t3-template-diff.mjs';
 
 // OPERATOR-only qualification utilities: Kubernetes reads, protected exclusive local outputs.
 export async function qualify(action, config, dependencies = {}) {
@@ -45,6 +47,17 @@ export async function qualify(action, config, dependencies = {}) {
     const objects = JSON.parse(read(config.fixtureInventoryFile,64*1024*1024));
     write(config.fixtureManifestFile,fixture(objects.items));
     return { fixtureWritten: true };
+  }
+  // P-0.8, offline: legacy capture + W3 wire + annex images against the rendered overlay.
+  if (action === 'template-diff') {
+    const grant = executionGrant({ A4_EXECUTION_FILE: config.executionFile, A4_EXECUTION_SHA256: config.executionSha256 },
+      config.request, read, tier);
+    const receipt = (dependencies.judge ?? judge)({ live: read(config.templateLiveFile, 64 * 1024 * 1024),
+      rendered: read(config.templateRenderFile, 64 * 1024 * 1024), image: config.request.candidateImage,
+      annexCommands: Object.values(grant.actions ?? {}).flat().filter(args => args[0] === 'set' && args[1] === 'image') });
+    write(config.templateDiffFile, receipt);
+    if (!receipt.strictZero) throw new Error('template_diff_nonzero');
+    return { templateDiffZero: true };
   }
   const call = dependencies.call ?? runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.namespace });
   const ctx = { config, call, print: () => {}, postgresPod: config.postgresPod ?? 'postgres-0',
