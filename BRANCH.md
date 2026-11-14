@@ -69,6 +69,7 @@
   - [ ] Measure cold/fresh/retained contexts, pod limits, memory and cancellation.
 - [ ] **Lot 3 — Browser runtime (Q7, Q9–10, Q14–16)**
   - [x] Probe import-map integrity, held imports and page clock in three engines; 24 local checks pass.
+  - [x] Qualify functional Vapor rerender/recreation and sibling state paths in all three engines (24 checks); latency gate remains open.
   - [ ] Probe import-map integrity, CSS/font parity and Vapor hot replacement.
   - [ ] Record setup/render wrappers, state witnesses and swap spans.
   - [ ] Measure worker compiles, pre-armed import and network/clock uncertainty.
