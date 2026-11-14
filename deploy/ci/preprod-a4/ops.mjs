@@ -11,6 +11,12 @@ export const wireCommands = image => ['api', 'auth-idp'].flatMap(name => [
 // against a missing claim (the legacy prod namespace has no IdP session claim).
 export const wireVolumes = ['deploy/ci/preprod-a4/custody-pvc.yaml', 'deploy/ci/preprod-a4/idp-session-pvc.yaml'];
 
+// The custodian runs the checkpoint worker, and every invocation loads the whole API bundle: about
+// 9 s under the 500m limit inherited from the API container (rehearsal r9), against about 3 s once
+// the load is no longer throttled. Requests stay inherited, so scheduling is unchanged; the limit
+// fits the tenant quota because the custodian only exists while the API and frontals are stopped.
+export const custodianCpuLimit = '1500m';
+
 // Custody is ReadWriteOnce: a consumer scheduled on another node waits for a detach and a new
 // attach (21-23 s measured, against 4 s on the same node). The wired API template prefers the
 // tenant database node; the custodian is pinned to that node, so the volume stays where the API
@@ -79,6 +85,7 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
       throw new Error('overlay_not_installed');
     }
     container.name = 'custodian'; container.image = request.candidateImage;
+    container.resources = { ...container.resources, limits: { ...container.resources?.limits, cpu: custodianCpuLimit } };
     container.command = ['node', '/run/cm-runtime/launch.mjs', '--custodian'];
     container.env = [...container.env, { name: 'A4_CANDIDATE_COMMIT', value: request.candidateCommit }];
     container.envFrom.push({ secretRef: { name: 'sentropic-pgbackup' } });
