@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { env, requiresOAuthProductionSecrets } from '../config/env';
-import { DEVELOPMENT_SECRET_SEED } from '../config/deployment-secrets';
+import { DEVELOPMENT_SECRET_SEED, isProvisionedDeploymentSecret } from '../config/deployment-secrets';
 import { decryptSecretOrNull } from './secret-crypto';
 import { settingsService } from './settings';
 
@@ -259,11 +259,14 @@ export const resolveGoogleDriveOAuthConfig = async (
  * must fall through to the next candidate instead of becoming the key.
  */
 const stateSecret = (): string => {
-  const secret = env.OAUTH_SIGNING_KEK || env.JWT_SECRET;
+  const deployed = requiresOAuthProductionSecrets();
+  const secret = deployed
+    ? [env.OAUTH_SIGNING_KEK, env.JWT_SECRET].find(isProvisionedDeploymentSecret)
+    : env.OAUTH_SIGNING_KEK || env.JWT_SECRET;
   if (secret) return secret;
-  if (requiresOAuthProductionSecrets()) {
+  if (deployed) {
     throw new Error(
-      'OAUTH_SIGNING_KEK or JWT_SECRET is required to seal Google Drive OAuth state in production.',
+      'OAUTH_SIGNING_KEK or JWT_SECRET must be provisioned to seal Google Drive OAuth state in production.',
     );
   }
   return DEVELOPMENT_SECRET_SEED;
