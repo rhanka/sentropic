@@ -83,7 +83,11 @@ test('restore preflight rejects production URLs in every observer and witness pa
   annex.format = 'prod-a4-execution/1'; annex.namespace = 'sentropic';
   annex.applicabilityReceiptPolicySha256 = digest(canonical(f.config.applicabilityReceiptPolicy));
   f.files['/annex'] = JSON.stringify(annex); f.config.executionSha256 = digest(f.files['/annex']);
-  const isolated = value => { const url = new URL(value); url.hostname = 'app.restore-a4.test'; return url.href; };
+  const isolated = value => {
+    const url = new URL(value);
+    url.hostname = url.hostname.startsWith('idp.') ? 'auth.restore-a4.test' : 'app.restore-a4.test';
+    return url.href;
+  };
   for (const key of Object.keys(f.config.endpoints)) f.config.endpoints[key] = isolated(f.config.endpoints[key]);
   for (const p of [...f.config.externalProbes,...f.config.restrictedProbes]) p.url = isolated(p.url);
   assert.doesNotThrow(() => preflight(f.config,f.read));

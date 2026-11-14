@@ -10,15 +10,16 @@ import { drive, recover } from './t3-window-driver.mjs';
 import { fence } from './t3-fence.mjs';
 import { digest } from './guards.mjs';
 import { approvedRequest } from './fixtures.mjs';
-import { emailProbe, probeEndpoints, probeReply, verificationHeader } from './t3-probe-fixture.mjs';
+import { emailProbe, observerProbes, probeEndpoints, probeReply, verificationHeader, verificationSpec } from './t3-probe-fixture.mjs';
 import { finishOpen } from './t3-finish-open.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
 function acceptanceContext() {
-  const config = { endpoints: probeEndpoints(), emailProbe, expectedSigningKid: 'qualified-kid', images: { candidate: 'c', ui: 'u' } };
+  const config = { endpoints: probeEndpoints(), ...observerProbes(), emailProbe, expectedSigningKid: 'qualified-kid',
+    images: { candidate: 'c', ui: 'u' }, middlewareSpec: verificationSpec };
   const writes = [], saved = [], seen = [];
   const ctx = { config, images: config.images, ...buildProbes(config), verification: verificationHeader,
-    state: { namespace: 'sentropic-preprod', middlewareSpec: {} }, save: s => saved.push({ ...s }),
+    state: { namespace: 'sentropic-preprod', middlewareSpec: verificationSpec }, save: s => saved.push({ ...s }),
     probe: async (url, options) => { seen.push(url);
       return probeReply(url, options, writes.some(write => write.startsWith('delete middleware a4-verification'))); },
     call: args => {
@@ -28,7 +29,7 @@ function acceptanceContext() {
         return JSON.stringify({ spec: { replicas: 1, template: { spec: { containers: [{ name, image: name === 'ui' ? 'u' : 'c' }] } } },
           metadata: { generation: 1 }, status: { readyReplicas: 1, observedGeneration: 1 } });
       }
-      if (args[1] === 'middleware') return '{"spec":{}}';
+      if (args[1] === 'middleware') return JSON.stringify({ spec: verificationSpec });
       if (args[1] === 'cronjob' && args[2] === 'sentropic-idp-identity-export') return '{"spec":{"suspend":true}}';
       if (args[1] === 'ingress') return JSON.stringify({ metadata: { annotations: {
         'traefik.ingress.kubernetes.io/router.middlewares': 'sentropic-preprod-a4-verification@kubernetescrd' } } });
@@ -90,7 +91,7 @@ test('RUN8 finish-open CLI preview preserves active bytes and real resumption st
   assert.equal(readFileSync(join(dir, 't3-window-state.json'), 'utf8'), before);
   ctx.state = loadState(dir);
   await finishOpen(ctx);
-  assert.equal(seen.length, 8, 'preview cannot cause a real resume to skip acceptance');
+  assert.equal(seen.length, 12, 'preview cannot cause a real resume to skip acceptance');
   assert.ok(writes.some(w => w.startsWith('annotate ingress')));
   assert.equal(ctx.state.substate, 'TWO_HOSTS_OPEN');
 });
@@ -160,6 +161,8 @@ test('RUN8 JSON response consumption remains inside the shared HTTP deadline', a
   const origin = `http://127.0.0.1:${server.address().port}`, url = `${origin}/api/v1/health`;
   for (const p of ctx.probes.filter(p => ['S-7', 'S-9a'].includes(p.id))) p.url = origin + new URL(p.url).pathname;
   ctx.probes.find(p => p.id === 'S-3').url = url;
+  ctx.restrictedProbes[0].url = `${origin}/restricted0`;
+  ctx.externalProbes[0].url = `${origin}/external-app`;
   ctx.probe = (target, options) => target === url ? fetch(target, options) : normal(target, options);
   ctx.deadlineMs = monoMs() + 300;
   const started = performance.now();
