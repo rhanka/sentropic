@@ -12,6 +12,12 @@ export function validateReceiptPolicy(config, grant, read) {
     || JSON.stringify(policy.allowedChanges) !== '["sourceContentSha256"]'
     || typeof policy.reviewRef !== 'string' || !policy.reviewRef.trim()
     || /pending|TODO|<|>/i.test(policy.reviewRef)) throw new Error('receipt_policy_invalid');
+  const original = JSON.parse(read(config.rehearsalFile));
+  if (original.format !== config.request.format.replace('request/1','rehearsal/2')
+    || original.candidateCommit !== config.request.candidateCommit || original.candidateImage !== config.request.candidateImage) {
+    throw new Error('original_rehearsal_binding_invalid');
+  }
+  fencedReceipt(original,original,policy);
 }
 
 export function fencedReceipt(original,snapshot,policy) {
