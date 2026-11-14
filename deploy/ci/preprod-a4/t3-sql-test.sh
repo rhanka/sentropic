@@ -29,6 +29,25 @@ sql -c 'CREATE SCHEMA control; CREATE TABLE control.event_outbox (id text,channe
 present=$(inspect)
 sql -c "INSERT INTO control.event_outbox VALUES ('t3','connector_grant_events','{}','queued','now')"
 [ "$(inspect)" != "$present" ]
+# Full-byte stability in every encrypted store, including equal-length mutations.
+for store in document_connector_accounts llm_provider_accounts; do
+  if [ "$store" = document_connector_accounts ]; then
+    sql -c "SET session_replication_role=replica; INSERT INTO document_connector_accounts(id,workspace_id,user_id,token_secret) VALUES ('t3-store','t3-workspace','t3-user','enc:aaaa')"
+  else
+    sql -c "INSERT INTO llm_provider_accounts(id,target_provider_id,transport_provider_id,token_secret) VALUES ('t3-store','synthetic','synthetic','enc:aaaa')"
+  fi
+  original=$(inspect)
+  sql -c "UPDATE $store SET token_secret='enc:bbbb' WHERE id='t3-store'"
+  [ "$(inspect)" != "$original" ]
+  sql -c "DELETE FROM $store WHERE id='t3-store'"
+done
+sql -c 'CREATE TABLE control.connector_revocation_custody(custody_ref text,delivery_id text,connector_account_id text,provider text,envelope_version text,key_ref text,nonce text,ciphertext text,auth_tag text,created_at text)'
+sql -c "INSERT INTO control.connector_revocation_custody VALUES ('t3','delivery','account','synthetic','1','ref','nonce','aaaa','tag','now')"
+original=$(inspect)
+sql -c "UPDATE control.connector_revocation_custody SET ciphertext='bbbb'"
+[ "$(inspect)" != "$original" ]
+sql -c 'DELETE FROM control.connector_revocation_custody'
+echo 'PASS: all four encrypted stores detect same-length mutations'
 # Round-trip all schemas and real column/default ACLs through the delivered restore generator.
 sql -c 'CREATE ROLE t3_reader; GRANT SELECT (client_id) ON oauth_clients TO t3_reader; ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO t3_reader; CREATE SCHEMA artifacts; CREATE TABLE artifacts.t3_empty(id text)'
 acl=$(sql -f /tests/t3-acl.sql)
