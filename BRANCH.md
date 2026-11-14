@@ -2,7 +2,7 @@
 ## Objective
 - [ ] Complete the reviewed applicability, preflight, rearm and restore contracts without cluster access.
 ## Scope / Guardrails
-- [x] Worktree `tmp/worktrees/t3-gaps`, branch `fix/t3-driver-gaps`, rebased onto `origin/main` at `a627f54e5`; only BRANCH.md conflicted.
+- [x] Worktree `tmp/worktrees/t3-gaps`, branch `fix/t3-driver-gaps`, rebased onto `origin/main` at `c95ca6bb9`; only BRANCH.md conflicted; reviewed source bytes replayed unchanged.
 - [x] Tests `ENV=test-t3-gaps`; API 9165, UI 5365, Maildev 1265, checked free.
 - [x] No cluster calls, secret values, Python, production or preproduction actions.
 ## Branch Scope Boundaries (MANDATORY)
@@ -28,7 +28,7 @@
 ## Feedback Loop
 - [x] BRT3-EX2: exact-head CI exposed import workspace selection overwritten by a stale membership refresh; allow the two UI files and focused store regression only. Impact: refresh after committed import, ignore superseded responses/errors. Rollback reverts this bounded correction; no timeout/retry or gate changes.
 - [x] CI import failure reproduced by a deferred stale response (1 failure before correction); focused workspace store suite now passes 11/11, including stale 409/500 errors, in a disposable locked-dependency container without an image build.
-- [x] UI review hardening: bind import continuation to its initiating user, refuse mutations after a session change during membership refresh; actual-handler tests exercise account switch and logout without changing timeouts.
+- [x] UI review hardening approved: bind import continuation to its initiating user, refuse mutations after a session change during membership refresh; 13/13 focused tests include actual-handler account switch and logout cases without changing timeouts.
 - [x] BRT3-EX1: add scoped operator/PostgreSQL jobs to existing validate-idp-sync CI gate; impact limited to T3 validation, rollback removes the two steps.
 - [x] SQL qualification detected ambiguous PostgreSQL internal-char concatenation in default ACL names; explicit text cast applied.
 - [x] ACL mismatch now raises an SQL error inside the transaction, rather than relying on psql quit status; round-trip refusal rechecked.
