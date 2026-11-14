@@ -176,6 +176,14 @@ function heartbeat(ctx, state, step) {
 // keeps exactly one writer: the loser stands down with exit 5.
 let RECOVERY_IN_FLIGHT = false;
 export async function recover(ctx, state, reason) {
+  // The armed CLI has exactly one recovery executor: its independent watchdog.
+  // Never spend a short driver lease before repeating the whole recovery there.
+  if (!ctx.recoverOwner && state.watchdogArmed && state.watchdogPid) {
+    state.recoveryRequested = reason;
+    saveState(ctx.stateDir,state);
+    ctx.print?.('# recovery handed to armed watchdog');
+    return 5;
+  }
   // An explicit false marker means the new driver's fence never began.
   // The child persists it immediately before the first authorized write;
   // reread after stopping automation so an in-flight fence cannot be missed.

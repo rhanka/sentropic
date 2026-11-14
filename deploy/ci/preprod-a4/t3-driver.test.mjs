@@ -173,6 +173,32 @@ test('RBAC matrix covers exactly 50 couples', () => {
   assert.equal(RBAC_COUNT, 50);
 });
 
+test('armed CLI hands a T+174s fault directly to one full-budget watchdog recovery', async () => {
+  const { recover } = await import('./t3-window-driver.mjs');
+  const { ctx, calls } = makeCtx({ scenario: { committed: true } });
+  const t0 = monoMs()-174000;
+  let clock = t0+174000;
+  const state = { step: 'W8',t0MonoMs: t0,heartbeatMonoMs: monoMs(),namespace: 'sentropic-preprod',
+    driverPid: process.pid,childPid: process.pid,watchdogPid: process.pid,watchdogArmed: true,
+    middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+  const before = calls.length;
+  assert.equal(await recover(ctx,state,'transient_at_174s'),5);
+  assert.equal(calls.length,before,'no first recovery attempt or API stop in the driver');
+  const original = ctx.call;
+  let classified = false,restarted = false,finished = false;
+  ctx.now = () => clock;
+  ctx.call = (...args) => {
+    if (!classified && args[0].join(' ') === 'scale deployment/api --replicas=0') { clock+=36000; classified=true; }
+    if (!restarted && args[0].join(' ') === 'scale deployment/api --replicas=1') { clock+=28000; restarted=true; }
+    return original(...args);
+  };
+  const probe = ctx.probe;
+  ctx.probe = (...args) => { if (!finished) { clock+=55000; finished=true; } return probe(...args); };
+  assert.equal(await poll(ctx),4);
+  assert.equal(loadState(ctx.stateDir).step,'DONE');
+  assert.ok(clock <= t0+300000,'one 119-second composite recovery fits the original window');
+});
+
 test('RUN6 budgets and staged PVC inputs precede every consumer', async () => {
   const { ctx } = makeCtx();
   const seen = [];
