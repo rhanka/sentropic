@@ -103,6 +103,10 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Switch back to worktree after UAT.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot 8 — Astra FIX R2**
+  - [x] Reproduce and fix partial deletion errors and maintenance enumeration across placement modes (composite-blob.test.ts).
+  - [ ] Qualify image rollback, real transactional GC, host paging, migration contention and process crash recovery.
+  - [ ] Push verified head, await CI, append FIX R2 report and remove isolated volumes.
 - [ ] **Lot 7 — Rebase and qualify exact head (2026-11-13)**
   - [x] Rebase on origin/main; preserve prior uncommitted metadata in a stash.
   - [x] Verify T3 candidate 4625a94b installs only 0001-0008; preprod deployment is namespace-scoped.
