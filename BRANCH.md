@@ -23,7 +23,8 @@
   - `api/tests/unit/google-drive-oauth.test.ts`
   - `api/tests/unit/auth/jwks-adapter.test.ts`
   - `api/tests/unit/auth/oauth-client-seed.test.ts`
-  - `api/tests/unit/k8s-bundle-secret.test.ts`
+  - `scripts/test-k8s-bundle-secret.sh`
+  - `api/tests/unit/k8s-bundle-secret.test.ts` (remove after migration to the shell gate)
   - `Makefile` (BRT1-EX1 only)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
@@ -43,6 +44,7 @@
 - [x] Bundle review correction: preserve quoted hash/comment bytes and assert received synthetic key digests, including padding and equals signs.
 - [x] Rebase: merge-tree identified BRANCH.md as the sole conflict; rebase onto main preserved the exact Makefile/API diff SHA-256 `0fa346f4f278bb3f13e8fdcd46871254df757f881b380178ef5fae3ea33a4683`. No package source or version changed; package post-rebase bump gate is not applicable.
 - [x] BRT1-EX2 — Direct test packaging blocker: the new bundle regression reads /workspace/Makefile, absent from ci-tools. Copy only Makefile into the ci-tools stage. Impact: test image gains its real recipe fixture; production stages remain unchanged. Rollback: remove that COPY and relocate the regression to a repository-mounted test lane. Cancel the superseded CI before pushing the corrected head; no rerun.
+- [x] BRT1-EX2 superseded — api-image-guards rejects every Dockerfile COPY not hashed into API_VERSION, including ci-tools input. Remove the COPY and run the bundle regression as a repository shell test via the existing canonical-image make gate. No Dockerfile change remains; the canonical guard stays intact. BRT1-EX1 also authorizes this directly required Makefile test dependency.
 
 ## AI Flaky tests
 - [x] No AI calls in scoped acceptance tests; no flaky allowance requested.
@@ -59,7 +61,7 @@
   - [x] `api/tests/unit/deployment-secrets.test.ts`: lengths 0/1/31/32, whitespace, public seeds, boot gates.
   - [x] `api/tests/unit/oauth-state-secret.test.ts`: production refusal in OAuth/Drive/JWKS, KEK precedence, empty dev fallback; existing Drive sealing checks retained.
 - [x] Lot 2 — Bundle JWT_SECRET and refuse incomplete deployed input before any kubectl apply (BRT1-EX1).
-  - [x] `api/tests/unit/k8s-bundle-secret.test.ts`: fake kubectl only; incomplete input, boundaries, all three names, no disclosed values. All 7 cases pass.
+  - [ ] `scripts/test-k8s-bundle-secret.sh`: real make target and fake kubectl; incomplete input, boundaries, exact received digests, all three names, no disclosed values.
 - [x] Lot 3 — Explicit tenant-free design-system seed; preserve tenant requirement for other sample clients.
   - [x] `api/tests/unit/auth/oauth-client-seed.test.ts`: observe insert/update values without a live database.
 - [x] Lot 4 — Scoped local tests through make, independent review, scope gate, atomic commits below 150 lines.
