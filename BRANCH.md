@@ -12,6 +12,7 @@
   - `deploy/k8s/overlays/preprod/a4-runtime/**`
   - `deploy/k8s/overlays/restore-a4/**`
   - `deploy/k8s/components/a4-wiring/patch-auth-idp-a4.yaml`
+  - `deploy/k8s/components/a4-wiring/patch-api-a4.yaml`
   - `api/tests/api/t3-*`
   - `docs/runbooks/t3-*`
   - `.github/workflows/ci.yml`
@@ -64,6 +65,8 @@
 - [x] CI workflow selftest includes the added operator/SQL/schema gates; schema test reuses an existing committed Zod tool lock. Alpine APK 404 was verified transient by a later HTTP 200 on the exact URL.
 - [x] Final F1 closure: every receipt hash and candidate field is explicitly a string; array coercions are refused by both the operator parser and real W6 schema tests.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
+- [x] R6 packet (rehearsal r8 findings) allows `deploy/**`; `patch-api-a4.yaml` joins the allowed paths.
+- [x] R6 P-0.8: A4 wiring restates the base env, volume and mount entries in rendered order; the fenced wire of the legacy template then gives the rendered pod templates and the later apply starts no rollout.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
 - [x] No AI tests or flaky allowances.
