@@ -6,5 +6,5 @@ SET LOCAL statement_timeout = '60s';
 SELECT pg_advisory_xact_lock(hashtext('sentropic:artifact-package-migrations'));
 INSERT INTO public.__drizzle_control_migrations (asset_id, hash, created_at)
 SELECT asset_id, hash, created_at FROM control.artifact_image_rollback_receipts;
-DELETE FROM control.artifact_image_rollback_receipts;
+-- Retain the archived proof across rollback/resume cycles.
 COMMIT;

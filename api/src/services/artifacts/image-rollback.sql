@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS control.artifact_image_rollback_receipts (
 );
 INSERT INTO control.artifact_image_rollback_receipts (asset_id, hash, created_at)
 SELECT asset_id, hash, created_at FROM public.__drizzle_control_migrations
-WHERE asset_id ~ '^@sentropic/artifacts/migrations/00(09|1[0-4])_';
+WHERE asset_id ~ '^@sentropic/artifacts/migrations/00(09|1[0-4])_'
+ON CONFLICT (asset_id) DO UPDATE SET hash = EXCLUDED.hash, created_at = EXCLUDED.created_at;
 DELETE FROM public.__drizzle_control_migrations WHERE asset_id IN (
   '@sentropic/artifacts/migrations/0009_upload_pages.sql',
   '@sentropic/artifacts/migrations/0010_git_bindings.sql',
