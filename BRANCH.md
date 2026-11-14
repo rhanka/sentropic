@@ -9,6 +9,7 @@
   - `deploy/k8s/overlays/prod/kustomization.yaml`
   - `deploy/ci/preprod-a4/bundle.selftest.mjs`
   - `deploy/ci/artifact-content/bundle.selftest.mjs`
+  - `deploy/ci/artifact-content/tests.mk`
   - `deploy/ci/preprod-a4/t3-iac.test.mjs`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -19,6 +20,7 @@
 ## Feedback Loop
 - [x] BR1001-EX1: Makefile prod-a4 switch authorized by packet; remove forced restart and block generic secret regeneration. Impact: explicit pod-template convergence required. Rollback: revert this branch before apply.
 - [ ] P-0.8: operator must prove exact pod-template and key parity before convergence; no runtime evidence claimed.
+- [x] CI failure 43545717439: scoped content-test container omitted Makefile required by the new IaC tests; mount it read-only, preserving all assertions.
 ## AI Flaky tests
 - [x] None.
 ## Orchestration Mode (AI-selected)
