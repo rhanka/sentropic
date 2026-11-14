@@ -4161,7 +4161,6 @@ k8s-deploy: ## Apply the prod-a4 overlay (kustomize) on the poc cluster — ingr
 	# Image = base default (:main) until the release pipeline pins a tag (BR-55c/d).
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -k deploy/k8s/overlays/prod-a4
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout restart deployment/api deployment/auth-idp deployment/ui
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/api      --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/ui       --timeout=300s
@@ -4215,6 +4214,7 @@ k8s-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete secret sentropic-postgres sentropic-api --ignore-not-found
 
 k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (.env)
+	@echo 'ERROR: generic secret regeneration is frozen after T3; use the reviewed tenant key custody procedure.' >&2; exit 1
 	@test -f $(K8S_ENV_FILE) || { echo "missing $(K8S_ENV_FILE)" >&2; exit 1; }
 	@set -eu ; \
 	get() { awk -v key="$$1" '\
