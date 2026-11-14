@@ -77,6 +77,8 @@
   - [ ] Record setup/render wrappers, state witnesses and swap spans.
   - [ ] Measure worker compiles, pre-armed import and network/clock uncertainty.
 - [ ] **Lot 4 — Evidence and review**
+  - [x] Pass all 69 browser probes with host-UID output and readonly tools; preserve the original 66-check snapshot.
+  - [x] Receive APPROVE_DIAGNOSTIC_ONLY from independent Astra follow-up; no VD-2.0 gate approval or generic MCP consensus claimed.
   - [x] Verify MapLibre constructor hooks and reject an empty-worker control in all engines (18 targeted checks).
   - [x] Address independent audit findings on adapter failure propagation and explicit evidence-generation recipes.
   - [x] Record all sixteen question statuses and raw evidence; the exit gate remains unqualified.
