@@ -8,6 +8,7 @@
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `deploy/ci/preprod-a4/**`
+  - `deploy/ci/idp-identity-sync/workflow.selftest.mjs`
   - `deploy/k8s/overlays/preprod/a4-runtime/**`
   - `deploy/k8s/overlays/restore-a4/**`
   - `deploy/k8s/components/a4-wiring/patch-auth-idp-a4.yaml`
@@ -54,6 +55,7 @@
 - [x] Final review F2: rollback witness rejects redirects. Handoff regression reproduced a stale fence marker overwrite and is fixed before delegation.
 - [x] Final review F1: original and fenced receipts validate all strict W6 fields, references, hashes and flags before fence/staging; fixtures now carry complete qualification receipts.
 - [x] Added a container-only test executing the actual W6 Zod schema declarations against original/fenced receipts and every missing-field mutation.
+- [x] CI workflow selftest includes the added operator/SQL/schema gates; schema test reuses an existing committed Zod tool lock. Alpine APK 404 was verified transient by a later HTTP 200 on the exact URL.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
