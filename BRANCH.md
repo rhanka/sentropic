@@ -30,6 +30,7 @@
 
 ## Feedback Loop
 - [ ] Conductor owns Track writes and DS/h2a consumer receipts; questions recorded in .tmp/rv/v8-contract-questions.md.
+- [x] Review R1: reject hidden properties, sparse arrays, accessors and symbols before canonical identity encoding; regression cases reproduced.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests or flaky exceptions.
