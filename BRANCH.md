@@ -6,10 +6,19 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
 ## Deployment isolation and operational prerequisites
 - T3 pins API/IdP image `sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce`, built from `4625a94bc5d971a361efbe9639ce59cf242c1a13` (successful CI run 42942234207). That commit's `host-storage.ts` only installs 0001-0008; it does not install 0009-0014. The package can contain SQL assets without running them.
 - Main deploys through `ci.yml:deploy-preprod` and `make k8s-deploy-preprod`, using a namespace-scoped credential and the `preprod-a4` overlay (`sentropic-preprod`). It cannot deploy into production `sentropic` or alter T3's immutable image.
-- API startup installs 0009-0014 transactionally under the existing advisory lock, with content hashes and prefix receipts. DDL is additive/idempotent; 0014 defaults existing blob placement to `object`. Default placement stays `s3`; this PR neither sets cutover flags nor migrates existing bytes.
+- API startup installs 0009-0014 transactionally under the existing advisory lock, with content hashes and prefix receipts. DDL is additive; some constraints are not replayable. The package runner bounds lock waits to 5 seconds and each statement to 60 seconds; failure rolls back the upgrade. 0014 defaults existing blob placement to `object`. Default placement stays `s3`; this PR neither sets cutover flags nor migrates existing bytes.
 - Builder VM and build-pool removal changes no storage contract: DB/S3 placement and verified blob reads/writes are independent of the execution backend. V8 owns future builds; no builder deployment or provisioning is part of this PR.
 - CMF-1o owner prerequisite: provision the RustFS `artifacts` write principal in the Secret Store, without exposing credentials. k8s prerequisites: measure the corpus, resize PostgreSQL PVC beyond 1 Gi and RustFS beyond 5 Gi in place as required, verify namespace quotas and storage-class expansion, and qualify an off-PVC object backup/restore with `s5cmd`. The former four-builder-pod quota belongs to the retired builder plan and is not a storage prerequisite.
 - No cluster or production action is authorized in this lane. No merge is performed; operational cutovers and owner gates remain separate.
+
+## Qualified image rollback and resume
+- A direct image rollback after 0009-0014 is unsafe: the previous runner rejects unknown receipts. Use the following offline procedure; the lane only qualifies it on an isolated database.
+- Fence application/CM writers and all maintenance jobs. Retain the T4a tool image while preparing rollback. Back up the database and object store using the established maintenance process.
+- For every `artifacts.storage_scopes.id`, run the existing `--placement-migrate --scope <id> --to object` tool through `make exec-api CMD="node dist/index.js --placement-migrate --scope <id> --to object" ENV=<maintenance-env>`. Require `done: true`, unchanged counts and verified target bytes; restarting without a cursor repeats any interrupted batch safely. Keep every source copy.
+- Drain active uploads/preparations; `artifacts.upload_staging_bytes` must be empty. Stop all remaining T4a API/CM processes before journal preparation. Disable the new feature flags and retain dedicated S3 configuration for the old image.
+- Run `make db-query QUERY="$(cat api/src/services/artifacts/image-rollback.sql)" ENV=<maintenance-env>`. The SQL refuses DB-placed registered blobs, nonempty DB staging and unqualified receipts; it archives the six receipts transactionally under the migration advisory lock. It drops no tables or blob bytes.
+- Start the previous qualified image (runner frozen from `a627f54e5`) and verify startup and existing object reads. The isolated regression first reproduces its unknown-receipt failure, then verifies old-runner startup, KV/blob preservation and archived receipts.
+- Before returning to T4a, fence and stop the old processes and run `image-resume.sql` through the same `make db-query` mechanism. This restores the original hashed receipts rather than replaying additive constraints. Start T4a and recheck the journal and existing bytes. Newer feature tables and DB source copies remain intact throughout.
 
 ## Scope / Guardrails
 - Scope limited to CM artifact storage, additive only, flag-gated, preprod-safe.
@@ -112,6 +121,7 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - [x] Replace the claimed mid-batch test with an actual SIGKILL after durable verified copies, before the switch; resume without a cursor (cmf-s3-placement-migrate.test.ts).
   - [x] Reproduce unbounded host S3 requests and S3-only maintenance enumeration; delegate keyset pages through both wrappers and collect both configured stores.
   - [x] Qualify offline data-preserving image rollback/resume and bounded migration DDL under contention (artifacts-host-migrations.test.ts).
+  - [x] Qualify durable failed-erasure claims and successful host retry in both directions; align gc-races.test.ts with retained debt.
   - [ ] Push verified head, await CI, append FIX R2 report and remove isolated volumes.
 - [ ] **Lot 7 — Rebase and qualify exact head (2026-11-13)**
   - [x] Rebase on origin/main; preserve prior uncommitted metadata in a stash.
