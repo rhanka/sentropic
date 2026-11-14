@@ -57,9 +57,9 @@
 - [ ] Operator validates isolated restore namespaces, authentication and timing after code delivery.
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read packet, all four Astra reviews, merged driver and constraints; mechanical branch PASS.
-- [ ] Lot 1: W0/W2/W5 stability gates wired; container-only actual legacy migration regression suite added.
-- [ ] Lot 2: explicit Make maintenance entry points delivered; restore/rearm tests pending.
-- [ ] Lot 3: fixture, namespace routing, ACL parser, restore SQL and rearm refusal regression tests added.
+- [x] Lot 1: W0/W2/W5 applicability and four-store gates, offline PKCE and real legacy SQL mutation suite pass.
+- [x] Lot 2: maintenance, original/fenced receipt, full restore/ACL, witness and rearm archive/refusal paths implemented and exercised.
+- [x] Lot 3: isolated fixture/routing, logical verifier, IdP key wiring, observers and authenticated completion tests implemented.
 - [ ] Lot 4: v5 plan reconciliation, #1001 pins/switch, exact operator handoff.
 - [ ] Final validation: focused operator and PostgreSQL tests on final bytes; PR and exact-head CI green.
 - [ ] Review: independent code and design review evidence; no consensus claim without completed peers.
