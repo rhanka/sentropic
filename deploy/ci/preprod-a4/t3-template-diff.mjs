@@ -49,14 +49,15 @@ function local(args, input) {
   return result.stdout;
 }
 
-// Offline conversion of a manifest stream (YAML or JSON, List or documents) to Deployment objects:
+// Offline conversion of a manifest stream (YAML or JSON, List or documents) to objects:
 // `kubectl patch --local -o json` prints one indented document per object and reads no cluster.
-export function deployments(text, run = local) {
+export function manifests(text, run = local) {
   const output = run(['patch', '--local', '-f', '-', '--type=merge', '-p', '{}', '-o', 'json'], text);
-  const objects = output.split(/^(?=\{$)/m).filter(part => part.trim()).map(part => JSON.parse(part))
+  return output.split(/^(?=\{$)/m).filter(part => part.trim()).map(part => JSON.parse(part))
     .flatMap(object => object.kind === 'List' ? object.items : [object]);
-  return Object.fromEntries(objects.filter(object => object.kind === 'Deployment').map(object => [object.metadata.name, object]));
 }
+export const deployments = (text, run = local) => Object.fromEntries(manifests(text, run)
+  .filter(object => object.kind === 'Deployment').map(object => [object.metadata.name, object]));
 
 // Replays on files the exact W3 wire vectors, then the annex set-image vectors.
 export function wired(objects, image, annexCommands, run = local) {

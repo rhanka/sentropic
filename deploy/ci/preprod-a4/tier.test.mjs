@@ -53,11 +53,11 @@ test('should wire prod from the shared A4 wiring component and create prod budge
     calls.push({ args, input, namespace }); return args[0] === 'get' ? JSON.stringify({ spec: { replicas: 0 } }) : 'runtime';
   }, read());
   const files = calls.flatMap(({ args }) => args.filter(arg => arg.startsWith('--patch-file=') || arg.endsWith('.yaml')));
-  assert.deepEqual(files, ['deploy/ci/preprod-a4/custody-pvc.yaml', '--patch-file=deploy/k8s/components/a4-wiring/patch-api-config.yaml',
+  assert.deepEqual(files, ['deploy/ci/preprod-a4/custody-pvc.yaml', 'deploy/ci/preprod-a4/idp-session-pvc.yaml', '--patch-file=deploy/k8s/components/a4-wiring/patch-api-config.yaml',
     '--patch-file=deploy/k8s/components/a4-wiring/patch-api-a4.yaml', '--patch-file=deploy/k8s/components/a4-wiring/patch-auth-idp-config.yaml',
     '--patch-file=deploy/k8s/components/a4-wiring/patch-auth-idp-a4.yaml']);
   assert(calls.every(({ namespace }) => namespace === 'sentropic'));
-  assert.doesNotMatch(readFileSync('deploy/ci/preprod-a4/custody-pvc.yaml', 'utf8'), /namespace:/);
+  for (const claim of ['custody-pvc.yaml', 'idp-session-pvc.yaml']) assert.doesNotMatch(readFileSync(`deploy/ci/preprod-a4/${claim}`, 'utf8'), /namespace:/);
   const budgets = { qualificationReceiptRef: 'track:prod-rehearsal-budgets' };
   for (const name of ['reservation', 'deletion', 'diagnostic', 'read', 'workspace', 'replicaExport', 'replicaValidation', 'replicaSync']) {
     budgets[name] = { deadlineMs: 1000, maxAttempts: 1 };
