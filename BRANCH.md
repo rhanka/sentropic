@@ -46,6 +46,7 @@
 - [x] R5-M4: human emergency passes the protected witness configuration; successful classified rollback persists DONE/commitVerified=false for rearm.
 - [x] R5-M1: preflight requires both excluded-source 403 probes; finish-open executes them before acceptance and requires configured final external probes.
 - [x] Qualification usable-auth reads both real authenticated /me responses after reopening, checks expected user IDs and records monotonic elapsed/fault-to-auth against final state; health alone cannot qualify.
+- [x] Added qualification refusal tests (401, wrong identity, late completion, incomplete window), plus fixture SA/logical-verifier/TEM assertions.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
