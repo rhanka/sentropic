@@ -238,7 +238,6 @@ test('RUN6 budgets and staged PVC inputs precede every consumer', async () => {
   const { ctx } = makeCtx();
   const seen = [];
   ctx.config.remoteFile = '/private/remote.json';
-  ctx.config.rehearsalFile = '/private/rehearsal.json';
   ctx.delivered = (c, script, env) => {
     const op = env.A4_ACTION ?? env.A4_OPERATION ?? env.A4_PHASE;
     if (op === 'custodian') assert.ok(seen.includes('budgets'), 'mandatory budgets Secret exists');
@@ -246,7 +245,8 @@ test('RUN6 budgets and staged PVC inputs precede every consumer', async () => {
     if (op === 'checkpoint') assert.ok(seen.includes('stage:rehearsal'), 'rehearsal on PVC');
     if (op === 'stage') {
       assert.equal(env.A4_REMOTE_FILE, ctx.config.remoteFile);
-      assert.equal(env.A4_REHEARSAL_FILE, ctx.config.rehearsalFile);
+      assert.equal(env.A4_REHEARSAL_FILE, env.A4_STAGE === 'rehearsal'
+        ? `${ctx.stateDir}/fenced-rehearsal.json` : ctx.config.rehearsalFile);
     }
     seen.push(op === 'stage' ? `${op}:${env.A4_STAGE}` : op);
     return '';

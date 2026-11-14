@@ -29,7 +29,8 @@ WITH objects AS (
     x.grantor::regrole::text,CASE WHEN x.grantee=0 THEN 'PUBLIC' ELSE x.grantee::regrole::text END,
     x.privilege_type,x.is_grantable) ORDER BY x.grantor::regrole::text COLLATE "C",
     CASE WHEN x.grantee=0 THEN 'PUBLIC' ELSE x.grantee::regrole::text END COLLATE "C",
-    x.privilege_type COLLATE "C",x.is_grantable),'[]'::jsonb) FROM aclexplode(acl) x)) AS permissions
+    x.privilege_type COLLATE "C",x.is_grantable),'[]'::jsonb)
+    FROM aclexplode(CASE WHEN cardinality(acl)>0 THEN acl ELSE NULL::aclitem[] END) x)) AS permissions
   FROM objects
 )
 SELECT encode(sha256(convert_to(coalesce(jsonb_agg(jsonb_build_array(kind,name,permissions)
