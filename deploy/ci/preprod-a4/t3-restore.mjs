@@ -55,13 +55,13 @@ BEGIN
     END IF;
   END LOOP;
 END $reset_defaults$;
-${/^CREATE SCHEMA public;/m.test(dump) ? '' : 'CREATE SCHEMA public;'}
+${/^CREATE SCHEMA public;/m.test(dump) ? '' : "CREATE SCHEMA public;\nCOMMENT ON SCHEMA public IS 'standard public schema';"}
 ${dump}
 ${acl}
 SELECT public.oauth_refresh_invalidate_restore();
 DELETE FROM public.oauth_tokens;
 ${aclSql().replace(/;\s*$/, ' \\gset')}
-SELECT 1 / ((:'acl_sha256' = '${expectedHash}')::int);
+SELECT 1 OPERATOR(pg_catalog./) ((:'acl_sha256' OPERATOR(pg_catalog.=) '${expectedHash}')::pg_catalog.int4);
 `;
 }
 
