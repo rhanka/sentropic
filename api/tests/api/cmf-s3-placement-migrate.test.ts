@@ -5,6 +5,7 @@
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
+import { fork } from 'node:child_process';
 import { Pool } from 'pg';
 import { createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
 import { createPostgresDbBlobStore } from '@sentropic/artifacts/adapters/db-blob';
@@ -103,7 +104,7 @@ describe('placement migration', () => {
     expect(await s3.getBlob(key)).toEqual(bytes);
   });
 
-  it('resumes after a crash mid-batch without losing or duplicating', async () => {
+  it('resumes after a completed batch without losing or duplicating', async () => {
     const s3 = createMemoryBlobStore();
     const db = createPostgresDbBlobStore(pool);
     const composite = createPlacementBlobStore({ pool, s3, mode: 'db', inlineMaxBytes: 8 });
@@ -134,6 +135,58 @@ describe('placement migration', () => {
     expect(third.beforeByPlacement).toEqual({ object: 3 });
     expect(third.afterByPlacement).toEqual({ object: 3 });
     expect((await pool.query('SELECT count(*)::int AS n FROM artifacts.blob_bytes')).rows).toEqual([{ n: 3 }]);
+  });
+
+  it('resumes after SIGKILL between verified copies and the placement switch', async () => {
+    const source = ['crash first', 'crash second'].map(text => new TextEncoder().encode(text));
+    const keys = source.map(bytes => keyFor(bytes));
+    for (const [index, key] of keys.entries()) {
+      await seedDbBlob(source[index]!, 'object');
+      await pool.query('DELETE FROM artifacts.blob_bytes WHERE digest = $1', [`sha256:${key.split('/').pop()}`]);
+    }
+    const script = `
+      const { Pool } = require('pg');
+      (async () => {
+        const { migratePlacement } = await import('./src/scripts/cm-placement-migrate.ts');
+        const { createPlacementBlobStore } = await import('./src/services/artifacts/blob-placement.ts');
+        const { createMemoryBlobStore } = await import('@sentropic/artifacts/server/publication');
+        const { createPostgresDbBlobStore } = await import('@sentropic/artifacts/adapters/db-blob');
+        const pool = new Pool({connectionString: process.env.DATABASE_URL});
+        try {
+          const s3 = createMemoryBlobStore();
+          for (const [key, bytes] of ${JSON.stringify(keys.map((key, i) => [key, [...source[i]!]]))}) {
+            await s3.putBlob(key, new Uint8Array(bytes));
+          }
+          const db = createPostgresDbBlobStore(pool);
+          const composite = createPlacementBlobStore({pool, s3, mode: 's3', inlineMaxBytes: 8});
+          await migratePlacement({pool, s3, db, composite, scope: '${SCOPE}', to: 'db',
+            beforePlacementSwitch: async () => {
+              process.send('verified');
+              await new Promise(() => {});
+            }});
+          process.send('completed');
+        } finally { await pool.end(); }
+      })().catch(() => { process.exitCode = 1; });`;
+    const child = fork('-e', [script], { execArgv: ['--import', 'tsx'],
+      env: { ...process.env, DATABASE_URL: pool.options.connectionString }, silent: true });
+    const exit = await new Promise((resolve, reject) => {
+      let message: unknown;
+      child.on('message', value => { message = value; if (value === 'verified') child.kill('SIGKILL'); });
+      child.on('error', reject);
+      child.on('exit', (code, signal) => resolve({ message, code, signal }));
+    });
+    expect(exit).toEqual({ message: 'verified', code: null, signal: 'SIGKILL' });
+    expect((await pool.query('SELECT placement FROM artifacts.blobs')).rows).toEqual(source.map(() => ({ placement: 'object' })));
+    const db = createPostgresDbBlobStore(pool);
+    const s3 = createMemoryBlobStore();
+    for (const [i, key] of keys.entries()) {
+      expect(await db.getBlob(key)).toEqual(source[i]);
+      await s3.putBlob(key, source[i]!);
+    }
+    const composite = createPlacementBlobStore({ pool, s3, mode: 's3', inlineMaxBytes: 8 });
+    expect((await migratePlacement({ pool, composite, db, s3, scope: SCOPE, to: 'db' })).done).toBe(true);
+    expect((await pool.query('SELECT placement FROM artifacts.blobs')).rows).toEqual(source.map(() => ({ placement: 'db' })));
+    for (const [i, key] of keys.entries()) expect(await s3.getBlob(key)).toEqual(source[i]);
   });
 
   it('requires an extra resume when batches exactly fill maxBatches', async () => {
