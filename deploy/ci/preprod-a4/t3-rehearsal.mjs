@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { canonical, digest } from './guards.mjs';
-import { aclSql } from './t3-restore.mjs';
+import { aclFormulaSha256, aclSql } from './t3-restore.mjs';
 
 export const STATE_HASHES = ['sourceContentSha256','schemaSha256','journalSha256','remoteSnapshotDigest',
   'mappingSha256','identityAssetSha256','connectorAssetSha256'];
@@ -67,7 +67,7 @@ export function prepareFencedReceipt(ctx,query) {
     throw new Error('fenced_snapshot_binding_invalid');
   }
   const acl = JSON.parse(readFileSync(config.aclReceiptFile,'utf8'));
-  if (query(ctx,aclSql()).trim() !== acl.aclCatalogSha256
+  if (acl.aclFormulaSha256 !== aclFormulaSha256() || query(ctx,aclSql()).trim() !== acl.aclCatalogSha256
     || digest(readFileSync(config.restoreAclFile)) !== acl.aclSqlSha256) throw new Error('w5_acl_drift');
   const receipt = fencedReceipt(original,snapshot,policy);
   const path = `${ctx.stateDir}/fenced-rehearsal.json`;

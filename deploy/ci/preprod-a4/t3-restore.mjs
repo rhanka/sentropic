@@ -6,6 +6,7 @@ import { preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
 import { monoMs } from './t3-lib.mjs';
 
 export const aclSql = () => readFileSync(new URL('./t3-acl.sql', import.meta.url), 'utf8');
+export const aclFormulaSha256 = () => digest(aclSql());
 const pg = (ctx, sql, extra = []) => ctx.call(['exec', ctx.config.postgresPod ?? 'postgres-0', '--',
   'psql', '-U', ctx.config.postgresUser ?? 'app', '-v', 'ON_ERROR_STOP=1', '-XqAt', ...extra], sql);
 export function privateBytes(path) {
@@ -22,7 +23,7 @@ export function captureAcl(ctx, dir) {
   const hash = pg(ctx, aclSql()).trim();
   if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('acl_capture_invalid');
   writeFileSync(`${dir}/acl.sql`, sql, { mode: 0o600 });
-  const receipt = { aclCatalogSha256: hash, aclSqlSha256: digest(sql) };
+  const receipt = { aclCatalogSha256: hash, aclSqlSha256: digest(sql), aclFormulaSha256: aclFormulaSha256() };
   writeFileSync(`${dir}/acl.json`, JSON.stringify(receipt), { mode: 0o600 });
   return receipt;
 }
