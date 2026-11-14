@@ -40,6 +40,7 @@
 - [x] R5-B2/M3: bind original rehearsal and P-0 baseline to the annex policy; derive the final fenced receipt only after applicability/ACL equality and preserve both originals.
 - [x] W5 now validates applicability and ACLs before staging its derived receipt; driver doubles use a real original/fenced receipt pair.
 - [x] Added regressions for session-only seven-hash rebasing, ACL drift before staging, missing annex actions and partial/corrupt custody archives.
+- [x] SQL canonicalization treats zero-dimensional empty ACL arrays as no entries before aclexplode.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
