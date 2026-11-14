@@ -77,6 +77,9 @@
 - [x] R6 tests, red before each fix: custodian pin (1), chronometer integration and locale (3), canonical template diff (six API env paths); the adapted delivered-ops test asserts the pinned Pod.
 - [x] CI failure 43618067877 (`changes`, check-image-registry): the legacy fixture quoted the retired registry host of the last-applied images. Replaced by a placeholder host; the guard is unchanged and the judged result is identical because apply reads only field ownership from that configuration.
 - [x] R6 dependency of the aligned wiring: the wired IdP template mounts claim `auth-idp-session-authority`, absent from the legacy prod namespace (rehearsal r7 inventory). The wire now applies `idp-session-pvc.yaml` with the custody claim before any template patch; the gate requires every claim mounted by a wired template to be created by the wire and equal to the rendered claim. Red before (IdP would stay Pending at W8), green after.
+- [x] R7-1 (rehearsal r9 blocker): the full restore aborted with `division by zero` on the prod schema. pg_dump empties `search_path` for the restore session and `pg_get_function_identity_arguments` then renders pg_trgm argument types as `public.gtrgm`, so the in-transaction ACL catalogue could never equal its P-0 capture. The catalogue is now pg_catalog-qualified (relations, functions, types, collations, operators) and names argument types from pg_type. Red before on a schema with pg_trgm (the same two `gtrgm_*` entries as r9), green after.
+- [x] R7-1 gate: `test-t3-sql` requires the same hash under the default, empty, pinned and shadowing search paths, and an identical schema-only dump after the restore (the recreated `public` schema keeps its default comment).
+- [ ] R7-1 operator: ACL receipts captured by earlier heads use the previous hash formula and must be recaptured before P-0.9.
 - [ ] Operator: the prod and restore quotas must admit one more 1Gi claim; the first IdP start now provisions and attaches that volume inside W8 and must be measured (M-5, M-7).
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
@@ -94,5 +97,6 @@
 - [x] Final local validation: 206/206 operator tests, actual W6 Zod schema acceptance/mutation tests, four-store/PKCE SQL drift checks, full restore semantic ACL parity and atomic refusal pass; standalone restore runtime renders.
 - [x] Lot R6: rehearsal r8 findings (custodian node pin, zero pod-template diff with judge and gate, locale-proof chronometer); `ENV=test-t3-r6`, API 9168, UI 5368, Maildev 1268, checked free.
 - [x] R6 local validation: 217/217 operator tests and the three canonical-diff checks pass; rendered-bundle and identity-sync selftests pass; the operator judge returns a zero diff on the read-only prod capture against the #1001 render with the candidate images.
+- [ ] Lot R7: rehearsal r9 findings (full restore, worker load, fence-to-W5 race, probe URLs, baseline order); `ENV=test-t3-r7`, API 9169, UI 5369, Maildev 1269, checked free.
 - [ ] PR and exact-head CI green, recorded in the final packet report; no merge authorized.
 - [ ] Review: independent code and design review evidence; no consensus claim without completed peers.
