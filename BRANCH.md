@@ -1,68 +1,64 @@
-# Feature: Land approved cluster-mesh specifications
+# Fix: Harden deployment secrets and complete T1 w9
 
 ## Objective
-- [x] Execute the approved specs-landing packet from origin/main without changing specification bodies.
+- [ ] Deliver A-R3-5, T1-w9 and the design-system seed from the ratified App-to-cluster-mesh plan.
 
 ## Scope / Guardrails
-- [x] Documentation only; no cluster, production, T3, application, workflow, or dependency changes.
-- [x] Worktree: tmp/worktrees/specs-landing; branch: docs/specs-landing.
-- [x] Test environment: test-cm-specs-land; API_PORT=9460, UI_PORT=5660, MAILDEV_UI_PORT=1560.
-- [x] Preserve approved specification bytes; prepend only the requested supersession notice to the two retired builder specs.
-- [x] One commit per large specification is explicitly permitted by the packet.
+- [x] Worktree: `tmp/secret-keys-hardening-w9`; branch: `fix/secret-keys-hardening-w9`; base: `938709b08`.
+- [x] Environment: `test-cm-t1-w9`; API_PORT=9450, UI_PORT=5650, MAILDEV_UI_PORT=1550 (checked free).
+- [x] Make-only, Docker-first; no cluster/prod actions; no T3 changes; no merge.
+- [x] Keep OAuth KEK checks at resolver time; do not add a KEK boot gate (QA-8r2).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `spec/CM_FIRST_ARTIFACTS.md`
-  - `spec/SPEC_EVOL_V8_ARTIFACT_DELIVERY.md`
-  - `spec/SPEC_EVOL_APP_VUE_VAPOR_MIGRATION.md`
-  - `spec/SPEC_EVOL_APP_CONTEXT_GENERIC.md`
-  - `spec/SPEC_EVOL_ARTIFACT_BUILDER_SLO.md`
-  - `spec/SPEC_EVOL_ARTIFACT_BUILDER_SERVERLESS.md`
-  - `spec/SPEC_EVOL_CLUSTER_MESH_GAS.md`
+  - `api/src/config/deployment-secrets.ts`
+  - `api/src/routes/auth/oauth.ts`
+  - `api/src/services/google-drive-oauth.ts`
+  - `api/src/services/auth/jwks-adapter.ts`
+  - `api/src/services/auth/oauth-client-seed.ts`
+  - `api/tests/unit/deployment-secrets.test.ts`
+  - `api/tests/unit/oauth-state-secret.test.ts`
+  - `api/tests/unit/google-drive-oauth.test.ts`
+  - `api/tests/unit/auth/jwks-adapter.test.ts`
+  - `api/tests/unit/auth/oauth-client-seed.test.ts`
+  - `api/tests/unit/k8s-bundle-secret.test.ts`
+  - `Makefile` (BRT1-EX1 only)
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.github/workflows/**`
-  - `api/**`
-  - `ui/**`
-  - `packages/**`
   - `deploy/**`
-  - `.track/**`
+  - `packages/**`
+  - `.github/workflows/**`
+  - `.track/**` (designated conductor writer only)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `spec/SPEC_EVOL_CONNECTOR_ACCOUNT_WORKSPACE_EXPOSURE.md` (approval evidence required)
+  - `Makefile` (BRT1-EX1)
 
 ## Feedback Loop
-- [x] Connector exposure: not landed: status unknown; source still says DRAFT / ARCHITECTURE DECISION, no approval found in .tmp/rv or git history.
-- [x] GAS: FROZEN r3 confirmed by .tmp/rv/spec-n1-frozen.md and commit a06c561934c52924e7d72b359f18ac310c79a98c; r3 co-review resolves OQ13/OQ14.
-- [x] Track source is this mergeable branch plan; shared .track remains owned by the conductor for its single-writer import.
+- [x] BRT1-EX1 — Authorized by cm-t1-w9 packet: change only k8s-bundle-secret to deliver JWT_SECRET and reject short/blank JWT_SECRET or SECRET_ENCRYPTION_KEY before any apply. Impact: incomplete deployed bundles fail closed. Rollback: revert this branch's bundle hunk; preserve provisioned cluster secrets. Local scope-check may use the installed host harness via an ignored make overlay, avoiding a tooling rebuild.
+- [x] Track: update this mergeable source artifact; conductor imports it as the designated single writer. No concurrent .track writes.
+- [x] No browser UAT: these are secret resolvers, bundle generation and database seed defaults; synthetic tests cover behavior without cluster access.
 
 ## AI Flaky tests
-- [x] Not applicable: documentation only.
+- [x] No AI calls in scoped acceptance tests; no flaky allowance requested.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; no delegated implementation or integration required.
+- [x] Mono-branch; independent code review before final push.
 
 ## UAT Management (in orchestration context)
-- [x] Not applicable: no runtime or UI behavior changes.
+- [ ] Synthetic acceptance only; do not alter live secrets or existing design-system registrations.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and approval evidence**
-  - [x] Read repository rules, common rules, packet, and consolidated plan; create isolated worktree from origin/main and pass harness check branch.
-  - [x] Verify V8 source SHA-256: ab53eb6a61a07fbff7c4092bcb64806b528825a8cf190e619008c680cccf2b9e.
-- [x] **Lot 1 — Approved specifications**
-  - [x] Land CM_FIRST_ARTIFACTS unchanged.
-  - [x] Land V8 delivery unchanged.
-  - [x] Land Vue Vapor migration unchanged.
-  - [x] Land generic app context unchanged.
-  - [x] Land frozen GAS r3 unchanged.
-- [x] **Lot 2 — Superseded builder specifications**
-  - [x] Land SLO with the requested supersession header and unchanged body.
-  - [x] Land serverless with the requested supersession header and unchanged body.
-- [ ] **Lot 3 — Final validation and handoff**
-  - [x] Verify exact source/body equivalence and git diff --check; pass make scope-check before every commit.
-  - [x] Inspect CI path classification; spec/** does not select application/package suites; do not modify ci.yml.
-  - [ ] Push final reviewed head; create PR with this plan as body and an execution-plan comment.
-  - [ ] Wait for successful CI on the exact PR head; do not merge.
-  - [ ] Write French report and completion marker under .tmp/rv with conductor Track import handoff.
+- [x] Lot 0 — Read rules, ratified plan and A-R3-5/w9 criteria; mechanically check branch and isolate ports.
+- [ ] Lot 1 — Minimum trimmed length 32; deployed OAuth/Drive/JWKS resolver validation; retain development behavior and key bytes.
+  - [ ] `api/tests/unit/deployment-secrets.test.ts`: lengths 0/1/31/32, whitespace, public seeds, boot gates.
+  - [ ] `api/tests/unit/oauth-state-secret.test.ts`, `google-drive-oauth.test.ts`, `auth/jwks-adapter.test.ts`: production refusal, KEK precedence, empty dev fallback.
+- [ ] Lot 2 — Bundle JWT_SECRET and refuse incomplete deployed input before any kubectl apply (BRT1-EX1).
+  - [ ] `api/tests/unit/k8s-bundle-secret.test.ts`: fake kubectl only; incomplete input, boundaries, all three names, no disclosed values.
+- [ ] Lot 3 — Explicit tenant-free design-system seed; preserve tenant requirement for other sample clients.
+  - [ ] `api/tests/unit/auth/oauth-client-seed.test.ts`: observe insert/update values without a live database.
+- [ ] Lot 4 — Scoped local tests through make, independent review, scope gate, atomic commits below 150 lines.
+- [ ] Lot 5 — Push, PR with this document as body, exact-head green CI, report and done marker; no merge.
+
+## Deferred to conductor
+- [ ] Import this branch's deliverables and evidence into Track from the designated origin/main writer.
