@@ -71,7 +71,11 @@ export async function installArtifactPackageAssets(
   connection: Pool | PoolClient,
   load: (id: string) => string = (id) => migrations.find((asset) => asset.id === id)!.read(),
   migrations: readonly { id: string; sha256: string; read: () => string }[] = artifactMigrationAssets,
+  limits = { lockTimeoutMs: 5000, statementTimeoutMs: 60000 },
 ): Promise<void> {
+  for (const value of Object.values(limits)) {
+    if (!Number.isSafeInteger(value) || value < 1) throw new Error('Invalid artifact migration timeout');
+  }
   // Validate every file before acquiring a connection or executing any asset.
   const assets = migrations.map((asset) => {
     const source = load(asset.id);
@@ -85,6 +89,8 @@ export async function installArtifactPackageAssets(
   let discard: Error | undefined;
   try {
     await client.query('BEGIN');
+    await client.query("SELECT set_config('lock_timeout', $1, true), set_config('statement_timeout', $2, true)",
+      [`${limits.lockTimeoutMs}ms`, `${limits.statementTimeoutMs}ms`]);
     await client.query(`SELECT pg_advisory_xact_lock(hashtext('sentropic:artifact-package-migrations'))`);
     const { rows } = await client.query<{ asset_id: string; sha256: string }>(
       'SELECT asset_id, hash AS sha256 FROM public.__drizzle_control_migrations WHERE asset_id IS NOT NULL',
