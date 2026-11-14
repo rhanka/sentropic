@@ -26,6 +26,9 @@ for (const size of ['S', 'M', 'L']) {
       } finally { freshIsolate.dispose(); }
       const memo = await context.eval(`(() => {const s=spike.createSession();s.compile(${JSON.stringify(source)});return {output:s.compile(${JSON.stringify(edit(source))}),counters:s.counters}})()`, { copy: true, timeout: 5000 });
       assert.deepEqual(memo.output, next, `block memo differs from whole compile: ${size}/${kind}`);
+      const expected = { style: [1, 1, 2], template: [1, 2, 1], whole: [2, 1, 1],
+        cssBinding: [2, 1, 2], scoped: [1, 2, 2], slotted: [1, 2, 2], importedBinding: [2, 2, 1] }[kind];
+      assert.deepEqual(['script', 'template', 'style'].map(key => memo.counters[key]), expected, `${size}/${kind} invalidation`);
       results.checks[`${size}/${kind}`] = Object.fromEntries(['script', 'template', 'styles'].map(key => [key,
         JSON.stringify(next[key]) !== JSON.stringify(output[key])]));
       results.checks[`${size}/${kind}`].memoEqualsWhole = true;
@@ -61,3 +64,8 @@ isolate.dispose();
 writeFileSync('/tools/spike/compiler-probe.json', JSON.stringify(results, null, 2));
 console.log(JSON.stringify(results, null, 2));
 if (['S', 'M', 'L'].some(size => !results.checks[size].success)) process.exitCode = 1;
+assert.ok(results.cssPass.visited > 0 && results.cssPass.code.includes('blue'));
+assert.deepEqual(results.cssPass.errors, []);
+assert.equal(typeof results.syntax.code, 'string');
+assert.equal(typeof results.importedTypes['./types'], 'string');
+assert.match(results.importedTypes['spike-types'].error, /non-relative sources is not supported/);
