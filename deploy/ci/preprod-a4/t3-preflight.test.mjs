@@ -7,6 +7,7 @@ import { STATE_HASHES } from './t3-rehearsal.mjs';
 import { applicabilityFixture } from './t3-applicability.test.mjs';
 import { witnessBinding } from './t3-applicability.mjs';
 import { aclFormulaSha256 } from './t3-restore.mjs';
+import { PROD_POSTGRES_IMAGE, PROD_POSTGRES_TOOL_IMAGE, PROD_POSTGRES_VERSION } from './t3-fixture.mjs';
 import { emailProbe, expectedSigningKid, probeEndpoints, observerProbes, verificationLine, verificationSpec } from './t3-probe-fixture.mjs';
 
 export function inputs(witnessUrl = 'https://app.test/api/v1/me') {
@@ -36,6 +37,9 @@ export function inputs(witnessUrl = 'https://app.test/api/v1/me') {
     ...Object.fromEntries(STATE_HASHES.map(key => [key,'a'.repeat(64)])) });
   files['/acl'] = '-- synthetic ACL';
   files['/acl-receipt'] = JSON.stringify({ aclCatalogSha256: 'a'.repeat(64),aclSqlSha256: digest(files['/acl']),aclFormulaSha256: aclFormulaSha256() });
+  files['/postgres-version'] = JSON.stringify({ version: 't3-postgres-version/1',namespace: 'sentropic-preprod',
+    postgresVersion: PROD_POSTGRES_VERSION,serverImage: PROD_POSTGRES_IMAGE,
+    pgbackupClientImage: PROD_POSTGRES_TOOL_IMAGE,identityExportClientImage: PROD_POSTGRES_TOOL_IMAGE });
   const policy = { originalRehearsalSha256: digest(files['/rehearsal']),baselineSha256: digest(files['/baseline']),
     reviewRef: 'track:qualified-applicability',allowedChanges: ['sourceContentSha256'] };
   annex.applicabilityReceiptPolicySha256 = digest(canonical(policy)); files['/annex'] = JSON.stringify(annex);
@@ -43,7 +47,8 @@ export function inputs(witnessUrl = 'https://app.test/api/v1/me') {
     request: approvedRequest, images: { candidate: image, ui }, executionFile: '/annex',
     executionSha256: digest(files['/annex']), authorizationFile: '/authorization', kubeconfigFile: '/kube',
     remoteFile: '/remote', budgetsFile: '/budgets', applicabilityBaselineFile: '/baseline',
-    rehearsalFile: '/rehearsal',aclReceiptFile: '/acl-receipt',restoreAclFile: '/acl',applicabilityReceiptPolicy: policy,
+    rehearsalFile: '/rehearsal',aclReceiptFile: '/acl-receipt',restoreAclFile: '/acl',
+    postgresVersionFile: '/postgres-version',applicabilityReceiptPolicy: policy,
     endpoints: probeEndpoints(), emailProbe, expectedSigningKid, initialSecretKeyNames: ['EMAIL_VERIFICATION_PEPPER'],
     restrictedProbes: observerProbes().restrictedProbes,
     externalProbes: [{ id: 'external-app',url: 'https://app.test/',expect: 200 },
@@ -78,6 +83,7 @@ test('restore preflight rejects production URLs in every observer and witness pa
     const value = JSON.parse(f.files[path]); value.format = value.format.replace('preprod-','prod-');
     if (value.namespace) value.namespace = 'sentropic'; f.files[path] = JSON.stringify(value);
   }
+  f.files['/postgres-version'] = JSON.stringify({ ...JSON.parse(f.files['/postgres-version']), namespace: 'sentropic-restore-a4' });
   f.config.applicabilityReceiptPolicy.originalRehearsalSha256 = digest(f.files['/rehearsal']);
   const annex = JSON.parse(f.files['/annex'].replaceAll('sentropic-preprod-a4-verification','sentropic-restore-a4-a4-verification'));
   annex.format = 'prod-a4-execution/1'; annex.namespace = 'sentropic';
@@ -131,5 +137,16 @@ test('offline preflight rejects an old-formula ACL receipt before the fence', ()
     if (patch.aclFormulaSha256 === undefined) delete receipt.aclFormulaSha256;
     f.files['/acl-receipt'] = JSON.stringify(receipt);
     assert.throws(() => preflight(f.config, f.read), /acl_baseline_invalid/);
+  }
+});
+test('offline preflight requires a bound postgres-version qualification receipt', () => {
+  const missing = inputs(); delete missing.config.postgresVersionFile;
+  assert.throws(() => preflight(missing.config, missing.read), /postgres_version_receipt_invalid/);
+  for (const patch of [{ postgresVersion: '17.12' }, { namespace: 'sentropic' },
+    { serverImage: 'postgres:17-alpine' }, { pgbackupClientImage: 'postgres:17-alpine' },
+    { identityExportClientImage: 'postgres:17-alpine' }]) {
+    const f = inputs();
+    f.files['/postgres-version'] = JSON.stringify({ ...JSON.parse(f.files['/postgres-version']), ...patch });
+    assert.throws(() => preflight(f.config, f.read), /postgres_version_receipt_invalid/);
   }
 });

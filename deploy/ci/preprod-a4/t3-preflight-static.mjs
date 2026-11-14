@@ -6,6 +6,7 @@ import { buildProbes, validateProbes, validateObservers } from './t3-lib.mjs';
 import { assertBaselineAfterWitness, validateApplicability } from './t3-applicability.mjs';
 import { validateReceiptPolicy } from './t3-rehearsal.mjs';
 import { aclFormulaSha256 } from './t3-restore.mjs';
+import { validatePostgresVersionReceipt } from './t3-fixture.mjs';
 import { verificationCredential } from './verification-boundary.mjs';
 
 // Offline only. Never interprets a request template as observed fence evidence.
@@ -46,6 +47,14 @@ export function preflight(config, read = privateInput) {
     || acl.aclSqlSha256 !== digest(read(config.restoreAclFile,64*1024*1024))) {
     throw new Error('acl_baseline_invalid');
   }
+  let pgReceipt;
+  try {
+    if (!config.postgresVersionFile) throw new Error('postgres_version_receipt_invalid');
+    pgReceipt = JSON.parse(read(config.postgresVersionFile));
+  } catch {
+    throw new Error('postgres_version_receipt_invalid');
+  }
+  validatePostgresVersionReceipt(pgReceipt, config.namespace);
   if (!URL.canParse(config.witness?.url) || typeof config.witness?.cookie !== 'string' || !config.witness.cookie.trim()
     || !(Date.parse(config.witness.expiresAt) > Date.now() + 7200000)) throw new Error('legacy_witness_invalid');
   if (config.tier === 'restore') {
