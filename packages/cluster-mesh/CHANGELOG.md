@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.26.0-dev.28
+
+- T4a storage CMF-S1 structural blob bridge contract (`storage/artifact-blob.ts`):
+  `ArtifactBlobPort` with buffer clone and SHA-256 pre-I/O check, conditional
+  create-only puts, digest-verified reads, `CommonBoundedPage` keyset listing
+  with opaque scope-bound integrity-protected continuations (CR-1/CR-2/CR-4),
+  composite `db+s3` routing with union paging, maintain-right deletes (CR-5).
+
 ## 0.26.0-dev.24
 
 - T5a CM providers, code only (flag-gated, no state move, no migration): CMP-L1

@@ -21,3 +21,4 @@ export type { AuthenticatedStagedHandle, AuthenticatedStagedSeal } from './stage
 export type { RootSealStepInput, RootSealOutcome } from './staged-seal.js';
 export type { JournalFence } from './staged-core.js';
 export type { RootQueryView, RootQueryContext, RootQueryPage, RootQueryRequest, RegisteredRootQuery } from './root-query.js';
+export type { ArtifactBlobPlacement, ArtifactBlobPort, BlobKey, BoundedBlobKeys, MaintainGrant, ObjectBindingRef } from './artifact-blob.js';

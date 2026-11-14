@@ -37,6 +37,10 @@ GRANT CONNECT ON DATABASE app TO artifact_content;
 GRANT USAGE ON SCHEMA artifacts, control, cm_identity, artifact_host TO artifact_content;
 GRANT SELECT ON ALL TABLES IN SCHEMA artifacts TO artifact_content;
 ALTER DEFAULT PRIVILEGES FOR ROLE app IN SCHEMA artifacts GRANT SELECT ON TABLES TO artifact_content;
+-- CMF-S2: explicit read grants on the blob registry and DB blob bytes (closes the
+-- privilege gap for 0014 even where default privileges were already granted).
+GRANT SELECT ON artifacts.blobs TO artifact_content;
+GRANT SELECT ON artifacts.blob_bytes TO artifact_content;
 GRANT SELECT ON control.artifact_host_kv TO artifact_content;
 GRANT SELECT ON cm_identity.identity_user_accounts, cm_identity.identity_account_profiles,
   cm_identity.cm_tenant_memberships, cm_identity.cm_tenants TO artifact_content;

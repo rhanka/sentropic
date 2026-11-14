@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.28
+
+- Add DB blob placement: migration `0014_db_blob_placement.sql` (`placement`, `blob_bytes`,
+  `upload_staging_bytes`), `db-blob` and `composite-blob` adapters with advisory digest-lock
+  coordination, and placement-aware publication writes with keyset-paged blob enumeration.
+- Harden the blob bridge: create-only verified S3/local puts, bounded pages with sealed
+  keyset cursors, and store-level `listKeysPaged` delegation.
+- Stays in `0.2.x` (cluster-mesh peer `>=0.2.0 <0.3.0`).
+
 ## 0.2.27
 
 - Wire the builder terminal failure through the live package: a `reconcile` answer with

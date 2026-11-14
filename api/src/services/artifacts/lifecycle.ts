@@ -6,9 +6,29 @@ import { createPostgresCommitExecutor } from '@sentropic/artifacts/adapters/post
 import { createPostgresDeletionClaimStore, createPostgresGcService } from '@sentropic/artifacts/server/gc';
 import { scheduleBoundedPreparationCleanup } from '@sentropic/artifacts/server/object-intents';
 import type { PublicationBlobStore } from '@sentropic/artifacts/server/publication';
+import { listBlobKeysPaged } from '@sentropic/artifacts/server/blob-bridge';
 
 export interface ArtifactBlobPage { keys: string[]; cursor?: string }
 export type ArtifactBlobPageReader = (prefix: string, limit: number, cursor?: string) => Promise<ArtifactBlobPage>;
+/** Lazy host wrapper; initialization and privacy enforcement stay in the supplied factory. */
+export function createLazyArtifactBlobs(load: () => Promise<{ blobs: PublicationBlobStore }>): PublicationBlobStore {
+  return {
+    putBlob: async (key, bytes) => (await load()).blobs.putBlob(key, bytes),
+    getBlob: async key => (await load()).blobs.getBlob(key),
+    getBlobRange: async (key, start, end) => {
+      const blobs = (await load()).blobs;
+      return blobs.getBlobRange ? blobs.getBlobRange(key, start, end) :
+        (await blobs.getBlob(key))?.slice(start, end + 1);
+    },
+    deleteBlob: async (key, transaction) => (await load()).blobs.deleteBlob(key, transaction),
+    listKeys: async prefix => (await load()).blobs.listKeys(prefix),
+    listKeysPaged: async (prefix, page) => {
+      const blobs = (await load()).blobs;
+      if (!blobs.listKeysPaged) throw new Error('Bounded artifact object listing required');
+      return blobs.listKeysPaged(prefix, page);
+    },
+  };
+}
 const blobKey = /^artifacts\/[A-Za-z0-9_-]+\/blobs\/sha256\/[0-9a-f]{64}$/;
 function bound(limit: number): number {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) throw new Error('Invalid artifact maintenance bound');
@@ -37,8 +57,10 @@ export async function createPrivateArtifactStorage(options: { client: S3Client; 
   const blobs: PublicationBlobStore = {
     async putBlob(key, bytes) { await assertPrivate(); await upstream.putBlob(key, bytes); },
     async getBlob(key) { await assertPrivate(); return upstream.getBlob(key); },
+    async getBlobRange(key, start, end) { await assertPrivate(); return upstream.getBlobRange!(key, start, end); },
     async deleteBlob(key) { await assertPrivate(); await upstream.deleteBlob(key); },
     async listKeys(prefix) { await assertPrivate(); return upstream.listKeys(prefix); },
+    async listKeysPaged(prefix, page) { await assertPrivate(); return upstream.listKeysPaged!(prefix, page); },
   };
   const page: ArtifactBlobPageReader = async (prefix, limit, cursor) => {
     bound(limit);
@@ -80,13 +102,20 @@ export function createArtifactHostJobs(options: {
   }
   function guardedBlobs(operation: 'cleanup' | 'collect'): PublicationBlobStore {
     return { ...options.blobs,
-      async deleteBlob(key) { await authorize(operation); await options.blobs.deleteBlob(key); },
+      async deleteBlob(key, transaction) { await authorize(operation); await options.blobs.deleteBlob(key, transaction); },
       async listKeys(key) {
         // Preparation cleanup probes exact keys, never an unbounded bucket listing.
         if (!blobKey.test(key)) throw new Error('Invalid preparation blob key');
         await authorize(operation);
-        return (await options.page(key, 1)).keys.filter(candidate => candidate === key);
+        const result = await listBlobKeysPaged(options.blobs, key, { maxItems: 1, maxEncodedBytes: 256 });
+        return result.keys.filter(candidate => candidate === key);
       },
+      ...(options.blobs.listKeysPaged === undefined ? {} : { async listKeysPaged(prefix: string, page: {
+        maxItems: number; maxEncodedBytes: number; startAfter?: string;
+      }) {
+        await authorize(operation);
+        return options.blobs.listKeysPaged!(prefix, page);
+      } }),
     };
   }
   return {
@@ -105,7 +134,8 @@ export function createArtifactHostJobs(options: {
           // Intents/refs persist independently; only deletion claims share this item's transaction.
           await scheduleBoundedPreparationCleanup({ intents: { ...store,
             listPreparationIntents: async () => [candidate] }, refs: store,
-          blobs: guardedBlobs('cleanup'), claims: createPostgresDeletionClaimStore(client), cleanupBatchSize: 1 }, now);
+          blobs: guardedBlobs('cleanup'), claims: createPostgresDeletionClaimStore(client),
+          transaction: client, cleanupBatchSize: 1 }, now);
           await client.commit();
         } catch (error) {
           failure = error;
@@ -134,12 +164,24 @@ export function createArtifactHostJobs(options: {
       await authorize('collect');
       if (!/^[A-Za-z0-9_-]+$/.test(storageScopeId)) throw new Error('Invalid artifact storage scope');
       const prefix = `artifacts/${storageScopeId}/blobs/sha256/`;
-      const page = await options.page(prefix, limit, cursor);
-      if (page.keys.length > limit || page.keys.some(key => !key.startsWith(prefix) || !blobKey.test(key))) {
-        throw new Error('Invalid artifact collection page');
-      }
+      const validateKeys = (keys: readonly string[]) => {
+        if (keys.length > limit || keys.some(key => !key.startsWith(prefix) || !blobKey.test(key))) {
+          throw new Error('Invalid artifact collection page');
+        }
+      };
+      const listed = options.blobs.listKeysPaged === undefined ? undefined : await listBlobKeysPaged({ ...options.blobs,
+        async listKeysPaged(keyPrefix, request) {
+          const result = await options.blobs.listKeysPaged!(keyPrefix, request);
+          validateKeys(result.keys);
+          return result;
+        } }, prefix,
+        { maxItems: limit, maxEncodedBytes: limit * 256, ...(cursor === undefined ? {} : { continuation: cursor }) });
+      const page = listed ? { keys: listed.keys, cursor: listed.continuation } : await options.page(prefix, limit, cursor);
+      validateKeys(page.keys);
       await authorize('collect');
-      const report = await gc.collect({ ...guardedBlobs('collect'), listKeys: async () => page.keys }, prefix);
+      const guarded = guardedBlobs('collect');
+      const report = await gc.collect({ ...guarded,
+        listKeys: async key => key === prefix ? page.keys : guarded.listKeys(key) }, prefix);
       return { ...report, cursor: page.cursor };
     },
     async recover(steps: {

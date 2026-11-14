@@ -84,6 +84,7 @@ export interface GcService {
     blobs: PublicationBlobStore,
     prefix: string,
     claims: DeletionClaimStore,
+    transaction?: FinalizeTxClient,
   ): Promise<GcReport>;
 }
 
@@ -96,7 +97,9 @@ export interface DeletionClaimStore {
   /** Share this exclusion across claims, reference/pin creation and erasure. */
   withDigestLock<T>(digest: string, action: (locked: DeletionClaimAccess) => Promise<T>): Promise<T>;
   /** Exclusive claim; throws when the digest is already claimed. */
-  claim(digest: string, holder: string): Promise<void>;
+  claim(digest: string, holder: string, blobKey?: string): Promise<void>;
+  /** Bounded recovery independent of the physical object listing. */
+  listPendingKeys?(prefix: string, limit: number): Promise<string[]>;
   /** Release the claim after the blob is gone (or the purge aborts). */
   releaseClaim(digest: string): Promise<void>;
   isClaimed(digest: string): Promise<boolean>;
@@ -126,7 +129,7 @@ export function createPostgresGcService(
       try {
         const refs = refsForTransaction(client);
         const claims = createPostgresDeletionClaimStore(client);
-        const report = await createGcService(refs).collect(blobs, prefix, claims);
+        const report = await createGcService(refs).collect(blobs, prefix, claims, client);
         await client.commit();
         return report;
       } catch (error) {
@@ -169,11 +172,11 @@ export function createPostgresDeletionClaimStore(client: FinalizeTxClient): Insp
         `SELECT EXISTS (SELECT 1 FROM artifacts.object_intents WHERE ${predicate}) AS present`, [digest]);
       return rows[0]?.present === true;
     },
-    async claim(digest, holder) {
+    async claim(digest, holder, blobKey) {
       if (await access.isClaimed(digest)) throw new Error(`deletion already claimed: ${digest}`);
       await client.query(`INSERT INTO artifacts.object_intents (id, kind, payload)
         VALUES ($1, 'delete-blob', $2::jsonb)`,
-      [crypto.randomUUID(), JSON.stringify({ deletionClaim: true, digest, holder })]);
+      [crypto.randomUUID(), JSON.stringify({ deletionClaim: true, digest, holder, blobKey })]);
     },
     async releaseClaim(digest) {
       const { rowCount } = await client.query(
@@ -183,9 +186,22 @@ export function createPostgresDeletionClaimStore(client: FinalizeTxClient): Insp
   };
   const withDigestLock: DeletionClaimStore['withDigestLock'] = async (digest, action) => {
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`artifacts-blob:${digest}`]);
+    // Always acquire the digest lock before locking a reservation row.
+    // Re-check pending state here and persist retry rotation under that lock.
+    await client.query(`UPDATE artifacts.object_intents SET updated_at = clock_timestamp()
+      WHERE ${predicate}`, [digest]);
     return action(access);
   };
   return { ...access, withDigestLock,
+    async listPendingKeys(prefix, limit) {
+      // Enumeration must not lock rows: physical listing can reach the same keys.
+      const { rows } = await client.query<{ key: string }>(
+        `SELECT payload->>'blobKey' AS key FROM artifacts.object_intents
+         WHERE kind = 'delete-blob' AND state = 'pending' AND payload->>'deletionClaim' = 'true'
+         AND starts_with(payload->>'blobKey', $1)
+         ORDER BY updated_at, id LIMIT $2`, [prefix, limit]);
+      return rows.map(row => row.key);
+    },
     async listClaims() {
       const { rows } = await client.query<{ id: string; state: 'pending' | 'done'; digest: string; holder: string }>(
         `SELECT id, state, payload->>'digest' AS digest, payload->>'holder' AS holder
@@ -193,7 +209,7 @@ export function createPostgresDeletionClaimStore(client: FinalizeTxClient): Insp
          AND payload->>'deletionClaim' = 'true' ORDER BY created_at, id`, []);
       return rows.map((row) => ({ claimId: row.id, digest: row.digest, holder: row.holder, state: row.state }));
     },
-    claim: (digest, holder) => withDigestLock(digest, (locked) => locked.claim(digest, holder)),
+    claim: (digest, holder, blobKey) => withDigestLock(digest, (locked) => locked.claim(digest, holder, blobKey)),
     releaseClaim: (digest) => withDigestLock(digest, (locked) => locked.releaseClaim(digest)) };
 }
 
@@ -261,16 +277,22 @@ export function createGcService(refs: RefcountStore): GcService {
       blobs: PublicationBlobStore,
       prefix: string,
       claims: DeletionClaimStore,
+      transaction?: FinalizeTxClient,
     ): Promise<GcReport> {
       const report: GcReport = { deleted: [], retained: [], failures: [] };
-      for (const key of await blobs.listKeys(prefix)) {
-        let digest: string;
+      const pending = await claims.listPendingKeys?.(prefix, 100) ?? [];
+      const candidates: { key: string; digest: string }[] = [];
+      for (const key of new Set([...pending, ...await blobs.listKeys(prefix)])) {
         try {
-          digest = blobDigestOfKey(key);
+          candidates.push({ key, digest: blobDigestOfKey(key) });
         } catch {
           report.retained.push(key);
-          continue;
         }
+      }
+      // Transactional digest locks survive each deletion: order the entire union,
+      // independent of reservation priority, physical listing order and scope.
+      candidates.sort((a, b) => a.digest < b.digest ? -1 : a.digest > b.digest ? 1 : 0);
+      for (const { key, digest } of candidates) {
         if ((await refs.count(digest)) !== 0 || (await refs.isPinned(digest))) {
           report.retained.push(key);
           continue;
@@ -278,19 +300,24 @@ export function createGcService(refs: RefcountStore): GcService {
         try {
           await claims.withDigestLock(digest, async (locked) => {
             const alreadyClaimed = await locked.isClaimed(digest);
-            if (!alreadyClaimed) await locked.claim(digest, 'gc');
+            if (!alreadyClaimed) await locked.claim(digest, 'gc', key);
             let deleted = false;
+            let deleting = false;
             try {
               if ((await refs.count(digest)) !== 0 || (await refs.isPinned(digest))) {
                 report.retained.push(key);
                 return;
               }
-              await blobs.deleteBlob(key);
+              deleting = true;
+              // Retry a lost DELETE response even when neither placement has bytes left.
+              if (!alreadyClaimed || (await blobs.listKeys(key)).includes(key)) {
+                await blobs.deleteBlob(key, transaction);
+              }
               deleted = true;
               report.deleted.push(key);
             } finally {
-              // Preserve a purge claim until erasure; always release our GC claim.
-              if (!alreadyClaimed || deleted) await locked.releaseClaim(digest);
+              // Failed erasure keeps durable debt for the next collection.
+              if (deleted || (!alreadyClaimed && !deleting)) await locked.releaseClaim(digest);
             }
           });
         } catch (error) {

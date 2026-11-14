@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/artifacts",
-  "version": "0.2.27",
+  "version": "0.2.28",
   "description": "Generic configurable artifacts MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9).",
   "type": "module",
   "license": "MIT",
@@ -28,6 +28,14 @@
     "./codecs": {
       "types": "./dist/codecs.d.ts",
       "import": "./dist/codecs.js"
+    },
+    "./adapters/db-blob": {
+      "types": "./dist/adapters/db-blob.d.ts",
+      "import": "./dist/adapters/db-blob.js"
+    },
+    "./adapters/composite-blob": {
+      "types": "./dist/adapters/composite-blob.d.ts",
+      "import": "./dist/adapters/composite-blob.js"
     },
     "./adapters/s3": {
       "types": "./dist/adapters/s3.d.ts",
@@ -134,6 +142,10 @@
     "./server/publication": {
       "types": "./dist/server/publication.d.ts",
       "import": "./dist/server/publication.js"
+    },
+    "./server/blob-bridge": {
+      "types": "./dist/server/blob-bridge.d.ts",
+      "import": "./dist/server/blob-bridge.js"
     },
     "./server/access": {
       "types": "./dist/server/access.d.ts",

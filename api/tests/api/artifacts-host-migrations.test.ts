@@ -9,6 +9,7 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool, type PoolClient } from 'pg';
 import { runControlMigrations, runMigrations } from '../../src/db/run-migrations';
 import { prepareCmFixtureCutover } from '../utils/cm-fresh-database';
+import { installArtifactPackageAssets as installPreviousImage } from './artifacts-rollback-runner.fixture';
 import {
   artifactMigrationAssets,
   createArtifactHostKv,
@@ -68,6 +69,92 @@ function rejectQueries(client: PoolClient, failures: Map<string, Error>) {
 }
 
 describe('artifact host migrations', () => {
+  it('bounds the real 0014 ALTER lock wait and preserves receipts under contention', async () => {
+    await runMigrations(database);
+    await database.query('DELETE FROM public.__drizzle_control_migrations WHERE asset_id = $1', [artifactMigrationAssets.at(-1)!.id]);
+    const receipts = await journal();
+    const blocker = await database.connect();
+    const runner = await database.connect();
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('LOCK TABLE artifacts.blobs IN ACCESS SHARE MODE');
+      await runner.query("SET statement_timeout = '1000ms'");
+      await expect(installArtifactPackageAssets(runner, undefined, undefined,
+        { lockTimeoutMs: 100, statementTimeoutMs: 500 })).rejects.toMatchObject({ code: '55P03' });
+      expect(await journal()).toEqual(receipts);
+      await blocker.query('ROLLBACK');
+      await installArtifactPackageAssets(runner);
+      expect((await runner.query('SHOW statement_timeout')).rows[0].statement_timeout).toBe('1s');
+      expect(await journal()).toHaveLength(artifactMigrationAssets.length);
+    } finally { await blocker.query('ROLLBACK'); blocker.release(); runner.release(); }
+  });
+
+  it('bounds migration statements and rolls back a timed out upgrade', async () => {
+    await runMigrations(database);
+    const source = 'SELECT pg_sleep(0.5);';
+    const assets = [...artifactMigrationAssets, { id: 'qualification-slow-upgrade',
+      sha256: createHash('sha256').update(source).digest('hex'), read: () => source }];
+    const receipts = await journal();
+    await expect(installArtifactPackageAssets(database, undefined, assets,
+      { lockTimeoutMs: 100, statementTimeoutMs: 100 })).rejects.toMatchObject({ code: '57014' });
+    expect(await journal()).toEqual(receipts);
+  });
+
+  it('restarts the previous image after installed 0009-0014 receipts without losing data', async () => {
+    await runMigrations(database);
+    await createArtifactHostKv(database, 'rollback-scope').putIfAbsent('witness', 'preserved');
+    const content = new TextEncoder().encode('rollback bytes');
+    const digest = `sha256:${createHash('sha256').update(content).digest('hex')}`;
+    await database.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('rollback-scope', 'tenant-a');
+    `);
+    await database.query(`INSERT INTO artifacts.blobs (storage_scope_id, digest, size, placement)
+      VALUES ('rollback-scope', $1, $2, 'db')`, [digest, content.length]);
+    const { createPostgresDbBlobStore } = await import('@sentropic/artifacts/adapters/db-blob');
+    const { createMemoryBlobStore } = await import('@sentropic/artifacts/server/publication');
+    const { createPlacementBlobStore } = await import('../../src/services/artifacts/blob-placement');
+    const { migratePlacement } = await import('../../src/scripts/cm-placement-migrate');
+    const db = createPostgresDbBlobStore(database);
+    const s3 = createMemoryBlobStore();
+    const key = `artifacts/rollback-scope/blobs/sha256/${digest.slice(7)}`;
+    await db.putBlob(key, content);
+    const sql = readFileSync(new URL('../../src/services/artifacts/image-rollback.sql', import.meta.url), 'utf8');
+    const blocked = await database.connect();
+    try { await expect(blocked.query(sql)).rejects.toThrow(/verified object placement/); }
+    finally { await blocked.query('ROLLBACK'); blocked.release(); }
+    const composite = createPlacementBlobStore({ pool: database, s3, mode: 'db', inlineMaxBytes: 64 });
+    expect((await migratePlacement({ pool: database, composite, db, s3, scope: 'rollback-scope', to: 'object' })).done).toBe(true);
+    expect(await s3.getBlob(key)).toEqual(content);
+    const receipts = await journal();
+    const blobs = (await database.query('SELECT * FROM artifacts.blobs')).rows;
+    const bytes = (await database.query('SELECT * FROM artifacts.blob_bytes')).rows;
+    await expect(installPreviousImage(database)).rejects.toThrow(/journal hash mismatch.*0009/);
+    const client = await database.connect();
+    try {
+      await client.query(sql);
+    } finally { await client.query('ROLLBACK'); client.release(); }
+    await installPreviousImage(database);
+    expect(await journal()).toEqual(receipts.filter(row => !/\/00(?:09|1[0-4])_/.test(row.asset_id)));
+    expect(await createArtifactHostKv(database, 'rollback-scope').get('witness')).toBe('preserved');
+    expect((await database.query('SELECT * FROM artifacts.blobs')).rows).toEqual(blobs);
+    expect((await database.query('SELECT * FROM artifacts.blob_bytes')).rows).toEqual(bytes);
+    const resume = await database.connect();
+    try { await resume.query(readFileSync(new URL('../../src/services/artifacts/image-resume.sql', import.meta.url), 'utf8')); }
+    finally { await resume.query('ROLLBACK'); resume.release(); }
+    await runMigrations(database);
+    expect(await journal()).toEqual(receipts);
+    expect((await database.query('SELECT * FROM artifacts.blob_bytes')).rows).toEqual(bytes);
+    expect((await database.query('SELECT * FROM control.artifact_image_rollback_receipts')).rows).toHaveLength(6);
+    const repeat = await database.connect();
+    try {
+      await repeat.query(sql);
+      await installPreviousImage(repeat);
+      await repeat.query(readFileSync(new URL('../../src/services/artifacts/image-resume.sql', import.meta.url), 'utf8'));
+    } finally { await repeat.query('ROLLBACK'); repeat.release(); }
+    await runMigrations(database);
+    expect(await journal()).toEqual(receipts);
+    expect((await database.query('SELECT * FROM artifacts.blob_bytes')).rows).toEqual(bytes);
+  });
+
   it('should serialize concurrent first installations and package reruns', async () => {
     await Promise.all([runMigrations(database), runMigrations(database)]);
     await Promise.all([installArtifactPackageAssets(database), installArtifactPackageAssets(database)]);
@@ -115,6 +202,67 @@ describe('artifact host migrations', () => {
     } finally {
       rmSync(folder, { recursive: true, force: true });
     }
+  });
+
+  it('should install package schemas 0009-0013 with all relations on an empty database', async () => {
+    await runMigrations(database);
+    expect(artifactMigrationAssets.map(({ id }) => id)).toEqual([
+      '@sentropic/artifacts/migrations/0001_artifacts.sql',
+      '@sentropic/artifacts/migrations/0002_lifecycle.sql',
+      '@sentropic/artifacts/migrations/0003_coordinator.sql',
+      '@sentropic/artifacts/sql/0001_activation.sql',
+      '@sentropic/artifacts/migrations/0004_terminal_controls.sql',
+      '@sentropic/artifacts/migrations/0005_metadata.sql',
+      '@sentropic/artifacts/migrations/0006_sharing.sql',
+      '@sentropic/artifacts/migrations/0007_uploads.sql',
+      '@sentropic/artifacts/migrations/0008_reader_consent.sql',
+      '@sentropic/artifacts/migrations/0009_upload_pages.sql',
+      '@sentropic/artifacts/migrations/0010_git_bindings.sql',
+      '@sentropic/artifacts/migrations/0011_live_drafts.sql',
+      '@sentropic/artifacts/migrations/0012_git_attach_intents.sql',
+      '@sentropic/artifacts/migrations/0013_live_invitations.sql',
+      '@sentropic/artifacts/migrations/0014_db_blob_placement.sql',
+    ]);
+    const { rows } = await database.query<{ name: string | null }>(`SELECT to_regclass(name)::text AS name
+      FROM unnest(ARRAY['artifacts.upload_pages', 'artifacts.git_bindings', 'artifacts.git_binding_events',
+        'artifacts.git_release_index', 'artifacts.live_drafts', 'artifacts.live_draft_objects',
+        'artifacts.live_commands', 'artifacts.live_commit_quota', 'artifacts.git_attach_intents',
+        'artifacts.live_invitations', 'artifacts.live_invitation_epochs']) AS name`);
+    expect(rows.map((row) => row.name).sort()).toEqual(['artifacts.git_attach_intents',
+      'artifacts.git_binding_events', 'artifacts.git_bindings', 'artifacts.git_release_index',
+      'artifacts.live_commands', 'artifacts.live_commit_quota', 'artifacts.live_draft_objects',
+      'artifacts.live_drafts', 'artifacts.live_invitation_epochs', 'artifacts.live_invitations',
+      'artifacts.upload_pages'].sort());
+  });
+
+  it('should default existing blob rows to object placement with DB tables present', async () => {
+    // True migration path: a row that predates 0014 has no placement value;
+    // 0014's ADD COLUMN with DEFAULT 'object' backfills it. Simulate by
+    // dropping the column, inserting without it, then re-applying the 0014
+    // DDL directly (IF NOT EXISTS makes the re-apply safe).
+    await runMigrations(database);
+    await database.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-p', 'tenant-a')`);
+    await database.query(`ALTER TABLE artifacts.blobs DROP COLUMN placement`);
+    await database.query(`INSERT INTO artifacts.blobs (storage_scope_id, digest, size)
+      VALUES ('scope-p', 'sha256:${'ab'.repeat(32)}', 3)`);
+    const migration0014 = artifactMigrationAssets.find(
+      (asset) => asset.id === '@sentropic/artifacts/migrations/0014_db_blob_placement.sql')!;
+    await database.query(migration0014.read());
+    expect((await database.query(`SELECT placement FROM artifacts.blobs WHERE storage_scope_id = 'scope-p'`)).rows)
+      .toEqual([{ placement: 'object' }]);
+    expect((await database.query(`SELECT to_regclass('artifacts.blob_bytes')::text AS bytes,
+      to_regclass('artifacts.upload_staging_bytes')::text AS staging`)).rows)
+      .toEqual([{ bytes: 'artifacts.blob_bytes', staging: 'artifacts.upload_staging_bytes' }]);
+  });
+
+  it('should rerun 0009-0013 idempotently without changing existing rows', async () => {
+    await runMigrations(database);
+    await database.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-kept', 'tenant-a')`);
+    const before = await journal();
+    await runMigrations(database);
+    expect(await journal()).toEqual(before);
+    expect((await database.query(`SELECT org_id FROM artifacts.storage_scopes WHERE id = 'scope-kept'`)).rows)
+      .toEqual([{ org_id: 'tenant-a' }]);
   });
 
   it('should install unchanged package schemas and durable host state on an empty database', async () => {

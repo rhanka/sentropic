@@ -17,6 +17,9 @@ beforeAll(async () => {
   // A host-owned journal survives application rollback along with the schema.
   await pool.query('CREATE TEMP TABLE rollback_host_journal(name TEXT PRIMARY KEY)');
   for (const file of migrations.filter(f => f < '0010')) await apply(file);
+  // Placement is additive and retained across the Git rollback (never rewound),
+  // so the pre-0010 application phase applies 0014 for release registration.
+  await apply('0014_db_blob_placement.sql');
 });
 afterAll(async () => { await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE'); await pool.end(); });
 
@@ -32,8 +35,9 @@ describe('0010 application rollback with retained additive schema', () => {
       authorPrincipalId: null, parentReleaseId: null, revertedFromReleaseId: null };
     await oldStore.putRelease(oldRelease);
     expect(await oldStore.compareAndSwapCurrent(artifactId, null, oldRelease.releaseId)).toBe(true);
-    // The forward application needs every Git-era migration, 0010 included.
-    for (const file of migrations.filter(f => f >= '0010')) await apply(file);
+    // The forward application needs every Git-era migration, 0010 included
+    // (0014 is already applied and recorded above, never re-applied).
+    for (const file of migrations.filter(f => f >= '0010' && f !== '0014_db_blob_placement.sql')) await apply(file);
     const bindings = createPostgresGitBindingStore(pool);
     const binding = gitBinding(artifactId);
     await bindings.reserveAttachIntent({ storageScopeId: 'scope-a', artifactId, actorId: 'alice', idempotencyKey: 'attach',
