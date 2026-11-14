@@ -67,24 +67,36 @@ test('baseline capture requires the live witness session first and binds the bas
   }
 });
 // The pinned dump client is 17.11: under a 17.12 server its dumps carry column options that the prod
-// minor refuses. The operator proves, read-only, that server and client are the pinned prod bytes.
-test('postgres qualification requires the pinned prod server bytes and the pinned dump client', async () => {
+// minor refuses. The operator proves, read-only, that server and clients are the pinned prod bytes.
+test('postgres qualification requires the pinned prod server bytes, both client jobs and writes a bound receipt', async () => {
   const { PROD_POSTGRES_IMAGE, PROD_POSTGRES_TOOL_IMAGE } = await import('./t3-fixture.mjs');
-  const base = { tier: 'restore', namespace: 'sentropic-restore-a4' };
-  const deps = ({ version = '17.11', imageID = `docker.io/library/${PROD_POSTGRES_IMAGE}`, client = PROD_POSTGRES_TOOL_IMAGE } = {}) => {
-    const calls = [];
-    return { calls, call: (args, input) => {
+  const base = { tier: 'restore', namespace: 'sentropic-restore-a4', postgresVersionFile: '/private/pg-version' };
+  const deps = ({ version = '17.11', imageID = `docker.io/library/${PROD_POSTGRES_IMAGE}`,
+    client = PROD_POSTGRES_TOOL_IMAGE, exportClient = PROD_POSTGRES_TOOL_IMAGE } = {}) => {
+    const calls = [], receipts = [];
+    return { calls, receipts, write: (path, value) => receipts.push({ path, value }), call: (args, input) => {
       calls.push(args.join(' '));
       if (args[0] === 'exec') { assert.equal(input, 'SHOW server_version'); return `${version}\n`; }
-      return args[1] === 'pod' ? JSON.stringify({ status: { containerStatuses: [{ name: 'postgres', imageID }] } })
-        : JSON.stringify({ spec: { jobTemplate: { spec: { template: { spec: { initContainers: [{ name: 'dump', image: client }] } } } } } });
+      if (args[1] === 'pod') return JSON.stringify({ status: { containerStatuses: [{ name: 'postgres', imageID }] } });
+      if (args[2] === 'pgbackup') {
+        return JSON.stringify({ spec: { jobTemplate: { spec: { template: { spec: { initContainers: [{ name: 'dump', image: client }] } } } } } });
+      }
+      return JSON.stringify({ spec: { jobTemplate: { spec: { template: { spec: { initContainers: [{ name: 'export-sql', image: exportClient }] } } } } } });
     } };
   };
   const ok = deps();
-  assert.deepEqual(await qualify('postgres-version', base, ok), { postgresVersion: '17.11' });
-  assert.ok(ok.calls.every(line => /^(get pod postgres-0 |get cronjob pgbackup |exec postgres-0 )/.test(line)), 'read-only');
+  const receipt = await qualify('postgres-version', base, ok);
+  assert.deepEqual(receipt, { version: 't3-postgres-version/1', namespace: 'sentropic-restore-a4',
+    postgresVersion: '17.11', serverImage: PROD_POSTGRES_IMAGE, pgbackupClientImage: PROD_POSTGRES_TOOL_IMAGE,
+    identityExportClientImage: PROD_POSTGRES_TOOL_IMAGE });
+  assert.deepEqual(ok.receipts, [{ path: '/private/pg-version', value: receipt }]);
+  assert.ok(ok.calls.every(line => /^(get pod postgres-0 |get cronjob (?:pgbackup|sentropic-idp-identity-export) |exec postgres-0 )/.test(line)), 'read-only');
+  await assert.rejects(qualify('postgres-version', { ...base, postgresVersionFile: undefined }, deps()), /postgres_version_receipt_missing/);
   for (const drift of [{ version: '17.12' }, { imageID: `docker.io/library/postgres@sha256:${'d'.repeat(64)}` }, { imageID: '' },
-    { client: 'postgres:17-alpine' }, { client: `postgres:17-alpine@sha256:${'d'.repeat(64)}` }]) {
-    await assert.rejects(qualify('postgres-version', base, deps(drift)), /postgres_version_unqualified/, JSON.stringify(drift));
+    { client: 'postgres:17-alpine' }, { client: `postgres:17-alpine@sha256:${'d'.repeat(64)}` },
+    { exportClient: 'postgres:17-alpine' }, { exportClient: `postgres:17-alpine@sha256:${'d'.repeat(64)}` }]) {
+    const bad = deps(drift);
+    await assert.rejects(qualify('postgres-version', base, bad), /postgres_version_unqualified/, JSON.stringify(drift));
+    assert.equal(bad.receipts.length, 0);
   }
 });

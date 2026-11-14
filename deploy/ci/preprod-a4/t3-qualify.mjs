@@ -4,7 +4,7 @@ import { inspectApplicability, newWitnessSalt, witnessBinding } from './t3-appli
 import { privateInput, tierOf } from './guards.mjs';
 import { PROBE_PATHS, runKubectl, loadState, monoMs, effectiveTimeout } from './t3-lib.mjs';
 import { digest } from './guards.mjs';
-import { fixture, PROD_POSTGRES_IMAGE, PROD_POSTGRES_TOOL_IMAGE, PROD_POSTGRES_VERSION } from './t3-fixture.mjs';
+import { fixture, inspectPostgresVersion } from './t3-fixture.mjs';
 import { executionGrant } from './execution.mjs';
 import { judge } from './t3-template-diff.mjs';
 
@@ -64,17 +64,13 @@ export async function qualify(action, config, dependencies = {}) {
   const ctx = { config, call, print: () => {}, postgresPod: config.postgresPod ?? 'postgres-0',
     postgresUser: config.postgresUser ?? 'app' };
   if (action === 'rbac') { checkRbac(ctx); return { rbacPassed: true }; }
-  // P-0: the database runs the pinned prod bytes and the backup job dumps with the pinned client. A
-  // newer server under the pinned client writes dumps that the prod minor cannot restore.
+  // P-0: the database runs the pinned prod bytes and the backup/export jobs dump with the pinned client.
+  // A newer server under the pinned client writes dumps that the prod minor cannot restore.
   if (action === 'postgres-version') {
-    const pod = JSON.parse(call(['get', 'pod', ctx.postgresPod, '-o', 'json']));
-    const imageID = pod.status?.containerStatuses?.find(status => status.name === 'postgres')?.imageID ?? '';
-    const cron = JSON.parse(call(['get', 'cronjob', 'pgbackup', '-o', 'json']));
-    const client = cron.spec?.jobTemplate?.spec?.template?.spec?.initContainers?.find(container => container.name === 'dump')?.image;
-    const version = psql(ctx, 'SHOW server_version').trim();
-    if (version !== PROD_POSTGRES_VERSION || !imageID.endsWith(`@${PROD_POSTGRES_IMAGE.split('@')[1]}`)
-      || client !== PROD_POSTGRES_TOOL_IMAGE) throw new Error('postgres_version_unqualified');
-    return { postgresVersion: version };
+    if (!config.postgresVersionFile) throw new Error('postgres_version_receipt_missing');
+    const receipt = inspectPostgresVersion(ctx, psql);
+    write(config.postgresVersionFile, receipt);
+    return receipt;
   }
   if (action === 'baseline') {
     // The witness login comes first: its session must already answer before the baseline is read.

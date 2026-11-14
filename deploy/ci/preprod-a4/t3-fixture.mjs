@@ -84,6 +84,40 @@ export function fixture(objects) {
       ] } });
   return { apiVersion: 'v1', kind: 'List', items: output };
 }
+export function validatePostgresVersionReceipt(receipt, namespace) {
+  if (!receipt || typeof receipt !== 'object' || receipt.version !== 't3-postgres-version/1'
+    || receipt.namespace !== namespace || receipt.postgresVersion !== PROD_POSTGRES_VERSION
+    || receipt.serverImage !== PROD_POSTGRES_IMAGE
+    || receipt.pgbackupClientImage !== PROD_POSTGRES_TOOL_IMAGE
+    || receipt.identityExportClientImage !== PROD_POSTGRES_TOOL_IMAGE) {
+    throw new Error('postgres_version_receipt_invalid');
+  }
+  return receipt;
+}
+
+export function inspectPostgresVersion(ctx, psqlFn) {
+  let pod, pgbackup, identityExport;
+  try {
+    pod = JSON.parse(ctx.call(['get', 'pod', ctx.postgresPod, '-o', 'json']) || '{}');
+    pgbackup = JSON.parse(ctx.call(['get', 'cronjob', 'pgbackup', '-o', 'json']) || '{}');
+    identityExport = JSON.parse(ctx.call(['get', 'cronjob', 'sentropic-idp-identity-export', '-o', 'json']) || '{}');
+  } catch {
+    throw new Error('postgres_version_unqualified');
+  }
+  const imageID = pod.status?.containerStatuses?.find(status => status.name === 'postgres')?.imageID ?? '';
+  const dumpClient = pgbackup.spec?.jobTemplate?.spec?.template?.spec?.initContainers
+    ?.find(container => container.name === 'dump')?.image;
+  const exportClient = identityExport.spec?.jobTemplate?.spec?.template?.spec?.initContainers
+    ?.find(container => container.name === 'export-sql')?.image;
+  const version = psqlFn(ctx, 'SHOW server_version').trim();
+  if (version !== PROD_POSTGRES_VERSION || !imageID.endsWith(`@${PROD_POSTGRES_IMAGE.split('@')[1]}`)
+    || dumpClient !== PROD_POSTGRES_TOOL_IMAGE || exportClient !== PROD_POSTGRES_TOOL_IMAGE) {
+    throw new Error('postgres_version_unqualified');
+  }
+  return { version: 't3-postgres-version/1', namespace: ctx.config.namespace, postgresVersion: version,
+    serverImage: PROD_POSTGRES_IMAGE, pgbackupClientImage: dumpClient, identityExportClientImage: exportClient };
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   try { process.stdout.write(JSON.stringify(fixture(JSON.parse(readFileSync(process.argv[2], 'utf8')).items))); }
   catch { console.error('fixture_refused'); process.exitCode = 1; }
