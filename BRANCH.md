@@ -52,6 +52,7 @@
 - [x] Protected ACL SQL capture accepts the full reviewed schema inventory, with a 64 MiB bound rather than the small JSON-input bound.
 - [x] Restore test uses the actual namespace-prefixed middleware reference; A4_TEST_FILES supports focused reruns without changing the full CI default.
 - [x] Final review F2: rollback witness rejects redirects. Handoff regression reproduced a stale fence marker overwrite and is fixed before delegation.
+- [x] Final review F1: original and fenced receipts validate all strict W6 fields, references, hashes and flags before fence/staging; fixtures now carry complete qualification receipts.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
