@@ -6,7 +6,7 @@ import { digest, canonical } from './guards.mjs';
 import { STATE_HASHES } from './t3-rehearsal.mjs';
 import { applicabilityFixture } from './t3-applicability.test.mjs';
 import { witnessBinding } from './t3-applicability.mjs';
-import { emailProbe, expectedSigningKid, probeEndpoints, observerProbes } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, observerProbes, verificationLine, verificationSpec } from './t3-probe-fixture.mjs';
 
 export function inputs(witnessUrl = 'https://app.test/api/v1/me') {
   const witness = { url: witnessUrl,cookie: 'synthetic-witness',expiresAt: new Date(Date.now()+86400000).toISOString() };
@@ -19,14 +19,14 @@ export function inputs(witnessUrl = 'https://app.test/api/v1/me') {
       'start-api': [['scale','deployment/api','--replicas=1']],
       resume: [['patch','cronjob','pgbackup','--type=merge','-p','{"spec":{"suspend":false}}']],
       'open-traffic': [['annotate','ingress','sentropic','traefik.ingress.kubernetes.io/router.middlewares-']] } };
-  annex.middlewareSpec = { ipAllowList: { sourceRange: ['192.0.2.1/32'] } };
+  annex.middlewareSpec = verificationSpec;
   annex.middlewareSpecSha256 = digest(canonical(annex.middlewareSpec));
   const budgets = { qualificationReceiptRef: 'track:t3-qualified' };
   for (const name of ['reservation','deletion','diagnostic','read','workspace','replicaExport','replicaValidation','replicaSync']) {
     budgets[name] = { deadlineMs: 10000, maxAttempts: 1 };
   }
   const files = { '/annex': JSON.stringify(annex), '/authorization': JSON.stringify(authorization),
-    '/remote': '{}', '/baseline': JSON.stringify({ ...applicabilityFixture(),witnessSha256: witnessBinding(witness) }), '/budgets': JSON.stringify(budgets) };
+    '/remote': '{}', '/verification': `${verificationLine}\n`, '/baseline': JSON.stringify({ ...applicabilityFixture(),witnessSha256: witnessBinding(witness) }), '/budgets': JSON.stringify(budgets) };
   files['/rehearsal'] = JSON.stringify({ format: 'preprod-a4-rehearsal/2',candidateCommit: approvedRequest.candidateCommit,
     receiptRef: 'track:qualified-rehearsal',applicabilityReviewRef: 'track:prior-review',
     restoredBackupSha256: 'd'.repeat(64),isolatedRestoreRef: 'track:qualified-isolated-restore',
@@ -46,7 +46,7 @@ export function inputs(witnessUrl = 'https://app.test/api/v1/me') {
     restrictedProbes: observerProbes().restrictedProbes,
     externalProbes: [{ id: 'external-app',url: 'https://app.test/',expect: 200 },
       { id: 'external-idp',url: 'https://idp.test/.well-known/openid-configuration',expect: 200 }],
-    witness,
+    witness, verificationCredentialFile: '/verification',
     rotationKeyFiles: { apiJwtSecretFile: '/jwt', secretEncryptionKeyFile: '/enc', idpSessionJwtFile: '/idp' },
     revisions: { api: '1', 'auth-idp': '2', ui: '3' }, preCmDir: '/cms' };
   return { config, files, read: name => files[name] ?? 'synthetic-private-input' };

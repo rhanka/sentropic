@@ -12,6 +12,7 @@ import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
 import { checkApplicability } from './t3-applicability.mjs';
 import { preflight } from './t3-preflight-static.mjs';
 import { prepareFencedReceipt } from './t3-rehearsal.mjs';
+import { VERIFICATION_SECRET, assertVerificationSecret, verificationCredential } from './verification-boundary.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const TOTAL_BUDGET_MS = 300_000;
@@ -319,7 +320,7 @@ export async function recover(ctx, state, reason) {
     // pins the candidate image.
     ctx.print?.('# recover: restarting committed api before finish-open');
     ensureStarted(ctx.call, 'api', ctx.config.images.candidate, { dryRun: ctx.dryRun, print: ctx.print });
-    await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
+    await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print, verification: verificationOf(ctx),
       save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes, restrictedProbes, deadlineMs, now });
     // Same single-writer guard on the post-commit branch.
     state.step = 'DONE';
@@ -419,6 +420,26 @@ export function awaitWritersGone(ctx, deadlineMs) {
   }
 }
 
+// W0, before the fence: the credential the probes will send must be the one Traefik will accept.
+// With a missing or different Secret the restricted routers answer nothing useful after COMMIT,
+// when only the probes can accept the candidate; refused here, nothing is written.
+export function checkVerification(ctx) {
+  if (ctx.dryRun) {
+    ctx.print?.(`# dry-run: secret ${VERIFICATION_SECRET} not compared with the local verification credential`);
+    return null;
+  }
+  const { header, users } = verificationCredential(ctx.config.verificationCredentialFile, ctx.read);
+  let secret;
+  try { secret = JSON.parse(ctx.call(['get', 'secret', VERIFICATION_SECRET, '-o', 'json'])); }
+  catch { throw new Error('verification_secret_missing'); }
+  assertVerificationSecret(secret, users);
+  return header;
+}
+
+// The watchdog and the recovery start from the configuration alone: same private file, read again.
+const verificationOf = ctx => ctx.verification
+  ?? (ctx.dryRun ? null : verificationCredential(ctx.config.verificationCredentialFile, ctx.read).header);
+
 function baseEnv(ctx, extra = {}) {
   return { A4_TIER: ctx.tier, A4_KUBECONFIG_FILE: ctx.config.kubeconfigFile,
     A4_REQUEST_FILE: `${ctx.stateDir}/request.json`, A4_DRY_RUN: ctx.dryRun ? '1' : '0', ...extra };
@@ -457,6 +478,7 @@ function assertPreviewSafe(ctx) {
 async function driveInner(ctx, state) {
   checkRbac(ctx);
   checkApplicability(ctx, psql, 'W0');
+  ctx.verification = checkVerification(ctx);
   const t0 = monoMs();
   state.t0MonoMs = t0;
   const cutoff = ms => t0 + ms;
@@ -553,7 +575,7 @@ async function driveInner(ctx, state) {
   heartbeat(ctx, state, 'W8');
   if (monoMs() > cutoff(FINISH_CUTOFF_MS)) return recover(ctx, state, 'W8_cutoff');
   const { probes, externalProbes, restrictedProbes } = buildProbes(ctx.config);
-  await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
+  await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print, verification: verificationOf(ctx),
     save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes,restrictedProbes,
     deadlineMs: t0 + FINISH_CUTOFF_MS });
   heartbeat(ctx, state, 'W9');

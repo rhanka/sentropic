@@ -107,10 +107,13 @@ export function buildProbes(config) {
   return { probes, externalProbes: config.externalProbes ?? [],restrictedProbes: config.restrictedProbes ?? [] };
 }
 
+// S-1/S-2: a request without the verification credential is refused by Traefik itself, which answers
+// basicAuth with 401 and a Basic challenge (the former 403 was the answer of the source-range rule).
+export const OBSERVER_REFUSAL = 401;
 export function validateObservers(config) {
   for (const id of ['S-1','S-2']) {
     const p = config.restrictedProbes?.find(p => p.id === id);
-    if (!p || p.expect !== 403 || !URL.canParse(p.url)) throw new Error('restricted_observer_missing');
+    if (!p || p.expect !== OBSERVER_REFUSAL || !URL.canParse(p.url)) throw new Error('restricted_observer_missing');
   }
   if (!Array.isArray(config.externalProbes) || config.externalProbes.length < 2
     || config.externalProbes.some(p => !URL.canParse(p.url) || p.expect !== 200)) throw new Error('external_probes_missing');

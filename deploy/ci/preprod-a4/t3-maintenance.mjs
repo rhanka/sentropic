@@ -3,13 +3,14 @@ import { captureAcl, restore } from './t3-restore.mjs';
 import { rearm } from './t3-rearm.mjs';
 import { privateInput } from './guards.mjs';
 import { runKubectl, readRecoveryClaim, claimDead, loadState } from './t3-lib.mjs';
+import { provisionVerification } from './verification-boundary.mjs';
 
 // No default mutation: all maintenance writes require --execute and bound input files.
 export async function maintenance(argv = process.argv.slice(2)) {
   const [action, configPath, stateDir] = argv;
   const config = JSON.parse(privateInput(configPath));
   if (action === 'preflight') return preflight(config);
-  if (!['capture-acl', 'restore', 'rearm'].includes(action) || !argv.includes('--execute')) {
+  if (!['capture-acl', 'restore', 'rearm', 'verification-secret'].includes(action) || !argv.includes('--execute')) {
     throw new Error('maintenance_action_not_explicit');
   }
   const state = loadState(stateDir), claim = readRecoveryClaim(stateDir);
@@ -22,6 +23,7 @@ export async function maintenance(argv = process.argv.slice(2)) {
   const call = runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.namespace });
   const ctx = { config, call, stateDir, probe: fetch };
   if (action === 'capture-acl') return captureAcl(ctx, stateDir);
+  if (action === 'verification-secret') return provisionVerification(config.verificationCredentialFile, config.namespace, call);
   if (action === 'restore') return restore(ctx, JSON.parse(privateInput(config.restoreApprovalFile)));
   return rearm(ctx, JSON.parse(privateInput(config.nextConfigFile)));
 }
