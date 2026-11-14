@@ -41,6 +41,7 @@ ACL
 sql -c 'CREATE SCHEMA cm_identity; CREATE TABLE cm_identity.after_commit(id text)'
 sql --single-transaction -v baseline_acl="$acl" -f /restore.sql >/tmp/restore.log 2>&1 || { cat /tmp/restore.log; exit 1; }
 [ "$(sql -f /tests/t3-acl.sql)" = "$acl" ]
+echo 'PASS: full restore catalogue matches'
 if sql --single-transaction -v baseline_acl="$(printf '%064d' 0)" -f /restore.sql >/tmp/refuse.log 2>&1; then exit 1; fi
 [ "$(sql -f /tests/t3-acl.sql)" = "$acl" ]
 echo 'PASS: full multi-schema restore, column/default ACL parity, atomic refusal on mismatch'
