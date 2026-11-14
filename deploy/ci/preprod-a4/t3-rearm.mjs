@@ -11,11 +11,11 @@ export function assertRearmState(state, claim, nextOperation) {
 }
 
 // Explicit action only, after rollback. Evidence is archived before custody is erased.
-export function rearm(ctx, nextConfig) {
+export function rearm(ctx, nextConfig, read) {
   const state = loadState(ctx.stateDir), config = ctx.config;
   const claim = readRecoveryClaim(ctx.stateDir);
   assertRearmState(state, claim && !claimDead(claim), nextConfig.request.operationId);
-  preflight(nextConfig);
+  preflight(nextConfig, read);
   if (nextConfig.namespace !== config.namespace || nextConfig.executionSha256 === config.executionSha256
     || nextConfig.request.operationId === config.request.operationId) throw new Error('rearm_inputs_not_fresh');
   const info = classify({ ...ctx, postgresPod: config.postgresPod ?? 'postgres-0' });
