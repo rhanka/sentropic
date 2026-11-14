@@ -102,7 +102,8 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
 - [ ] **Lot 7 — Rebase and qualify exact head (2026-11-13)**
   - [x] Rebase on origin/main; preserve prior uncommitted metadata in a stash.
   - [x] Verify T3 candidate 4625a94b installs only 0001-0008; preprod deployment is namespace-scoped.
-  - [ ] Verify published versions, guarded archive tuple, scoped storage tests and scope gate.
+  - [x] Verify published versions (artifacts 0.2.27, cluster-mesh latest 0.25.0), guarded 0.2.28 archive tuple, 36 package tests, 39 API tests and scope gate.
+  - [x] Regenerate and validate P1 through make memory-l5-pack (2 artifacts, 44 contracts); local receipt .tmp/cm-t4a-p1.json, sha256 b1a7324c6e9eda944d8f89a8ee1ee202f156fe16c88084bd020e6eef28ddc238.
   - [ ] Push PR branch, update PR isolation evidence, await exact-head green CI; do not merge.
   - [ ] Write French report and completion marker; remove isolated test volumes.
 - [x] **Lot 0 — Baseline and constraints**
