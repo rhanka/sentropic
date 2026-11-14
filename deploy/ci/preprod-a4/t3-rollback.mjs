@@ -1,4 +1,5 @@
-import { effectiveTimeout, monoMs, podLabels, recoveryDeadline, runKubectl } from './t3-lib.mjs';
+import { effectiveTimeout, monoMs, podLabels, recoveryDeadline, runKubectl, loadState, saveState } from './t3-lib.mjs';
+import { readFileSync } from 'node:fs';
 
 // Keys added by the window wire step (fence journal K). Both must be gone and
 // verified gone BEFORE any rollout undo or scale-up (Fable M1), or the legacy
@@ -112,6 +113,7 @@ export function cliArgs(argv) {
     revisions: JSON.parse(get('--revisions-json') ?? '{}'), preCmDir: get('--pre-cm-dir'),
     dryRun: argv.includes('--dry-run'), probeReadOnly: argv.includes('--probe-readonly'),
     healthUrl: get('--health-url'), jwksUrl: get('--jwks-url'),
+    configFile: get('--config'),
   };
 }
 
@@ -123,9 +125,18 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const call = runKubectl({ kubeconfig: args.kubeconfig, namespace: args.namespace, dryRun: args.dryRun,
       probeReadOnly: args.probeReadOnly, print: console.log, timeoutRef: { deadlineMs }, stateDir: process.env.T3_STATE_DIR });
     try {
+      const config = args.configFile ? JSON.parse(readFileSync(args.configFile,'utf8')) : {};
+      if (args.configFile && !args.dryRun && (!config.witness?.url || !config.witness?.cookie)) {
+        throw new Error('rollback_witness_missing');
+      }
       const out = await preCommitRollback({ call, revisions: args.revisions, preCmDir: args.preCmDir,
         dryRun: args.dryRun, probeReadOnly: args.probeReadOnly, note: console.log, deadlineMs,
-        probe: fetch, healthUrl: args.healthUrl, jwksUrl: args.jwksUrl });
+        probe: fetch, healthUrl: args.healthUrl, jwksUrl: args.jwksUrl,witness: config.witness });
+      if (!args.dryRun && process.env.T3_STATE_DIR) {
+        const state = loadState(process.env.T3_STATE_DIR);
+        if (state?.commitVerified !== false || state.locks !== 0) throw new Error('rollback_classification_missing');
+        Object.assign(state,{ step: 'DONE',watchdogDone: true }); saveState(process.env.T3_STATE_DIR,state);
+      }
       if (!args.dryRun) console.log(`rollback_ok removed=${out.removedKeys.join(',') || 'none'}`);
     } catch (err) { console.error(`rollback_failed: ${err.message}`); process.exitCode = 1; }
   }

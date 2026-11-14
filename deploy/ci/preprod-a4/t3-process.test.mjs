@@ -34,6 +34,7 @@ for (const { mode, step, operation, substate, committed = false } of cases) {
     await until(() => existsSync(join(dir, 'port')));
     const endpoints = probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`);
     writeFileSync(config, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
+      witness: { url: `${new URL(endpoints.appHealth).origin}/legacyWitness`,cookie: 'synthetic-witness' },
       endpoints, emailProbe, expectedSigningKid, images: { candidate: 'c', ui: 'u' }, revisions: {}, request: { operationId: 'process-test' } }));
     // The double needs no Node runtime. Keep real driver/watchdog/process-group
     // supervision while avoiding dozens of cold Node startups in each recovery.

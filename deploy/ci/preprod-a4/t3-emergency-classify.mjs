@@ -1,4 +1,4 @@
-import { effectiveTimeout, monoMs, recoveryDeadline, runKubectl } from './t3-lib.mjs';
+import { effectiveTimeout, monoMs, recoveryDeadline, runKubectl, loadState, saveState } from './t3-lib.mjs';
 import { classify } from './t3-window-driver.mjs';
 import { waitZeroPods } from './t3-rollback.mjs';
 
@@ -40,6 +40,11 @@ if (!kubeconfig) {
     }
     console.log(JSON.stringify({ journal: info.journal, locks: info.locks,
       committed: info.committed, receipts: info.receipts, apiReady: info.apiReady }));
+    if (info.locks === 0 && process.env.T3_STATE_DIR && !dryRun) {
+      const state = loadState(process.env.T3_STATE_DIR) ?? {};
+      Object.assign(state,{ commitVerified: info.committed,locks: 0 });
+      saveState(process.env.T3_STATE_DIR,state);
+    }
     if (info.locks > 0) {
       console.error('migration locks still held; refusing to decide');
       process.exitCode = 6;
