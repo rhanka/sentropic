@@ -113,3 +113,113 @@ SELECT CASE
             ) s
           )
         ),
+        'pre_cutover_guards', jsonb_build_object(
+          'cm_identity_schema_present', EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'cm_identity'),
+          'cm_identity_invitations', %s,
+          'cm_identity_import_receipts', %s,
+          'app_cm_identity_cutover', %s,
+          'live_federation_flow_states', (SELECT count(*)::int FROM public.federation_flow_states WHERE expires_at > now()),
+          'non_null_identity_token_secrets', (SELECT count(*)::int FROM public.identities WHERE token_secret IS NOT NULL),
+          'legacy_foreign_keys', (
+            SELECT coalesce(jsonb_agg(fk_row ORDER BY child_schema COLLATE "C", child_table COLLATE "C", name COLLATE "C"), '[]'::jsonb)
+            FROM (
+              SELECT ns.nspname AS child_schema, child.relname AS child_table, c.conname AS name,
+                parent.relname AS parent, c.confdeltype AS on_delete, c.confupdtype AS on_update,
+                c.condeferrable AS deferrable, c.condeferred AS deferred, c.confmatchtype AS match,
+                (SELECT json_agg(a.attname ORDER BY k.ord) FROM unnest(c.conkey) WITH ORDINALITY k(num, ord)
+                  JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.num) AS child_columns,
+                (SELECT json_agg(a.attname ORDER BY k.ord) FROM unnest(c.confkey) WITH ORDINALITY k(num, ord)
+                  JOIN pg_attribute a ON a.attrelid = c.confrelid AND a.attnum = k.num) AS parent_columns
+              FROM pg_constraint c
+              JOIN pg_class child ON child.oid = c.conrelid
+              JOIN pg_namespace ns ON ns.oid = child.relnamespace
+              JOIN pg_class parent ON parent.oid = c.confrelid
+              JOIN pg_namespace pn ON pn.oid = parent.relnamespace
+              WHERE c.contype = 'f' AND pn.nspname = 'public'
+                AND parent.relname = ANY(ARRAY[
+                  'users', 'webauthn_credentials', 'webauthn_challenges', 'email_verification_codes',
+                  'magic_links', 'auth_invite_tokens', 'user_sessions', 'identities',
+                  'tenants', 'tenant_memberships', 'workspace_memberships'
+                ])
+            ) fk_row
+          )
+        )
+      ) AS applicability_doc,
+      jsonb_build_object(
+        'settings_enc', (
+          SELECT coalesce(jsonb_agg(
+            jsonb_build_object(
+              'id', s.key || coalesce('@' || s.user_id, ''),
+              'value_sha256', encode(sha256(convert_to(s.value, 'UTF8')), 'hex')
+            ) ORDER BY (s.key || coalesce('@' || s.user_id, '')) COLLATE "C"
+          ), '[]'::jsonb)
+          FROM public.settings s WHERE s.value LIKE 'enc:%%'
+        ),
+        'document_connector_accounts_enc', %s,
+        'llm_provider_accounts_enc', %s,
+        'connector_revocation_custody_enc', %s
+      ) AS encrypted_stores_doc
+    )
+    SELECT jsonb_build_object(
+      'version', 'cutover-applicability-v1',
+      'ok', true,
+      'durableCutoverApplicabilitySha256', encode(sha256(convert_to(applicability_doc::text, 'UTF8')), 'hex'),
+      'encryptedStoresSha256', encode(sha256(convert_to(encrypted_stores_doc::text, 'UTF8')), 'hex'),
+      'guards', (applicability_doc->'pre_cutover_guards') - 'legacy_foreign_keys'
+    )::text
+    FROM payload;
+  $sql$,
+  CASE WHEN to_regclass('control.event_outbox') IS NOT NULL THEN $sub$(
+    SELECT jsonb_build_object('present', true, 'rows', coalesce(jsonb_agg(
+      jsonb_build_object('id', eo.id, 'channel', eo.channel, 'envelope', eo.envelope, 'status', eo.status, 'created_at', eo.created_at)
+      ORDER BY eo.id COLLATE "C"
+    ), '[]'::jsonb))
+    FROM control.event_outbox eo WHERE eo.channel = 'connector_grant_events'
+  )$sub$ ELSE $sub$'{"present":false,"rows":[]}'::jsonb$sub$ END,
+  CASE WHEN to_regclass('public.document_connector_accounts') IS NOT NULL THEN $sub$(
+    SELECT jsonb_build_object('present', true, 'rows', coalesce(jsonb_agg(
+      (to_jsonb(dca) - 'token_secret') || jsonb_build_object(
+        'token_secret_sha256', CASE WHEN dca.token_secret IS NULL THEN NULL ELSE encode(sha256(convert_to(dca.token_secret, 'UTF8')), 'hex') END
+      ) ORDER BY dca.id COLLATE "C"
+    ), '[]'::jsonb))
+    FROM public.document_connector_accounts dca
+  )$sub$ ELSE $sub$'{"present":false,"rows":[]}'::jsonb$sub$ END,
+  CASE WHEN to_regclass('cm_identity.identity_invitations') IS NOT NULL THEN $sub$(
+    SELECT jsonb_build_object('present', true, 'row_count', count(*)::int) FROM cm_identity.identity_invitations
+  )$sub$ ELSE $sub$'{"present":false,"row_count":0}'::jsonb$sub$ END,
+  CASE WHEN to_regclass('cm_identity.identity_import_receipts') IS NOT NULL THEN $sub$(
+    SELECT jsonb_build_object('present', true, 'row_count', count(*)::int) FROM cm_identity.identity_import_receipts
+  )$sub$ ELSE $sub$'{"present":false,"row_count":0}'::jsonb$sub$ END,
+  CASE WHEN to_regclass('control.app_cm_identity_cutover') IS NOT NULL THEN $sub$(
+    SELECT jsonb_build_object('present', true, 'row_count', count(*)::int) FROM control.app_cm_identity_cutover
+  )$sub$ ELSE $sub$'{"present":false,"row_count":0}'::jsonb$sub$ END,
+  CASE WHEN to_regclass('public.document_connector_accounts') IS NOT NULL THEN $sub$(
+    SELECT jsonb_build_object('present', true, 'rows', coalesce(jsonb_agg(
+      jsonb_build_object('id', dca.id, 'value_sha256', encode(sha256(convert_to(dca.token_secret, 'UTF8')), 'hex'))
+      ORDER BY dca.id COLLATE "C"
+    ), '[]'::jsonb))
+    FROM public.document_connector_accounts dca WHERE dca.token_secret LIKE 'enc:%'
+  )$sub$ ELSE $sub$'{"present":false,"rows":[]}'::jsonb$sub$ END,
+  CASE WHEN to_regclass('public.llm_provider_accounts') IS NOT NULL THEN $sub$(
+    SELECT jsonb_build_object('present', true, 'rows', coalesce(jsonb_agg(
+      jsonb_build_object('id', lpa.id, 'value_sha256', encode(sha256(convert_to(lpa.token_secret, 'UTF8')), 'hex'))
+      ORDER BY lpa.id COLLATE "C"
+    ), '[]'::jsonb))
+    FROM public.llm_provider_accounts lpa WHERE lpa.token_secret LIKE 'enc:%'
+  )$sub$ ELSE $sub$'{"present":false,"rows":[]}'::jsonb$sub$ END,
+  CASE WHEN to_regclass('control.connector_revocation_custody') IS NOT NULL THEN $sub$(
+    SELECT jsonb_build_object('present', true, 'rows', coalesce(jsonb_agg(
+      jsonb_build_object(
+        'custody_ref', crc.custody_ref, 'delivery_id', crc.delivery_id,
+        'connector_account_id', crc.connector_account_id, 'provider', crc.provider,
+        'envelope_version', crc.envelope_version, 'key_ref', crc.key_ref,
+        'nonce', crc.nonce, 'ciphertext_sha256', encode(sha256(convert_to(crc.ciphertext, 'UTF8')), 'hex'),
+        'auth_tag', crc.auth_tag, 'created_at', crc.created_at
+      ) ORDER BY crc.custody_ref COLLATE "C"
+    ), '[]'::jsonb))
+    FROM control.connector_revocation_custody crc
+  )$sub$ ELSE $sub$'{"present":false,"rows":[]}'::jsonb$sub$ END
+  )
+END \gexec
+
+COMMIT;
