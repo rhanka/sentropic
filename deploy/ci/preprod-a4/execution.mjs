@@ -13,6 +13,16 @@ export function executionGrant(env, request, read = privateInput, tier = tierOf(
   return grant;
 }
 
+export function validateMiddleware(grant) {
+  const spec = grant.middlewareSpec;
+  if (!spec || digest(canonical(spec)) !== grant.middlewareSpecSha256
+    || Object.keys(spec).join(',') !== 'ipAllowList' || Object.keys(spec.ipAllowList).join(',') !== 'sourceRange'
+    || !spec.ipAllowList.sourceRange?.length || !spec.ipAllowList.sourceRange.every(range => /\/(32|128)$/.test(range))) {
+    throw new Error('traffic_boundary_invalid');
+  }
+  return spec;
+}
+
 export function validateActionCommands(grant, request, action, namespace) {
   if (!['fence', 'delete-custodian', 'start-api', 'start-ui', 'start-idp', 'refence', 'resume', 'restrict', 'open-traffic'].includes(action)
     ) throw new Error('action_invalid');
@@ -51,12 +61,7 @@ export function execute(env = process.env, call = kubectl, read = privateInput) 
     && args[2] !== '--replicas=0')) assertTrafficRestriction(request, grant, k, namespace);
   // Network boundary is tenant-approved, namespace-scoped and attached before either proxy starts.
   if (action === 'restrict') {
-    const spec = grant.middlewareSpec;
-    if (!spec || digest(canonical(spec)) !== grant.middlewareSpecSha256
-      || Object.keys(spec).join(',') !== 'ipAllowList' || Object.keys(spec.ipAllowList).join(',') !== 'sourceRange'
-      || !spec.ipAllowList.sourceRange?.length || !spec.ipAllowList.sourceRange.every(range => /\/(32|128)$/.test(range))) {
-      throw new Error('traffic_boundary_invalid');
-    }
+    const spec = validateMiddleware(grant);
     for (const name of ['sentropic', 'auth-idp']) {
       const ingress = JSON.parse(k(['get', 'ingress', name, '-o', 'json']));
       if (ingress.metadata.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']) {

@@ -25,6 +25,11 @@ export function fixture(objects) {
       return value;
     };
     const clean = replace(object);
+    // Logical identity verification must match the immutable prod bundle contract.
+    // Transport origins are isolated separately; these values are never HTTP destinations.
+    if (clean.kind === 'ConfigMap') for (const key of ['WEBAUTHN_RP_ID','WEBAUTHN_ORIGIN']) {
+      if (source.data?.[key] !== undefined) clean.data[key] = source.data[key];
+    }
     if (clean.kind === 'CronJob') clean.spec.suspend = true;
     if (clean.kind === 'StatefulSet' && clean.metadata.name !== 'postgres') throw new Error('fixture_postgres_name');
     if (clean.kind === 'RoleBinding') for (const subject of clean.subjects ?? []) {

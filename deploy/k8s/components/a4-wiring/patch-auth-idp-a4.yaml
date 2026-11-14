@@ -9,6 +9,10 @@ spec:
         - name: auth-idp
           command: ["node", "/run/cm-runtime/launch.mjs", "--idp"]
           env:
+            - name: JWT_SECRET
+              value: null
+              valueFrom:
+                secretKeyRef: { name: auth-idp-session-signing, key: JWT_SECRET }
             - name: CM_A4_NAMESPACE
               valueFrom:
                 fieldRef: { fieldPath: metadata.namespace }
