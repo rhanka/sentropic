@@ -23,6 +23,44 @@ function stores(placements = new Map<string, 'db' | 'object'>()) {
 }
 
 describe('composite blob placement', () => {
+  it.each(['db', 's3'] as const)('keeps a partial %s deletion failure visible and retryable', async (failingSide) => {
+    const db = createMemoryBlobStore();
+    const s3 = createMemoryBlobStore();
+    const bytes = new TextEncoder().encode('retry partial delete');
+    const key = keyFor(bytes);
+    await db.putBlob(key, bytes);
+    await s3.putBlob(key, bytes);
+    let denied = true;
+    const side = failingSide === 'db' ? db : s3;
+    const failing = { ...side, async deleteBlob(candidate: string) {
+      if (denied) throw new Error('AccessDenied');
+      await side.deleteBlob(candidate);
+    } };
+    const store = createCompositeBlobStore({ db: failingSide === 'db' ? failing : db,
+      s3: failingSide === 's3' ? failing : s3, mode: 'db+s3', inlineMaxBytes: 8,
+      placements: { getPlacement: async () => undefined } });
+    await expect(store.deleteBlob(key)).rejects.toThrow('AccessDenied');
+    expect(await side.getBlob(key)).toEqual(bytes);
+    denied = false;
+    await store.deleteBlob(key);
+    expect(await db.getBlob(key)).toBeUndefined();
+    expect(await s3.getBlob(key)).toBeUndefined();
+  });
+
+  it.each(['db', 's3'] as const)('enumerates old placements after switching to %s', async (mode) => {
+    const { db, s3 } = stores();
+    const a = new TextEncoder().encode('old db bytes');
+    const b = new TextEncoder().encode('old object bytes');
+    await db.putBlob(keyFor(a), a);
+    await s3.putBlob(keyFor(b), b);
+    const store = createCompositeBlobStore({ db, s3, mode, inlineMaxBytes: 8,
+      placements: { getPlacement: async () => undefined } });
+    const expected = [keyFor(a), keyFor(b)].sort();
+    expect(await store.listKeys('artifacts/scope-a/blobs/sha256/')).toEqual(expected);
+    expect((await store.listKeysPaged!('artifacts/scope-a/blobs/sha256/',
+      { maxItems: 10, maxEncodedBytes: 10000 })).keys).toEqual(expected);
+  });
+
   it('routes puts by mode and inline threshold', () => {
     expect(placementForPut('db', 1_000_000, 8)).toBe('db');
     expect(placementForPut('s3', 1, 8)).toBe('object');

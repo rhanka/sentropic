@@ -69,8 +69,6 @@ export function createCompositeBlobStore(options: CompositeBlobOptions): Publica
         s3.getBlobRange?.(key, start, endInclusive);
     },
     async listKeys(prefix: string): Promise<string[]> {
-      if (mode === 'db') return db.listKeys(prefix);
-      if (mode === 's3') return s3.listKeys(prefix);
       const [fromDb, fromS3] = await Promise.all([db.listKeys(prefix), s3.listKeys(prefix)]);
       return [...new Set([...fromDb, ...fromS3])].sort();
     },
@@ -81,8 +79,7 @@ export function createCompositeBlobStore(options: CompositeBlobOptions): Publica
       // its own side than in the union). Bounded per side, no bulk load; the
       // bridge applies the byte budget and seals the single resume key.
       if (!Number.isSafeInteger(page.maxItems) || page.maxItems < 1) throw new Error('invalid blob page maxItems');
-      const sides: readonly PublicationBlobStore[] =
-        mode === 'db' ? [db] : mode === 's3' ? [s3] : [db, s3];
+      const sides: readonly PublicationBlobStore[] = [db, s3];
       const fetched = await Promise.all(sides.map(async (side) => {
         const input: BlobKeyPage = page.startAfter === undefined
           ? { maxItems: page.maxItems, maxEncodedBytes: page.maxEncodedBytes }
@@ -114,6 +111,13 @@ export function createCompositeBlobStore(options: CompositeBlobOptions): Publica
           await side.deleteBlob(key);
         };
         const outcomes = await Promise.allSettled([attempt(db), attempt(s3)]);
+        for (const outcome of outcomes) {
+          if (outcome.status === 'rejected' &&
+            !(outcome.reason instanceof Error && outcome.reason.message === `unknown blob: ${key}`) &&
+            outcome.reason?.name !== 'NoSuchKey' && outcome.reason?.name !== 'NotFound') {
+            throw outcome.reason;
+          }
+        }
         if (outcomes.every((outcome) => outcome.status === 'rejected')) {
           throw (outcomes[0] as PromiseRejectedResult).reason;
         }
