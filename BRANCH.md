@@ -51,17 +51,17 @@
 - [x] **Lot 0 — Baseline and approval evidence**
   - [x] Read repository rules, common rules, packet, and consolidated plan; create isolated worktree from origin/main and pass harness check branch.
   - [x] Verify V8 source SHA-256: ab53eb6a61a07fbff7c4092bcb64806b528825a8cf190e619008c680cccf2b9e.
-- [ ] **Lot 1 — Approved specifications**
+- [x] **Lot 1 — Approved specifications**
   - [x] Land CM_FIRST_ARTIFACTS unchanged.
   - [x] Land V8 delivery unchanged.
   - [x] Land Vue Vapor migration unchanged.
   - [x] Land generic app context unchanged.
   - [x] Land frozen GAS r3 unchanged.
-- [ ] **Lot 2 — Superseded builder specifications**
+- [x] **Lot 2 — Superseded builder specifications**
   - [x] Land SLO with the requested supersession header and unchanged body.
-  - [ ] Land serverless with the requested supersession header and unchanged body.
+  - [x] Land serverless with the requested supersession header and unchanged body.
 - [ ] **Lot 3 — Final validation and handoff**
-  - [ ] Verify exact source/body equivalence and git diff --check; pass make scope-check before every commit.
+  - [x] Verify exact source/body equivalence and git diff --check; pass make scope-check before every commit.
   - [x] Inspect CI path classification; spec/** does not select application/package suites; do not modify ci.yml.
   - [ ] Push final reviewed head; create PR with this plan as body and an execution-plan comment.
   - [ ] Wait for successful CI on the exact PR head; do not merge.
