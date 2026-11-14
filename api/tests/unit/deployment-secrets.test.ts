@@ -55,7 +55,7 @@ describe('deployment secrets — fail-closed in a deployed runtime', () => {
   it('should require 32 trimmed characters and reject public seeds', () => {
     for (const value of [undefined, '', 'x', 'x'.repeat(31), ` ${'x'.repeat(31)} `,
       ' '.repeat(32), DEVELOPMENT_SECRET_SEED, DEVELOPMENT_EMAIL_TICKET_SEED,
-      'dev-idp-jwt-secret-change-in-production']) {
+      'dev-idp-jwt-secret-change-in-production', 'dev-idp-signing-kek-change-in-production']) {
       expect(isProvisionedDeploymentSecret(value)).toBe(false);
     }
     expect(isProvisionedDeploymentSecret('x'.repeat(32))).toBe(true);
