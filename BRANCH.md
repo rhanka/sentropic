@@ -64,7 +64,7 @@
 - [ ] Lot 3 — Verification and handoff
   - [x] File-level checks: source hashes/counts, 94 exact ranges covering 7,052 lines, 24 view metrics and ownership completeness; no runtime tests warranted.
   - [ ] Independent review reconciled against the audited sources.
-  - [ ] Native harness scope check before each commit; final `git diff --check`.
+  - [x] Native harness scope checks and final `git diff --check` pass; initial advisory failure is retained as C0-F0.
   - [ ] Create PR with this file as its body and add its 3-step execution plan.
   - [ ] CI green on exact pushed head; leave PR unmerged.
   - [ ] Record deliverable file:line, checks, exit-gate evidence, Track handoff, PR and CI in `.tmp/rv/app-vue-c0.md`; write `.done` last.
