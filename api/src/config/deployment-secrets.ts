@@ -13,6 +13,7 @@ const PUBLIC_SEEDS: ReadonlySet<string> = new Set([
   DEVELOPMENT_EMAIL_TICKET_SEED,
   // The standalone IdP dev compose default (docker-compose.idp.yml).
   'dev-idp-jwt-secret-change-in-production',
+  'dev-idp-signing-kek-change-in-production',
 ]);
 
 export type DeploymentSecretName = 'JWT_SECRET' | 'SECRET_ENCRYPTION_KEY';
@@ -22,16 +23,16 @@ export class MissingDeploymentSecretError extends Error {
   readonly secret: DeploymentSecretName;
 
   constructor(secret: DeploymentSecretName) {
-    super(`${secret} must be provisioned (non-blank, not a public development seed) in a deployed runtime.`);
+    super(`${secret} must be provisioned (at least 32 non-padding characters, not a public development seed) in a deployed runtime.`);
     this.name = 'MissingDeploymentSecretError';
     this.secret = secret;
   }
 }
 
-/** True only for a non-blank value that is not one of the committed development seeds. */
+/** True only for at least 32 trimmed characters that are not a committed development seed. */
 export const isProvisionedDeploymentSecret = (value: string | undefined): boolean => {
   const trimmed = value?.trim() ?? '';
-  return trimmed.length > 0 && !PUBLIC_SEEDS.has(trimmed);
+  return trimmed.length >= 32 && !PUBLIC_SEEDS.has(trimmed);
 };
 
 /**
