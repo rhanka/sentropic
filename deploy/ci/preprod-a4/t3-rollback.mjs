@@ -97,7 +97,7 @@ async function verifyService(probe, ctx) {
     if (res.status !== 200) throw new Error(`rollback_verify_failed: ${url}`);
   }
   if (ctx.witness) {
-    const res = await probe(ctx.witness.url, { headers: { cookie: ctx.witness.cookie }, signal: signal() });
+    const res = await probe(ctx.witness.url, { redirect: 'error',headers: { cookie: ctx.witness.cookie }, signal: signal() });
     await res.body?.cancel?.();
     if (res.status !== 200) throw new Error('rollback_witness_failed');
   }
