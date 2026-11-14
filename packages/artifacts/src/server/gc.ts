@@ -281,14 +281,18 @@ export function createGcService(refs: RefcountStore): GcService {
     ): Promise<GcReport> {
       const report: GcReport = { deleted: [], retained: [], failures: [] };
       const pending = await claims.listPendingKeys?.(prefix, 100) ?? [];
+      const candidates: { key: string; digest: string }[] = [];
       for (const key of new Set([...pending, ...await blobs.listKeys(prefix)])) {
-        let digest: string;
         try {
-          digest = blobDigestOfKey(key);
+          candidates.push({ key, digest: blobDigestOfKey(key) });
         } catch {
           report.retained.push(key);
-          continue;
         }
+      }
+      // Transactional digest locks survive each deletion: order the entire union,
+      // independent of reservation priority, physical listing order and scope.
+      candidates.sort((a, b) => a.digest < b.digest ? -1 : a.digest > b.digest ? 1 : 0);
+      for (const { key, digest } of candidates) {
         if ((await refs.count(digest)) !== 0 || (await refs.isPinned(digest))) {
           report.retained.push(key);
           continue;
