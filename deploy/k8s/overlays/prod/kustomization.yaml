@@ -71,4 +71,4 @@ patches:
           spec:
             containers:
               - name: ui
-                image: ghcr.io/rhanka/sentropic-ui@sha256:18ad65c8b93c425b82647659dcf6d134c42a8e8112aa68fbbe0f115de87a449d
+                image: ghcr.io/rhanka/sentropic-ui@sha256:18ad65c8b93c425b82647659dcf6d134c42a8e8112aa68fbbe0f115de87a749d

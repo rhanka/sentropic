@@ -21,7 +21,7 @@ assert.equal(object(base, 'ConfigMap', 'api').data.CM_IDENTITY_CUTOVER_CHECKPOIN
 for (const [name, image] of Object.entries({
   api: 'sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce',
   'auth-idp': 'sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce',
-  ui: 'sentropic-ui@sha256:18ad65c8b93c425b82647659dcf6d134c42a8e8112aa68fbbe0f115de87a449d',
+  ui: 'sentropic-ui@sha256:18ad65c8b93c425b82647659dcf6d134c42a8e8112aa68fbbe0f115de87a749d',
   'artifact-content': 'sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce',
 })) {
   assert.equal(object(prod, 'Deployment', name).spec.template.spec.containers[0].image,
