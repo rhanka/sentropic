@@ -30,7 +30,7 @@
 - [ ] Operator validates isolated restore namespaces, authentication and timing after code delivery.
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read packet, all four Astra reviews, merged driver and constraints; mechanical branch PASS.
-- [ ] Lot 1: applicability SQL and four stores delivered; wire stability gates and execute SQL regression tests.
+- [ ] Lot 1: applicability SQL and four stores wired at W0/W2/W5; execute SQL regression tests.
 - [ ] Lot 2: offline preflight, explicit rearm, full transactional restore with exact ACL comparison.
 - [ ] Lot 3: host guards and isolated restore routing; dedicated fixture tests.
 - [ ] Lot 4: v5 plan reconciliation, #1001 pins/switch, exact operator handoff.
