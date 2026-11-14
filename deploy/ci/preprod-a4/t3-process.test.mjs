@@ -110,6 +110,8 @@ esac
           { env: { ...process.env, PATH: `${dir}:${process.env.PATH}` }, encoding: 'utf8', timeout: 5000 });
         assert.equal(out.status, 0, `${out.error?.message ?? ''}\n${out.stderr}\n${out.stdout}`);
         assert.match(out.stdout, /rollback_ok/);
+        const restored = JSON.parse(readFileSync(join(dir,'t3-window-state.json')));
+        assert.equal(restored.step,'DONE'); assert.equal(restored.commitVerified,false);
       }
       await until(() => existsSync(join(dir, 'recovery')));
       for (const name of ['worker', 'grandchild']) {

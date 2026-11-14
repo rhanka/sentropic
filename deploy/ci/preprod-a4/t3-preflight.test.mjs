@@ -62,6 +62,31 @@ test('offline preflight refuses each missing annex action and a changed receipt 
   const f = inputs(); f.config.applicabilityReceiptPolicy.allowedChanges.push('schemaSha256');
   assert.throws(() => preflight(f.config,f.read),/receipt_policy/);
 });
+
+test('restore preflight rejects production URLs in every observer and witness path', () => {
+  const f = inputs();
+  f.config.tier = 'restore'; f.config.namespace = 'sentropic-restore-a4';
+  f.config.request = { ...f.config.request,format: 'prod-a4-request/1',namespace: 'sentropic',
+    emailCodeActiveKeyRef: 'email-code-hmac:v1:prod:15c2f8b66073655a' };
+  for (const path of ['/authorization','/rehearsal']) {
+    const value = JSON.parse(f.files[path]); value.format = value.format.replace('preprod-','prod-');
+    if (value.namespace) value.namespace = 'sentropic'; f.files[path] = JSON.stringify(value);
+  }
+  f.config.applicabilityReceiptPolicy.originalRehearsalSha256 = digest(f.files['/rehearsal']);
+  const annex = JSON.parse(f.files['/annex'].replaceAll('sentropic-preprod-a4-verification','sentropic-restore-a4-verification'));
+  annex.format = 'prod-a4-execution/1'; annex.namespace = 'sentropic';
+  annex.applicabilityReceiptPolicySha256 = digest(canonical(f.config.applicabilityReceiptPolicy));
+  f.files['/annex'] = JSON.stringify(annex); f.config.executionSha256 = digest(f.files['/annex']);
+  const isolated = value => { const url = new URL(value); url.hostname = 'app.restore-a4.test'; return url.href; };
+  for (const key of Object.keys(f.config.endpoints)) f.config.endpoints[key] = isolated(f.config.endpoints[key]);
+  f.config.witness.url = isolated(f.config.witness.url);
+  for (const p of [...f.config.externalProbes,...f.config.restrictedProbes]) p.url = isolated(p.url);
+  assert.doesNotThrow(() => preflight(f.config,f.read));
+  for (const target of [f.config.witness,f.config.externalProbes[0],f.config.restrictedProbes[0]]) {
+    const before = target.url; target.url = 'https://sentropic.sent-tech.ca/';
+    assert.throws(() => preflight(f.config,f.read),/fixture_http_not_isolated/); target.url = before;
+  }
+});
 test('offline preflight refuses annex, baseline, keys, remote and budget drift', () => {
   for (const mutate of [
     f => { f.config.executionSha256 = '0'.repeat(64); },
