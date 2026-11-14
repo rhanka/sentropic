@@ -65,13 +65,15 @@ echo 'PASS: offline PKCE-only mutation changes durable applicability'
 # for the whole restore session, so a search_path-sensitive catalogue can never equal its P-0 capture.
 sql -c 'CREATE EXTENSION pg_trgm'
 # Objects that shadow pg_catalog when a session lists their schema first.
-sql -c 'CREATE SCHEMA t3_shadow; CREATE FUNCTION t3_shadow.sha256(bytea) RETURNS bytea LANGUAGE sql AS $f$ SELECT $1 $f$; CREATE FUNCTION t3_shadow.second(text,text) RETURNS text LANGUAGE sql AS $f$ SELECT $2 $f$; CREATE OPERATOR t3_shadow.|| (LEFTARG=text, RIGHTARG=text, FUNCTION=t3_shadow.second)'
+sql -c 'CREATE SCHEMA t3_shadow; CREATE FUNCTION t3_shadow.sha256(bytea) RETURNS bytea LANGUAGE sql AS $f$ SELECT $1 $f$; CREATE FUNCTION t3_shadow.second(text,text) RETURNS text LANGUAGE sql AS $f$ SELECT $2 $f$; CREATE OPERATOR t3_shadow.|| (LEFTARG=text, RIGHTARG=text, FUNCTION=t3_shadow.second); CREATE FUNCTION t3_shadow.never_name(name,name) RETURNS boolean LANGUAGE sql AS $f$ SELECT false $f$; CREATE OPERATOR t3_shadow.= (LEFTARG=name, RIGHTARG=name, FUNCTION=t3_shadow.never_name)'
 sql -c 'CREATE ROLE t3_reader; GRANT USAGE ON SCHEMA public TO t3_reader; GRANT SELECT (client_id) ON oauth_clients TO t3_reader; ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO t3_reader; CREATE SCHEMA artifacts; CREATE TABLE artifacts.t3_empty(id text)'
 acl=$(sql -f /tests/t3-acl.sql)
+pub_acl=$(sql -f /tests/t3-public-acl.sql)
 for path in '' pg_catalog t3_shadow,pg_catalog,public; do
   [ "$(PGOPTIONS="-c search_path=$path" sql -f /tests/t3-acl.sql)" = "$acl" ] || { echo "acl_catalogue_search_path_dependent: $path"; exit 1; }
+  [ "$(PGOPTIONS="-c search_path=$path" sql -f /tests/t3-public-acl.sql)" = "$pub_acl" ] || { echo "public_acl_search_path_dependent: $path"; exit 1; }
 done
-echo 'PASS: ACL catalogue is identical under the default, empty, pinned and shadowing search paths'
+echo 'PASS: ACL catalogue and public-schema ACL capture are identical under default, empty, pinned and shadowing search paths'
 sed '/^SELECT pg_catalog\.encode/,$d' /tests/t3-acl.sql > /tmp/catalog.sql
 echo 'SELECT * FROM entries ORDER BY kind,name;' >> /tmp/catalog.sql
 sql -f /tmp/catalog.sql > /tmp/t3-catalog-before
