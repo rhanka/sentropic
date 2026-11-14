@@ -1,61 +1,68 @@
-# Feature: Disable artifact builds and live workers without capacity
+# Feature: App Vue T0 templater contracts
 
 ## Objective
-- [x] Apply the owner directive to stop using removed build capacity; preserve builder code until V8 step 7.
+- [ ] Deliver both neutral templater contracts and the complete print migration inventory from the approved migration specification, section 6.6.
 
 ## Scope / Guardrails
-- [x] Worktree: `tmp/worktrees/builder-gate-off`; branch: `fix/artifact-builder-gate-off`, based on `origin/main`.
-- [x] Make-only, Docker-first; no cluster access, deployment, merge, secrets or package changes.
-- [x] Environment: `fix-builder-gate-off`; API_PORT=9860, UI_PORT=6060, MAILDEV_UI_PORT=1960; verified free with `ss -ltn`.
-- [x] Manifest target rejects `ENV=fix-builder-gate-off` with `ERROR: use ENV=test-*`; use isolated `ENV=test-fix-builder-gate-off` for that target without bypassing its guard.
-- [x] Free disk before testing: 35 GB (minimum 30 GB).
+- [x] Worktree: `tmp/worktrees/app-vue-t0`; branch: `feat/app-vue-t0`, based on `origin/main`.
+- [x] Specification SHA-256: `277104d6cd95a7d3cb91ffca1644a088b937fb9e067247f19779c955887eb2b7`.
+- [x] Track parent: `01M79DW3RDPC2CSCGZJCXC2A81`; conductor owns Track imports and decisions D1/D2.
+- [x] Make-only, Docker-first; Docker commands through `.tmp/packets/docker-slot.sh`.
+- [x] Environment: `feat-app-vue-t0`; ports API `9300`, UI `5500`, Maildev `1400`; ENV last.
+- [x] No DS install, API/seed changes, reference UI changes, V8 work, or owner decisions D3–D8.
+- [x] No merge; independent review and integration belong to s-conductor.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `deploy/k8s/overlays/**`
-  - `deploy/ci/artifact-content/**`
-  - `BRANCH.md`
+  - `ui-shared/templater/contract/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
+  - `ui/**`
   - `api/**`
-  - `packages/**`
   - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `deploy/k8s/base/**` (only if needed)
-  - `.github/workflows/**`
+  - `spec/SPEC_TEMPLATING.md`
+  - `BRANCH.md`
 - **Exception process**:
-  - [x] No exceptions needed; report any blocking scope change before editing.
+  - [x] No conditional path needed; record rationale, impact and rollback before any exception.
 
 ## Feedback Loop
-- [x] Track imports belong to the conductor as designated single writer; this branch provides the mergeable request and lot source.
-- [x] Bundle assertions: 211 pass. Full target fails A4 process observation deadlines; serial execution also fails and was reverted. No timeout or test weakened; exact-head CI remains required.
-- [x] Shared disk fell below 30 GB after tests; no new local image build permitted. Cleanup requested for this lane only.
-- [x] Astra found no configuration defect; P2 requires complete passing manifest/A4 validation. Keep PR draft until exact-head CI resolves this gate.
+- [x] BR00-EX1: administrative `BRANCH.md` required by packet; no product scope expansion; rollback restores the base branch plan.
+- [x] Packet authorizes `ENV=feat-app-vue-t0`; it supersedes the generic test environment prefix for this isolated lane.
+- [ ] Conductor imports this branch under the existing migration Track item; no concurrent sidecar write from this worktree.
 
 ## AI Flaky tests
-- [x] No provider-dependent tests or flaky acceptance.
+- [x] None: contract qualification has no provider dependency.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; one configuration fix and its regression checks.
+- [x] **Mono-branch**: one scoped build lot, no integration by this lane.
 
 ## UAT Management (in orchestration context)
-- [x] No interactive UAT: no application code changes and cluster access is prohibited.
+- [x] No rendered UI delivered; schema, adapter and print inventory qualification replace browser UAT for T0.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read rules, common packet, branch template and the builder/live composition.
-  - [x] Create isolated worktree and pass mechanical `harness check branch`.
-- [x] **Lot 1 — Close capacity gates**
-  - [x] Disable preprod `ARTIFACT_BUILDER_ENABLED` in `deploy/k8s/overlays/preprod/patch-api-config.yaml`.
-  - [x] Disable preprod `APP_ARTIFACT_LIVE_ENABLED` in `deploy/k8s/overlays/preprod/patch-artifact-content-config.yaml`.
-  - [x] Confirm prod builder absent and prod live closed; preserve published content and builder code.
-  - [x] Update tier expectations and negative mutations in `deploy/ci/artifact-content/bundle-checks.mjs` and `bundle.selftest.mjs`.
-- [ ] **Lot 2 — Validation and handoff**
-  - [x] Run manifest/bundle checks through the existing make target, including both tiers and A4 overlays; record A4 process failures without accepting them.
-  - [x] Complete independent code review and mechanical scope verification before commit; retain the unresolved P2 validation finding above.
-  - [ ] Push branch and create PR using this file as its body; post the execution checklist.
-  - [ ] Confirm CI green on exact head; do not merge or deploy.
-  - [ ] Write `.tmp/rv/builder-gate-off.md` with consumer impact and residual platform references, then `.done`.
-  - [x] Clean the isolated environment with `make down-volumes`; `make disk-hygiene` reclaimed 0 B.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read packet, repository rules, approved specification and template.
+  - [x] Create isolated worktree from `origin/main`.
+  - [x] `harness check branch`: PASS C1.
+  - [x] `df -h /`: 38 GB free before Docker work; recheck before building.
+- [ ] **Lot 1 — Family (b) contract**
+  - [ ] JSON Schema: eight field types, three row shapes, presentation and print properties.
+  - [ ] `contract.test.mjs`: seven real seed shapes validate; 17 seed records qualify; mutations fail.
+- [ ] **Lot 2 — Family (a) contract and adapters**
+  - [ ] `container.ts`: typed icons/tones, cards/actions/menu callbacks, activation adapters.
+  - [ ] `container.test.mjs`: callbacks, navigation precedence, disabled menu actions and card mapping.
+- [ ] **Lot 3 — Consumer and presentation mappings**
+  - [ ] `README.md`: five consumers with source lines; row/field/slot contracts and ownership.
+  - [ ] `presentation.ts`: colour/tone/variant and print token/hook mappings.
+- [ ] **Lot 4 — Print inventory**
+  - [ ] `print-inventory-*.json`: every selector line, source target and future hook or dropped reason.
+  - [ ] `inventory.test.mjs`: exact source coverage, no missing or duplicate lines.
+- [ ] **Lot 5 — Final validation**
+  - [ ] Scoped Docker qualification through the contract Makefile.
+  - [ ] `make scope-check` before every atomic commit, each below 150 changed lines.
+  - [ ] Push branch; PR title and body from this file; independent review handoff.
+  - [ ] CI green on exact pushed head; no merge.
+  - [ ] French report `.tmp/rv/app-vue-t0.md`, then `.tmp/rv/app-vue-t0.done`.
