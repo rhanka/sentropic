@@ -156,12 +156,20 @@ export function createArtifactHostJobs(options: {
       await authorize('collect');
       if (!/^[A-Za-z0-9_-]+$/.test(storageScopeId)) throw new Error('Invalid artifact storage scope');
       const prefix = `artifacts/${storageScopeId}/blobs/sha256/`;
-      const listed = options.blobs.listKeysPaged === undefined ? undefined : await listBlobKeysPaged(options.blobs, prefix,
+      const validateKeys = (keys: readonly string[]) => {
+        if (keys.length > limit || keys.some(key => !key.startsWith(prefix) || !blobKey.test(key))) {
+          throw new Error('Invalid artifact collection page');
+        }
+      };
+      const listed = options.blobs.listKeysPaged === undefined ? undefined : await listBlobKeysPaged({ ...options.blobs,
+        async listKeysPaged(keyPrefix, request) {
+          const result = await options.blobs.listKeysPaged!(keyPrefix, request);
+          validateKeys(result.keys);
+          return result;
+        } }, prefix,
         { maxItems: limit, maxEncodedBytes: limit * 256, ...(cursor === undefined ? {} : { continuation: cursor }) });
       const page = listed ? { keys: listed.keys, cursor: listed.continuation } : await options.page(prefix, limit, cursor);
-      if (page.keys.length > limit || page.keys.some(key => !key.startsWith(prefix) || !blobKey.test(key))) {
-        throw new Error('Invalid artifact collection page');
-      }
+      validateKeys(page.keys);
       await authorize('collect');
       const report = await gc.collect({ ...guardedBlobs('collect'), listKeys: async () => page.keys }, prefix);
       return { ...report, cursor: page.cursor };
