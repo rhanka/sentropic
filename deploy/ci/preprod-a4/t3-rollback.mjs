@@ -1,4 +1,5 @@
 import { effectiveTimeout, monoMs, podLabels, recoveryDeadline, runKubectl, loadState, saveState } from './t3-lib.mjs';
+import { t3PriorityClass } from './ops.mjs';
 import { readFileSync } from 'node:fs';
 
 // Keys added by the window wire step (fence journal K). Both must be gone and
@@ -12,11 +13,11 @@ function podsOf(call, component) {
   return out ? JSON.parse(out).items ?? [] : [];
 }
 
-export function waitZeroPods(call, deadlineMs, components = DEPLOYS) {
+export function waitZeroPods(call, deadlineMs, components = DEPLOYS, now = monoMs) {
   for (const component of components) {
     while (podsOf(call, component).length > 0) {
-      if (monoMs() > deadlineMs) throw new Error(`pods_not_zero: ${component}`);
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+      if (now() > deadlineMs) throw new Error(`pods_not_zero: ${component}`);
+      if (now === monoMs) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
     }
   }
 }
@@ -41,18 +42,27 @@ export function removeRotatedKeys(call, dryRun = false) {
   return present;
 }
 
-function revisionOf(call, deploy) {
+function needsUndo(call, deploy, want, tier) {
   const out = JSON.parse(call(['get', 'deployment', deploy, '-o', 'json']) || '{}');
-  return String(out.metadata?.annotations?.['deployment.kubernetes.io/revision'] ?? '');
+  const revision = String(out.metadata?.annotations?.['deployment.kubernetes.io/revision'] ?? '');
+  const spec = out.spec?.template?.spec;
+  return revision !== String(want)
+    || (out.metadata?.generation != null && out.status?.observedGeneration != null
+      && out.metadata.generation !== out.status.observedGeneration)
+    || (tier !== 'restore' && spec?.priorityClassName === t3PriorityClass)
+    || Boolean(spec?.volumes?.some(v => ['sentropic-a4-custody', 'auth-idp-session-authority']
+      .includes(v.persistentVolumeClaim?.claimName)))
+    || Boolean(spec?.containers?.some(c => c.command?.join(' ') === 'node /run/cm-runtime/launch.mjs'));
 }
 
 // Pre-commit rollback. Runs only after the classifier proved
 // identity_committed=false with zero api pods and zero migration locks.
 export async function preCommitRollback(ctx) {
   const { call, probe = null, revisions, preCmDir = null, healthUrl = null, jwksUrl = null,
-    dryRun = false, note = () => {} } = ctx;
+    dryRun = false, note = () => {}, tier = null } = ctx;
+  const clock = ctx.now ?? monoMs;
   for (const deploy of DEPLOYS) call(['scale', `deployment/${deploy}`, '--replicas=0']);
-  waitZeroPods(call, Math.min(ctx.deadlineMs ?? Infinity, monoMs() + (ctx.zeroPodsTimeoutMs ?? 60_000)));
+  waitZeroPods(call, Math.min(ctx.deadlineMs ?? Infinity, clock() + (ctx.zeroPodsTimeoutMs ?? 60_000)), DEPLOYS, clock);
   call(['delete', 'pod', 'sentropic-a4-custodian', '--ignore-not-found=true', '--wait=true', '--timeout=60s']);
   const removed = removeRotatedKeys(call, dryRun);
   if (preCmDir) {
@@ -61,7 +71,7 @@ export async function preCommitRollback(ctx) {
   }
   for (const deploy of DEPLOYS) {
     const want = revisions?.[deploy];
-    if (want && revisionOf(call, deploy) !== String(want)) {
+    if (want && needsUndo(call, deploy, want, tier)) {
       call(['rollout', 'undo', `deployment/${deploy}`, `--to-revision=${want}`]);
     }
   }
@@ -130,7 +140,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         throw new Error('rollback_witness_missing');
       }
       const out = await preCommitRollback({ call, revisions: args.revisions, preCmDir: args.preCmDir,
-        dryRun: args.dryRun, probeReadOnly: args.probeReadOnly, note: console.log, deadlineMs,
+        dryRun: args.dryRun, probeReadOnly: args.probeReadOnly, note: console.log, deadlineMs, tier: config.tier,
         probe: fetch, healthUrl: args.healthUrl, jwksUrl: args.jwksUrl,witness: config.witness });
       if (!args.dryRun && process.env.T3_STATE_DIR) {
         const state = loadState(process.env.T3_STATE_DIR);

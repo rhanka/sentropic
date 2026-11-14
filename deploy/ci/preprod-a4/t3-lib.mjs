@@ -14,7 +14,9 @@ export const podLabels = {
 const READ_ONLY = new Set(['get', 'auth', 'describe', 'logs', 'top', 'version', 'api-resources', 'kustomize', 'diff']);
 
 export function isReadOnly(args, execIsReadOnly = false) {
-  return READ_ONLY.has(args[0]) || (execIsReadOnly && args[0] === 'exec');
+  return READ_ONLY.has(args[0])
+    || (execIsReadOnly && args[0] === 'exec')
+    || (args[0] === 'create' && args.includes('--dry-run=server'));
 }
 
 // kubectl runner with a hard timeout (Fable B1: the pilot kills its

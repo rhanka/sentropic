@@ -7,8 +7,8 @@ These rules complete [prod-a4-cutover.md](prod-a4-cutover.md) for the window dri
 A legacy login can move the durable applicability projection: an admin login rewrites the default workspace row. The baseline is therefore only valid for the session state it was captured in.
 
 1. Log in as the legacy witness on the product origin and store the session in `witness` of the CONFIG (`url` = product `/api/v1/me`, `cookie`, `expiresAt` beyond T0 + 2 h).
-2. Capture the baseline: `make k8s-t3-qualify T3_ACTION=baseline T3_CONFIG=CONFIG ENV=test-t3-restore`. The action first calls the witness URL with the witness cookie and requires `200`, then reads the applicability SQL. The baseline file carries `witnessSha256`, the binding to that witness session. Without a live witness session it refuses (`baseline_witness_missing`, `baseline_witness_not_authenticated`) and writes nothing.
-3. Capture the ACL receipt (`T3_ACTION=capture-acl`), build the receipt policy and the annex (the policy binds the baseline bytes).
+2. Capture the baseline: `make k8s-t3-qualify T3_ACTION=baseline T3_CONFIG=CONFIG ENV=test-t3-restore`. The action first calls the witness URL with the witness cookie and requires `200`, then reads the applicability SQL. The baseline file carries a salted `witnessSha256` (`witnessSalt` + HMAC-SHA256), the binding to that witness session. Without a live witness session it refuses (`baseline_witness_missing`, `baseline_witness_not_authenticated`) and writes nothing.
+3. Capture the ACL receipt (`T3_ACTION=capture-acl`) and the PostgreSQL version receipt (`T3_ACTION=postgres-version`, writing `postgresVersionFile`), then build the receipt policy and the annex (the policy binds the baseline bytes).
 4. Provision the verification boundary Secret (next section), then run `make k8s-t3-preview`.
 5. From the baseline capture until the fence: no admin login, no new witness login, no legacy API restart.
 
@@ -18,8 +18,11 @@ Enforcement:
 | --- | --- | --- |
 | Baseline bound to the configured witness session | offline preflight (`k8s-t3-preview`, driver start) and W0, W2, W5 | `baseline_not_after_witness` |
 | Durable projection and encrypted stores unchanged since the baseline | W0, before the fence | `baseline_stale_before_fence: applicability_drift:<hash>` |
+| ACL receipt formula matches current `t3-acl.sql` | offline preflight | `acl_baseline_invalid` |
+| PostgreSQL 17.11 server and backup/export client pins | offline preflight (`postgresVersionFile`) and W0 (live `SHOW server_version`, `postgres-0` `imageID`, `pgbackup` and `sentropic-idp-identity-export` client images) | `postgres_version_receipt_invalid`, `postgres_version_unqualified` |
 | Verification credential present and well formed | offline preflight | `verification_credential_missing`, `verification_credential_invalid` |
-| Cluster Secret `a4-verification-auth` is the verifier of the local credential | W0, before the fence | `verification_secret_missing`, `verification_secret_mismatch` |
+| Cluster Secret `a4-verification-auth` is the verifier of the local credential | W0, before the fence (including `--dry-run --probe-readonly`) | `verification_secret_missing`, `verification_secret_mismatch` |
+| Server-side admission (`--dry-run=server`) of `priorityClassName: sentropic-t3-critical` | W0, before the fence on `prod` and `restore` | `priority_class_unadmitted` |
 
 A W0 refusal happens before any write: nothing is fenced, the driver exits 1 and records `refusalReason` in the state file. Capture the baseline again (steps 2 and 3, new policy and annex), then start a new attempt.
 
@@ -53,13 +56,13 @@ On the candidate the product origin answers 404 on `/api/v1/auth/me`, and both o
 ## After the fence
 
 - The fence returns as soon as the Deployments are scaled, but the legacy `api` and `auth-idp` pods stay Terminating for their whole grace period (Node as PID 1 ignores SIGTERM). At the end of W3 the driver waits for zero `api`, `auth-idp` and `ui` pods, inside the W3 cutoff. A pod that never leaves routes to the pre-commit rollback. The wait is recorded as `writersGone` in the chronometer file.
-- Scheduling: the prod wire names PriorityClass `sentropic-t3-critical` on the `api`, `auth-idp` and `ui` templates (the same field `overlays/prod-a4` renders, so P-0.8 stays at zero) and the driver names it on the custodian. The class gives queue priority only, never preemption, and acts only on pods that name it. A pod naming a class that does not exist is refused at creation: a missing class stops the window at W4, before COMMIT. The pods of a rollback run the legacy templates, without the class.
-- The custodian keeps the API requests and limits except the CPU limit, `1500m`. Before the window, check read-only that the namespace admits it while the consumers are stopped: the CPU-limit quota must cover the database, the custodian and the backup Job together, and the LimitRange maximum must allow `1500m`.
+- Scheduling: the prod wire names PriorityClass `sentropic-t3-critical` on the `api`, `auth-idp` and `ui` templates (the same field `overlays/prod-a4` renders, so P-0.8 stays at zero) and the driver names it on the custodian. The class gives queue priority only, never preemption, and acts only on pods that name it. W0 checks server-side pod admission (`--dry-run=server`) for `sentropic-t3-critical` before the fence (`priority_class_unadmitted`), and `preCommitRollback` undoes wired templates even before `DeploymentController` increments `deployment.kubernetes.io/revision`.
+- The custodian keeps the API requests and limits except the CPU limit, `1500m`. Before the window, check read-only that the namespace admits it while the consumers are stopped: the CPU-limit quota must cover the database, the custodian and the backup Job together, and the LimitRange maximum and `maxLimitRequestRatio` (1500m limit over 100m inherited request = 15) must allow `1500m`.
 
 ## Full restore (OD-T3-7 contingency)
 
-- The ACL catalogue hash no longer depends on the session `search_path`. A receipt captured by an earlier driver head uses the previous formula: capture it again before any attempt.
-- PostgreSQL version: the backup job dumps with a client pinned to 17.11. Under a 17.12 server that client writes `ALTER COLUMN … SET (pg_attver=…)` statements, which a 17.11 server refuses; server and client on the same pinned minor write none. Check both sides, read-only, on the fixture and on prod: `make k8s-t3-qualify T3_ACTION=postgres-version T3_CONFIG=CONFIG ENV=test-t3-restore` requires server version 17.11, the pod imageID of the pinned prod bytes and the pinned dump client (`postgres_version_unqualified` otherwise).
+- The ACL catalogue hash no longer depends on the session `search_path`. Offline preflight rejects receipts captured with an earlier formula (`aclFormulaSha256`): capture it again before any attempt.
+- PostgreSQL version: the backup and identity-export jobs dump with a client pinned to 17.11. Under a 17.12 server that client writes `ALTER COLUMN … SET (pg_attver=…)` statements, which a 17.11 server refuses; server and client on the same pinned minor write none. Run `make k8s-t3-qualify T3_ACTION=postgres-version T3_CONFIG=CONFIG ENV=test-t3-restore` to verify server version 17.11, the pod `imageID` of the pinned prod bytes and the pinned `pgbackup` and `sentropic-idp-identity-export` client images (`postgres_version_unqualified` otherwise) and write `postgresVersionFile`; both offline preflight and W0 enforce it before the fence.
 
 ## Isolated fixture
 
