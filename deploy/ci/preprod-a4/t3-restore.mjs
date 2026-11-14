@@ -69,6 +69,7 @@ export async function restore(ctx, approval) {
       !== `${config.namespace}-a4-verification@kubernetescrd`) throw new Error('restore_ingress_open');
   }
   const dump = gunzipSync(dumpBytes).toString();
+  pg(ctx, readFileSync(new URL('../artifact-data-guard/refuse-artifact-data.sql', import.meta.url), 'utf8'));
   pg(ctx, restoreSql(dump, acl, approval.aclCatalogSha256), ['--single-transaction']);
   if (pg(ctx, aclSql()).trim() !== approval.aclCatalogSha256) throw new Error('restore_acl_mismatch');
   return preCommitRollback({ ...ctx, revisions: config.revisions, preCmDir: config.preCmDir,
