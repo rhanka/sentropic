@@ -5,9 +5,11 @@ import { approvedRequest, image } from './fixtures.mjs';
 import { digest, canonical } from './guards.mjs';
 import { STATE_HASHES } from './t3-rehearsal.mjs';
 import { applicabilityFixture } from './t3-applicability.test.mjs';
+import { witnessBinding } from './t3-applicability.mjs';
 import { emailProbe, expectedSigningKid, probeEndpoints, observerProbes } from './t3-probe-fixture.mjs';
 
-export function inputs() {
+export function inputs(witnessUrl = 'https://app.test/api/v1/me') {
+  const witness = { url: witnessUrl,cookie: 'synthetic-witness',expiresAt: new Date(Date.now()+86400000).toISOString() };
   const ui = `ghcr.io/rhanka/sentropic-ui@sha256:${'c'.repeat(64)}`;
   const authorization = { ...approvedRequest, format: 'preprod-a4-authorization/1' };
   const annex = { ...approvedRequest, format: 'preprod-a4-execution/1', uiImage: ui,
@@ -24,7 +26,7 @@ export function inputs() {
     budgets[name] = { deadlineMs: 10000, maxAttempts: 1 };
   }
   const files = { '/annex': JSON.stringify(annex), '/authorization': JSON.stringify(authorization),
-    '/remote': '{}', '/baseline': JSON.stringify(applicabilityFixture()), '/budgets': JSON.stringify(budgets) };
+    '/remote': '{}', '/baseline': JSON.stringify({ ...applicabilityFixture(),witnessSha256: witnessBinding(witness) }), '/budgets': JSON.stringify(budgets) };
   files['/rehearsal'] = JSON.stringify({ format: 'preprod-a4-rehearsal/2',candidateCommit: approvedRequest.candidateCommit,
     receiptRef: 'track:qualified-rehearsal',applicabilityReviewRef: 'track:prior-review',
     restoredBackupSha256: 'd'.repeat(64),isolatedRestoreRef: 'track:qualified-isolated-restore',
@@ -44,7 +46,7 @@ export function inputs() {
     restrictedProbes: observerProbes().restrictedProbes,
     externalProbes: [{ id: 'external-app',url: 'https://app.test/',expect: 200 },
       { id: 'external-idp',url: 'https://idp.test/.well-known/openid-configuration',expect: 200 }],
-    witness: { url: 'https://app.test/api/v1/me',cookie: 'synthetic-witness',expiresAt: new Date(Date.now()+86400000).toISOString() },
+    witness,
     rotationKeyFiles: { apiJwtSecretFile: '/jwt', secretEncryptionKeyFile: '/enc', idpSessionJwtFile: '/idp' },
     revisions: { api: '1', 'auth-idp': '2', ui: '3' }, preCmDir: '/cms' };
   return { config, files, read: name => files[name] ?? 'synthetic-private-input' };
@@ -66,7 +68,7 @@ test('offline preflight refuses each missing annex action and a changed receipt 
 });
 
 test('restore preflight rejects production URLs in every observer and witness path', () => {
-  const f = inputs();
+  const f = inputs('https://app.restore-a4.test/api/v1/me');
   f.config.tier = 'restore'; f.config.namespace = 'sentropic-restore-a4';
   f.config.request = { ...f.config.request,format: 'prod-a4-request/1',namespace: 'sentropic',
     emailCodeActiveKeyRef: 'email-code-hmac:v1:prod:15c2f8b66073655a' };
@@ -81,7 +83,6 @@ test('restore preflight rejects production URLs in every observer and witness pa
   f.files['/annex'] = JSON.stringify(annex); f.config.executionSha256 = digest(f.files['/annex']);
   const isolated = value => { const url = new URL(value); url.hostname = 'app.restore-a4.test'; return url.href; };
   for (const key of Object.keys(f.config.endpoints)) f.config.endpoints[key] = isolated(f.config.endpoints[key]);
-  f.config.witness.url = isolated(f.config.witness.url);
   for (const p of [...f.config.externalProbes,...f.config.restrictedProbes]) p.url = isolated(p.url);
   assert.doesNotThrow(() => preflight(f.config,f.read));
   for (const target of [f.config.witness,f.config.externalProbes[0],f.config.restrictedProbes[0]]) {
@@ -99,5 +100,13 @@ test('offline preflight refuses annex, baseline, keys, remote and budget drift',
     f => { f.config.revisions.api = ''; },
   ]) {
     const f = inputs(); mutate(f); assert.throws(() => preflight(f.config,f.read));
+  }
+});
+// A later witness login gives another session: the baseline must be captured again after it.
+test('offline preflight refuses a baseline that is not bound to the configured witness login', () => {
+  for (const mutate of [f => { f.config.witness.cookie = 'later-login'; },
+    f => { f.config.witness.url = 'https://app.test/api/v1/me?other'; }]) {
+    const f = inputs(); mutate(f);
+    assert.throws(() => preflight(f.config,f.read),/baseline_not_after_witness/);
   }
 });

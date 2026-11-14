@@ -11,6 +11,7 @@ import { preCommitRollback } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
 import { emailProbe, expectedSigningKid, probeEndpoints, probeReply, observerProbes } from './t3-probe-fixture.mjs';
 import { applicabilityFixture } from './t3-applicability.test.mjs';
+import { witnessBinding } from './t3-applicability.mjs';
 import { rehearsalFixture } from './t3-rehearsal-fixture.mjs';
 
 const CANDIDATE = `ghcr.io/rhanka/sentropic-api@sha256:${'e'.repeat(64)}`;
@@ -156,8 +157,10 @@ export function makeCtx(overrides = {}) {
   writeFileSync(defaultKeys.secretEncryptionKeyFile, 'test-enc-key');
   writeFileSync(defaultKeys.idpSessionJwtFile, 'test-idp-jwt');
   const applicabilityBaselineFile = join(keyDir, 'baseline.json');
-  writeFileSync(applicabilityBaselineFile, JSON.stringify(applicabilityFixture()));
-  const qualification = rehearsalFixture(keyDir,{ candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE,operationId: 'test' },JSON.stringify(applicabilityFixture()));
+  const witness = { url: 'https://idp.test/legacyWitness', cookie: 'synthetic-witness' };
+  const baselineBytes = JSON.stringify({ ...applicabilityFixture(), witnessSha256: witnessBinding(witness) });
+  writeFileSync(applicabilityBaselineFile, baselineBytes);
+  const qualification = rehearsalFixture(keyDir,{ candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE,operationId: 'test' },baselineBytes);
   scenario.snapshot = qualification.snapshot;
   return {
     ctx: {
@@ -178,6 +181,7 @@ export function makeCtx(overrides = {}) {
         request: { format: 'x', operationId: 'test',candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE },
         rotationKeyFiles: defaultKeys,
         applicabilityBaselineFile,
+        witness,
         ...qualification,
         ...(overrides.config ?? {}),
       },
@@ -1076,4 +1080,33 @@ test('R7 a read-only probe run has no fence, so it does not wait for the live po
   awaitWritersGone(ctx, monoMs() + 60_000);
   assert.equal(calls.length, 0);
   assert.ok(printed.some(line => line.includes('legacy pods not awaited')));
+});
+
+// Rehearsal r9: a legacy admin login moves the durable projection (default workspace row). The
+// baseline is captured after the witness login; nothing may log in as admin or restart the API
+// until the fence. Both rules are checked at W0, before any write.
+test('R7 W0 refuses, before the fence, a baseline not bound to the configured witness login', async () => {
+  for (const mutate of [ctx => { ctx.config.witness = { ...ctx.config.witness, cookie: 'later-login' }; },
+    ctx => { delete ctx.config.witness; },
+    ctx => writeFileSync(ctx.config.applicabilityBaselineFile, JSON.stringify(applicabilityFixture()))]) {
+    const { ctx, calls } = makeCtx();
+    mutate(ctx);
+    ctx.delivered = () => assert.fail('fence started');
+    assert.equal(await drive(ctx), 1);
+    const state = loadState(ctx.stateDir);
+    assert.equal(state.refusalReason, 'throw:baseline_not_after_witness');
+    assert.equal(state.t0MonoMs, undefined, 'the window clock never started');
+    assert.ok(calls.every(line => line.startsWith('auth can-i')), 'only the read-only RBAC matrix ran');
+  }
+});
+
+test('R7 W0 names a baseline made stale before the fence and never fences', async () => {
+  const { ctx } = makeCtx();
+  const inner = ctx.call;
+  ctx.call = (args, input) => args[0] === 'exec' && String(input).includes('cutover-applicability-v1')
+    ? JSON.stringify({ ...applicabilityFixture(), durableCutoverApplicabilitySha256: 'c'.repeat(64) }) : inner(args, input);
+  ctx.delivered = () => assert.fail('fence started');
+  assert.equal(await drive(ctx), 1);
+  assert.equal(loadState(ctx.stateDir).refusalReason,
+    'throw:baseline_stale_before_fence: applicability_drift:durableCutoverApplicabilitySha256');
 });
