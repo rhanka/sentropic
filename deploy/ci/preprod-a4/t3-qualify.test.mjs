@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { qualify } from './t3-qualify.mjs';
 const config = { tier: 'restore',namespace: 'sentropic-restore-a4',qualificationStateDir: '/private/state',
-  endpoints: { appMe: 'https://app.restore-a4.test/api/v1/auth/me',idpMe: 'https://auth.restore-a4.test/api/v1/auth/me' } };
+  endpoints: { appMe: 'https://app.restore-a4.test/api/v1/me',idpMe: 'https://auth.restore-a4.test/api/v1/auth/me' } };
 config.postAuthWitnesses = ['app','idp'].map(name => ({ name,url: config.endpoints[`${name}Me`],
   cookieFile: `/private/${name}-cookie`,expectedUserId: 'qualified-user' }));
 function dependencies(patch = {}) {
@@ -29,4 +29,9 @@ test('qualification refuses a precommit recovery reaching authenticated service 
   const d = dependencies({ now: () => 290000,
     state: () => ({ step: 'DONE',t0MonoMs: 0,recoveryReason: 'injected',commitVerified: false }) });
   await assert.rejects(qualify('usable-auth',{ ...config,qualificationFaultMonoMs: 170000 },d),/recovery_overrun/);
+});
+test('qualification refuses the former product /me URL, which answers 404 on the candidate', async () => {
+  const former = structuredClone(config), d = dependencies();
+  former.endpoints.appMe = former.postAuthWitnesses[0].url = 'https://app.restore-a4.test/api/v1/auth/me';
+  await assert.rejects(qualify('usable-auth',former,d),/qualification_witness_binding/); assert.equal(d.receipts.length,0);
 });

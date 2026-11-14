@@ -155,7 +155,9 @@ test('RUN8 JSON response consumption remains inside the shared HTTP deadline', a
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const normal = ctx.probe;
-  const url = `http://127.0.0.1:${server.address().port}/health`;
+  // The product-origin probes move together to the real listener, on their qualified paths.
+  const origin = `http://127.0.0.1:${server.address().port}`, url = `${origin}/api/v1/health`;
+  for (const p of ctx.probes.filter(p => ['S-7', 'S-9a'].includes(p.id))) p.url = origin + new URL(p.url).pathname;
   ctx.probes.find(p => p.id === 'S-3').url = url;
   ctx.probe = (target, options) => target === url ? fetch(target, options) : normal(target, options);
   ctx.deadlineMs = monoMs() + 300;

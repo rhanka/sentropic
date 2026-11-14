@@ -8,9 +8,12 @@ export const observerProbes = (base = 'https://idp.test') => ({
   restrictedProbes: ['S-1','S-2'].map((id,i) => ({ id,url: `${base}/restricted${i}`,expect: 403 })),
   externalProbes: ['external-app','external-idp'].map(id => ({ id,url: `${base}/${id}`,expect: 200 })),
 });
+// Qualified paths on one synthetic origin; the trailing probe name keeps app and IdP replies apart.
 export function probeEndpoints(base = 'https://idp.test') {
-  return Object.fromEntries(['appHealth', 'idpConfig', 'idpJwks', 's6Authorize', 'appMe', 'idpMe', 'emailApp', 'emailIdp']
-    .map(name => [name, `${base}/${name}`]));
+  return Object.fromEntries(Object.entries({ appHealth: '/api/v1/health', idpConfig: '/.well-known/openid-configuration',
+    idpJwks: '/.well-known/jwks.json', s6Authorize: '/api/v1/auth/oauth/authorize', appMe: '/api/v1/me',
+    idpMe: '/api/v1/auth/me', emailApp: '/api/v1/auth/email/verify-request', emailIdp: '/api/v1/auth/email/verify-request' })
+    .map(([name, path]) => [name, `${base}${path}?probe=${name}`]));
 }
 export function probeReply(url, options = {}) {
   if (/restricted[01]$/.test(url)) return new Response('excluded',{ status: 403 });
