@@ -2,7 +2,7 @@
 ## Objective
 - [ ] Complete the reviewed applicability, preflight, rearm and restore contracts without cluster access.
 ## Scope / Guardrails
-- [x] Worktree `tmp/worktrees/t3-gaps`, branch `fix/t3-driver-gaps`, base `938709b08`.
+- [x] Worktree `tmp/worktrees/t3-gaps`, branch `fix/t3-driver-gaps`, rebased onto `origin/main` at `a627f54e5`; only BRANCH.md conflicted.
 - [x] Tests `ENV=test-t3-gaps`; API 9165, UI 5365, Maildev 1265, checked free.
 - [x] No cluster calls, secret values, Python, production or preproduction actions.
 ## Branch Scope Boundaries (MANDATORY)
@@ -47,6 +47,7 @@
 - [x] R5-M1: preflight requires both excluded-source 403 probes; finish-open executes them before acceptance and requires configured final external probes.
 - [x] Qualification usable-auth reads both real authenticated /me responses after reopening, checks expected user IDs and records monotonic elapsed/fault-to-auth against final state; health alone cannot qualify.
 - [x] Added qualification refusal tests (401, wrong identity, late completion, incomplete window), plus fixture SA/logical-verifier/TEM assertions.
+- [x] Added explicit production-URL refusal across restore observer/witness paths and human-emergency DONE/commitVerified=false assertion.
 - [x] Track single writer: conductor imports this branch plan and the final packet report; no concurrent `.track` writes.
 - [ ] Operational P-0.1..9 and M-1..8 remain unverified; owner exception OD-T3-7 remains pending.
 ## AI Flaky tests
