@@ -4,6 +4,7 @@ import { loadState, readRecoveryClaim, claimDead } from './t3-lib.mjs';
 import { classify } from './t3-window-driver.mjs';
 import { preflight } from './t3-preflight-static.mjs';
 import { digest } from './guards.mjs';
+import { gunzipSync } from 'node:zlib';
 
 export function assertRearmState(state, claim, nextOperation) {
   if (state?.step !== 'DONE' || state.commitVerified !== false || claim
@@ -47,9 +48,13 @@ export function rearm(ctx, nextConfig, read) {
   ctx.call(['create', '-f', '-'], JSON.stringify(pod));
   try {
     ctx.call(['wait', '--for=condition=Ready', `pod/${name}`, '--timeout=30s']);
-    const bytes = ctx.call(['exec', name, '--', 'sh', '-ec', 'tar czf - -C /run/cm-cutover . | base64']);
+    const bytes = ctx.call(['exec', name, '--', 'sh', '-ec',
+      'tar czf /tmp/t3-custody.tar.gz -C /run/cm-cutover . && tar tzf /tmp/t3-custody.tar.gz >/dev/null && base64 < /tmp/t3-custody.tar.gz']);
     const data = Buffer.from(bytes.replace(/\s/g, ''), 'base64');
-    if (!data.length) throw new Error('rearm_archive_empty');
+    const unpacked = gunzipSync(data); // CRC and complete transfer, before deletion.
+    if (unpacked.length < 1024 || unpacked.length % 512 !== 0) throw new Error('rearm_archive_invalid');
+    const remoteHash = ctx.call(['exec', name, '--', 'sha256sum', '/tmp/t3-custody.tar.gz']).trim().split(/\s/)[0];
+    if (remoteHash !== digest(data)) throw new Error('rearm_archive_transfer_mismatch');
     writeFileSync(join(archive, 'custody.tar.gz'), data, { mode: 0o600 });
     writeFileSync(join(archive, 'custody.sha256'), digest(data), { mode: 0o600 });
     ctx.call(['exec', name, '--', 'node', '-e', `const fs=require('node:fs');const p='/run/cm-cutover';
