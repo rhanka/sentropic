@@ -13,6 +13,50 @@ export A4_VERIFY_PHASE ?= internal
 export A4_EXECUTION_FILE
 export A4_EXECUTION_SHA256
 export A4_ACTION
+export A4_VERIFICATION_FILE
+export T3_ACTION T3_CONFIG T3_STATE_DIR T3_CHRONO_FILE
+# Every operator chronometer runs under the C numeric locale, whatever the caller exports:
+# a comma-decimal locale truncated /proc/uptime to whole seconds in rehearsal r8.
+k8s-t3-%: export override LC_ALL := C
+k8s-t3-%: export override LC_NUMERIC := C
+k8s-restore-a4-%: export override LC_ALL := C
+k8s-restore-a4-%: export override LC_NUMERIC := C
+k8s-preprod-a4-%: export override LC_ALL := C
+k8s-preprod-a4-%: export override LC_NUMERIC := C
+k8s-prod-a4-%: export override LC_ALL := C
+k8s-prod-a4-%: export override LC_NUMERIC := C
+.PHONY: k8s-t3-chrono
+k8s-t3-chrono: ## Summarize the protected chronometer file against the M-1 and M-4 thresholds
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/t3-chrono.mjs "$(or $(T3_CHRONO_FILE),$(T3_STATE_DIR)/t3-chrono.jsonl)"
+.PHONY: k8s-t3-qualify
+k8s-t3-qualify:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/t3-qualify.mjs "$(T3_ACTION)" "$(T3_CONFIG)"
+.PHONY: k8s-t3-maintenance k8s-t3-window k8s-t3-preview
+k8s-t3-maintenance:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/t3-maintenance.mjs "$(T3_ACTION)" "$(T3_CONFIG)" "$(T3_STATE_DIR)" $(if $(filter 0,$(A4_DRY_RUN)),--execute,)
+k8s-t3-window:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/t3-window-driver.mjs --config "$(T3_CONFIG)" --state-dir "$(T3_STATE_DIR)" $(if $(filter 0,$(A4_DRY_RUN)),,--dry-run)
+k8s-t3-preview:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/t3-preflight-static.mjs "$(T3_CONFIG)"
+k8s-restore-a4-action k8s-restore-a4-verify k8s-restore-a4-custody k8s-restore-a4-prepare: export override A4_TIER := restore
+.PHONY: k8s-restore-a4-action k8s-restore-a4-verify k8s-restore-a4-custody k8s-restore-a4-prepare
+k8s-restore-a4-action:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/execution.mjs
+k8s-restore-a4-verify:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/verify.mjs
+k8s-restore-a4-custody:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/ops.mjs
+k8s-restore-a4-prepare:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@node deploy/ci/preprod-a4/run.mjs
 # The tier is bound by the target name, never by a variable (A4_TIER cannot be overridden).
 k8s-preprod-a4-action k8s-preprod-a4-verify k8s-preprod-a4-custody k8s-preprod-a4-prepare: export override A4_TIER := preprod
 k8s-prod-a4-action k8s-prod-a4-verify k8s-prod-a4-custody k8s-prod-a4-prepare: export override A4_TIER := prod
@@ -33,11 +77,44 @@ k8s-preprod-a4-prepare: ## Prepare the owner-authorized A4 evidence; dry-run by 
 	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
 	@node deploy/ci/preprod-a4/run.mjs
 
-test-preprod-a4: ## Scoped operator, secret-composition and bundle preparation tests; no cluster
+.PHONY: test-t3-template-diff
+test-t3-template-diff: ## P-0.8: wired legacy prod templates equal the prod-a4 render; pinned kubectl, no cluster, no network
 	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test deploy/ci/preprod-a4/*.test.mjs
+	@set -eu; tools="$$(mktemp -d)"; id="$$(docker create $(IDP_SYNC_KUBECTL_IMAGE))"; \
+	trap 'docker rm "$$id" >/dev/null; rm -rf "$$tools"' EXIT; docker cp "$$id:/bin/kubectl" "$$tools/kubectl"; \
+	docker run --rm --network none -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" \
+		-v "$$tools/kubectl:/usr/local/bin/kubectl:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		node deploy/ci/preprod-a4/t3-template-diff.selftest.mjs
+
+A4_TEST_FILES ?= deploy/ci/preprod-a4/*.test.mjs
+test-preprod-a4: test-t3-template-diff ## Scoped operator, secret-composition and bundle preparation tests; no cluster
+	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
+	@set -eu; tools="$$(mktemp -d)"; id="$$(docker create $(IDP_SYNC_KUBECTL_IMAGE))"; \
+	trap 'docker rm "$$id" >/dev/null; rm -rf "$$tools"' EXIT; docker cp "$$id:/bin/kubectl" "$$tools/kubectl"; \
+	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e T3_REAL_KUBECTL=/opt/t3-kubectl/kubectl \
+		-v "$(CURDIR):/workspace:ro" -v "$$tools/kubectl:/opt/t3-kubectl/kubectl:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		node --test --test-concurrency=1 $(A4_TEST_FILES)
+
+# PostgreSQL bytes of the prod tenant, by digest: the server image the live pod runs and the client
+# image of the dump jobs (same pins as t3-fixture.mjs, compared in t3-maintenance.test.mjs). The SQL
+# gate runs on each and refuses any other version: the floating tag gave the fixture 17.12, whose
+# dumps the prod minor cannot restore.
+T3_PG_VERSION := 17.11
+T3_PG_IMAGES := postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+.PHONY: test-t3-sql
+test-t3-sql: ## Exercise applicability, dump and restore on the pinned prod PostgreSQL bytes; no network or cluster
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@set -eu; template="$$(mktemp)"; trap 'rm -f "$$template"' EXIT; \
+	docker run --rm --network none -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node deploy/ci/preprod-a4/t3-restore-fixture.mjs > "$$template"; \
+	for image in $(T3_PG_IMAGES); do echo "# $$image"; \
+		docker run --rm --network none --tmpfs /tmp:rw,exec -e T3_PG_VERSION=$(T3_PG_VERSION) -v "$$template:/restore.sql:ro" -v "$(CURDIR)/api/drizzle:/migrations:ro" -v "$(CURDIR)/deploy/ci/preprod-a4:/tests:ro" --entrypoint sh "$$image" /tests/t3-sql-test.sh; \
+	done
 
 A4_TEST_IMAGE ?= $(API_TOOL_IMAGE)
+.PHONY: test-t3-rehearsal-contract
+test-t3-rehearsal-contract:
+	@case "$(ENV)" in test-*) ;; *) exit 1;; esac
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e T3_ZOD_PACKAGE=/tmp/t3-contract/package.json -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -ec 'node scripts/ci/locked-tools.mjs --prefix /tmp/t3-contract --ignore-scripts --no-audit --no-fund @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 @types/node hono@4.10.7 jose@5.10.0 typescript@5.4.5 zod@4.6.7 >/dev/null; node deploy/ci/preprod-a4/t3-rehearsal-contract.selftest.mjs'
 .PHONY: test-preprod-a4-api
 test-preprod-a4-api: ## Run preparation tests in a cached API toolbox with container-only source overlay
 	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac

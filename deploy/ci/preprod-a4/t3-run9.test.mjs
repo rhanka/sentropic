@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { createServer } from 'node:http';
 import { finishOpen } from './t3-finish-open.mjs';
 import { buildProbes, monoMs, validateProbes } from './t3-lib.mjs';
-import { emailProbe, expectedSigningKid, probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, observerProbes, probeEndpoints, probeReply, verificationHeader, verificationSpec } from './t3-probe-fixture.mjs';
 
 test('RUN9 refuses a recipient without room for the attempt tag before fence', () => {
   const config = { endpoints: probeEndpoints(), expectedSigningKid,
@@ -15,7 +15,7 @@ for (const fault of ['lost-second-response', 'crash-before-accepted-save']) {
   test(`RUN9 shared email quota converges after ${fault} within the original window`, async () => {
     // Faithful custody semantics: normalized address, shared across hosts, 3/600s.
     const counts = new Map(), emitted = [];
-    let inject = true, persisted = { namespace: 'sentropic-preprod', middlewareSpec: {}, substate: 'POSTCOMMIT_RESTRICTED' };
+    let inject = true, persisted = { namespace: 'sentropic-preprod', middlewareSpec: verificationSpec, substate: 'POSTCOMMIT_RESTRICTED' };
     const server = createServer(async (req, res) => {
       let body = '';
       for await (const chunk of req) body += chunk;
@@ -35,10 +35,11 @@ for (const fault of ['lost-second-response', 'crash-before-accepted-save']) {
       res.end(await reply.text());
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-    const endpoints = probeEndpoints(`http://127.0.0.1:${server.address().port}`);
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const endpoints = probeEndpoints(base);
     const deadlineMs = monoMs() + 300_000;
-    const ctx = { ...buildProbes({ endpoints, emailProbe, expectedSigningKid }),
-      deadlineMs, images: { candidate: 'c', ui: 'u' }, probe: fetch,
+    const ctx = { ...buildProbes({ endpoints, ...observerProbes(base), emailProbe, expectedSigningKid }),
+      deadlineMs, images: { candidate: 'c', ui: 'u' }, probe: fetch, verification: verificationHeader,
       save: state => {
         if (inject && fault === 'crash-before-accepted-save' && state.substate === 'ACCEPTED') {
           inject = false; throw new Error('crash_before_save');
@@ -51,7 +52,7 @@ for (const fault of ['lost-second-response', 'crash-before-accepted-save']) {
           return JSON.stringify({ metadata: { generation: 1 }, status: { readyReplicas: 1, observedGeneration: 1 },
             spec: { replicas: 1, template: { spec: { containers: [{ name, image: name === 'ui' ? 'u' : 'c' }] } } } });
         }
-        if (args[1] === 'middleware') return '{"spec":{}}';
+        if (args[1] === 'middleware') return JSON.stringify({ spec: verificationSpec });
         if (args[1] === 'ingress') return JSON.stringify({ metadata: { annotations: {
           'traefik.ingress.kubernetes.io/router.middlewares': 'sentropic-preprod-a4-verification@kubernetescrd' } } });
         return '{}';
@@ -68,7 +69,7 @@ for (const fault of ['lost-second-response', 'crash-before-accepted-save']) {
       for (const email of emitted) assert.match(email, /^cutover\+t3-[a-f0-9]{24}@example\.test$/);
       for (const status of [200, 200, 200, 429]) {
         const reply = await fetch(endpoints.emailApp, { method: 'POST',
-          headers: { 'content-type': 'application/json' }, body: JSON.stringify(emailProbe) });
+          headers: { 'content-type': 'application/json', authorization: verificationHeader }, body: JSON.stringify(emailProbe) });
         assert.equal(reply.status, status, 'protection still limits repeated use of one address');
         await reply.body.cancel();
       }
