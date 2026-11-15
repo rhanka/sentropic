@@ -4,6 +4,10 @@
 
 - 0.36.0: add `gemini-4-carbon` (Gemini Cloud Code model mirroring Argon capabilities) and `claude-fable-5-2` (Anthropic claude-code model mirroring Fable 5.1). Fable 5.2 launch aliases serve Gemini 4 Carbon on the Cloud Code slot (owner mapping 2026-11-10) with GPT-6 Astra on the Codex slot; the mapped base/high/xhigh aliases carry no Muse candidate.
 
+## 0.38.1
+
+- Complete Gemini 4 Carbon (`gemini-4-carbon`) canonical effort routing targets (`gemini-4-carbon-low`, `gemini-4-carbon-medium`, `gemini-4-carbon-high`) on `gemini`/`cloud-code`, resolving per reasoning effort through the generic Cloud Code wire suffix (`gemini-4-carbon-low|medium|high`) while preserving `gemini-4-carbon` as the served model identifier and keeping serving-table defaults unchanged.
+
 ## 0.35.0
 
 - New `llm-mesh-enroll` bin (`./dist/node/cli/bin.js`, dedicated entry
