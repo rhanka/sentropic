@@ -38,7 +38,8 @@ export function kubectl(config, args, input, namespace) {
     result = spawnSync('kubectl', ['--kubeconfig', config, '--namespace', namespace,
       '--request-timeout=60s', ...args], { input, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, env: stripOwnedProxyEnv(process.env) });
   }
-  chrono(kubectlClass(args), started, { command: args.slice(0, 3).join(' '), status: result.status });
+  chrono(kubectlClass(args), started, { command: args.slice(0, 3).join(' '), status: result.status,
+    proxyConnects: kubectlProxyConnectCount(config) - before });
   if (result.status !== 0 || result.error) throw new Error('kubectl_failed');
   return result.stdout;
 }

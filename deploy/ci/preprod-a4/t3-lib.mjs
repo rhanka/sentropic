@@ -64,9 +64,9 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
       saveState(stateDir, cur);
     } catch { /* best-effort observability only */ }
   };
-  const finishResult = (effective, line, started, result) => {
+  const finishResult = (effective, line, started, result, proxyConnects = 0) => {
     track(result?.pid ?? null);
-    const timing = chrono(kubectlClass(effective), started, { command: effective.slice(0, 3).join(' '), status: result.status },
+    const timing = chrono(kubectlClass(effective), started, { command: effective.slice(0, 3).join(' '), status: result.status, proxyConnects },
       { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE, T3_STATE_DIR: stateDir ?? process.env.T3_STATE_DIR });
     if (probeReadOnly) print(`# ${timing.elapsedMs.toFixed(3)}ms ${line}`);
     if (result.error || result.status !== 0) {
@@ -103,7 +103,7 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
       res = supervisedSync('kubectl', p.argv, { input, encoding: 'utf8', env: stripOwnedProxyEnv(process.env),
         timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir);
     }
-    return finishResult(p.effective, p.line, p.started, res);
+    return finishResult(p.effective, p.line, p.started, res, kubectlProxyConnectCount(kubeconfig) - before);
   };
   call.async = async (args, input, overrideMs, opts = {}) => {
     const p = prepare(args, input);
@@ -118,8 +118,9 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
       res = await supervisedAsync('kubectl', p.argv, { input, env: stripOwnedProxyEnv(process.env),
         timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024, signal: opts.signal }, stateDir);
     }
-    return finishResult(p.effective, p.line, p.started, res);
+    return finishResult(p.effective, p.line, p.started, res, kubectlProxyConnectCount(kubeconfig) - before);
   };
+  call.kubectlProxyKubeconfig = kubeconfig;
   return call;
 }
 
