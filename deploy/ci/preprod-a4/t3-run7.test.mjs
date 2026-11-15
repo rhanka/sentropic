@@ -9,11 +9,10 @@ import { poll } from './t3-watchdog.mjs';
 import { buildProbes } from './t3-lib.mjs';
 import { drive } from './t3-window-driver.mjs';
 import { finishOpen } from './t3-finish-open.mjs';
-import { emailProbe, expectedSigningKid, probeReply } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, observerProbes, probeEndpoints, probeReply, verificationHeader, verificationSpec } from './t3-probe-fixture.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
-const endpoints = Object.fromEntries(['appHealth', 'idpConfig', 'idpJwks', 's6Authorize', 'appMe', 'idpMe', 'emailApp', 'emailIdp']
-  .map(name => [name, `https://idp.test/${name}`]));
+const endpoints = probeEndpoints();
 
 test('RUN7 missing mandatory probes refuses before the fence or any state write', async () => {
   const dir = mkdtempSync(join(tmpdir(), 't3-missing-probes-'));
@@ -27,9 +26,10 @@ for (const location of ['https://client.test/callback?error=invalid_scope',
   'https://client.test/callback?error=invalid_target', '/auth/login?error=invalid_scope', '',
   'https://evil.test/auth/login?continue=ok', '/auth/login?continue=ok']) {
   test(`RUN7 S-6 accepts only the error-free login redirect: ${location}`, async () => {
-    const state = { namespace: 'sentropic-preprod', middlewareSpec: {} };
+    const state = { namespace: 'sentropic-preprod', middlewareSpec: verificationSpec };
     const writes = [];
-    const ctx = { state, images: { candidate: 'c', ui: 'u' }, ...buildProbes({ endpoints, emailProbe, expectedSigningKid }), save: () => {},
+    const ctx = { state, images: { candidate: 'c', ui: 'u' }, ...buildProbes({ endpoints, ...observerProbes(), emailProbe, expectedSigningKid }), save: () => {},
+      verification: verificationHeader,
       call: args => {
         const cmd = args.join(' ');
         if (cmd.includes('get deployment')) {
@@ -37,7 +37,7 @@ for (const location of ['https://client.test/callback?error=invalid_scope',
           return JSON.stringify({ spec: { replicas: 1, template: { spec: { containers: [{ name, image: name === 'ui' ? 'u' : 'c' }] } } },
             status: { readyReplicas: 1, observedGeneration: 1 }, metadata: { generation: 1 } });
         }
-        if (cmd.includes('get middleware')) return '{"spec":{}}';
+        if (cmd.includes('get middleware')) return JSON.stringify({ spec: verificationSpec });
         if (cmd.includes('get ingress')) return JSON.stringify({ metadata: { annotations: {
           'traefik.ingress.kubernetes.io/router.middlewares': 'sentropic-preprod-a4-verification@kubernetescrd' } } });
         writes.push(cmd); return '{}';
@@ -75,7 +75,7 @@ for (const entry of ['emergency', 'classify', 'rollback', 'finish-open']) {
     const dir = mkdtempSync(join(tmpdir(), 't3-deadline-'));
     const config = join(dir, 'config.json');
     writeFileSync(config, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
-      endpoints, images: { candidate: 'c', ui: 'u' }, middlewareSpec: { ipAllowList: { sourceRange: ['1.1.1.1/32'] } } }));
+      endpoints, ...observerProbes(), images: { candidate: 'c', ui: 'u' }, middlewareSpec: verificationSpec }));
     saveState(dir, { step: 'W3', t0MonoMs: monoMs() - 299_500 });
     writeFileSync(join(dir, 'kubectl'), '#!/bin/sh\nsleep 0.3\necho \'{"items":[],"spec":{"suspend":true}}\'\n', { mode: 0o700 });
     const args = entry === 'emergency' ? ['sh', [`${here}t3-emergency.sh`, '--config', config, '--state-dir', dir]]
@@ -121,7 +121,7 @@ test('RUN7 watchdog kills a SIGSTOP recovery owner before its only writer restor
     assert.equal(readFileSync(join(dir, 'replicas-api'), 'utf8'), '0', 'API stopped before driver suspension');
     await new Promise(r => setTimeout(r, 1100));
     let writes = 0;
-    const code = await poll({ stateDir: dir, config: { revisions: {} }, print: () => {}, call: args => {
+    const code = await poll({ stateDir: dir, config: { templateDigests: {} }, print: () => {}, call: args => {
       let running = false;
       try { running = readFileSync(`/proc/${driver.pid}/stat`, 'utf8').split(') ')[1][0] !== 'Z'; } catch {}
       assert.equal(running, false, 'old writer must be dead before any recovery command');
