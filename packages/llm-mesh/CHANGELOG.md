@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 0.38.1: Cloud Code now announces the provider CLI identity (`antigravity/cli/1.5.9 … cl=1021519450 …`, shared `CLOUD_CODE_USER_AGENT` / `CLOUD_CODE_CLIENT_VERSION` for catalogue, enrollment metadata and generation). The previous `antigravity/cli/1.1.10` identity made Cloud Code hide `gemini-4-argon` (catalogue miss, 404 on generation) while agy on the same seat was served, which the gateway surfaced as a 503. A model missing from the account catalogue now fails with `statusCode: 404`, `code: 'model_not_found'` (unknown model) instead of an untyped error mapped to 503.
 - 0.36.0: add `gemini-4-carbon` (Gemini Cloud Code model mirroring Argon capabilities) and `claude-fable-5-2` (Anthropic claude-code model mirroring Fable 5.1). Fable 5.2 launch aliases serve Gemini 4 Carbon on the Cloud Code slot (owner mapping 2026-11-10) with GPT-6 Astra on the Codex slot; the mapped base/high/xhigh aliases carry no Muse candidate.
 
 ## 0.35.0
