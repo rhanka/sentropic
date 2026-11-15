@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ops } from './ops.mjs';
+import { custodianCpuLimit, ops, t3PriorityClass } from './ops.mjs';
 import { digest, privateInput } from './guards.mjs';
 import { approvedRequest, commit, image, sha } from './fixtures.mjs';
 import { approvalRef, compose, entrypoint } from '../../k8s/overlays/preprod/a4-runtime/launch.mjs';
@@ -27,10 +27,108 @@ test('should preserve the IdP entrypoint and wire both stopped consumers without
     assert(calls.some(args => args.join(' ') === `set image deployment/${name} ${name}=${image}`));
   }
   assert(!calls.some(args => args[0] === 'scale'));
+  // Every claim a wired template mounts exists before the first template patch.
+  const order = calls.map(args => args.join(' '));
+  for (const claim of ['custody-pvc.yaml', 'idp-session-pvc.yaml']) {
+    const applied = order.indexOf(`apply -f deploy/ci/preprod-a4/${claim}`);
+    assert(applied >= 0 && applied < order.findIndex(line => line.startsWith('patch deployment ')), claim);
+  }
   assert.throws(() => ops({ ...env, A4_OPERATION: 'wire', A4_DRY_RUN: '0' }, (_config, args) => {
     assert.equal(args[0], 'get');
     return JSON.stringify({ spec: { replicas: args[2] === 'auth-idp' ? 1 : 0 } });
   }, read), /consumer_not_quiesced/);
+});
+test('should pin the custodian to the tenant database node, where custody stays attached', () => {
+  const affinity = { podAffinity: { preferredDuringSchedulingIgnoredDuringExecution: [{ weight: 100, podAffinityTerm: {
+    topologyKey: 'kubernetes.io/hostname', labelSelector: { matchLabels: {
+      'app.kubernetes.io/name': 'sentropic', 'app.kubernetes.io/component': 'postgres' } } } }] } };
+  const spec = { affinity, containers: [{ name: 'api', command: ['node', '/run/cm-runtime/launch.mjs'], env: [], envFrom: [],
+    volumeMounts: [{ name: 'cm-cutover', mountPath: '/run/cm-cutover', readOnly: true }] }],
+  volumes: [{ name: 'cm-runtime', configMap: { name: 'sentropic-a4-runtime' } },
+    { name: 'cm-cutover', persistentVolumeClaim: { claimName: 'sentropic-a4-custody', readOnly: true } }] };
+  const read = path => path === env.A4_REQUEST_FILE ? JSON.stringify(request) : 'private';
+  const pod = (nodeName, phase = 'Running', metadata = {}) => ({ metadata, spec: { nodeName }, status: { phase } });
+  const custodian = (pods, template = spec, calls = []) => {
+    ops({ ...env, A4_OPERATION: 'custodian', A4_DRY_RUN: '0' }, (_config, args, input) => {
+      calls.push({ args, input });
+      return args[1] === 'deployment' ? JSON.stringify({ spec: { replicas: 0, template: { spec: template } } })
+        : args[1] === 'pods' ? JSON.stringify({ items: pods }) : '';
+    }, read);
+    return calls;
+  };
+  const calls = custodian([pod('node-b'), pod('node-a', 'Succeeded'), pod('node-c', 'Running', { deletionTimestamp: 'now' })]);
+  assert.deepEqual(calls[1].args, ['get', 'pods', '-l',
+    'app.kubernetes.io/name=sentropic,app.kubernetes.io/component=postgres', '-o', 'json']);
+  assert.deepEqual(JSON.parse(calls.find(call => call.args[0] === 'create').input).spec.affinity, { nodeAffinity: {
+    requiredDuringSchedulingIgnoredDuringExecution: { nodeSelectorTerms: [
+      { matchFields: [{ key: 'metadata.name', operator: 'In', values: ['node-b'] }] }] } } });
+  // No resolved single node, or no placement rule on the wired template: refused before any write.
+  for (const [pods, template, error] of [[[], spec, /custody_node_unresolved/],
+    [[pod('node-a'), pod('node-b')], spec, /custody_node_unresolved/], [[pod(undefined)], spec, /custody_node_unresolved/],
+    [[pod('node-a')], { ...spec, affinity: undefined }, /overlay_not_installed/]]) {
+    const refused = [];
+    assert.throws(() => custodian(pods, template, refused), error);
+    assert(!refused.some(call => call.args[0] === 'create'));
+  }
+});
+// The worker loads the API bundle on every invocation: under the API limit of 500m that load took
+// about 9 s (rehearsal r9). The custodian gets its own CPU limit; requests and other limits are inherited.
+test('should give the custodian its own CPU limit and inherit every other resource of the API template', () => {
+  const resources = { requests: { cpu: '100m', memory: '256Mi', 'ephemeral-storage': '64Mi' },
+    limits: { cpu: '500m', memory: '512Mi', 'ephemeral-storage': '1Gi' } };
+  const template = { affinity: { podAffinity: { preferredDuringSchedulingIgnoredDuringExecution: [{ weight: 100, podAffinityTerm: {
+    topologyKey: 'kubernetes.io/hostname', labelSelector: { matchLabels: { 'app.kubernetes.io/component': 'postgres' } } } }] } },
+  containers: [{ name: 'api', command: ['node', '/run/cm-runtime/launch.mjs'], env: [], envFrom: [], resources,
+    volumeMounts: [{ name: 'cm-cutover', mountPath: '/run/cm-cutover', readOnly: true }] }],
+  volumes: [{ name: 'cm-runtime', configMap: { name: 'sentropic-a4-runtime' } },
+    { name: 'cm-cutover', persistentVolumeClaim: { claimName: 'sentropic-a4-custody', readOnly: true } }] };
+  let created;
+  ops({ ...env, A4_OPERATION: 'custodian', A4_DRY_RUN: '0' }, (_config, args, input) => {
+    if (args[0] === 'create') created = JSON.parse(input);
+    return args[1] === 'deployment' ? JSON.stringify({ spec: { replicas: 0, template: { spec: template } } })
+      : args[1] === 'pods' ? JSON.stringify({ items: [{ metadata: {}, spec: { nodeName: 'node-a' }, status: { phase: 'Running' } }] }) : '';
+  }, path => path === env.A4_REQUEST_FILE ? JSON.stringify(request) : 'private');
+  assert.deepEqual(created.spec.containers[0].resources,
+    { requests: resources.requests, limits: { ...resources.limits, cpu: custodianCpuLimit } });
+  assert.equal(custodianCpuLimit, '1500m');
+  assert.deepEqual(template.containers[0].resources, resources);
+});
+// k8s gives the T3 window a PriorityClass (queue priority, no preemption). It only acts on pods that
+// name it: the three prod templates recreated in the window, through the wire, and the custodian.
+test('should name the T3 priority class on the prod wire and custodian, and on no preprod object', () => {
+  const template = { affinity: { podAffinity: { preferredDuringSchedulingIgnoredDuringExecution: [{ weight: 100,
+    podAffinityTerm: { topologyKey: 'kubernetes.io/hostname', labelSelector: { matchLabels: { 'app.kubernetes.io/component': 'postgres' } } } }] } },
+  containers: [{ name: 'api', command: ['node', '/run/cm-runtime/launch.mjs'], env: [], envFrom: [],
+    volumeMounts: [{ name: 'cm-cutover', mountPath: '/run/cm-cutover', readOnly: true }] }],
+  volumes: [{ name: 'cm-runtime', configMap: { name: 'sentropic-a4-runtime' } },
+    { name: 'cm-cutover', persistentVolumeClaim: { claimName: 'sentropic-a4-custody', readOnly: true } }] };
+  const run = (tier, operation, uiReplicas = 0) => {
+    const calls = [], prod = tier !== 'preprod';
+    const body = { ...request, format: `${prod ? 'prod' : 'preprod'}-a4-request/1`, namespace: prod ? 'sentropic' : 'sentropic-preprod',
+      emailCodeActiveKeyRef: `email-code-hmac:v1:${prod ? 'prod' : 'preprod'}:15c2f8b66073655a` };
+    ops({ ...env, A4_TIER: tier, A4_OPERATION: operation, A4_DRY_RUN: '0' }, (_config, args, input) => {
+      calls.push({ args, input });
+      if (args[0] === 'kustomize') return 'runtime';
+      return args[1] === 'deployment' ? JSON.stringify({ spec: { replicas: args[2] === 'ui' ? uiReplicas : 0,
+        template: { spec: template } } })
+        : args[1] === 'pods' ? JSON.stringify({ items: [{ metadata: {}, spec: { nodeName: 'node-a' }, status: { phase: 'Running' } }] }) : '';
+    }, path => path === env.A4_REQUEST_FILE ? JSON.stringify(body) : 'private');
+    return calls;
+  };
+  const priority = calls => calls.filter(({ args }) => args.includes('-p')).map(({ args }) => [args[2], JSON.parse(args.at(-1))]);
+  const patch = { spec: { template: { spec: { priorityClassName: 'sentropic-t3-critical' } } } };
+  for (const tier of ['prod', 'restore']) {
+    assert.deepEqual(priority(run(tier, 'wire')), ['api', 'auth-idp', 'ui'].map(name => [name, patch]), tier);
+    // The wire now patches the ui template: a ui that still runs would be rolled, so it is refused.
+    assert.throws(() => run(tier, 'wire', 1), /consumer_not_quiesced/);
+    const pod = JSON.parse(run(tier, 'custodian').find(({ args }) => args[0] === 'create').input);
+    assert.equal(pod.spec.priorityClassName, t3PriorityClass, tier);
+    // The isolated namespace opens the backup storage egress to this label only; prod has no such policy.
+    assert.equal(pod.metadata.labels.component, tier === 'restore' ? 'backup-download' : undefined);
+  }
+  assert.deepEqual(priority(run('preprod', 'wire', 1)), []);
+  const preprod = JSON.parse(run('preprod', 'custodian').find(({ args }) => args[0] === 'create').input);
+  assert.deepEqual([preprod.spec.priorityClassName, preprod.metadata.labels.component], [undefined, undefined]);
 });
 test('should refuse malformed keys, unexpected previous slots and incorrect active fingerprints', () => {
   const base = { CM_A4_NAMESPACE: 'sentropic-preprod', CM_IDENTITY_EMAIL_CODE_POLICY: 'hmac-sha256', CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF: approvalRef,

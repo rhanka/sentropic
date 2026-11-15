@@ -7,6 +7,7 @@ import { ops } from './ops.mjs';
 import { run } from './run.mjs';
 import { verify } from './verify.mjs';
 import { approvedRequest, cron, fixture, image, sha } from './fixtures.mjs';
+import { verificationHeader, verificationLine, verificationSpec } from './t3-probe-fixture.mjs';
 
 const prod = { ...approvedRequest, format: 'prod-a4-request/1', namespace: 'sentropic',
   emailCodeActiveKeyRef: 'email-code-hmac:v1:prod:0123456789abcdef' };
@@ -53,11 +54,11 @@ test('should wire prod from the shared A4 wiring component and create prod budge
     calls.push({ args, input, namespace }); return args[0] === 'get' ? JSON.stringify({ spec: { replicas: 0 } }) : 'runtime';
   }, read());
   const files = calls.flatMap(({ args }) => args.filter(arg => arg.startsWith('--patch-file=') || arg.endsWith('.yaml')));
-  assert.deepEqual(files, ['deploy/ci/preprod-a4/custody-pvc.yaml', '--patch-file=deploy/k8s/components/a4-wiring/patch-api-config.yaml',
+  assert.deepEqual(files, ['deploy/ci/preprod-a4/custody-pvc.yaml', 'deploy/ci/preprod-a4/idp-session-pvc.yaml', '--patch-file=deploy/k8s/components/a4-wiring/patch-api-config.yaml',
     '--patch-file=deploy/k8s/components/a4-wiring/patch-api-a4.yaml', '--patch-file=deploy/k8s/components/a4-wiring/patch-auth-idp-config.yaml',
     '--patch-file=deploy/k8s/components/a4-wiring/patch-auth-idp-a4.yaml']);
   assert(calls.every(({ namespace }) => namespace === 'sentropic'));
-  assert.doesNotMatch(readFileSync('deploy/ci/preprod-a4/custody-pvc.yaml', 'utf8'), /namespace:/);
+  for (const claim of ['custody-pvc.yaml', 'idp-session-pvc.yaml']) assert.doesNotMatch(readFileSync(`deploy/ci/preprod-a4/${claim}`, 'utf8'), /namespace:/);
   const budgets = { qualificationReceiptRef: 'track:prod-rehearsal-budgets' };
   for (const name of ['reservation', 'deletion', 'diagnostic', 'read', 'workspace', 'replicaExport', 'replicaValidation', 'replicaSync']) {
     budgets[name] = { deadlineMs: 1000, maxAttempts: 1 };
@@ -69,7 +70,7 @@ test('should wire prod from the shared A4 wiring component and create prod budge
 });
 
 test('should restrict prod traffic only with the prod verification middleware and probe the prod origin', async () => {
-  const spec = { ipAllowList: { sourceRange: ['192.0.2.10/32'] } };
+  const spec = verificationSpec;
   const annotate = middleware => ['sentropic', 'auth-idp'].map(name =>
     ['annotate', 'ingress', name, `traefik.ingress.kubernetes.io/router.middlewares=${middleware}@kubernetescrd`, '--overwrite']);
   const grant = (middleware) => ({ ...prod, format: 'prod-a4-execution/1', middlewareSpec: spec,
@@ -97,7 +98,8 @@ test('should restrict prod traffic only with the prod verification middleware an
   };
   const probed = [];
   const bytes = JSON.stringify(g);
-  await verify({ ...env, A4_VERIFY_PHASE: 'http', A4_EXECUTION_FILE: '/private/annex', A4_EXECUTION_SHA256: digest(bytes) },
-    call, read({ '/private/annex': bytes }), async url => { probed.push(url); return new Response('{}', { status: 200 }); });
-  assert.deepEqual(probed, ['https://sentropic.sent-tech.ca/api/v1/health']);
+  await verify({ ...env, A4_VERIFY_PHASE: 'http', A4_EXECUTION_FILE: '/private/annex', A4_EXECUTION_SHA256: digest(bytes),
+    A4_VERIFICATION_FILE: '/private/verification' }, call, read({ '/private/annex': bytes, '/private/verification': verificationLine }),
+  async (url, options) => { probed.push([url, options.headers.authorization]); return new Response('{}', { status: 200 }); });
+  assert.deepEqual(probed, [['https://sentropic.sent-tech.ca/api/v1/health', verificationHeader]]);
 });

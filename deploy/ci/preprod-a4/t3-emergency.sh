@@ -5,6 +5,8 @@
 # legacy boot on a committed database.
 # Usage: t3-emergency.sh --state-dir DIR --config FILE [--finish-open] [--dry-run]
 set -eu
+# Recovery figures never depend on the operator locale (a comma-decimal locale truncates seconds).
+LC_ALL=C LC_NUMERIC=C; export LC_ALL LC_NUMERIC
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 STATE_DIR=""
 CONFIG=""
@@ -49,7 +51,6 @@ if (!claimRecovery(dir, me)) { console.error('emergency refused: lost the lock r
 
 KUBECONFIG_FILE=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).kubeconfigFile)' "$CONFIG")
 NAMESPACE=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).namespace ?? "sentropic-preprod")' "$CONFIG")
-REVISIONS=$(node -e 'console.log(JSON.stringify(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).revisions ?? {}))' "$CONFIG")
 PRE_CM_DIR=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).preCmDir ?? "")' "$CONFIG")
 HEALTH_URL=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).endpoints?.appHealth ?? "")' "$CONFIG")
 JWKS_URL=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).endpoints?.idpJwks ?? "")' "$CONFIG")
@@ -80,5 +81,5 @@ else
   HEALTH_ARG=""
   [ -n "$HEALTH_URL" ] && [ -n "$JWKS_URL" ] && HEALTH_ARG="--health-url $HEALTH_URL --jwks-url $JWKS_URL"
   # shellcheck disable=SC2086
-  exec node "$HERE/t3-rollback.mjs" --kubeconfig-file "$KUBECONFIG_FILE" --namespace "$NAMESPACE" --revisions-json "$REVISIONS" $PRE_CM_ARG $HEALTH_ARG $DRYRUN
+  exec node "$HERE/t3-rollback.mjs" --config "$CONFIG" --kubeconfig-file "$KUBECONFIG_FILE" --namespace "$NAMESPACE" $PRE_CM_ARG $HEALTH_ARG $DRYRUN
 fi

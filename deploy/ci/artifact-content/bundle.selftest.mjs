@@ -11,20 +11,22 @@ const load = file => parseAllDocuments(readFileSync(file, 'utf8')).map(doc => {
 }).filter(Boolean);
 let passed = 0;
 const check = (name, fn) => { fn(); passed++; console.log(`PASS: ${name}`); };
-// Remove these preservation expectations at the A4 prod cutover.
+// T3 A4 prod cutover: candidate pins replace the live preservation pins.
 const prodPins = {
-  api: 'ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05',
-  'auth-idp': 'ghcr.io/rhanka/sentropic-api@sha256:4b78a02fc743ae85ce9f5819d5ebc6b49e02fca7b3161a87ea06afa401a3dc34',
-  'artifact-content': 'ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05',
-  ui: 'ghcr.io/rhanka/sentropic-ui@sha256:1f33dd0cde7733d2061f02ab1a5a14eb1a6276ce99001c697f5c697e2c0c9d4e',
+  api: 'ghcr.io/rhanka/sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce',
+  'auth-idp': 'ghcr.io/rhanka/sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce',
+  'artifact-content': 'ghcr.io/rhanka/sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce',
+  ui: 'ghcr.io/rhanka/sentropic-ui@sha256:18ad65c8b93c425b82647659dcf6d134c42a8e8112aa68fbbe0f115de87a749d',
 };
+// G7 stays suspended on its frozen live pin under a separate gate; the export image is not cut over.
+const prodG7ApiImage = 'ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05';
 const checkProdPins = objects => {
   for (const [name, expected] of Object.entries(prodPins)) {
     const containers = object(objects, 'Deployment', name).spec.template.spec.containers;
     assert.equal(containers.length, 1);
     assert.equal(containers[0].name, name);
     assert.doesNotMatch(containers[0].image, /:main(?:@|$)/);
-    assert.equal(containers[0].image, expected, `${name} must retain its live production digest without a mutable tag`);
+    assert.equal(containers[0].image, expected, `${name} must use its T3 candidate digest without a mutable tag`);
   }
 };
 const prod = load('/rendered/prod.yaml');
@@ -46,13 +48,13 @@ for (const [index, c] of allContainers(prod).entries()) for (const image of ['re
     assert.throws(() => checkImmutableImages(changed), /must use an immutable image/);
   });
 }
-check('prod: export uses the preserved API image and postgres keeps its live digest', () => {
+check('prod: export uses the frozen G7 API image and postgres keeps its live digest', () => {
   assert.equal(object(prod, 'CronJob', 'sentropic-idp-identity-export').spec.jobTemplate.spec.template.spec
-    .initContainers.find(c => c.name === 'export-replica').image, prodPins.api);
+    .initContainers.find(c => c.name === 'export-replica').image, prodG7ApiImage);
   assert.equal(object(prod, 'StatefulSet', 'postgres').spec.template.spec.containers[0].image,
     'postgres@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b');
 });
-check('prod: API, IdP and UI retain their live GHCR digests without mutable tags', () => checkProdPins(prod));
+check('prod: API, IdP and UI use their T3 candidate GHCR digests without mutable tags', () => checkProdPins(prod));
 for (const name of Object.keys(prodPins)) for (const tag of ['main', 'latest', 'abcdef', 'prod-20261106']) {
   check(`prod: reject ${name}:${tag}`, () => {
     const changed = structuredClone(prod);

@@ -4,7 +4,8 @@ import { existsSync, mkdtempSync, openSync, readFileSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { emailProbe, expectedSigningKid, probeEndpoints } from './t3-probe-fixture.mjs';
+import { templateDigest } from './t3-rollback.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, observerProbes, verificationFile, verificationSpec } from './t3-probe-fixture.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -30,39 +31,59 @@ for (const { mode, step, operation, substate, committed = false } of cases) {
   test(`RUN6 actual driver child watchdog eliminates TERM-resistant descendants: ${mode} ${operation ?? step} ${substate ?? ''}`, async () => {
     const dir = mkdtempSync(join(tmpdir(), 't3-process-'));
     const config = join(dir, 'config.json');
-    const http = spawn(process.execPath, [`${here}t3-probe-fixture.mjs`, join(dir, 'port')], { stdio: 'ignore' });
+    const http = spawn(process.execPath, [`${here}t3-probe-fixture.mjs`, join(dir, 'port'), join(dir, 'open')], { stdio: 'ignore' });
     await until(() => existsSync(join(dir, 'port')));
     const endpoints = probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`);
     writeFileSync(config, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
-      endpoints, emailProbe, expectedSigningKid, images: { candidate: 'c', ui: 'u' }, revisions: {}, request: { operationId: 'process-test' } }));
-    writeFileSync(join(dir, 'kubectl'), `#!/usr/bin/env node
-const fs = require('node:fs'), a = process.argv.join(' ');
-fs.appendFileSync('${dir}/commands', a+'\\n');
-if (a.includes('scale deployment/api --replicas=0')) {
-  fs.writeFileSync('${dir}/recovery', 'started');
-  for (const name of ['worker','grandchild']) {
-    try { const pid = fs.readFileSync('${dir}/'+name,'utf8');
-      if (fs.readFileSync('/proc/'+pid+'/stat','utf8').split(') ')[1][0] !== 'Z') process.exit(9);
-    } catch {}
-  }
-}
-const scale = a.match(/scale deployment\\/(\\S+) --replicas=(\\d)/);
-if (scale) fs.writeFileSync('${dir}/replicas-'+scale[1], scale[2]);
-if (a.includes('get pods')) console.log('{"items":[]}');
-else if (a.includes('get cronjob sentropic-idp-identity-export')) console.log('{"spec":{"suspend":true}}');
-else if (a.includes('get middleware')) console.log('{"spec":{"ipAllowList":{"sourceRange":["9.9.9.9/32"]}}}');
-else if (a.includes('get deployment')) {
-  const name = a.match(/get deployment (\\S+)/)[1];
-  let replicas = 0; try { replicas = Number(fs.readFileSync('${dir}/replicas-'+name)); } catch {}
-  console.log(JSON.stringify({spec:{replicas,template:{spec:{containers:[{name,image:name==='ui'?'u':'c'}]}}},
-    status:{readyReplicas:replicas,observedGeneration:1},metadata:{generation:1}}));
-}
-else if (a.includes('exec ')) {
-  const sql = fs.readFileSync(0,'utf8');
-  console.log(sql.includes('journal_present') ? '${committed ? 't' : 'f'}|0'
-    : sql.includes('identity_committed') ? '${committed ? 't' : 'f'}' : sql.includes('to_regclass(name)') ? 'relation|t' : 'f');
-}
-else console.log('{}');
+      witness: { url: `${new URL(endpoints.appHealth).origin}/legacyWitness`,cookie: 'synthetic-witness' },
+      ...observerProbes(new URL(endpoints.appHealth).origin), verificationCredentialFile: verificationFile(dir),
+      endpoints, emailProbe, expectedSigningKid, images: { candidate: 'c', ui: 'u' },
+      templateDigests: {
+        api: templateDigest({ spec: { containers: [{ name: 'api', image: 'c' }] } }),
+        'auth-idp': templateDigest({ spec: { containers: [{ name: 'auth-idp', image: 'c' }] } }),
+        ui: templateDigest({ spec: { containers: [{ name: 'ui', image: 'u' }] } }),
+      },
+      request: { operationId: 'process-test' } }));
+    // The double needs no Node runtime. Keep real driver/watchdog/process-group
+    // supervision while avoiding dozens of cold Node startups in each recovery.
+    writeFileSync(join(dir, 'kubectl'), `#!/bin/sh
+set -eu
+a="$*"
+printf '%s\\n' "$a" >> '${dir}/commands'
+case "$a" in *'scale deployment/api --replicas=0'*)
+  printf started > '${dir}/recovery'
+  for name in worker grandchild; do
+    if [ -r '${dir}/'"$name" ]; then
+      pid=$(cat '${dir}/'"$name")
+      if [ -r "/proc/$pid/stat" ]; then
+        state=$(sed 's/.*) //' "/proc/$pid/stat" | cut -c1)
+        [ "$state" = Z ] || exit 9
+      fi
+    fi
+  done;; esac
+case "$a" in *'scale deployment/'*)
+  name=\${a#*scale deployment/}; name=\${name%% *}
+  replicas=\${a##*--replicas=}
+  printf '%s' "$replicas" > '${dir}/replicas-'"$name";; esac
+case "$a" in *'delete middleware a4-verification'*) : > '${dir}/open';; esac
+case "$a" in
+  *'get pods'*) echo '{"items":[]}';;
+  *'get cronjob sentropic-idp-identity-export'*) echo '{"spec":{"suspend":true}}';;
+  *'get middleware'*) echo '{"spec":${JSON.stringify(verificationSpec)}}';;
+  *'get deployment '*)
+    name=\${a#*get deployment }; name=\${name%% *}
+    replicas=0; [ ! -r '${dir}/replicas-'"$name" ] || replicas=$(cat '${dir}/replicas-'"$name")
+    image=c; [ "$name" != ui ] || image=u
+    printf '{"spec":{"replicas":%s,"template":{"spec":{"containers":[{"name":"%s","image":"%s"}]}}},"status":{"readyReplicas":%s,"observedGeneration":1},"metadata":{"generation":1}}\\n' "$replicas" "$name" "$image" "$replicas";;
+  *'exec '*)
+    sql=$(cat)
+    case "$sql" in
+      *journal_present*) echo '${committed ? 't' : 'f'}|0';;
+      *identity_committed*) echo '${committed ? 't' : 'f'}';;
+      *'to_regclass(name)'*) echo 'relation|t';;
+      *) echo f;; esac;;
+  *) echo '{}';;
+esac
 `, { mode: 0o700 });
     const program = `
       import { spawn } from 'node:child_process';
@@ -71,7 +92,7 @@ else console.log('{}');
       import { delivered, drive } from '${here}t3-window-driver.mjs';
       const dir = ${JSON.stringify(dir)};
       if (!${JSON.stringify(operation ?? null)}) saveState(dir, { step:${JSON.stringify(step ?? 'W0')}, substate:${JSON.stringify(substate ?? null)},
-        middlewareSpec:{ipAllowList:{sourceRange:['9.9.9.9/32']}}, namespace:'sentropic-preprod', driverPid:process.pid, childPid:process.pid,
+        middlewareSpec:${JSON.stringify(verificationSpec)}, namespace:'sentropic-preprod', driverPid:process.pid, childPid:process.pid,
         heartbeatMonoMs:monoMs(), t0MonoMs:monoMs(), stepDeadlineMonoMs:monoMs()+${mode === 'emergency' ? 30000 : 500} });
       const w = spawn(process.execPath, ['${here}t3-watchdog.mjs','--state-dir',dir,'--config','${config}'],
         { detached:true, stdio:'ignore' });
@@ -97,6 +118,8 @@ else console.log('{}');
           { env: { ...process.env, PATH: `${dir}:${process.env.PATH}` }, encoding: 'utf8', timeout: 5000 });
         assert.equal(out.status, 0, `${out.error?.message ?? ''}\n${out.stderr}\n${out.stdout}`);
         assert.match(out.stdout, /rollback_ok/);
+        const restored = JSON.parse(readFileSync(join(dir,'t3-window-state.json')));
+        assert.equal(restored.step,'DONE'); assert.equal(restored.commitVerified,false);
       }
       await until(() => existsSync(join(dir, 'recovery')));
       for (const name of ['worker', 'grandchild']) {
