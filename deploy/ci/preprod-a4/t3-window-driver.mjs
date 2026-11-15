@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { supervisedSync } from './t3-processes.mjs';
+import { kubectlProxyEnv, stripOwnedProxyEnv } from './t3-kubectl-proxy.mjs';
 import { chrono, chronoSince, chronoStart } from './t3-chrono.mjs';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -90,7 +91,7 @@ export function delivered(ctx, script, env, timeoutMs) {
   const started = chronoStart();
   const chronoEnv = { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE ?? (ctx.stateDir ? `${ctx.stateDir}/t3-chrono.jsonl` : '') };
   const res = supervisedSync('node', [join(HERE, script)],
-    { env: { ...process.env, ...chronoEnv, ...env }, encoding: 'utf8', timeout: timeoutMs }, ctx.stateDir);
+    { env: { ...kubectlProxyEnv(process.env), ...chronoEnv, ...env }, encoding: 'utf8', timeout: timeoutMs }, ctx.stateDir);
   chrono('delivered', started, { script, operation: env.A4_OPERATION ?? env.A4_ACTION ?? env.A4_PHASE, status: res.status }, chronoEnv);
   try {
     if (ctx.stateDir) {
@@ -702,7 +703,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const watchdog = spawn(process.execPath, [join(HERE, 't3-watchdog.mjs'),
       '--state-dir', stateDir, '--config', configPath,
       ...(dryRun ? ['--dry-run'] : []), ...(probeReadOnly ? ['--probe-readonly'] : [])],
-      { detached: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+      { detached: true, env: stripOwnedProxyEnv(process.env), stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
     try {
       await new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('watchdog_arm_timeout')), 2000);

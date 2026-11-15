@@ -89,7 +89,11 @@ test-t3-template-diff: ## P-0.8: wired legacy prod templates equal the prod-a4 r
 A4_TEST_FILES ?= deploy/ci/preprod-a4/*.test.mjs
 test-preprod-a4: test-t3-template-diff ## Scoped operator, secret-composition and bundle preparation tests; no cluster
 	@case "$(ENV)" in test-*) ;; *) echo 'ERROR: use ENV=test-*'; exit 1;; esac
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test --test-concurrency=1 $(A4_TEST_FILES)
+	@set -eu; tools="$$(mktemp -d)"; id="$$(docker create $(IDP_SYNC_KUBECTL_IMAGE))"; \
+	trap 'docker rm "$$id" >/dev/null; rm -rf "$$tools"' EXIT; docker cp "$$id:/bin/kubectl" "$$tools/kubectl"; \
+	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e T3_REAL_KUBECTL=/opt/t3-kubectl/kubectl \
+		-v "$(CURDIR):/workspace:ro" -v "$$tools/kubectl:/opt/t3-kubectl/kubectl:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		node --test --test-concurrency=1 $(A4_TEST_FILES)
 
 # PostgreSQL bytes of the prod tenant, by digest: the server image the live pod runs and the client
 # image of the dump jobs (same pins as t3-fixture.mjs, compared in t3-maintenance.test.mjs). The SQL
