@@ -7,9 +7,19 @@
  * Consumers read `describeTargetRoutes()` instead of duplicating a route table.
  */
 
-import { describe, expect, it } from 'vitest';
+import {
+  CloudCodeRuntimeClient,
+  InMemoryRoutePlanner,
+  createDefaultProviderAdapters,
+  createLlmMesh,
+  createProviderRegistry,
+  type PlannedRouteTarget,
+} from '@sentropic/llm-mesh';
+import { CLOUD_CODE_STREAM_URL } from '@sentropic/llm-mesh/transport/cloud-code';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createGatewayRouter,
   createCanonicalTargetCandidatesResolver,
   createCanonicalTargetResolver,
   createStaticTargetResolver,
@@ -20,6 +30,7 @@ import {
   CANONICAL_TARGET_ROUTE_MAPPINGS,
   DEFAULT_TARGET_MAPPINGS,
   LAUNCH_ALIAS_TARGET_MAPPINGS,
+  stubGatewayConfig,
 } from '../src/index.js';
 
 const MERGED = { ...DEFAULT_TARGET_MAPPINGS, ...LAUNCH_ALIAS_TARGET_MAPPINGS };
@@ -433,4 +444,85 @@ describe('describeTargetRoutes (discovery)', () => {
 it('keeps default gateway re-export resolution exact', () => {
   expect(createCanonicalTargetCandidatesResolver()('claude-opus-5-5')).toEqual([]);
   expect(createCanonicalTargetResolver()('claude-opus-5')).toMatchObject({ providerId: 'anthropic', model: 'claude-opus-5' });
+});
+
+it('serves gemini-4-carbon and effort variants on Cloud Code with x-sentropic-served carrying gemini-4-carbon', async () => {
+  const fetchFn = vi.fn<typeof fetch>(async (url) => {
+    if (url.toString().includes('fetchAvailableModels')) {
+      const models = ['gemini-4-carbon-low', 'gemini-4-carbon-medium', 'gemini-4-carbon-high', 'gemini-4-carbon-tiered'];
+      return new Response(JSON.stringify({
+        models: Object.fromEntries(models.map((id) => [id, {}])),
+        tieredModelIds: { flash: [], flashLite: [], pro: ['gemini-4-carbon-tiered'] },
+        defaultAgentModelId: 'gemini-4-carbon-tiered', deprecatedModelIds: [],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    const sse = `data: ${JSON.stringify({
+      response: { candidates: [{ content: { parts: [{ text: 'pong' }] } }],
+        usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 2, totalTokenCount: 5 } },
+    })}\n\n`;
+    return new Response(sse, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  });
+  const runtime = createLlmMesh({
+    registry: createProviderRegistry(createDefaultProviderAdapters({ gemini: new CloudCodeRuntimeClient(fetchFn) })),
+  });
+  const auth = {
+    material: {
+      type: 'account-transport' as const, provider: 'cloud-code' as const,
+      accessToken: 'cloud-token', accountId: 'cloud-carbon',
+      metadata: { stableSessionId: 'sess-1', leaseId: 'lease-1', cloudaicompanionProject: 'proj-carbon' },
+    },
+    descriptor: { sourceType: 'account-transport' as const, accountProviderId: 'cloud-code' as const },
+  };
+  const planner = new InMemoryRoutePlanner({
+    directory: {
+      async listEligible() {
+        return [{ accountRef: 'cloud-carbon', diagnosticAccountRef: 'acct_carbon', ownerScopeRef: 't1:u1',
+          targetProviderId: 'gemini', transportProviderId: 'cloud-code', supportedModelIds: ['gemini-4-carbon'],
+          enrollmentCompletedAt: '2026-11-15T00:00:00Z', readiness: 'ready' as const, revision: 'r1' }];
+      },
+      async prepareAttempt({ target }: { target: PlannedRouteTarget }) {
+        const withRoute = <T extends Parameters<typeof runtime.generate>[0]>(req: T): T => ({
+          ...req, providerId: 'gemini', modelId: target.modelId, auth,
+          ...(target.effort ? { reasoning: { ...req.reasoning, effort: target.effort as never } } : {}),
+        });
+        return {
+          attemptRef: 'attempt-carbon',
+          generate: (req) => runtime.generate(withRoute(req)),
+          stream: (req) => runtime.stream(withRoute(req)),
+          async recordOutcome() {}, async markCommitted() {}, async complete() {}, async releaseCancelled() {},
+        };
+      },
+    },
+  });
+  const app = createGatewayRouter({
+    config: {
+      ...stubGatewayConfig,
+      callerAuth: {
+        async verify() {
+          return {
+            ok: true as const,
+            cost: { tenantId: 't1', principalId: 'u1', source: 'test', correlationId: 'req-1' },
+          };
+        },
+      },
+    },
+    routePlanner: planner,
+    routeMetering: { async settleRoute() {} },
+  });
+  for (const [model, wireModel, thinkingLevel] of [
+    ['gemini-4-carbon', 'gemini-4-carbon-tiered', undefined],
+    ['gemini-4-carbon-low', 'gemini-4-carbon-low', 'LOW'],
+    ['gemini-4-carbon-medium', 'gemini-4-carbon-medium', 'MEDIUM'],
+    ['gemini-4-carbon-high', 'gemini-4-carbon-high', 'HIGH'],
+  ] as const) {
+    const res = await app.request('https://gateway.test/v1/chat/completions', {
+      method: 'POST', headers: { authorization: 'Bearer ok', 'content-type': 'application/json' },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    expect(res.status, model).toBe(200);
+    expect(res.headers.get('x-sentropic-served'), model).toBe('provider=gemini; model=gemini-4-carbon; transport=cloud-code');
+    const sent = JSON.parse(String(fetchFn.mock.calls.filter(([u]) => u.toString() === CLOUD_CODE_STREAM_URL).at(-1)?.[1]?.body));
+    expect(sent.model, model).toBe(wireModel);
+    expect(sent.request.generationConfig.thinkingConfig, model).toEqual(thinkingLevel ? { thinkingLevel } : undefined);
+  }
 });

@@ -52,11 +52,11 @@
   - [x] Audit npm registry versions (`@sentropic/llm-mesh` local=`0.38.0`, registry=`0.38.0`; `@sentropic/llm-gateway` local=`0.23.2`, registry=`0.23.2`).
   - [x] Configure `ENV=test-llm-mesh-carbon` with `API_PORT=9178`, `UI_PORT=5378`, `MAILDEV_UI_PORT=1278` and declare `BR40-EX1..EX3`.
 
-- [ ] **Lot 1 — TDD effort target resolution & x-sentropic-served verification**
-  - [ ] Write failing tests first (RED) in `packages/llm-mesh/tests/routing-targets.test.ts`, `packages/llm-mesh/tests/service/local-account-transport-service.test.ts`, and `packages/llm-gateway/tests/target.test.ts` (`gemini-4-carbon` and `gemini-4-carbon-low|medium|high` on `gemini`/`cloud-code` with reasoning effort and `x-sentropic-served` served model id).
-  - [ ] Add `gemini-4-carbon-low`, `gemini-4-carbon-medium`, and `gemini-4-carbon-high` targets to `DEFAULT_TARGET_MAPPINGS` in `packages/llm-mesh/src/routing-targets.ts` without modifying serving-table defaults.
-  - [ ] Verify council generation stays clean via `make check-llm-model-equivalences API_PORT=9178 UI_PORT=5378 MAILDEV_UI_PORT=1278 ENV=test-llm-mesh-carbon`.
-  - [ ] Lot gate: `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make test-llm-mesh`, and `make test-llm-gateway` green on `ENV=test-llm-mesh-carbon`.
+- [x] **Lot 1 — TDD effort target resolution & x-sentropic-served verification**
+  - [x] Write failing tests first (RED) in `packages/llm-mesh/tests/routing-targets.test.ts`, `packages/llm-mesh/tests/service/local-account-transport-service.test.ts`, and `packages/llm-gateway/tests/target.test.ts` (`gemini-4-carbon` and `gemini-4-carbon-low|medium|high` on `gemini`/`cloud-code` with reasoning effort and `x-sentropic-served` served model id).
+  - [x] Add `gemini-4-carbon-low`, `gemini-4-carbon-medium`, and `gemini-4-carbon-high` targets to `DEFAULT_TARGET_MAPPINGS` in `packages/llm-mesh/src/routing-targets.ts` without modifying serving-table defaults.
+  - [x] Verify council generation stays clean via `make check-llm-model-equivalences API_PORT=9178 UI_PORT=5378 MAILDEV_UI_PORT=1278 ENV=test-llm-mesh-carbon`.
+  - [x] Lot gate: `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make test-llm-mesh`, and `make test-llm-gateway` green on `ENV=test-llm-mesh-carbon`.
 
 - [ ] **Lot 2 — Package version bump (0.38.1), changelog & companion tuple pins**
   - [ ] Bump `packages/llm-mesh/package.json` to `0.38.1`, update `packages/llm-mesh/tests/decision-public-surface.test.ts`, and add `## 0.38.1` entry in `packages/llm-mesh/CHANGELOG.md`.
