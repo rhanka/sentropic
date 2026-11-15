@@ -28,7 +28,7 @@ export function kubectl(config, args, input, namespace) {
   if (namespace !== 'sentropic-restore-a4' && !Object.values(tiers).some(tier => tier.namespace === namespace)) throw new Error('namespace_invalid');
   const started = chronoStart();
   const result = spawnSync('kubectl', ['--kubeconfig', config, '--namespace', namespace,
-    '--request-timeout=60s', ...args], { input, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, env: kubectlProxyEnv(process.env) });
+    '--request-timeout=60s', ...args], { input, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, env: kubectlProxyEnv(process.env, { kubeconfig: config }) });
   chrono(kubectlClass(args), started, { command: args.slice(0, 3).join(' '), status: result.status });
   if (result.status !== 0 || result.error) throw new Error('kubectl_failed');
   return result.stdout;
