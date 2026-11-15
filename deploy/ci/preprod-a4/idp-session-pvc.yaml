@@ -1,0 +1,11 @@
+# Claim of the IdP session authority, exactly as deploy/k8s/base/35-auth-idp.yaml renders it.
+# The fenced wire creates it because the wired IdP template mounts it before any overlay apply.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: auth-idp-session-authority
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
