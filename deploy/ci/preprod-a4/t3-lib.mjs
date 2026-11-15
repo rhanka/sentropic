@@ -1,4 +1,4 @@
-import { supervisedSync } from './t3-processes.mjs';
+import { supervisedAsync, supervisedSync } from './t3-processes.mjs';
 import { chrono, chronoStart, kubectlClass, monoMs } from './t3-chrono.mjs';
 export { monoMs };
 import { closeSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
@@ -62,18 +62,7 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
       saveState(stateDir, cur);
     } catch { /* best-effort observability only */ }
   };
-  return (args, input, overrideMs) => {
-    const effective = withExecStdin(args, input);
-    const line = `kubectl --namespace ${namespace} ${effective.join(' ')}`;
-    if (dryRun && (!probeReadOnly || !isReadOnly(args, execIsReadOnly))) {
-      print(dryRunLine(line, input !== undefined));
-      return '';
-    }
-    track(process.pid);
-    const started = chronoStart();
-    const result = supervisedSync('kubectl',
-      ['--kubeconfig', kubeconfig, '--namespace', namespace, '--request-timeout=60s', ...effective],
-      { input, encoding: 'utf8', timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir);
+  const finishResult = (effective, line, started, result) => {
     track(result?.pid ?? null);
     const timing = chrono(kubectlClass(effective), started, { command: effective.slice(0, 3).join(' '), status: result.status },
       { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE, T3_STATE_DIR: stateDir ?? process.env.T3_STATE_DIR });
@@ -85,6 +74,30 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
     }
     return result.stdout;
   };
+  const prepare = (args, input) => {
+    const effective = withExecStdin(args, input);
+    const line = `kubectl --namespace ${namespace} ${effective.join(' ')}`;
+    if (dryRun && (!probeReadOnly || !isReadOnly(args, execIsReadOnly))) {
+      print(dryRunLine(line, input !== undefined));
+      return null;
+    }
+    track(process.pid);
+    return { effective, line, started: chronoStart(),
+      argv: ['--kubeconfig', kubeconfig, '--namespace', namespace, '--request-timeout=60s', ...effective] };
+  };
+  const call = (args, input, overrideMs) => {
+    const p = prepare(args, input);
+    if (!p) return '';
+    return finishResult(p.effective, p.line, p.started, supervisedSync('kubectl', p.argv,
+      { input, encoding: 'utf8', timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir));
+  };
+  call.async = async (args, input, overrideMs, opts = {}) => {
+    const p = prepare(args, input);
+    if (!p) return '';
+    return finishResult(p.effective, p.line, p.started, await supervisedAsync('kubectl', p.argv,
+      { input, timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024, signal: opts.signal }, stateDir));
+  };
+  return call;
 }
 
 // Exact W8d probe URLs are operator inputs (qualified in P-0.4): the driver
