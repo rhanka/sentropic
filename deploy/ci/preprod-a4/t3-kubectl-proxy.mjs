@@ -8,47 +8,77 @@ const RETRYABLE_DIAL_CODES = new Set([
   'ETIMEDOUT', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ECONNRESET', 'EAI_AGAIN',
 ]);
 
+const EMPTY_KUBECONFIG = Object.freeze({ allowedTarget: '', hasHttpsServer: false, proxyUrl: '', host: '', port: 0 });
+const kubeconfigCache = new Map();
+
+function normalizeAuthority(rawHost, port) {
+  const hostPart = rawHost.includes(':') && !rawHost.startsWith('[') ? `[${rawHost}]` : rawHost;
+  if (!hostPart || !URL.canParse(`https://${hostPart}:${port}`)) return null;
+  const u = new URL(`https://${hostPart}:${port}`);
+  const host = u.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
+  return host ? { host, port, key: `${host}:${port}` } : null;
+}
+
 export function parseKubeconfigInfo(kubeconfigPath) {
-  const empty = { allowedTarget: '', hasHttpsServer: false, proxyUrl: '', host: '', port: 0 };
-  if (!kubeconfigPath) return empty;
+  if (!kubeconfigPath) return EMPTY_KUBECONFIG;
+  const cached = kubeconfigCache.get(kubeconfigPath);
+  if (cached) return cached;
   let text = '', server = '', proxyUrl = '';
-  try { text = readFileSync(kubeconfigPath, 'utf8'); } catch { return empty; }
+  try { text = readFileSync(kubeconfigPath, 'utf8'); } catch { kubeconfigCache.set(kubeconfigPath, EMPTY_KUBECONFIG); return EMPTY_KUBECONFIG; }
   if (text.trimStart().startsWith('{')) {
     try {
       const cfg = JSON.parse(text), ctxName = cfg['current-context'];
       const ctx = (cfg.contexts ?? []).find(c => c.name === ctxName)?.context ?? cfg.contexts?.[0]?.context;
       const cl = (cfg.clusters ?? []).find(c => c.name === ctx?.cluster)?.cluster ?? cfg.clusters?.[0]?.cluster;
       server = String(cl?.server ?? ''); proxyUrl = String(cl?.['proxy-url'] ?? '');
-    } catch { return empty; }
+    } catch { kubeconfigCache.set(kubeconfigPath, EMPTY_KUBECONFIG); return EMPTY_KUBECONFIG; }
   } else {
     const clusters = [], contexts = [], unquote = v => v.trim().replace(/^['"]|['"]$/g, '');
-    let section = '', cur = null, curIndent = -1, currentContext = '';
+    let section = '', cur = null, dashIndent = -1, propIndent = -1, subIndent = -1, inSub = false, currentContext = '';
     for (const raw of text.split(/\r?\n/)) {
       const line = raw.replace(/(?:^|\s)#.*$/, ''), trimmed = line.trim();
       if (!trimmed) continue;
       const indent = line.match(/^ */)[0].length;
       if (indent === 0 && !trimmed.startsWith('-')) {
-        cur = null; curIndent = -1;
+        cur = null; dashIndent = -1;
         const m = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(trimmed);
         section = m ? m[1] : '';
         if (section === 'current-context' && m[2]) currentContext = unquote(m[2]);
       } else if (section === 'clusters' || section === 'contexts') {
-        if (trimmed.startsWith('-') && (curIndent === -1 || indent === curIndent)) {
-          curIndent = indent; cur = {}; (section === 'clusters' ? clusters : contexts).push(cur);
+        const subKey = section === 'clusters' ? 'cluster' : 'context';
+        if (trimmed.startsWith('-') && (dashIndent === -1 || indent === dashIndent)) {
+          dashIndent = indent; cur = {}; (section === 'clusters' ? clusters : contexts).push(cur);
+          const rest = trimmed.slice(1), lead = rest.match(/^ */)[0].length;
+          propIndent = indent + 1 + lead; inSub = false; subIndent = -1;
+          const kv = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(rest.trim());
+          if (kv) { if (kv[1] === subKey && !kv[2]) inSub = true; else if (kv[1] === 'name' && kv[2]) cur.name = unquote(kv[2]); }
+        } else if (cur && !trimmed.startsWith('-')) {
+          const kv = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(trimmed);
+          if (!kv) continue;
+          if (indent === propIndent) {
+            inSub = kv[1] === subKey && !kv[2]; subIndent = -1;
+            if (kv[1] === 'name' && kv[2]) cur.name = unquote(kv[2]);
+          } else if (inSub && indent > propIndent && (subIndent === -1 || indent === subIndent)) {
+            subIndent = indent;
+            if (kv[2]) cur[kv[1]] = unquote(kv[2]);
+          }
         }
-        const kv = /^([A-Za-z0-9_-]+):\s*(.+)$/.exec(trimmed.startsWith('-') ? trimmed.slice(1).trim() : trimmed);
-        if (kv && cur) cur[kv[1]] = unquote(kv[2]);
       }
     }
     const clusterName = (contexts.find(c => c.name === currentContext) ?? contexts[0])?.cluster;
     const active = clusters.find(c => c.name === clusterName) ?? clusters[0];
     server = active?.server ?? ''; proxyUrl = active?.['proxy-url'] ?? '';
   }
-  if (!URL.canParse(server)) return empty;
-  const u = new URL(server);
-  if (u.protocol !== 'https:') return empty;
-  const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase(), port = u.port ? Number(u.port) : 443;
-  return { allowedTarget: `${host}:${port}`, hasHttpsServer: true, proxyUrl, host, port };
+  let parsed = EMPTY_KUBECONFIG;
+  if (URL.canParse(server)) {
+    const u = new URL(server);
+    if (u.protocol === 'https:') {
+      const norm = normalizeAuthority(u.hostname.replace(/^\[|\]$/g, ''), u.port ? Number(u.port) : 443);
+      if (norm) parsed = Object.freeze({ allowedTarget: norm.key, hasHttpsServer: true, proxyUrl, host: norm.host, port: norm.port });
+    }
+  }
+  kubeconfigCache.set(kubeconfigPath, parsed);
+  return parsed;
 }
 
 function parseAuthority(authority) {
@@ -56,7 +86,7 @@ function parseAuthority(authority) {
   if (!m) return null;
   const port = Number(m[2]);
   if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
-  return { host: m[1].replace(/^\[|\]$/g, ''), port };
+  return normalizeAuthority(m[1].replace(/^\[|\]$/g, ''), port);
 }
 
 function dialOnce(host, port, timeoutMs, dial) {
@@ -113,7 +143,7 @@ async function runProxyWorker(cfg) {
       const m = /^CONNECT ([^\s]+) HTTP\/1\.[01]$/.exec(firstLine);
       const target = m ? parseAuthority(m[1]) : null;
       if (!target) { client.end('HTTP/1.1 400 Bad Request\r\n\r\n'); return; }
-      if (!cfg.allowedTarget || `${target.host.toLowerCase()}:${target.port}` !== cfg.allowedTarget) {
+      if (!cfg.allowedTarget || target.key !== cfg.allowedTarget) {
         client.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
         return;
       }
@@ -171,6 +201,7 @@ function retireEntry(key, entry, markDown) {
 }
 
 function spawnProxyWorker(key, extra = {}) {
+  if (!extra.allowedTarget) throw new Error('kubectl_proxy_target_unresolved');
   const state = new Int32Array(new SharedArrayBuffer(16));
   const worker = new Worker(new URL(import.meta.url), {
     execArgv: [],
@@ -221,7 +252,7 @@ export function registerKubectlProxy({ kubeconfig = '', dialModule = null, dialS
 
 export async function resetKubectlProxyForTests() {
   const list = [...workers.entries()];
-  workers.clear(); downKeys.clear(); closedConnects.clear(); ownedUrls.clear(); fallbackDirectDepth = 0;
+  workers.clear(); downKeys.clear(); closedConnects.clear(); ownedUrls.clear(); kubeconfigCache.clear(); fallbackDirectDepth = 0;
   await Promise.all(list.map(([, e]) => { e.closing = true; return e.worker.terminate(); }));
 }
 
@@ -271,6 +302,7 @@ export function inspectDialProxyBypass(env = process.env, kubeconfig = '') {
     || (env.https_proxy && env.https_proxy !== env.T3_KUBECTL_PROXY_URL)) return 'https_proxy';
   const info = parseKubeconfigInfo(kubeconfig);
   if (info.proxyUrl) return 'kubeconfig_proxy_url';
+  if (!info.hasHttpsServer || !info.allowedTarget) return 'kubeconfig_unparsed';
   const rawNo = env.NO_PROXY || env.no_proxy || '';
   if (rawNo && info.hasHttpsServer) {
     for (const part of rawNo.split(',').map(s => s.trim()).filter(Boolean)) {
@@ -299,13 +331,14 @@ export function kubectlProxyEnv(env = process.env, opts = {}) {
   if (env.T3_KUBECTL_PROXY_DISABLE === '1') return stripOwnedProxyEnv(env);
   if (env.HTTPS_PROXY && env.HTTPS_PROXY !== env.T3_KUBECTL_PROXY_URL) return env;
   if (env.https_proxy && env.https_proxy !== env.T3_KUBECTL_PROXY_URL) return env;
-  const reqTarget = opts.kubeconfig ? parseKubeconfigInfo(opts.kubeconfig).allowedTarget : '';
+  const info = parseKubeconfigInfo(opts.kubeconfig);
+  if (info.proxyUrl || !info.allowedTarget) return stripOwnedProxyEnv(env);
   const reuse = Boolean(env.T3_KUBECTL_PROXY_URL && !ownedUrls.has(env.T3_KUBECTL_PROXY_URL)
-    && workers.size === 0 && (!reqTarget || env.T3_KUBECTL_PROXY_TARGET === reqTarget));
+    && workers.size === 0 && (!env.T3_KUBECTL_PROXY_TARGET || env.T3_KUBECTL_PROXY_TARGET === info.allowedTarget));
   try {
     if (isKubectlProxyDown(opts.kubeconfig)) throw new Error('kubectl_proxy_down');
     const { url, allowedTarget } = reuse
-      ? { url: env.T3_KUBECTL_PROXY_URL, allowedTarget: env.T3_KUBECTL_PROXY_TARGET ?? '' }
+      ? { url: env.T3_KUBECTL_PROXY_URL, allowedTarget: info.allowedTarget }
       : ensureProxyWorker(opts.kubeconfig);
     return { ...env, T3_KUBECTL_PROXY_URL: url, T3_KUBECTL_PROXY_TARGET: allowedTarget, HTTPS_PROXY: url, https_proxy: url };
   } catch (err) {
