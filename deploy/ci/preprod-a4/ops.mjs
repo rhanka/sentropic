@@ -1,10 +1,49 @@
 import { pathToFileURL } from 'node:url';
 import { assertDigestOutput, assertRequest, canonical, digest, kubectl, podName, privateInput, tierOf, wiring } from './guards.mjs';
+import { chrono, chronoStart } from './t3-chrono.mjs';
+
+// Exact W3 wire vectors. The P-0.8 judge (t3-template-diff.mjs) replays the deployment ones offline.
+// PriorityClass provided by the platform for the T3 window (queue priority, preemptionPolicy Never):
+// a pod recreated inside the window must not wait behind other tenants on full nodes. Prod tier only.
+// The wire sets the class on the three prod templates exactly as overlays/prod-a4 renders it, so the
+// later apply rolls nothing; the custodian carries it too.
+export const t3PriorityClass = 'sentropic-t3-critical';
+export const prioritized = tier => tier.tier === 'prod' ? ['api', 'auth-idp', 'ui'] : [];
+const priorityPatch = JSON.stringify({ spec: { template: { spec: { priorityClassName: t3PriorityClass } } } });
+export const wireCommands = (image, tier) => [...['api', 'auth-idp'].flatMap(name => [
+  ['patch', 'configmap', name, '--type=merge', `--patch-file=${wiring}/patch-${name}-config.yaml`],
+  ['patch', 'deployment', name, '--type=strategic', `--patch-file=${wiring}/patch-${name}-a4.yaml`],
+  ['set', 'image', `deployment/${name}`, `${name}=${image}`]]),
+...prioritized(tier).map(name => ['patch', 'deployment', name, '--type=merge', '-p', priorityPatch])];
+// Claims the wired templates mount. The wire creates them first: a consumer never starts
+// against a missing claim (the legacy prod namespace has no IdP session claim).
+export const wireVolumes = ['deploy/ci/preprod-a4/custody-pvc.yaml', 'deploy/ci/preprod-a4/idp-session-pvc.yaml'];
+
+// The custodian runs the checkpoint worker, and every invocation loads the whole API bundle: about
+// 9 s under the 500m limit inherited from the API container (rehearsal r9), against about 3 s once
+// the load is no longer throttled. Requests stay inherited, so scheduling is unchanged; the limit
+// fits the tenant quota because the custodian only exists while the API and frontals are stopped.
+export const custodianCpuLimit = '1500m';
+
+// Custody is ReadWriteOnce: a consumer scheduled on another node waits for a detach and a new
+// attach (21-23 s measured, against 4 s on the same node). The wired API template prefers the
+// tenant database node; the custodian is pinned to that node, so the volume stays where the API
+// will mount it. No fallback node: a second node would spend the W4 budget on the attach.
+function custodyNode(spec, k) {
+  const term = spec.affinity?.podAffinity?.preferredDuringSchedulingIgnoredDuringExecution?.[0]?.podAffinityTerm;
+  const labels = Object.entries(term?.labelSelector?.matchLabels ?? {});
+  if (term?.topologyKey !== 'kubernetes.io/hostname' || !labels.length) throw new Error('overlay_not_installed');
+  const pods = JSON.parse(k(['get', 'pods', '-l', labels.map(([key, value]) => `${key}=${value}`).join(','), '-o', 'json'])).items;
+  const nodes = new Set(pods.filter(pod => pod.status?.phase === 'Running' && !pod.metadata.deletionTimestamp)
+    .map(pod => pod.spec.nodeName));
+  if (nodes.size !== 1 || nodes.has(undefined)) throw new Error('custody_node_unresolved');
+  return [...nodes][0];
+}
 
 export function ops(env = process.env, call = kubectl, read = privateInput) {
   if (!['wire', 'budgets', 'custodian', 'stage'].includes(env.A4_OPERATION)
     || !['0', '1'].includes(env.A4_DRY_RUN ?? '1')) throw new Error('arguments_invalid');
-  const tier = tierOf(env), { namespace } = tier;
+  const tier = tierOf(env), namespace = tier.destinationNamespace ?? tier.namespace;
   read(env.A4_KUBECONFIG_FILE);
   const requestBytes = read(env.A4_REQUEST_FILE), request = JSON.parse(requestBytes);
   assertRequest(request, tier);
@@ -28,20 +67,16 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     return `budgetsSha256=${digest(bytes)}\n`;
   }
   if (env.A4_OPERATION === 'wire') {
-    for (const name of ['api', 'auth-idp']) {
+    for (const name of new Set(['api', 'auth-idp', ...prioritized(tier)])) {
       const deployment = JSON.parse(k(['get', 'deployment', name, '-o', 'json']));
       if (deployment.spec.replicas !== 0 || (deployment.status?.replicas ?? 0) !== 0) throw new Error('consumer_not_quiesced');
     }
-    const runtime = k(['kustomize', 'deploy/k8s/overlays/preprod/a4-runtime']);
+    const runtime = k(['kustomize', tier.destinationNamespace ? 'deploy/k8s/overlays/restore-a4/runtime'
+      : 'deploy/k8s/overlays/preprod/a4-runtime']);
     if (env.A4_DRY_RUN === '0') {
-      k(['apply', '-f', 'deploy/ci/preprod-a4/custody-pvc.yaml']);
+      for (const file of wireVolumes) k(['apply', '-f', file]);
       k(['apply', '-f', '-'], runtime);
-      k(['patch', 'configmap', 'api', '--type=merge', `--patch-file=${wiring}/patch-api-config.yaml`]);
-      k(['patch', 'deployment', 'api', '--type=strategic', `--patch-file=${wiring}/patch-api-a4.yaml`]);
-      k(['set', 'image', 'deployment/api', `api=${request.candidateImage}`]);
-      k(['patch', 'configmap', 'auth-idp', '--type=merge', `--patch-file=${wiring}/patch-auth-idp-config.yaml`]);
-      k(['patch', 'deployment', 'auth-idp', '--type=strategic', `--patch-file=${wiring}/patch-auth-idp-a4.yaml`]);
-      k(['set', 'image', 'deployment/auth-idp', `auth-idp=${request.candidateImage}`]);
+      for (const args of wireCommands(request.candidateImage, tier)) k(args);
     }
     return `runtimeManifestSha256=${digest(runtime)}\n`;
   }
@@ -49,6 +84,8 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     const api = JSON.parse(k(['get', 'deployment', 'api', '-o', 'json']));
     if (api.spec.replicas !== 0 || (api.status?.replicas ?? 0) !== 0) throw new Error('api_not_quiesced');
     const spec = structuredClone(api.spec.template.spec);
+    spec.affinity = { nodeAffinity: { requiredDuringSchedulingIgnoredDuringExecution: { nodeSelectorTerms: [
+      { matchFields: [{ key: 'metadata.name', operator: 'In', values: [custodyNode(spec, k)] }] }] } } };
     const container = spec.containers.find(container => container.name === 'api');
     if (!container || container.command?.join(' ') !== 'node /run/cm-runtime/launch.mjs'
       || !spec.volumes?.some(volume => volume.configMap?.name === 'sentropic-a4-runtime')
@@ -56,6 +93,7 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
       throw new Error('overlay_not_installed');
     }
     container.name = 'custodian'; container.image = request.candidateImage;
+    container.resources = { ...container.resources, limits: { ...container.resources?.limits, cpu: custodianCpuLimit } };
     container.command = ['node', '/run/cm-runtime/launch.mjs', '--custodian'];
     container.env = [...container.env, { name: 'A4_CANDIDATE_COMMIT', value: request.candidateCommit }];
     container.envFrom.push({ secretRef: { name: 'sentropic-pgbackup' } });
@@ -64,13 +102,20 @@ export function ops(env = process.env, call = kubectl, read = privateInput) {
     volume.persistentVolumeClaim.readOnly = false;
     container.volumeMounts.find(mount => mount.name === volume.name).readOnly = false;
     spec.containers = [container]; spec.initContainers = []; spec.restartPolicy = 'Never';
+    if (prioritized(tier).length) spec.priorityClassName = t3PriorityClass;
     spec.automountServiceAccountToken = false;
+    spec.terminationGracePeriodSeconds = 1;
     container.securityContext = { allowPrivilegeEscalation: false, capabilities: { drop: ['ALL'] }, readOnlyRootFilesystem: true };
+    // The isolated restore namespace opens the backup storage egress only to pods carrying this label.
     const pod = { apiVersion: 'v1', kind: 'Pod', metadata: { name: podName, namespace,
-      labels: { 'app.kubernetes.io/name': 'sentropic', 'app.kubernetes.io/component': 'pgbackup' } }, spec };
+      labels: { 'app.kubernetes.io/name': 'sentropic', 'app.kubernetes.io/component': 'pgbackup',
+        ...(tier.destinationNamespace ? { component: 'backup-download' } : {}) } }, spec };
     if (env.A4_DRY_RUN === '0') {
-      k(['create', '-f', '-'], JSON.stringify(pod));
-      k(['wait', '--for=condition=Ready', '--timeout=180s', `pod/${podName}`]);
+      const started = chronoStart();
+      try {
+        k(['create', '-f', '-'], JSON.stringify(pod));
+        k(['wait', '--for=condition=Ready', '--timeout=180s', `pod/${podName}`]);
+      } finally { chrono('custodyAttach', started); }
     }
     return `custodianManifestSha256=${digest(canonical(pod))}\n`;
   }

@@ -5,14 +5,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { COMMIT_CUTOFF_MS, FINISH_CUTOFF_MS, RBAC_COUNT, TOTAL_BUDGET_MS,
-  buildProbes, checkRbac, classify, drive, loadSql, splitSql } from './t3-window-driver.mjs';
-import { loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
-import { preCommitRollback } from './t3-rollback.mjs';
+  STEP_CUTOFFS, awaitWritersGone, buildProbes, checkRbac, checkVerification, classify, drive, loadSql, splitSql } from './t3-window-driver.mjs';
+import { isReadOnly, loadState, monoMs, saveState, withExecStdin } from './t3-lib.mjs';
+import { preCommitRollback, templateDigest } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
-import { emailProbe, expectedSigningKid, probeEndpoints, probeReply } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, probeReply, observerProbes,
+  verificationFile, verificationHeader, verificationSecret, verificationSpec } from './t3-probe-fixture.mjs';
+import { applicabilityFixture } from './t3-applicability.test.mjs';
+import { witnessBinding } from './t3-applicability.mjs';
+import { rehearsalFixture } from './t3-rehearsal-fixture.mjs';
+import { PROD_POSTGRES_IMAGE, PROD_POSTGRES_TOOL_IMAGE } from './t3-fixture.mjs';
 
-const CANDIDATE = 'ghcr.io/rhanka/sentropic-api@sha256:candidate';
+const CANDIDATE = `ghcr.io/rhanka/sentropic-api@sha256:${'e'.repeat(64)}`;
 const UI_IMAGE = 'ghcr.io/rhanka/sentropic-ui@sha256:ui';
+const LEGACY_API = `ghcr.io/rhanka/sentropic-api@sha256:${'1'.repeat(64)}`;
+const LEGACY_UI = 'ghcr.io/rhanka/sentropic-ui@sha256:legacy-ui';
 
 // Fault-injectable kubectl double: canned reads, recorded writes.
 export function makeCall(scenario = {}) {
@@ -20,13 +27,20 @@ export function makeCall(scenario = {}) {
   const liveSecrets = { ...(scenario.secretData ?? {}) };
   const createdSecrets = {};
   let frontalPollsLeft = scenario.frontalTerminating ?? 0;
-  const scaled = {};
+  let writerPollsLeft = scenario.writersTerminating ?? 0;
+  const scaled = {}, boundary = { open: false };
+  const legacyTemplates = {
+    api: scenario.legacyTemplates?.api ?? scenario.api?.spec?.template ?? { spec: { containers: [{ name: 'api', image: LEGACY_API }] } },
+    'auth-idp': scenario.legacyTemplates?.['auth-idp'] ?? scenario['auth-idp']?.spec?.template ?? { spec: { containers: [{ name: 'auth-idp', image: LEGACY_API }] } },
+    ui: scenario.legacyTemplates?.ui ?? scenario.ui?.spec?.template ?? { spec: { containers: [{ name: 'ui', image: LEGACY_UI }] } },
+  };
   const readyDeploy = (name, image) => ({ spec: { replicas: 1,
     template: { spec: { containers: [{ name, image }] } } },
     status: { replicas: 1, readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } });
   const call = (args, input) => {
     calls.push(args.join(' ') + (args[0] === 'exec' ? ` <<<${String(input ?? '').split('\n')[0].slice(0, 120)}` : ''));
     const cmd = args.join(' ');
+    if (cmd.startsWith('delete middleware a4-verification')) boundary.open = true;
     const patchPayload = () => {
       const at = args.indexOf('-p');
       if (at !== -1) return JSON.parse(args[at + 1]);
@@ -57,7 +71,11 @@ export function makeCall(scenario = {}) {
     }
     if (cmd.startsWith('auth can-i')) return 'yes';
     if (args[0] === 'exec') {
+      if (args.some(a => String(a).includes('/run/cm-cutover/snapshot.json'))) return JSON.stringify(scenario.snapshot);
       const statement = String(input ?? '');
+      if (statement.includes('AS acl_sha256')) return 'a'.repeat(64);
+      if (statement.includes('SHOW server_version')) return `${scenario.postgresVersion ?? '17.11'}\n`;
+      if (statement.includes('cutover-applicability-v1')) return JSON.stringify(applicabilityFixture());
       if (statement.includes('journal_present')) return scenario.journal === false ? 'f|0\n' : `t|${scenario.locks ?? 0}\n`;
       if (statement.includes('identity_committed')) return scenario.committed ? 't\n' : 'f\n';
       if (statement.includes('asset_column_present')) return 'f\n';
@@ -69,6 +87,14 @@ export function makeCall(scenario = {}) {
     }
     if (cmd.startsWith('get pods -l app.kubernetes.io/name=sentropic')) {
       const component = cmd.match(/component=([a-z-]+)/)?.[1];
+      if (component === 'api' && scenario.writersUnreadableOnce) {
+        scenario.writersUnreadableOnce = false;
+        throw new Error('kubectl_failed: get pods -l');
+      }
+      if (component === 'api' && writerPollsLeft > 0) {
+        writerPollsLeft -= 1;
+        return JSON.stringify({ items: [{ metadata: { name: 'api-legacy', deletionTimestamp: 'now' }, status: { phase: 'Running' } }] });
+      }
       if ((component === 'ui' || component === 'auth-idp') && frontalPollsLeft > 0) {
         frontalPollsLeft -= 1;
         return JSON.stringify({ items: [{ metadata: { name: 'terminating' } }] });
@@ -90,31 +116,69 @@ export function makeCall(scenario = {}) {
     if (cmd.startsWith('get secret ') && cmd.endsWith(' -o json')) {
       const name = cmd.split(' ')[2];
       if (name === 'sentropic-api') return JSON.stringify({ data: liveSecrets });
+      if (name === 'a4-verification-auth') {
+        if (scenario.verificationSecret === false) throw new Error('kubectl_failed: get secret a4-verification-auth');
+        return JSON.stringify(scenario.verificationSecret ?? verificationSecret);
+      }
       if (createdSecrets[name]) return JSON.stringify({ data: createdSecrets[name].data ?? {} });
     }
     if (cmd === 'get middleware a4-verification -o json') {
       if (scenario.middlewareSpec === false) return '{}';
-      return JSON.stringify({ spec: scenario.middlewareSpec ?? { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } });
+      return JSON.stringify({ spec: scenario.middlewareSpec ?? verificationSpec });
+    }
+    if (cmd === 'create --dry-run=server -o json -f -') {
+      if (scenario.priorityAdmitted === false) throw new Error('kubectl_failed: create --dry-run=server -o');
+      const pod = JSON.parse(input);
+      scenario.priorityProbePod = pod;
+      return JSON.stringify(scenario.priorityAdmitted ?? pod);
+    }
+    if (cmd === 'get pod postgres-0 -o json') {
+      return JSON.stringify({ status: { containerStatuses: [{ name: 'postgres',
+        imageID: scenario.postgresImageID ?? `docker.io/library/${PROD_POSTGRES_IMAGE}` }] } });
+    }
+    if (cmd === 'get cronjob pgbackup -o json') {
+      return JSON.stringify({ spec: { suspend: true, jobTemplate: { spec: { template: { spec: {
+        initContainers: [{ name: 'dump', image: scenario.pgbackupImage ?? PROD_POSTGRES_TOOL_IMAGE }] } } } } } });
     }
     if (cmd === 'get cronjob sentropic-idp-identity-export -o json') {
-      return JSON.stringify({ spec: { suspend: scenario.exportSuspended !== false } });
+      const initContainers = scenario.identityExportInitContainers ?? [
+        { name: scenario.identityExportInitName ?? 'export-sql', image: scenario.identityExportImage ?? PROD_POSTGRES_TOOL_IMAGE },
+      ];
+      return JSON.stringify({ spec: { suspend: scenario.exportSuspended !== false, jobTemplate: { spec: { template: { spec: { initContainers } } } } } });
     }
     if (cmd.startsWith('patch cronjob sentropic-idp-identity-export')) {
       scenario.exportSuspended = true;
       return '';
     }
+    if (cmd.startsWith('get replicasets -l app.kubernetes.io/name=sentropic')) {
+      const component = cmd.match(/component=([a-z-]+)/)?.[1];
+      return JSON.stringify(scenario.replicasets?.[component] ?? { items: [{
+        metadata: { annotations: { 'deployment.kubernetes.io/revision': '4' },
+          ownerReferences: [{ kind: 'Deployment', name: component }] },
+        spec: { template: { metadata: { labels: { 'pod-template-hash': 'legacy' } }, ...legacyTemplates[component] } },
+      }] });
+    }
+    if (cmd.startsWith('rollout undo deployment/')) {
+      const deploy = args[2].split('/')[1];
+      if (scenario[deploy]) {
+        scenario[deploy] = { ...scenario[deploy], spec: { ...scenario[deploy].spec, template: legacyTemplates[deploy] } };
+      }
+      return '';
+    }
     if (cmd === 'get deployment api -o json') {
       return JSON.stringify(scenario.api ?? (scaled.api
         ? readyDeploy('api', CANDIDATE)
-        : { spec: { replicas: 0 }, status: { replicas: 0 } }));
+        : { spec: { replicas: 0, template: legacyTemplates.api }, status: { replicas: 0 } }));
     }
     if (cmd === 'get deployment ui -o json') {
-      return JSON.stringify(scaled.ui ? readyDeploy('ui', UI_IMAGE) : { spec: { replicas: 0 }, status: { replicas: 0 } });
+      return JSON.stringify(scenario.ui ?? (scaled.ui
+        ? readyDeploy('ui', UI_IMAGE)
+        : { spec: { replicas: 0, template: legacyTemplates.ui }, status: { replicas: 0 } }));
     }
     if (cmd === 'get deployment auth-idp -o json') {
-      return JSON.stringify(scaled['auth-idp']
+      return JSON.stringify(scenario['auth-idp'] ?? (scaled['auth-idp']
         ? readyDeploy('auth-idp', CANDIDATE)
-        : { spec: { replicas: 0 }, status: { replicas: 0 } });
+        : { spec: { replicas: 0, template: legacyTemplates['auth-idp'] }, status: { replicas: 0 } }));
     }
     if (/^scale deployment\/(\S+) --replicas=1$/.test(cmd)) {
       scaled[cmd.split('/')[1].split(' ')[0]] = true;
@@ -123,11 +187,12 @@ export function makeCall(scenario = {}) {
     if (/^get (deployment|middleware|ingress|cronjob) /.test(cmd)) return '{}';
     return '';
   };
-  return { call, calls };
+  return { call, calls, boundary, legacyTemplates };
 }
 
 export function makeCtx(overrides = {}) {
-  const { call, calls } = makeCall(overrides.scenario ?? {});
+  const scenario = overrides.scenario ?? {};
+  const { call, calls, boundary, legacyTemplates } = makeCall(scenario);
   const printed = [];
   // Default rotation key material: every full drive poses the W3 keys, so
   // tests get files unless they opt out (rotationKeyFiles: undefined).
@@ -140,23 +205,39 @@ export function makeCtx(overrides = {}) {
   writeFileSync(defaultKeys.apiJwtSecretFile, 'test-jwt-secret');
   writeFileSync(defaultKeys.secretEncryptionKeyFile, 'test-enc-key');
   writeFileSync(defaultKeys.idpSessionJwtFile, 'test-idp-jwt');
+  const applicabilityBaselineFile = join(keyDir, 'baseline.json');
+  const witness = { url: 'https://idp.test/legacyWitness', cookie: 'synthetic-witness' };
+  const witnessSalt = 'e'.repeat(64);
+  const baselineBytes = JSON.stringify({ ...applicabilityFixture(), witnessSalt, witnessSha256: witnessBinding(witness, witnessSalt) });
+  writeFileSync(applicabilityBaselineFile, baselineBytes);
+  const tier = overrides.tier ?? overrides.config?.tier ?? 'preprod';
+  const namespace = overrides.config?.namespace ?? 'sentropic-preprod';
+  const qualification = rehearsalFixture(keyDir,{ candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE,operationId: 'test',namespace },baselineBytes);
+  scenario.snapshot = qualification.snapshot;
   return {
     ctx: {
       call, printed,
       print: line => printed.push(line),
-      dryRun: false, probeReadOnly: false, tier: 'preprod', postgresPod: 'postgres-0',
+      dryRun: false, probeReadOnly: false, tier, postgresPod: 'postgres-0',
       stateDir: mkdtempSync(join(tmpdir(), 't3-test-')),
-      probe: async (url, options) => probeReply(url, options),
+      probe: async (url, options) => probeReply(url, options, boundary.open),
+      verification: verificationHeader,
       delivered: async () => '',
       config: {
         kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod', tier: 'preprod',
-        candidateImage: CANDIDATE, revisions: { api: '12', 'auth-idp': '9', ui: '4' },
+        candidateImage: CANDIDATE,
+        templateDigests: Object.fromEntries(['api', 'auth-idp', 'ui'].map(n => [n, templateDigest(legacyTemplates[n])])),
         images: { candidate: CANDIDATE, ui: UI_IMAGE },
         endpoints: probeEndpoints(),
+        ...observerProbes(),
         emailProbe,
         expectedSigningKid,
-        request: { format: 'x', operationId: 'test' },
+        request: { format: 'x', operationId: 'test',candidateCommit: 'b'.repeat(40),candidateImage: CANDIDATE },
         rotationKeyFiles: defaultKeys,
+        applicabilityBaselineFile,
+        verificationCredentialFile: verificationFile(keyDir),
+        witness,
+        ...qualification,
         ...(overrides.config ?? {}),
       },
     },
@@ -168,11 +249,64 @@ test('RBAC matrix covers exactly 50 couples', () => {
   assert.equal(RBAC_COUNT, 50);
 });
 
+test('W5 allows session-only source drift and stages the fenced seven-hash receipt before checkpoint', async () => {
+  const { ctx } = makeCtx({ scenario: { committed: true } });
+  let staged;
+  ctx.delivered = (_ctx,_script,env) => {
+    if (env.A4_STAGE === 'rehearsal') staged = JSON.parse(readFileSync(env.A4_REHEARSAL_FILE,'utf8'));
+    if (env.A4_PHASE === 'checkpoint') {
+      assert.equal(staged.sourceContentSha256,'b'.repeat(64));
+      for (const key of ['schemaSha256','journalSha256','remoteSnapshotDigest','mappingSha256','identityAssetSha256','connectorAssetSha256']) {
+        assert.equal(staged[key],'a'.repeat(64));
+      }
+    }
+    return '';
+  };
+  await drive(ctx);
+  assert.ok(staged);
+  assert.equal(JSON.parse(readFileSync(ctx.config.rehearsalFile)).sourceContentSha256,'a'.repeat(64));
+});
+
+test('W5 ACL drift refuses before staging rehearsal or starting the candidate', async () => {
+  const { ctx } = makeCtx();
+  const original = ctx.call,operations = [];
+  ctx.call = (args,input) => String(input).includes('AS acl_sha256') ? 'c'.repeat(64) : original(args,input);
+  ctx.delivered = (_ctx,_script,env) => { operations.push(env.A4_STAGE ?? env.A4_ACTION ?? env.A4_PHASE); return ''; };
+  assert.equal(await drive(ctx),3);
+  assert.ok(!operations.includes('rehearsal'));
+  assert.ok(!operations.includes('start-api'));
+});
+
+test('armed CLI hands a T+174s fault directly to one full-budget watchdog recovery', async () => {
+  const { recover } = await import('./t3-window-driver.mjs');
+  const { ctx, calls } = makeCtx({ scenario: { committed: true } });
+  const t0 = monoMs()-174000;
+  let clock = t0+174000;
+  const state = { step: 'W8',t0MonoMs: t0,heartbeatMonoMs: monoMs(),namespace: 'sentropic-preprod',
+    driverPid: process.pid,childPid: process.pid,watchdogPid: process.pid,watchdogArmed: true,
+    middlewareSpec: verificationSpec };
+  const before = calls.length;
+  assert.equal(await recover(ctx,state,'transient_at_174s'),5);
+  assert.equal(calls.length,before,'no first recovery attempt or API stop in the driver');
+  const original = ctx.call;
+  let classified = false,restarted = false,finished = false;
+  ctx.now = () => clock;
+  ctx.call = (...args) => {
+    if (!classified && args[0].join(' ') === 'scale deployment/api --replicas=0') { clock+=36000; classified=true; }
+    if (!restarted && args[0].join(' ') === 'scale deployment/api --replicas=1') { clock+=28000; restarted=true; }
+    return original(...args);
+  };
+  const probe = ctx.probe;
+  ctx.probe = (...args) => { if (!finished) { clock+=55000; finished=true; } return probe(...args); };
+  assert.equal(await poll(ctx),4);
+  assert.equal(loadState(ctx.stateDir).step,'DONE');
+  assert.ok(clock <= t0+300000,'one 119-second composite recovery fits the original window');
+});
+
 test('RUN6 budgets and staged PVC inputs precede every consumer', async () => {
   const { ctx } = makeCtx();
   const seen = [];
   ctx.config.remoteFile = '/private/remote.json';
-  ctx.config.rehearsalFile = '/private/rehearsal.json';
   ctx.delivered = (c, script, env) => {
     const op = env.A4_ACTION ?? env.A4_OPERATION ?? env.A4_PHASE;
     if (op === 'custodian') assert.ok(seen.includes('budgets'), 'mandatory budgets Secret exists');
@@ -180,7 +314,8 @@ test('RUN6 budgets and staged PVC inputs precede every consumer', async () => {
     if (op === 'checkpoint') assert.ok(seen.includes('stage:rehearsal'), 'rehearsal on PVC');
     if (op === 'stage') {
       assert.equal(env.A4_REMOTE_FILE, ctx.config.remoteFile);
-      assert.equal(env.A4_REHEARSAL_FILE, ctx.config.rehearsalFile);
+      assert.equal(env.A4_REHEARSAL_FILE, env.A4_STAGE === 'rehearsal'
+        ? `${ctx.stateDir}/fenced-rehearsal.json` : ctx.config.rehearsalFile);
     }
     seen.push(op === 'stage' ? `${op}:${env.A4_STAGE}` : op);
     return '';
@@ -208,7 +343,7 @@ test('RUN6 recovery stays inside the original fence deadline on both branches', 
     const t0 = monoMs() - 175_000;
     ctx.timeoutRef = {};
     await recover(ctx, { step: 'W8', t0MonoMs: t0, namespace: ctx.config.namespace,
-      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } }, 'run6-late-fault');
+      middlewareSpec: verificationSpec }, 'run6-late-fault');
     assert.ok(ctx.timeoutRef.deadlineMs <= t0 + TOTAL_BUDGET_MS, 'no recovery deadline extension');
     assert.equal(loadState(ctx.stateDir).step, 'DONE');
   }
@@ -240,7 +375,7 @@ test('RUN6 complete recovery paths consume the remaining fence budget through re
       return original(args, input);
     };
     const state = { step: 'W8', t0MonoMs: 0, namespace: ctx.config.namespace,
-      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+      middlewareSpec: verificationSpec };
     assert.equal(await recover(ctx, state, 'late-fault'), committed ? 4 : 3);
     assert.equal(loadState(ctx.stateDir).step, 'DONE');
     assert.ok(calls.includes('delete middleware a4-verification --ignore-not-found=true'));
@@ -370,14 +505,14 @@ test('post-rollback verification fails the rollback on bad health', async () => 
   const { ctx } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' } } });
   const badProbe = async () => ({ status: 500, body: { cancel: async () => {} } });
   await assert.rejects(
-    preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, probe: badProbe,
+    preCommitRollback({ call: ctx.call, templateDigests: ctx.config.templateDigests, probe: badProbe,
       healthUrl: 'https://app/health', jwksUrl: 'https://idp/jwks' }),
     /rollback_verify_failed/);
 });
 
 test('rollback forces identity-export suspension and still reopens ingress', async () => {
   const { ctx, calls } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' }, exportSuspended: false } });
-  const out = await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions });
+  const out = await preCommitRollback({ call: ctx.call, templateDigests: ctx.config.templateDigests });
   assert.deepEqual(out.removedKeys.sort(), ['JWT_SECRET', 'SECRET_ENCRYPTION_KEY']);
   const joined = calls.join('\n');
   assert.ok(joined.includes('patch cronjob sentropic-idp-identity-export'), 'guard forced back on');
@@ -387,7 +522,7 @@ test('rollback forces identity-export suspension and still reopens ingress', asy
 
 test('pre-commit rollback removes both rotated keys before any scale-up', async () => {
   const { ctx, calls } = makeCtx({ scenario: { secretData: { JWT_SECRET: 'eA==', SECRET_ENCRYPTION_KEY: 'eQ==' } } });
-  const out = await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions });
+  const out = await preCommitRollback({ call: ctx.call, templateDigests: ctx.config.templateDigests });
   assert.deepEqual(out.removedKeys.sort(), ['JWT_SECRET', 'SECRET_ENCRYPTION_KEY']);
   const joined = calls.join('\n');
   assert.match(joined, /patch secret sentropic-api/);
@@ -464,7 +599,7 @@ test('delivered timeouts never outlive the step cutoff', async () => {
 });
 
 test('probe URLs are operator inputs, never invented by the driver', () => {
-  assert.deepEqual(buildProbes({}), { probes: [], externalProbes: [] });
+  assert.deepEqual(buildProbes({}), { probes: [], externalProbes: [],restrictedProbes: [] });
   const { probes } = buildProbes({ endpoints: {
     appHealth: 'https://app/health', idpConfig: 'https://idp/.well-known/openid-configuration',
     idpJwks: 'https://idp/jwks.json', appMe: 'https://app/me', idpMe: 'https://idp/me',
@@ -493,7 +628,7 @@ test('kill after commit converges forward with no legacy boot', async () => {
   const readyApi = { spec: { replicas: 1, template: { spec: { containers: [{ name: 'api', image: CANDIDATE }] } } },
     status: { readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } };
   const { ctx, calls } = makeCtx({
-    config: { middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } },
+    config: { middlewareSpec: verificationSpec },
     scenario: { journal: true, committed: true, api: readyApi, deployReady: true },
   });
   let n = 0;
@@ -509,7 +644,7 @@ test('kill after commit converges forward with no legacy boot', async () => {
 
 test('committed but not ready api restarts without legacy boot (U2b)', async () => {
   const { ctx, calls } = makeCtx({
-    config: { middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } },
+    config: { middlewareSpec: verificationSpec },
     scenario: { journal: true, committed: true },
   });
   let n = 0;
@@ -568,16 +703,16 @@ test('watchdog enforces the total 300 s budget on a live driver', async () => {
 test('finishOpen patches an existing middleware instead of recreating it', async () => {
   const readyApi = { spec: { replicas: 1, template: { spec: { containers: [{ name: 'api', image: CANDIDATE }] } } },
     status: { replicas: 1, readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } };
-  const { ctx, calls } = makeCtx({ config: { middlewareSpec: { ipAllowList: { sourceRange: ['1.2.3.4/32'] } } },
-    scenario: { api: readyApi } });
+  const { ctx, calls } = makeCtx({ config: { middlewareSpec: verificationSpec },
+    scenario: { api: readyApi, middlewareSpec: { basicAuth: { secret: 'a4-verification-auth' } } } });
   const { finishOpen } = await import('./t3-finish-open.mjs');
   const state = { namespace: 'sentropic-preprod', middlewareSpec: ctx.config.middlewareSpec };
   const images = { candidate: CANDIDATE, ui: UI_IMAGE };
-  await finishOpen({ call: ctx.call, probe: ctx.probe, state,
-    save: next => Object.assign(state, next), images, probes: buildProbes(ctx.config).probes, externalProbes: [] });
+  await finishOpen({ call: ctx.call, probe: ctx.probe, verification: ctx.verification, state,
+    save: next => Object.assign(state, next), images, ...buildProbes(ctx.config) });
   const joined = calls.join('\n');
   assert.ok(!joined.includes('create -f -'), 'no create over the existing middleware (no AlreadyExists)');
-  assert.ok(joined.includes('patch middleware a4-verification'), 'middleware patched in place');
+  assert.ok(joined.includes('patch middleware a4-verification --type=json'), 'middleware patched in place via JSON Patch');
   assert.equal(state.substate, 'TWO_HOSTS_OPEN');
 });
 
@@ -587,7 +722,7 @@ test('finishOpen resumes from ACCEPTED without replaying probes', async () => {
   const { ctx } = makeCtx({ scenario: { api: readyApi } });
   const { finishOpen } = await import('./t3-finish-open.mjs');
   const state = { namespace: 'sentropic-preprod', substate: 'ACCEPTED',
-    middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+    middlewareSpec: verificationSpec };
   const images = { candidate: CANDIDATE, ui: UI_IMAGE };
   const neverProbe = async () => { throw new Error('probe replayed after ACCEPTED'); };
   await finishOpen({ call: ctx.call, probe: neverProbe, state,
@@ -601,7 +736,7 @@ test('finishOpen resumes from BACKUP_RESUMED and ONE_HOST_OPEN', async () => {
     const { ctx } = makeCtx();
     const { finishOpen } = await import('./t3-finish-open.mjs');
     const state = { namespace: 'sentropic-preprod', substate,
-      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+      middlewareSpec: verificationSpec };
     const images = { candidate: CANDIDATE, ui: UI_IMAGE };
     await finishOpen({ call: ctx.call, probe: ctx.probe, state,
       save: next => Object.assign(state, next), images, probes: [], externalProbes: [] });
@@ -623,7 +758,7 @@ test('reconcile waits for terminating frontals instead of failing', async () => 
   const { ctx, calls } = makeCtx({ scenario: { frontalTerminating: 3 } });
   const { reconcileRestrictSafe } = await import('./t3-finish-open.mjs');
   const state = { namespace: 'sentropic-preprod',
-    middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+    middlewareSpec: verificationSpec };
   reconcileRestrictSafe({ call: ctx.call, dryRun: false }, state);
   const joined = calls.join('\n');
   assert.ok(joined.includes('scale deployment/ui --replicas=0'), 'frontal fenced first');
@@ -633,7 +768,7 @@ test('reconcile waits for terminating frontals instead of failing', async () => 
 test('dry-run prints the key-removal patch even with no keys present', async () => {
   const { ctx, calls } = makeCtx({ scenario: { secretData: {} } });
   const { preCommitRollback } = await import('./t3-rollback.mjs');
-  await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, dryRun: true });
+  await preCommitRollback({ call: ctx.call, templateDigests: ctx.config.templateDigests, dryRun: true });
   assert.ok(calls.some(c => c.startsWith('patch secret sentropic-api')), 'patch printed in dry-run');
 });
 
@@ -734,7 +869,7 @@ test('emergency command prints the rollback plan in dry-run', () => {
   const dir = mkdtempSync(join(tmpdir(), 't3-emg-'));
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube',
-    namespace: 'sentropic-preprod', revisions: { api: '12', 'auth-idp': '9', ui: '4' } }));
+    namespace: 'sentropic-preprod', templateDigests: { api: 'a'.repeat(64), 'auth-idp': 'b'.repeat(64), ui: 'c'.repeat(64) } }));
   const out = execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
     '--state-dir', dir, '--config', cfg, '--dry-run'], { encoding: 'utf8' });
   assert.match(out, /scale deployment\/api --replicas=0/);
@@ -744,7 +879,7 @@ test('emergency preview preserves another live recovery lock', () => {
   const dir = mkdtempSync(join(tmpdir(), 't3-emg-'));
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube',
-    namespace: 'sentropic-preprod', revisions: {} }));
+    namespace: 'sentropic-preprod', templateDigests: {} }));
   writeFileSync(join(dir, 't3-recovering.lock'), `other-pid-${process.pid}|${monoMs()}`);
   const before = readFileSync(join(dir, 't3-recovering.lock'), 'utf8');
   execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
@@ -756,7 +891,7 @@ test('emergency classifies after stopping api and passes pre-cm-dir to rollback'
   const dir = mkdtempSync(join(tmpdir(), 't3-emg-'));
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
-    revisions: { api: '12', 'auth-idp': '9', ui: '4' }, preCmDir: '/pre-cm' }));
+    templateDigests: { api: 'a'.repeat(64), 'auth-idp': 'b'.repeat(64), ui: 'c'.repeat(64) }, preCmDir: '/pre-cm' }));
   const out = execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
     '--state-dir', dir, '--config', cfg, '--dry-run'], { encoding: 'utf8' });
   const stopped = out.indexOf('would stop automation');
@@ -777,7 +912,7 @@ S="$FAKE_KUBECTL_STATE"
 A="$*"
 case "$A" in
   *"get pods"*) echo '{"items":[]}';;
-  *"get middleware"*) echo '{"spec":{"ipAllowList":{"sourceRange":["9.9.9.9/32"]}}}';;
+  *"get middleware"*) echo '{"spec":{"basicAuth":{"secret":"a4-verification-auth","removeHeader":true}}}';;
   *"get deployment api "*) if [ -f "$S/scaled-api" ]; then echo '{"spec":{"replicas":1,"template":{"spec":{"containers":[{"name":"api","image":"candidate-img"}]}}},"status":{"replicas":1,"readyReplicas":1,"observedGeneration":7},"metadata":{"generation":7}}'; else echo '{"spec":{"replicas":0},"status":{"replicas":0}}'; fi;;
   *"get deployment "*) N=$(printf '%s' "$A" | sed 's/.*get deployment \\([^ ]*\\).*/\\1/'); if [ -f "$S/scaled-$N" ]; then IMG="candidate-img"; [ "$N" = "ui" ] && IMG="ui-img"; echo "{\\"spec\\":{\\"replicas\\":1,\\"template\\":{\\"spec\\":{\\"containers\\":[{\\"name\\":\\"$N\\",\\"image\\":\\"$IMG\\"}]}}},\\"status\\":{\\"replicas\\":1,\\"readyReplicas\\":1,\\"observedGeneration\\":7},\\"metadata\\":{\\"generation\\":7}}"; else echo '{"spec":{"replicas":0},"status":{"replicas":0}}'; fi;;
   *"scale deployment/"*"--replicas=1") N=$(printf '%s' "$A" | sed 's/.*scale deployment\\/\\([^ ]*\\).*/\\1/'); touch "$S/scaled-$N";;
@@ -800,8 +935,9 @@ esac
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ kubeconfigFile: '/private/kube', namespace: 'sentropic-preprod',
     endpoints: probeEndpoints(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`), emailProbe, expectedSigningKid,
-    revisions: { api: '12', 'auth-idp': '9', ui: '4' }, candidateImage: 'candidate-img',
-    middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } },
+    ...observerProbes(`http://127.0.0.1:${readFileSync(join(dir, 'port'), 'utf8')}`),
+    templateDigests: { api: 'a'.repeat(64), 'auth-idp': 'b'.repeat(64), ui: 'c'.repeat(64) }, candidateImage: 'candidate-img',
+    middlewareSpec: verificationSpec, verificationCredentialFile: verificationFile(dir),
     images: { candidate: 'candidate-img', ui: 'ui-img' } }));
   let out;
   try { out = execFileSync('sh', [join('deploy/ci/preprod-a4/t3-emergency.sh'),
@@ -846,14 +982,14 @@ test('recover waits for advisory locks to drain instead of failing fast', async 
 
 test('finishOpen restarts a stopped api before opening traffic', async () => {
   const { ctx, calls } = makeCtx({
-    config: { middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } },
+    config: { middlewareSpec: verificationSpec },
     scenario: {},
   });
   const { finishOpen } = await import('./t3-finish-open.mjs');
-  const state = { namespace: 'sentropic-preprod', middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+  const state = { namespace: 'sentropic-preprod', middlewareSpec: verificationSpec };
   const images = { candidate: CANDIDATE, ui: UI_IMAGE };
-  await finishOpen({ call: ctx.call, probe: ctx.probe, state,
-    save: next => Object.assign(state, next), images, probes: buildProbes(ctx.config).probes, externalProbes: [] });
+  await finishOpen({ call: ctx.call, probe: ctx.probe, verification: ctx.verification, state,
+    save: next => Object.assign(state, next), images, ...buildProbes(ctx.config) });
   const joined = calls.join('\n');
   assert.ok(joined.includes('scale deployment/api --replicas=1'), 'stopped api restarted before open');
   assert.equal(state.substate, 'TWO_HOSTS_OPEN');
@@ -901,7 +1037,7 @@ test('RUN5 recover marks DONE so the watchdog never runs a second recovery', asy
     // Real recoveries carry the W1 middleware record; the post-commit branch
     // converges through it, so the test state must too.
     const state = { step: 'W7b', namespace: 'sentropic-preprod', t0MonoMs: monoMs(),
-      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+      middlewareSpec: verificationSpec };
     const code = await recover(ctx, state, 'run5-double-recover');
     assert.ok(code === 3 || code === 4, `recover exit, committed=${committed}`);
     const saved = loadState(ctx.stateDir);
@@ -915,7 +1051,7 @@ test('RUN5 finishOpen restarts a stopped api from ACCEPTED/BACKUP_RESUMED/ONE_HO
     const { ctx, calls } = makeCtx({ scenario: {} });
     const { finishOpen } = await import('./t3-finish-open.mjs');
     const state = { namespace: 'sentropic-preprod', substate,
-      middlewareSpec: { ipAllowList: { sourceRange: ['9.9.9.9/32'] } } };
+      middlewareSpec: verificationSpec };
     const images = { candidate: CANDIDATE, ui: UI_IMAGE };
     await finishOpen({ call: ctx.call, probe: ctx.probe, state,
       save: next => Object.assign(state, next), images, probes: [], externalProbes: [] });
@@ -955,4 +1091,255 @@ test('RUN5 rotation keys never travel in argv, even base64', async () => {
   assert.ok(!joined.includes('test-jwt-secret') && !joined.includes('test-enc-key'), 'no raw secret in argv');
   assert.ok(!joined.includes(b64('test-jwt-secret')) && !joined.includes(b64('test-enc-key')), 'no base64 secret in argv');
   assert.ok(!joined.includes(' -p ') || !joined.includes('JWT_SECRET'), 'no secret payload in -p argv');
+});
+
+// Rehearsal r9: the fence returns in 1.6 s but the legacy api and auth-idp pods stay Terminating
+// for about 31 s. A fast W4 then met them at the W5 fence assertion (writer_pod_present).
+test('R7 W3 waits for the terminating legacy pods before the custodian is created', async () => {
+  const { ctx, calls } = makeCtx({ scenario: { writersTerminating: 2 } });
+  const apiPolls = () => calls.filter(line => line.startsWith('get pods -l') && line.includes('component=api')).length;
+  const inner = ctx.call, during = [];
+  ctx.call = (args, input) => {
+    if (args.join(' ').includes('component=api') && !during.length) during.push(loadState(ctx.stateDir));
+    return inner(args, input);
+  };
+  let pollsBeforeCustodian = null;
+  ctx.delivered = (c, script, env) => {
+    if (env.A4_OPERATION === 'custodian') pollsBeforeCustodian = apiPolls();
+    return '';
+  };
+  await drive(ctx);
+  assert.equal(pollsBeforeCustodian, 3, 'two polls saw the terminating pod, the third saw none');
+  // The wait spends the W3 budget only: same step, same hard cutoff, nothing added.
+  assert.equal(during[0].step, 'W3');
+  assert.equal(during[0].stepDeadlineMonoMs - during[0].t0MonoMs, STEP_CUTOFFS.W3);
+  assert.equal(STEP_CUTOFFS.W3, 50_000);
+});
+
+test('R7 the writer-pod wait is bounded and its failure rolls back before any custodian', async () => {
+  const stuck = makeCtx({ scenario: { writersTerminating: Infinity } });
+  const started = monoMs();
+  assert.throws(() => awaitWritersGone(stuck.ctx, monoMs() + 1200), /pods_not_zero: api/);
+  assert.ok(monoMs() - started < 6000, 'the wait stops at its deadline');
+  const { ctx } = makeCtx({ scenario: { writersUnreadableOnce: true } });
+  const seen = [];
+  ctx.delivered = (c, script, env) => { seen.push(env.A4_ACTION ?? env.A4_OPERATION ?? env.A4_PHASE); return ''; };
+  assert.equal(await drive(ctx), 3, 'pre-commit rollback');
+  assert.ok(!seen.includes('custodian') && !seen.includes('snapshot'));
+  assert.equal(loadState(ctx.stateDir).recoveryReason, 'throw:kubectl_failed: get pods -l');
+});
+
+test('R7 a read-only probe run has no fence, so it does not wait for the live pods', () => {
+  const { ctx, calls, printed } = makeCtx({ scenario: { writersTerminating: Infinity } });
+  ctx.dryRun = true; ctx.probeReadOnly = true;
+  awaitWritersGone(ctx, monoMs() + 60_000);
+  assert.equal(calls.length, 0);
+  assert.ok(printed.some(line => line.includes('legacy pods not awaited')));
+});
+
+// Rehearsal r9: a legacy admin login moves the durable projection (default workspace row). The
+// baseline is captured after the witness login; nothing may log in as admin or restart the API
+// until the fence. Both rules are checked at W0, before any write.
+test('R7 W0 refuses, before the fence, a baseline not bound to the configured witness login', async () => {
+  for (const mutate of [ctx => { ctx.config.witness = { ...ctx.config.witness, cookie: 'later-login' }; },
+    ctx => { delete ctx.config.witness; },
+    ctx => writeFileSync(ctx.config.applicabilityBaselineFile, JSON.stringify(applicabilityFixture()))]) {
+    const { ctx, calls } = makeCtx();
+    mutate(ctx);
+    ctx.delivered = () => assert.fail('fence started');
+    assert.equal(await drive(ctx), 1);
+    const state = loadState(ctx.stateDir);
+    assert.equal(state.refusalReason, 'throw:baseline_not_after_witness');
+    assert.equal(state.t0MonoMs, undefined, 'the window clock never started');
+    assert.ok(calls.every(line => line.startsWith('auth can-i')), 'only the read-only RBAC matrix ran');
+  }
+});
+
+test('R7 W0 names a baseline made stale before the fence and never fences', async () => {
+  const { ctx } = makeCtx();
+  const inner = ctx.call;
+  ctx.call = (args, input) => args[0] === 'exec' && String(input).includes('cutover-applicability-v1')
+    ? JSON.stringify({ ...applicabilityFixture(), durableCutoverApplicabilitySha256: 'c'.repeat(64) }) : inner(args, input);
+  ctx.delivered = () => assert.fail('fence started');
+  assert.equal(await drive(ctx), 1);
+  assert.equal(loadState(ctx.stateDir).refusalReason,
+    'throw:baseline_stale_before_fence: applicability_drift:durableCutoverApplicabilitySha256');
+});
+
+// R8: the load balancer hides the client address from Traefik, so the boundary is a credential.
+// W0 proves, before the fence, that the cluster Secret is the verifier of the local credential.
+test('R8 W0 refuses, before the fence, a verification Secret that is missing or not the local credential', async () => {
+  const other = { type: 'Opaque', data: { users: Buffer.from('t3-verify:{SHA}AAAAAAAAAAAAAAAAAAAAAAAAAAA=\n').toString('base64') } };
+  for (const [secret, reason] of [[false, 'verification_secret_missing'], [other, 'verification_secret_mismatch'],
+    [{ ...verificationSecret, type: 'kubernetes.io/basic-auth' }, 'verification_secret_mismatch']]) {
+    const { ctx, calls } = makeCtx({ scenario: { verificationSecret: secret } });
+    ctx.delivered = () => assert.fail('fence started');
+    assert.equal(await drive(ctx), 1);
+    const state = loadState(ctx.stateDir);
+    assert.equal(state.refusalReason, `throw:${reason}`);
+    assert.equal(state.t0MonoMs, undefined, 'the window clock never started');
+    assert.ok(calls.every(line => /^(auth can-i |exec |get secret a4-verification-auth )/.test(line)), 'read-only calls only');
+  }
+  const { ctx } = makeCtx();
+  delete ctx.config.verificationCredentialFile;
+  ctx.delivered = () => assert.fail('fence started');
+  assert.equal(await drive(ctx), 1);
+  assert.equal(loadState(ctx.stateDir).refusalReason, 'throw:verification_credential_missing');
+});
+
+test('R8 the window sends the W0 credential on the W8 probes and accepts only after the observer refusal', async () => {
+  const readyApi = { spec: { replicas: 1, template: { spec: { containers: [{ name: 'api', image: CANDIDATE }] } } },
+    status: { replicas: 1, readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } };
+  const { ctx } = makeCtx({ scenario: { committed: true, api: readyApi } });
+  delete ctx.verification;
+  const seen = [];
+  const probe = ctx.probe;
+  ctx.probe = (url, options) => { seen.push([url, new Headers(options.headers).get('authorization')]); return probe(url, options); };
+  assert.equal(await drive(ctx), 0);
+  assert.equal(loadState(ctx.stateDir).substate, 'TWO_HOSTS_OPEN');
+  assert.deepEqual(seen.slice(0, 2).map(([url, authorization]) => [url.slice(-11), authorization]), [['restricted0', null], ['restricted1', null]]);
+  assert.ok(seen.filter(([url]) => url.includes('probe=')).every(([, authorization]) => authorization === verificationHeader));
+});
+
+test('R9 W0 checks server-side PriorityClass admission on prod and restore before any fence write', async () => {
+  assert.equal(isReadOnly(['create', '--dry-run=server', '-o', 'json', '-f', '-']), true);
+  assert.equal(isReadOnly(['create', '-f', '-']), false);
+  for (const [tier, namespace] of [['prod', 'sentropic'], ['restore', 'sentropic-restore-a4']]) {
+    const { ctx, calls } = makeCtx({ config: { tier, namespace }, scenario: { priorityAdmitted: false } });
+    ctx.delivered = () => assert.fail('fence started');
+    assert.equal(await drive(ctx), 1);
+    const state = loadState(ctx.stateDir);
+    assert.equal(state.refusalReason, 'throw:priority_class_unadmitted');
+    assert.equal(state.t0MonoMs, undefined);
+    assert.ok(calls.includes('create --dry-run=server -o json -f -'));
+    const okScenario = { committed: true, api: { spec: { replicas: 1, template: { spec: { containers: [{ name: 'api', image: CANDIDATE }] } } },
+      status: { replicas: 1, readyReplicas: 1, observedGeneration: 7 }, metadata: { generation: 7 } } };
+    const ok = makeCtx({ config: { tier, namespace }, scenario: okScenario });
+    assert.equal(await drive(ok.ctx), 0);
+    assert.equal(okScenario.priorityProbePod?.spec?.priorityClassName, 'sentropic-t3-critical');
+  }
+  const preprod = makeCtx({ scenario: { priorityAdmitted: false } });
+  preprod.ctx.delivered = () => { throw new Error('stop_at_fence'); };
+  await drive(preprod.ctx);
+  assert.ok(!preprod.calls.includes('create --dry-run=server -o json -f -'));
+});
+
+test('R9 preCommitRollback undoes W3 template patches even before DeploymentController increments revision', async () => {
+  const unconciledUi = {
+    metadata: { annotations: { 'deployment.kubernetes.io/revision': '4' }, generation: 5 },
+    status: { replicas: 0, observedGeneration: 4 },
+    spec: { replicas: 0, template: { spec: { priorityClassName: 'sentropic-t3-critical' } } },
+  };
+  const { ctx, calls } = makeCtx({
+    config: { tier: 'prod', namespace: 'sentropic' },
+    scenario: { ui: unconciledUi, legacyTemplates: { ui: { spec: { containers: [{ name: 'ui', image: LEGACY_UI }] } } } },
+  });
+  await preCommitRollback({ call: ctx.call, templateDigests: ctx.config.templateDigests });
+  const undoIdx = calls.indexOf('rollout undo deployment/ui --to-revision=4');
+  const scaleIdx = calls.indexOf('scale deployment/ui --replicas=1');
+  assert.ok(undoIdx !== -1 && undoIdx < scaleIdx, 'rollout undo runs before scale-up despite unincremented revision');
+});
+
+test('R9 W0 checks live postgres server version and pinned client images before any fence write', async () => {
+  for (const drift of [
+    { postgresVersion: '17.12' },
+    { postgresImageID: `docker.io/library/postgres@sha256:${'d'.repeat(64)}` },
+    { pgbackupImage: 'postgres:17-alpine' },
+    { identityExportImage: 'postgres:17-alpine' },
+  ]) {
+    const { ctx } = makeCtx({ scenario: drift });
+    ctx.delivered = () => assert.fail('fence started');
+    assert.equal(await drive(ctx), 1, JSON.stringify(drift));
+    const state = loadState(ctx.stateDir);
+    assert.equal(state.refusalReason, 'throw:postgres_version_unqualified');
+    assert.equal(state.t0MonoMs, undefined);
+  }
+  const { ctx } = makeCtx();
+  writeFileSync(ctx.config.postgresVersionFile, JSON.stringify({ version: 't3-postgres-version/1', namespace: 'wrong' }));
+  ctx.delivered = () => assert.fail('fence started');
+  assert.equal(await drive(ctx), 1);
+  assert.equal(loadState(ctx.stateDir).refusalReason, 'throw:postgres_version_receipt_invalid');
+});
+
+test('R9 checkVerification runs under --dry-run --probe-readonly and skips plain --dry-run', () => {
+  const plain = makeCtx({ scenario: { verificationSecret: false } });
+  plain.ctx.dryRun = true; plain.ctx.probeReadOnly = false;
+  assert.equal(checkVerification(plain.ctx), null);
+  assert.equal(plain.calls.length, 0);
+
+  const probeOk = makeCtx();
+  probeOk.ctx.dryRun = true; probeOk.ctx.probeReadOnly = true;
+  assert.equal(checkVerification(probeOk.ctx), verificationHeader);
+  assert.deepEqual(probeOk.calls, ['get secret a4-verification-auth -o json']);
+
+  const probeBad = makeCtx({ scenario: { verificationSecret: false } });
+  probeBad.ctx.dryRun = true; probeBad.ctx.probeReadOnly = true;
+  assert.throws(() => checkVerification(probeBad.ctx), /verification_secret_missing/);
+});
+
+test('R9 a writer pod that overruns W3 or never leaves routes through drive without creating custodian', async () => {
+  assert.equal(STEP_CUTOFFS.W3, 50_000);
+  const realStart = monoMs();
+  {
+    let clock = 1_000;
+    const { ctx, calls } = makeCtx({ scenario: { writersTerminating: 6 } });
+    ctx.now = () => clock;
+    const inner = ctx.call, seen = [];
+    ctx.call = (args, input) => {
+      if (monoMs() - realStart > 3_000) throw new Error('clock_injection_ignored');
+      if (args.join(' ').includes('component=api')) clock += 10_000;
+      return inner(args, input);
+    };
+    ctx.delivered = (_c, _script, env) => { seen.push(env.A4_ACTION ?? env.A4_OPERATION ?? env.A4_PHASE); return ''; };
+    assert.equal(await drive(ctx), 3, 'late-draining writer routes to pre-commit rollback');
+    assert.ok(!seen.includes('custodian') && !seen.includes('snapshot'));
+    assert.equal(loadState(ctx.stateDir).recoveryReason, 'throw:pods_not_zero: api');
+    assert.ok(calls.includes('delete middleware a4-verification --ignore-not-found=true'));
+  }
+  {
+    let clock = 1_000;
+    const { ctx, calls } = makeCtx({ scenario: { writersTerminating: Infinity } });
+    ctx.now = () => clock;
+    const inner = ctx.call, seen = [];
+    ctx.call = (args, input) => {
+      if (monoMs() - realStart > 3_000) throw new Error('clock_injection_ignored');
+      if (args.join(' ').includes('component=api')) clock += 10_000;
+      return inner(args, input);
+    };
+    ctx.delivered = (_c, _script, env) => { seen.push(env.A4_ACTION ?? env.A4_OPERATION ?? env.A4_PHASE); return ''; };
+    await assert.rejects(drive(ctx), /pods_not_zero: api/);
+    assert.ok(!seen.includes('custodian') && !seen.includes('snapshot'));
+    assert.ok(!calls.includes('delete middleware a4-verification --ignore-not-found=true'));
+    assert.equal(loadState(ctx.stateDir).recoveryReason, 'throw:pods_not_zero: api');
+  }
+  assert.ok(monoMs() - realStart < 3_000);
+});
+
+test('R11 W0 refuses T0 when CronJob sentropic-idp-identity-export initContainer name is not export-sql', async () => {
+  for (const scenario of [
+    { identityExportInitName: 'export' },
+    { identityExportInitContainers: [] },
+    { identityExportInitContainers: [{ name: 'export', image: PROD_POSTGRES_TOOL_IMAGE }, { name: 'export-sql', image: PROD_POSTGRES_TOOL_IMAGE }] },
+  ]) {
+    const { ctx } = makeCtx({ scenario });
+    ctx.delivered = () => assert.fail('fence started');
+    assert.equal(await drive(ctx), 1, JSON.stringify(scenario));
+    const state = loadState(ctx.stateDir);
+    assert.equal(state.refusalReason, 'throw:identity_export_init_container_invalid');
+    assert.equal(state.t0MonoMs, undefined);
+    assert.equal(state.fenceStarted, false);
+  }
+  const probe = makeCtx({ scenario: { identityExportInitName: 'export' } });
+  probe.ctx.dryRun = true; probe.ctx.probeReadOnly = true;
+  assert.equal(await drive(probe.ctx), 1);
+  assert.equal(loadState(probe.ctx.stateDir).refusalReason, 'throw:identity_export_init_container_invalid');
+
+  const staleReceipt = makeCtx();
+  const receipt = JSON.parse(readFileSync(staleReceipt.ctx.config.postgresVersionFile, 'utf8'));
+  receipt.identityExportInitContainer = 'export';
+  writeFileSync(staleReceipt.ctx.config.postgresVersionFile, JSON.stringify(receipt));
+  staleReceipt.ctx.delivered = () => assert.fail('fence started');
+  assert.equal(await drive(staleReceipt.ctx), 1);
+  assert.equal(loadState(staleReceipt.ctx.stateDir).refusalReason, 'throw:postgres_version_receipt_invalid');
+  assert.equal(loadState(staleReceipt.ctx.stateDir).t0MonoMs, undefined);
 });

@@ -20,6 +20,7 @@ test-artifact-content-manifests: ## Render and qualify closed content infrastruc
 		-v "$(CURDIR)/deploy/ci/artifact-content:/tests:ro" -v "$$rendered:/rendered:ro" \
 		-v "$(CURDIR)/packages/artifacts/src:/routing:ro" -v "$(CURDIR)/scripts/ci:/ci:ro" \
 		-v "$(CURDIR)/deploy:/workspace/deploy:ro" -v "$(CURDIR)/docs:/workspace/docs:ro" \
+		-v "$(CURDIR)/Makefile:/workspace/Makefile:ro" \
 		-v "$(CURDIR)/api/tests/api:/workspace/api/tests/api:ro" \
 		-w /workspace -e A4_YAML_PACKAGE=/tmp/content-tools/package.json \
 		$(LLM_MESH_NODE_IMAGE)@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 \
