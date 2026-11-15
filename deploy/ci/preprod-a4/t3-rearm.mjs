@@ -10,7 +10,7 @@ import { gunzipSync } from 'node:zlib';
 const REARM_HOLD = "process.on('SIGTERM',()=>process.exit(0));process.on('SIGINT',()=>process.exit(0));setInterval(()=>{},1000)";
 const ARCHIVE_ENTRIES = new Set([
   'custody.tar.gz', 'custody.tar.gz.tmp', 'custody.sha256', 'custody.sha256.tmp',
-  '.custody-emptied', '.custody-emptied.tmp', 'operator-state',
+  '.custody-emptied', '.custody-emptied.tmp', 'rearm-chrono.jsonl', 'operator-state',
 ]);
 
 function writeAtomic(file, content) {
@@ -53,6 +53,19 @@ export function rearm(ctx, nextConfig, read) {
   preflight(nextConfig, read);
   if (nextConfig.namespace !== config.namespace || nextConfig.executionSha256 === config.executionSha256
     || nextConfig.request.operationId === config.request.operationId) throw new Error('rearm_inputs_not_fresh');
+  mkdirSync(archive, { recursive: true, mode: 0o700 });
+  const prevChrono = process.env.T3_CHRONO_FILE;
+  process.env.T3_CHRONO_FILE = prevChrono || join(archive, 'rearm-chrono.jsonl');
+  try {
+    return rearmArchive(ctx, nextConfig, archive, archivedStateDir);
+  } finally {
+    if (prevChrono === undefined) delete process.env.T3_CHRONO_FILE;
+    else process.env.T3_CHRONO_FILE = prevChrono;
+  }
+}
+
+function rearmArchive(ctx, nextConfig, archive, archivedStateDir) {
+  const config = ctx.config;
   const info = classify({ ...ctx, postgresPod: config.postgresPod ?? 'postgres-0' });
   if (info.committed || info.locks !== 0) throw new Error('rearm_database_not_legacy');
   for (const name of ['api', 'auth-idp', 'ui']) {
@@ -69,7 +82,6 @@ export function rearm(ctx, nextConfig, read) {
   }
   const jobs = JSON.parse(ctx.call(['get', 'jobs', '-o', 'json'])).items;
   if (jobs.some(j => j.metadata.name.startsWith('pgbackup-a4-') && j.status?.active)) throw new Error('rearm_backup_active');
-  mkdirSync(archive, { recursive: true, mode: 0o700 });
   const tarFile = join(archive, 'custody.tar.gz'), shaFile = join(archive, 'custody.sha256');
   const emptiedMarker = join(archive, '.custody-emptied');
   const archiveDone = existsSync(shaFile);
