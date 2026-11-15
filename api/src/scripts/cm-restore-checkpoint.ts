@@ -21,15 +21,21 @@
  * digests byte-identical by construction. The WebAuthn verifier comes from
  * the environment, so the caller must pass the same `WEBAUTHN_RP_ID` /
  * `WEBAUTHN_ORIGIN` the SUT boots with.
+ *
+ * Post-A4 backups (control migration 0015 already journaled, legacy identity
+ * tables dropped) carry no legacy source: the boot skips the identity import,
+ * so no checkpoint is consumed. The durable cutover evidence is verified
+ * fail-closed instead (`readA4CutoverEvidence`) and no checkpoint is written.
  */
 
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { identityCustodySchemaAssetV1 } from '@sentropic/cluster-mesh';
 import { pool } from '../db/client';
 import { connectorCustodyAssetSha256 } from '../services/identity/cm-connector-custody-values';
 import { loadCmCutoverCheckpoint } from '../services/identity/cm-cutover-checkpoint';
+import { isA4CutoverJournaled, readA4CutoverEvidence } from '../services/identity/cm-cutover-evidence';
 import { a4MappingAssetSha256 } from '../services/identity/cm-import-manifest';
 import { loadA4RemoteSnapshot } from '../services/identity/cm-import-remote-snapshot';
 import { readA4IdentitySource } from '../services/identity/cm-import-source';
@@ -52,12 +58,21 @@ export async function runCmRestoreCheckpoint(): Promise<void> {
       try {
         await mkdir(directory, { recursive: true, mode: 0o700 });
         await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
-        let snapshotBytes: string;
+        let snapshotBytes: string | null = null;
         try {
-          const source = await readA4IdentitySource(client);
-          snapshotBytes = JSON.stringify({ rows: [...source.rows], inventory: source.inventory });
+          if (await isA4CutoverJournaled(client)) await readA4CutoverEvidence(client);
+          else {
+            const source = await readA4IdentitySource(client);
+            snapshotBytes = JSON.stringify({ rows: [...source.rows], inventory: source.inventory });
+          }
         } finally {
           await client.query('ROLLBACK');
+        }
+        if (snapshotBytes === null) {
+          // A leftover rehearsal checkpoint from an earlier run must not survive as evidence.
+          for (const file of ['checkpoint.json', 'source.json', 'remote.json']) await rm(join(directory, file), { force: true });
+          console.log('CHECKPOINT_NOT_REQUIRED a4-cutover-journaled evidence-verified');
+          return;
         }
         const remoteBytes = JSON.stringify({ format: 'remote-session-projection-snapshot/1', records: [] });
         const sourceSnapshotPath = join(directory, 'source.json');
