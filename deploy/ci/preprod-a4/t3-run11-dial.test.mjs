@@ -88,12 +88,41 @@ function runMockKubeWorker({ ctrl, candidateImage }) {
 
 const kubeconfigYaml = hp => `apiVersion: v1\nkind: Config\nclusters:\n- name: c\n  cluster:\n    server: https://${hp}\n    insecure-skip-tls-verify: true\nusers:\n- name: u\n  user:\n    token: synthetic-token\ncontexts:\n- name: ctx\n  context:\n    cluster: c\n    user: u\ncurrent-context: ctx\n`;
 
+const NODE_KUBECTL_SHIM = `#!/usr/bin/env node
+import { readFileSync } from 'node:fs'; import { request } from 'node:https'; import { connect } from 'node:net'; import { connect as tlsConnect } from 'node:tls';
+const args = process.argv.slice(2), rest = []; let kc = '';
+for (let i = 0; i < args.length; i++) { if (args[i] === '--kubeconfig' || args[i] === '--namespace') { if (args[i] === '--kubeconfig') kc = args[i + 1]; i++; } else if (!args[i].startsWith('--request-timeout=')) rest.push(args[i]); }
+const auth = /server:\\s*https:\\/\\/([^\\s]+)/.exec(readFileSync(kc, 'utf8'))[1], [host, portStr] = auth.split(':'), port = Number(portStr);
+const openTls = () => new Promise((res, rej) => {
+  const up = raw => { const s = tlsConnect({ socket: raw, rejectUnauthorized: false }, () => res(s)); s.on('error', rej); };
+  if (!process.env.HTTPS_PROXY) { const raw = connect(port, host, () => up(raw)); raw.on('error', rej); return; }
+  const p = new URL(process.env.HTTPS_PROXY), raw = connect(Number(p.port), p.hostname, () => raw.write(\`CONNECT \${auth} HTTP/1.1\\r\\nHost: \${auth}\\r\\n\\r\\n\`));
+  let b = Buffer.alloc(0); raw.on('error', rej);
+  raw.on('data', function onD(c) { b = Buffer.concat([b, c]); const i = b.indexOf('\\r\\n\\r\\n'); if (i < 0) return; raw.removeListener('data', onD);
+    if (!b.subarray(0, i).toString().startsWith('HTTP/1.1 200')) { raw.destroy(); rej(new Error('proxy_502')); return; } up(raw); });
+});
+const maskFrame = p => { const h = p.length < 126 ? Buffer.of(0x82, 0x80 | p.length) : Buffer.of(0x82, 0xfe, p.length >> 8, p.length & 0xff); return Buffer.concat([h, Buffer.alloc(4), p]); };
+const sock = await openTls();
+if (rest[0] === 'exec') {
+  const stdin = readFileSync(0); sock.write(\`GET /api/v1/namespaces/sentropic-preprod/pods/postgres-0/exec HTTP/1.1\\r\\nHost: \${auth}\\r\\nConnection: Upgrade\\r\\nUpgrade: websocket\\r\\nSec-WebSocket-Version: 13\\r\\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\\r\\nSec-WebSocket-Protocol: v5.channel.k8s.io\\r\\n\\r\\n\`);
+  let b = Buffer.alloc(0), up = false, out = '', ok = false;
+  sock.on('data', c => { b = Buffer.concat([b, c]); if (!up) { const i = b.indexOf('\\r\\n\\r\\n'); if (i < 0) return; up = true; b = b.subarray(i + 4); sock.write(maskFrame(Buffer.concat([Buffer.of(0), stdin]))); sock.write(maskFrame(Buffer.of(255))); }
+    while (b.length >= 2) { const op = b[0] & 0x0f, len = b[1] & 0x7f; if (b.length < 2 + len) break; const f = b.subarray(2, 2 + len); b = b.subarray(2 + len); if (op === 8) { sock.end(); break; } if (f[0] === 1 && f.length > 1) out += f.subarray(1).toString(); if (f[0] === 3 && f.subarray(1).toString().includes('"Success"')) ok = true; } });
+  sock.on('close', () => { if (!ok) process.exit(1); process.stdout.write(out); process.exit(0); }); sock.on('error', () => process.exit(1));
+} else {
+  const [method, path] = rest[0] === 'auth' ? ['POST', '/apis/authorization.k8s.io/v1/selfsubjectaccessreviews'] : rest[0] === 'patch' ? ['PATCH', '/api/v1/secrets/sentropic-api'] : ['GET', '/apis/apps/v1/deployments/api'];
+  const req = request({ host, port, method, path, headers: { connection: 'close' }, createConnection: () => sock, rejectUnauthorized: false }, r => { let d = ''; r.on('data', c => d += c); r.on('end', () => { if (r.statusCode !== 200) process.exit(1); process.stdout.write(rest[0] === 'auth' ? 'yes\\n' : d); process.exit(0); }); });
+  req.on('error', () => process.exit(1)); req.end(rest[0] === 'patch' ? rest.at(-1) : '');
+}
+`;
+
 if (!isMainThread && workerData?.mockKube) runMockKubeWorker(workerData);
 else test('R11 dial stall: <=3s pre-establishment TCP dial retry recovers W0 and W7b exec -i, never retries mid-stream, and measures overhead', async () => {
+  if (process.env.T3_REAL_KUBECTL) assert.ok(existsSync(process.env.T3_REAL_KUBECTL), `pinned kubectl required at ${process.env.T3_REAL_KUBECTL}`);
   const realKubectl = process.env.T3_REAL_KUBECTL ?? '/opt/t3-kubectl/kubectl';
-  assert.ok(existsSync(realKubectl), `pinned kubectl required at ${realKubectl}`);
   const dir = mkdtempSync(join(tmpdir(), 't3-r11-dial-')), candidate = `ghcr.io/rhanka/sentropic-api@sha256:${'e'.repeat(64)}`;
-  symlinkSync(realKubectl, join(dir, 'kubectl'));
+  if (existsSync(realKubectl)) symlinkSync(realKubectl, join(dir, 'kubectl'));
+  else writeFileSync(join(dir, 'kubectl'), NODE_KUBECTL_SHIM, { mode: 0o700 });
   const ctrl = new Int32Array(new SharedArrayBuffer(20));
   const apiWorker = new Worker(new URL(import.meta.url), { workerData: { mockKube: true, ctrl, candidateImage: candidate } });
   Atomics.wait(ctrl, 0, 0, 5_000);
