@@ -7,7 +7,7 @@ import { drive } from './t3-window-driver.mjs';
 import { ops } from './ops.mjs';
 import { digest } from './guards.mjs';
 import { approvedRequest } from './fixtures.mjs';
-import { emailProbe, expectedSigningKid, probeEndpoints } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, observerProbes, probeEndpoints } from './t3-probe-fixture.mjs';
 
 test('RUN6 delivered ops create required pod Secret and stage checkpoint files on an empty PVC', async () => {
   const stateDir = mkdtempSync(join(tmpdir(), 't3-delivered-'));
@@ -22,7 +22,11 @@ test('RUN6 delivered ops create required pod Secret and stage checkpoint files o
   const container = { name: 'api', command: ['node', '/run/cm-runtime/launch.mjs'], envFrom: [],
     env: [{ name: dependency[2], valueFrom: { secretKeyRef: { name: dependency[1], key: dependency[2] } } }],
     volumeMounts: [{ name: 'custody', readOnly: true }] };
-  const api = { spec: { replicas: 0, template: { spec: { containers: [container], volumes: [
+  assert.match(patch, /podAffinity:\n\s+preferredDuringSchedulingIgnoredDuringExecution:/, 'shipped wiring places custody consumers');
+  const affinity = { podAffinity: { preferredDuringSchedulingIgnoredDuringExecution: [{ weight: 100, podAffinityTerm: {
+    topologyKey: 'kubernetes.io/hostname', labelSelector: { matchLabels: { 'app.kubernetes.io/component': 'postgres' } } } }] } };
+  const database = { items: [{ metadata: {}, spec: { nodeName: 'database-node' }, status: { phase: 'Running' } }] };
+  const api = { spec: { replicas: 0, template: { spec: { affinity, containers: [container], volumes: [
     { name: 'runtime', configMap: { name: 'sentropic-a4-runtime' } },
     { name: 'custody', persistentVolumeClaim: { claimName: 'sentropic-a4-custody' } },
   ] } } } };
@@ -31,11 +35,13 @@ test('RUN6 delivered ops create required pod Secret and stage checkpoint files o
   const read = path => path.endsWith('request.json') ? JSON.stringify(request)
     : path === '/budgets' ? JSON.stringify(budgets) : path === '/remote' ? '{}' : 'rehearsal-bytes';
   const kubectl = (_kube, args, input) => {
-    if (args[0] === 'get') return JSON.stringify(api);
+    if (args[0] === 'get') return JSON.stringify(args[1] === 'pods' ? database : api);
     if (args[0] === 'create') {
       const resource = JSON.parse(input);
       if (resource.kind === 'Secret') secrets.add(resource.metadata.name);
       if (resource.kind === 'Pod') {
+        assert.deepEqual(resource.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms,
+          [{ matchFields: [{ key: 'metadata.name', operator: 'In', values: ['database-node'] }] }]);
         for (const env of resource.spec.containers[0].env) {
           if (env.valueFrom?.secretKeyRef) assert.ok(secrets.has(env.valueFrom.secretKeyRef.name), 'pod cannot become Ready without its required Secret');
         }
@@ -48,7 +54,7 @@ test('RUN6 delivered ops create required pod Secret and stage checkpoint files o
     return '';
   };
   const code = await drive({ stateDir, dryRun: true, print: () => {}, call: () => '', tier: 'preprod',
-    config: { request, endpoints: probeEndpoints(), emailProbe, expectedSigningKid, namespace: 'sentropic-preprod', kubeconfigFile: '/kube', budgetsFile: '/budgets',
+    config: { request, endpoints: probeEndpoints(), ...observerProbes(), emailProbe, expectedSigningKid, namespace: 'sentropic-preprod', kubeconfigFile: '/kube', budgetsFile: '/budgets',
       remoteFile: '/remote', rehearsalFile: '/rehearsal', images: { candidate: 'c', ui: 'u' } },
     delivered: (_ctx, _script, env) => {
       if (['budgets', 'custodian', 'stage'].includes(env.A4_OPERATION)) {

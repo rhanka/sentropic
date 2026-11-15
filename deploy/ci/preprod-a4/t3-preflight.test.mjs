@@ -1,0 +1,156 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { preflight } from './t3-preflight-static.mjs';
+import { approvedRequest, image } from './fixtures.mjs';
+import { digest, canonical } from './guards.mjs';
+import { STATE_HASHES } from './t3-rehearsal.mjs';
+import { applicabilityFixture } from './t3-applicability.test.mjs';
+import { witnessBinding } from './t3-applicability.mjs';
+import { aclFormulaSha256 } from './t3-restore.mjs';
+import { PROD_POSTGRES_IMAGE, PROD_POSTGRES_TOOL_IMAGE, PROD_POSTGRES_VERSION } from './t3-fixture.mjs';
+import { emailProbe, expectedSigningKid, probeEndpoints, observerProbes, verificationLine, verificationSpec } from './t3-probe-fixture.mjs';
+
+export function inputs(witnessUrl = 'https://app.test/api/v1/me') {
+  const witness = { url: witnessUrl,cookie: 'synthetic-witness',expiresAt: new Date(Date.now()+86400000).toISOString() };
+  const ui = `ghcr.io/rhanka/sentropic-ui@sha256:${'c'.repeat(64)}`;
+  const authorization = { ...approvedRequest, format: 'preprod-a4-authorization/1' };
+  const annex = { ...approvedRequest, format: 'preprod-a4-execution/1', uiImage: ui,
+    actions: { fence: [['scale','deployment/api','--replicas=0']],
+      restrict: [['annotate','ingress','sentropic','traefik.ingress.kubernetes.io/router.middlewares=sentropic-preprod-a4-verification@kubernetescrd','--overwrite']],
+      'delete-custodian': [['delete','pod','sentropic-a4-custodian','--wait=true','--timeout=180s']],
+      'start-api': [['scale','deployment/api','--replicas=1']],
+      resume: [['patch','cronjob','pgbackup','--type=merge','-p','{"spec":{"suspend":false}}']],
+      'open-traffic': [['annotate','ingress','sentropic','traefik.ingress.kubernetes.io/router.middlewares-']] } };
+  annex.middlewareSpec = verificationSpec;
+  annex.middlewareSpecSha256 = digest(canonical(annex.middlewareSpec));
+  const budgets = { qualificationReceiptRef: 'track:t3-qualified' };
+  for (const name of ['reservation','deletion','diagnostic','read','workspace','replicaExport','replicaValidation','replicaSync']) {
+    budgets[name] = { deadlineMs: 10000, maxAttempts: 1 };
+  }
+  const witnessSalt = 'e'.repeat(64);
+  const files = { '/annex': JSON.stringify(annex), '/authorization': JSON.stringify(authorization),
+    '/remote': '{}', '/verification': `${verificationLine}\n`, '/baseline': JSON.stringify({ ...applicabilityFixture(),witnessSalt,witnessSha256: witnessBinding(witness,witnessSalt) }), '/budgets': JSON.stringify(budgets) };
+  files['/rehearsal'] = JSON.stringify({ format: 'preprod-a4-rehearsal/2',candidateCommit: approvedRequest.candidateCommit,
+    receiptRef: 'track:qualified-rehearsal',applicabilityReviewRef: 'track:prior-review',
+    restoredBackupSha256: 'd'.repeat(64),isolatedRestoreRef: 'track:qualified-isolated-restore',
+    candidateImage: image,candidateBootPassed: true,functionalAuthPassed: true,d11Passed: true,
+    ...Object.fromEntries(STATE_HASHES.map(key => [key,'a'.repeat(64)])) });
+  files['/acl'] = '-- synthetic ACL';
+  files['/acl-receipt'] = JSON.stringify({ aclCatalogSha256: 'a'.repeat(64),aclSqlSha256: digest(files['/acl']),aclFormulaSha256: aclFormulaSha256() });
+  files['/postgres-version'] = JSON.stringify({ version: 't3-postgres-version/1',namespace: 'sentropic-preprod',
+    postgresVersion: PROD_POSTGRES_VERSION,serverImage: PROD_POSTGRES_IMAGE,
+    pgbackupClientImage: PROD_POSTGRES_TOOL_IMAGE,identityExportInitContainer: 'export-sql',
+    identityExportClientImage: PROD_POSTGRES_TOOL_IMAGE });
+  const policy = { originalRehearsalSha256: digest(files['/rehearsal']),baselineSha256: digest(files['/baseline']),
+    reviewRef: 'track:qualified-applicability',allowedChanges: ['sourceContentSha256'] };
+  annex.applicabilityReceiptPolicySha256 = digest(canonical(policy)); files['/annex'] = JSON.stringify(annex);
+  const config = { tier: 'preprod', namespace: 'sentropic-preprod', candidateImage: image,
+    request: approvedRequest, images: { candidate: image, ui }, executionFile: '/annex',
+    executionSha256: digest(files['/annex']), authorizationFile: '/authorization', kubeconfigFile: '/kube',
+    remoteFile: '/remote', budgetsFile: '/budgets', applicabilityBaselineFile: '/baseline',
+    rehearsalFile: '/rehearsal',aclReceiptFile: '/acl-receipt',restoreAclFile: '/acl',
+    postgresVersionFile: '/postgres-version',applicabilityReceiptPolicy: policy,
+    endpoints: probeEndpoints(), emailProbe, expectedSigningKid, initialSecretKeyNames: ['EMAIL_VERIFICATION_PEPPER'],
+    restrictedProbes: observerProbes().restrictedProbes,
+    externalProbes: [{ id: 'external-app',url: 'https://app.test/',expect: 200 },
+      { id: 'external-idp',url: 'https://idp.test/.well-known/openid-configuration',expect: 200 }],
+    witness, verificationCredentialFile: '/verification',
+    rotationKeyFiles: { apiJwtSecretFile: '/jwt', secretEncryptionKeyFile: '/enc', idpSessionJwtFile: '/idp' },
+    templateDigests: { api: 'a'.repeat(64), 'auth-idp': 'b'.repeat(64), ui: 'c'.repeat(64) }, preCmDir: '/cms' };
+  return { config, files, read: name => files[name] ?? 'synthetic-private-input' };
+}
+test('offline preflight accepts complete bound inputs without invoking Kubernetes', () => {
+  const f = inputs();
+  assert.equal(preflight(f.config,f.read).namespace,'sentropic-preprod');
+});
+
+test('offline preflight refuses each missing annex action and a changed receipt policy', () => {
+  for (const action of ['fence','restrict','delete-custodian','start-api','resume','open-traffic']) {
+    const f = inputs(), annex = JSON.parse(f.files['/annex']);
+    delete annex.actions[action]; f.files['/annex'] = JSON.stringify(annex);
+    f.config.executionSha256 = digest(f.files['/annex']);
+    assert.throws(() => preflight(f.config,f.read),/action_not_authorized/);
+  }
+  const f = inputs(); f.config.applicabilityReceiptPolicy.allowedChanges.push('schemaSha256');
+  assert.throws(() => preflight(f.config,f.read),/receipt_policy/);
+});
+
+test('restore preflight rejects production URLs in every observer and witness path', () => {
+  const f = inputs('https://app.restore-a4.test/api/v1/me');
+  f.config.tier = 'restore'; f.config.namespace = 'sentropic-restore-a4';
+  f.config.request = { ...f.config.request,format: 'prod-a4-request/1',namespace: 'sentropic',
+    emailCodeActiveKeyRef: 'email-code-hmac:v1:prod:15c2f8b66073655a' };
+  for (const path of ['/authorization','/rehearsal']) {
+    const value = JSON.parse(f.files[path]); value.format = value.format.replace('preprod-','prod-');
+    if (value.namespace) value.namespace = 'sentropic'; f.files[path] = JSON.stringify(value);
+  }
+  f.files['/postgres-version'] = JSON.stringify({ ...JSON.parse(f.files['/postgres-version']), namespace: 'sentropic-restore-a4' });
+  f.config.applicabilityReceiptPolicy.originalRehearsalSha256 = digest(f.files['/rehearsal']);
+  const annex = JSON.parse(f.files['/annex'].replaceAll('sentropic-preprod-a4-verification','sentropic-restore-a4-a4-verification'));
+  annex.format = 'prod-a4-execution/1'; annex.namespace = 'sentropic';
+  annex.applicabilityReceiptPolicySha256 = digest(canonical(f.config.applicabilityReceiptPolicy));
+  f.files['/annex'] = JSON.stringify(annex); f.config.executionSha256 = digest(f.files['/annex']);
+  const isolated = value => {
+    const url = new URL(value);
+    url.hostname = url.hostname.startsWith('idp.') ? 'auth.restore-a4.test' : 'app.restore-a4.test';
+    return url.href;
+  };
+  for (const key of Object.keys(f.config.endpoints)) f.config.endpoints[key] = isolated(f.config.endpoints[key]);
+  for (const p of [...f.config.externalProbes,...f.config.restrictedProbes]) p.url = isolated(p.url);
+  assert.doesNotThrow(() => preflight(f.config,f.read));
+  for (const target of [f.config.witness,f.config.externalProbes[0],f.config.restrictedProbes[0]]) {
+    const before = target.url; target.url = 'https://sentropic.sent-tech.ca/';
+    assert.throws(() => preflight(f.config,f.read),/fixture_http_not_isolated/); target.url = before;
+  }
+});
+test('offline preflight refuses annex, baseline, keys, remote and budget drift', () => {
+  for (const mutate of [
+    f => { f.config.executionSha256 = '0'.repeat(64); },
+    f => { f.files['/baseline'] = '{}'; },
+    f => { f.config.initialSecretKeyNames.push('JWT_SECRET'); },
+    f => { f.files['/remote'] = '{"changed":true}'; },
+    f => { f.files['/budgets'] = '{}'; },
+    f => { f.config.templateDigests.api = ''; },
+  ]) {
+    const f = inputs(); mutate(f); assert.throws(() => preflight(f.config,f.read));
+  }
+});
+// A later witness login gives another session: the baseline must be captured again after it.
+test('offline preflight refuses a baseline that is not bound to the configured witness login', () => {
+  for (const mutate of [f => { f.config.witness.cookie = 'later-login'; },
+    f => { f.config.witness.url = 'https://app.test/api/v1/me?other'; },
+    f => {
+      const b = JSON.parse(f.files['/baseline']); delete b.witnessSalt;
+      f.files['/baseline'] = JSON.stringify(b);
+      f.config.applicabilityReceiptPolicy.baselineSha256 = digest(f.files['/baseline']);
+      const annex = JSON.parse(f.files['/annex']);
+      annex.applicabilityReceiptPolicySha256 = digest(canonical(f.config.applicabilityReceiptPolicy));
+      f.files['/annex'] = JSON.stringify(annex); f.config.executionSha256 = digest(f.files['/annex']);
+    }]) {
+    const f = inputs(); mutate(f);
+    assert.throws(() => preflight(f.config,f.read),/baseline_not_after_witness/);
+  }
+});
+test('offline preflight rejects an old-formula ACL receipt before the fence', () => {
+  for (const patch of [{ aclFormulaSha256: undefined }, { aclFormulaSha256: '0'.repeat(64) }]) {
+    const f = inputs();
+    const receipt = { ...JSON.parse(f.files['/acl-receipt']), ...patch };
+    if (patch.aclFormulaSha256 === undefined) delete receipt.aclFormulaSha256;
+    f.files['/acl-receipt'] = JSON.stringify(receipt);
+    assert.throws(() => preflight(f.config, f.read), /acl_baseline_invalid/);
+  }
+});
+test('offline preflight requires a bound postgres-version qualification receipt', () => {
+  const missing = inputs(); delete missing.config.postgresVersionFile;
+  assert.throws(() => preflight(missing.config, missing.read), /postgres_version_receipt_invalid/);
+  for (const patch of [{ postgresVersion: '17.12' }, { namespace: 'sentropic' },
+    { serverImage: 'postgres:17-alpine' }, { pgbackupClientImage: 'postgres:17-alpine' },
+    { identityExportInitContainer: 'export' }, { identityExportInitContainer: undefined },
+    { identityExportClientImage: 'postgres:17-alpine' }]) {
+    const f = inputs();
+    const next = { ...JSON.parse(f.files['/postgres-version']), ...patch };
+    if ('identityExportInitContainer' in patch && patch.identityExportInitContainer === undefined) delete next.identityExportInitContainer;
+    f.files['/postgres-version'] = JSON.stringify(next);
+    assert.throws(() => preflight(f.config, f.read), /postgres_version_receipt_invalid/, JSON.stringify(patch));
+  }
+});

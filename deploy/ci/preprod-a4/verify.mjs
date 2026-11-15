@@ -1,12 +1,12 @@
 import { pathToFileURL } from 'node:url';
 import { assertDigestOutput, assertRequest, canonical, digest, kubectl, privateInput, tierOf } from './guards.mjs';
-import { assertVerificationBoundary } from './verification-boundary.mjs';
+import { assertVerificationBoundary, verificationCredential } from './verification-boundary.mjs';
 import { executionGrant } from './execution.mjs';
 
 export async function verify(env = process.env, call = kubectl, read = privateInput, probe = fetch) {
   const phase = env.A4_VERIFY_PHASE ?? 'internal';
   if (!['internal', 'http'].includes(phase)) throw new Error('phase_invalid');
-  const tier = tierOf(env), { namespace } = tier, health = `${tier.origin}/api/v1/health`;
+  const tier = tierOf(env), namespace = tier.destinationNamespace ?? tier.namespace, health = `${tier.origin}/api/v1/health`;
   read(env.A4_KUBECONFIG_FILE);
   const request = JSON.parse(read(env.A4_REQUEST_FILE)); assertRequest(request, tier);
   const k = args => call(env.A4_KUBECONFIG_FILE, args, undefined, namespace);
@@ -23,9 +23,11 @@ export async function verify(env = process.env, call = kubectl, read = privateIn
     'node', '/run/cm-runtime/launch.mjs', '--cm-preprod-verify']));
   const internal = result + `readinessSha256=${digest(canonical({ candidate: request.candidateCommit, ready: true, serving: true }))}\n`;
   if (phase === 'internal') return internal;
+  // The restricted Ingress only admits the verification credential (file path, never a value in argv).
+  const { header } = verificationCredential(env.A4_VERIFICATION_FILE, read);
   assertVerificationBoundary(request, executionGrant(env, request, read, tier), k, namespace);
   const response = await probe(health,
-    { redirect: 'error', signal: AbortSignal.timeout(30_000) });
+    { redirect: 'error', headers: { authorization: header }, signal: AbortSignal.timeout(30_000) });
   await response.body?.cancel();
   if (response.status !== 200) throw new Error('public_api_not_200');
   return internal + `httpSha256=${digest(`${health}:200`)}\n`;

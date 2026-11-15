@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { emailProbe, expectedSigningKid, probeEndpoints } from './t3-probe-fixture.mjs';
+import { emailProbe, expectedSigningKid, observerProbes, probeEndpoints } from './t3-probe-fixture.mjs';
 import { loadState } from './t3-lib.mjs';
 
 const here = new URL('.', import.meta.url).pathname;
@@ -18,7 +18,7 @@ for (const mode of ['suspend-parent', 'watchdog-fails']) {
   test(`RUN8 startup ${mode} cannot enter fence without armed watchdog`, async () => {
     const dir = mkdtempSync(join(tmpdir(), 't3-startup-'));
     const config = join(dir, 'config.json'), preload = join(dir, 'preload.mjs');
-    writeFileSync(config, JSON.stringify({ namespace: 'sentropic-preprod', endpoints: probeEndpoints(),
+    writeFileSync(config, JSON.stringify({ namespace: 'sentropic-preprod', endpoints: probeEndpoints(), ...observerProbes(),
       emailProbe, expectedSigningKid, images: { candidate: 'c', ui: 'u' }, request: {} }));
     writeFileSync(preload, `
       import cp from 'node:child_process';

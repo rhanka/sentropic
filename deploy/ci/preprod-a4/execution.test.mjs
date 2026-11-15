@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { execute } from './execution.mjs';
 import { canonical, digest } from './guards.mjs';
 import { approvedRequest, image } from './fixtures.mjs';
+import { verificationSpec } from './t3-probe-fixture.mjs';
 
 const fixture = (commands = [['scale', 'deployment/api', '--replicas=1']]) => {
   const grant = { ...approvedRequest, format: 'preprod-a4-execution/1', actions: { 'start-api': commands } };
@@ -30,8 +31,8 @@ test('should refuse annex drift, missing action and unreviewed commands before w
     assert.throws(() => execute({ ...g.env, A4_DRY_RUN: '0' }, g.call, g.read)); assert.equal(g.calls.length, 0);
   }
 });
-test('should establish only the approved host allowlist and refuse to replace another middleware', () => {
-  const spec = { ipAllowList: { sourceRange: ['192.0.2.10/32'] } };
+test('should establish only the credential boundary named in the annex and refuse to replace another middleware', () => {
+  const spec = verificationSpec;
   const grant = { ...approvedRequest, format: 'preprod-a4-execution/1', middlewareSpec: spec,
     middlewareSpecSha256: digest(canonical(spec)), actions: { restrict: ['sentropic', 'auth-idp'].map(name =>
       ['annotate', 'ingress', name, 'traefik.ingress.kubernetes.io/router.middlewares=sentropic-preprod-a4-verification@kubernetescrd', '--overwrite']) } };

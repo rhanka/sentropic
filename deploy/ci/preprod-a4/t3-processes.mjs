@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -33,6 +33,16 @@ function stop(groups, pids) {
   if (members().length) throw new Error('command_processes_survived');
 }
 
+const LAUNCHER = 'umask 077; printf "%s" "$$" > "$1"; kill -0 "$2" 2>/dev/null || exit 125; case "$(cat /proc/"$2"/stat 2>/dev/null)" in ""|*") Z "*) exit 125;; esac; shift 2; exec "$@"';
+
+function cleanupRecord(record) {
+  try {
+    const group = Number(readFileSync(record, 'utf8'));
+    if (group > 1) stop([group], []);
+  } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  try { unlinkSync(record); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+}
+
 // Each synchronous command owns a session separate from driver AND watchdog.
 // The launcher publishes its PGID before exec, then refuses to start if its
 // owner died during launch. The record survives driver SIGKILL and reparenting.
@@ -40,16 +50,53 @@ export function supervisedSync(command, args, options, stateDir) {
   const dir = stateDir ?? mkdtempSync(join(tmpdir(), 't3-command-'));
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const record = join(dir, `.t3-command-${randomUUID()}.pgid`);
-  const result = spawnSync('sh', ['-c',
-    'umask 077; printf "%s" "$$" > "$1"; kill -0 "$2" 2>/dev/null || exit 125; case "$(cat /proc/"$2"/stat 2>/dev/null)" in ""|*") Z "*) exit 125;; esac; shift 2; exec "$@"',
-    't3-command', record, String(process.pid), command, ...args],
-  { ...options, detached: true, killSignal: 'SIGKILL' });
-  try {
-    const group = Number(readFileSync(record, 'utf8'));
-    if (group > 1) stop([group], []);
-  } catch (e) { if (e.code !== 'ENOENT') throw e; }
-  try { unlinkSync(record); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  const result = spawnSync('sh', ['-c', LAUNCHER, 't3-command', record, String(process.pid), command, ...args],
+    { ...options, detached: true, killSignal: 'SIGKILL' });
+  cleanupRecord(record);
   return result;
+}
+
+export function supervisedAsync(command, args, options = {}, stateDir) {
+  if (options.signal?.aborted) {
+    return Promise.resolve({ pid: null, status: null, signal: 'SIGKILL', stdout: '', stderr: '', error: new Error('command_aborted') });
+  }
+  const dir = stateDir ?? mkdtempSync(join(tmpdir(), 't3-command-'));
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const record = join(dir, `.t3-command-${randomUUID()}.pgid`);
+  const maxBuffer = options.maxBuffer ?? 32 * 1024 * 1024;
+  return new Promise(resolve => {
+    const child = spawn('sh', ['-c', LAUNCHER, 't3-command', record, String(process.pid), command, ...args],
+      { env: options.env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const outChunks = [], errChunks = [];
+    let outLen = 0, errLen = 0, error = null, settled = false;
+    const killGroup = sig => {
+      let group = 0;
+      try { group = Number(readFileSync(record, 'utf8')); } catch { /* not written yet */ }
+      if (group > 1) signal(-group, sig);
+      if (child.pid > 1) signal(-child.pid, sig);
+    };
+    const terminate = err => {
+      if (error) return;
+      error = err; killGroup('SIGTERM');
+      setTimeout(() => killGroup('SIGKILL'), 50).unref();
+    };
+    const onAbort = () => terminate(new Error('command_aborted'));
+    const timer = options.timeout > 0 ? setTimeout(() => terminate(new Error('ETIMEDOUT')), options.timeout) : null;
+    options.signal?.addEventListener('abort', onAbort, { once: true });
+    child.stdin.on('error', () => {});
+    child.stdin.end(options.input);
+    child.stdout.on('data', c => { if ((outLen += c.length) <= maxBuffer) outChunks.push(c); else terminate(new Error('maxBuffer exceeded')); });
+    child.stderr.on('data', c => { if ((errLen += c.length) <= maxBuffer) errChunks.push(c); else terminate(new Error('maxBuffer exceeded')); });
+    const finish = (status, exitSignal, spawnErr) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer); options.signal?.removeEventListener('abort', onAbort);
+      try { cleanupRecord(record); } catch (e) { error ??= e; }
+      resolve({ pid: child.pid ?? null, status, signal: exitSignal, error: error ?? spawnErr ?? null,
+        stdout: Buffer.concat(outChunks).toString('utf8'), stderr: Buffer.concat(errChunks).toString('utf8') });
+    };
+    child.once('error', err => finish(null, null, err));
+    child.once('close', (status, exitSignal) => finish(status, exitSignal, null));
+  });
 }
 
 export function stopAutomation(stateDir, state, includeWatchdog = false) {
