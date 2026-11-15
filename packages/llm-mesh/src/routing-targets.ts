@@ -100,6 +100,15 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'gemini-4-carbon': {
     providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-4-carbon',
   },
+  'gemini-4-carbon-low': {
+    providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-4-carbon', effort: 'low',
+  },
+  'gemini-4-carbon-medium': {
+    providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-4-carbon', effort: 'medium',
+  },
+  'gemini-4-carbon-high': {
+    providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-4-carbon', effort: 'high',
+  },
   'gpt-5.6-terra': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra',
   },

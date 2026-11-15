@@ -919,3 +919,26 @@ it('defaults to exact identity without enabling the cross-model table', () => {
   expect(resolve('claude-opus-5-5')).toEqual([]);
   expect(resolve('gpt-6.1-sol')).toEqual([{ providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.1-sol' }]);
 });
+
+it('resolves gemini-4-carbon and effort-suffixed variants on gemini/cloud-code', () => {
+  const cases: ReadonlyArray<readonly [string, string | undefined]> = [
+    ['gemini-4-carbon', undefined],
+    ['gemini-4-carbon-low', 'low'],
+    ['gemini-4-carbon-medium', 'medium'],
+    ['gemini-4-carbon-high', 'high'],
+  ];
+  for (const options of [{}, { allowEquivalentModels: true }] as const) {
+    const resolve = createCanonicalTargetResolver(options);
+    const resolveCandidates = createCanonicalTargetCandidatesResolver(options);
+    for (const [requestedId, effort] of cases) {
+      const expected: TargetMapping = {
+        providerId: 'gemini',
+        transportProviderId: 'cloud-code',
+        model: 'gemini-4-carbon',
+        ...(effort ? { effort } : {}),
+      };
+      expect(resolve(requestedId), requestedId).toEqual(expected);
+      expect(resolveCandidates(requestedId), requestedId).toEqual([expected]);
+    }
+  }
+});
