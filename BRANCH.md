@@ -121,6 +121,11 @@ Additive preprod-safe CM artifact storage: install package 0009-0013, harden blo
   - Switch back to worktree after UAT.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot 14 — Sync origin/main 913e3bcbc (2026-11-15)**
+  - [x] Merge origin/main (913e3bcbc) into feat/t4a-cm-artifact-storage (651bd61cd -> 6d5c81dff) without rebase or functional change.
+  - [x] Regenerate api/package-lock.json from origin/main via make install-api in Docker (ENV=test-t4a-sync).
+  - [x] Qualify artifacts (typecheck/lint/unit 1077/1077), cluster-mesh (typecheck/lint/tuple 5/5), artifact-content (234/234) and scoped T4a API suites (124/124); tear down isolated test volumes.
+  - [ ] Push and await green exact-head CI without merging.
 - [ ] **Lot 13 — FIX R6b PostgreSQL CI**
   - [x] Fetch and mechanically verify the requested worktree and branch; compare the storage path with origin/main.
   - [x] Measure transaction-local timeout settings and WAL commit waits without printing connection strings or values.
