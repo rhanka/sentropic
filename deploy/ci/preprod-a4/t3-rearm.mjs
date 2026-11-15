@@ -1,21 +1,55 @@
-import { mkdirSync, renameSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadState, readRecoveryClaim, claimDead } from './t3-lib.mjs';
 import { classify } from './t3-window-driver.mjs';
 import { preflight } from './t3-preflight-static.mjs';
 import { digest } from './guards.mjs';
+import { t3PriorityClass } from './ops.mjs';
 import { gunzipSync } from 'node:zlib';
+
+const REARM_HOLD = "process.on('SIGTERM',()=>process.exit(0));process.on('SIGINT',()=>process.exit(0));setInterval(()=>{},1000)";
+const ARCHIVE_ENTRIES = new Set([
+  'custody.tar.gz', 'custody.tar.gz.tmp', 'custody.sha256', 'custody.sha256.tmp',
+  '.custody-emptied', '.custody-emptied.tmp', 'operator-state',
+]);
+
+function writeAtomic(file, content) {
+  const tmp = `${file}.tmp`;
+  writeFileSync(tmp, content, { mode: 0o600 });
+  renameSync(tmp, file);
+}
+
+function verifyArchivedCustody(tarFile, shaFile) {
+  if (!existsSync(tarFile) || !existsSync(shaFile)) throw new Error('rearm_archive_invalid');
+  const data = readFileSync(tarFile);
+  const expected = readFileSync(shaFile, 'utf8').trim();
+  if (!/^[a-f0-9]{64}$/.test(expected) || digest(data) !== expected) throw new Error('rearm_archive_invalid');
+  let unpacked;
+  try { unpacked = gunzipSync(data); } catch { throw new Error('rearm_archive_invalid'); }
+  if (unpacked.length < 1024 || unpacked.length % 512 !== 0) throw new Error('rearm_archive_invalid');
+}
 
 export function assertRearmState(state, claim, nextOperation) {
   if (state?.step !== 'DONE' || state.commitVerified !== false || claim
     || !nextOperation || nextOperation === state.operationId) throw new Error('rearm_state_invalid');
 }
 
-// Explicit action only, after rollback. Evidence is archived before custody is erased.
+// Explicit action only, after rollback. Evidence is archived before custody is erased,
+// and every step is idempotent and resumable across interruptions.
 export function rearm(ctx, nextConfig, read) {
-  const state = loadState(ctx.stateDir), config = ctx.config;
-  const claim = readRecoveryClaim(ctx.stateDir);
+  const config = ctx.config;
+  const archive = `${ctx.stateDir}-attempt-${config.request.operationId}`;
+  const archivedStateDir = join(archive, 'operator-state');
+  const liveEntries = existsSync(ctx.stateDir) ? readdirSync(ctx.stateDir) : [];
+  if (existsSync(archivedStateDir) && liveEntries.length > 0) throw new Error('rearm_archive_exists');
+  if (existsSync(archive) && readdirSync(archive).some(entry => !ARCHIVE_ENTRIES.has(entry))) {
+    throw new Error('rearm_archive_exists');
+  }
+  const stateSource = liveEntries.length === 0 && existsSync(archivedStateDir) ? archivedStateDir : ctx.stateDir;
+  const state = loadState(stateSource);
+  const claim = readRecoveryClaim(stateSource);
   assertRearmState(state, claim && !claimDead(claim), nextConfig.request.operationId);
+  if (state.operationId !== config.request.operationId) throw new Error('rearm_state_invalid');
   preflight(nextConfig, read);
   if (nextConfig.namespace !== config.namespace || nextConfig.executionSha256 === config.executionSha256
     || nextConfig.request.operationId === config.request.operationId) throw new Error('rearm_inputs_not_fresh');
@@ -35,38 +69,49 @@ export function rearm(ctx, nextConfig, read) {
   }
   const jobs = JSON.parse(ctx.call(['get', 'jobs', '-o', 'json'])).items;
   if (jobs.some(j => j.metadata.name.startsWith('pgbackup-a4-') && j.status?.active)) throw new Error('rearm_backup_active');
-  const archive = `${ctx.stateDir}-attempt-${config.request.operationId}`;
-  if (existsSync(archive)) throw new Error('rearm_archive_exists');
-  mkdirSync(archive, { mode: 0o700 });
+  mkdirSync(archive, { recursive: true, mode: 0o700 });
+  const tarFile = join(archive, 'custody.tar.gz'), shaFile = join(archive, 'custody.sha256');
+  const emptiedMarker = join(archive, '.custody-emptied');
+  const archiveDone = existsSync(shaFile);
+  if (archiveDone || existsSync(emptiedMarker) || existsSync(archivedStateDir)) {
+    verifyArchivedCustody(tarFile, shaFile);
+  }
   const name = 'sentropic-a4-rearm';
-  const pod = { apiVersion: 'v1', kind: 'Pod', metadata: { name, namespace: config.namespace }, spec: {
-    restartPolicy: 'Never', automountServiceAccountToken: false,
-    containers: [{ name: 'rearm', image: config.images.candidate, command: ['node', '-e', 'setInterval(()=>{},1000)'],
-      securityContext: { runAsUser: 0, allowPrivilegeEscalation: false, capabilities: { drop: ['ALL'] } },
-      volumeMounts: [{ name: 'custody', mountPath: '/run/cm-cutover' }] }],
-    volumes: [{ name: 'custody', persistentVolumeClaim: { claimName: 'sentropic-a4-custody' } }] } };
-  ctx.call(['create', '-f', '-'], JSON.stringify(pod));
-  try {
-    ctx.call(['wait', '--for=condition=Ready', `pod/${name}`, '--timeout=30s']);
-    const bytes = ctx.call(['exec', name, '--', 'sh', '-ec',
-      'tar czf /tmp/t3-custody.tar.gz -C /run/cm-cutover . && tar tzf /tmp/t3-custody.tar.gz >/dev/null && base64 < /tmp/t3-custody.tar.gz']);
-    const data = Buffer.from(bytes.replace(/\s/g, ''), 'base64');
-    const unpacked = gunzipSync(data); // CRC and complete transfer, before deletion.
-    if (unpacked.length < 1024 || unpacked.length % 512 !== 0) throw new Error('rearm_archive_invalid');
-    const remoteHash = ctx.call(['exec', name, '--', 'sha256sum', '/tmp/t3-custody.tar.gz']).trim().split(/\s/)[0];
-    if (remoteHash !== digest(data)) throw new Error('rearm_archive_transfer_mismatch');
-    writeFileSync(join(archive, 'custody.tar.gz'), data, { mode: 0o600 });
-    writeFileSync(join(archive, 'custody.sha256'), digest(data), { mode: 0o600 });
-    ctx.call(['exec', name, '--', 'node', '-e', `const fs=require('node:fs');const p='/run/cm-cutover';
-      for(const n of fs.readdirSync(p)) fs.rmSync(p+'/'+n,{recursive:true});
-      fs.chmodSync(p,0o700);if(fs.readdirSync(p).length)process.exit(1);`]);
-  } finally {
-    ctx.call(['delete', 'pod', name, '--ignore-not-found=true', '--wait=true', '--timeout=30s']);
+  ctx.call(['delete', 'pod', name, '--ignore-not-found=true', '--wait=true', '--timeout=30s']);
+  if (!existsSync(emptiedMarker)) {
+    const pod = { apiVersion: 'v1', kind: 'Pod', metadata: { name, namespace: config.namespace }, spec: {
+      restartPolicy: 'Never', automountServiceAccountToken: false,
+      terminationGracePeriodSeconds: 1, priorityClassName: t3PriorityClass,
+      containers: [{ name: 'rearm', image: config.images.candidate, command: ['node', '-e', REARM_HOLD],
+        securityContext: { runAsUser: 0, allowPrivilegeEscalation: false, capabilities: { drop: ['ALL'] } },
+        volumeMounts: [{ name: 'custody', mountPath: '/run/cm-cutover' }] }],
+      volumes: [{ name: 'custody', persistentVolumeClaim: { claimName: 'sentropic-a4-custody' } }] } };
+    ctx.call(['create', '-f', '-'], JSON.stringify(pod));
+    try {
+      ctx.call(['wait', '--for=condition=Ready', `pod/${name}`, '--timeout=30s']);
+      if (!archiveDone) {
+        const bytes = ctx.call(['exec', name, '--', 'sh', '-ec',
+          'tar czf /tmp/t3-custody.tar.gz -C /run/cm-cutover . && tar tzf /tmp/t3-custody.tar.gz >/dev/null && base64 < /tmp/t3-custody.tar.gz']);
+        const data = Buffer.from(bytes.replace(/\s/g, ''), 'base64');
+        const unpacked = gunzipSync(data); // CRC and complete transfer, before deletion.
+        if (unpacked.length < 1024 || unpacked.length % 512 !== 0) throw new Error('rearm_archive_invalid');
+        const remoteHash = ctx.call(['exec', name, '--', 'sha256sum', '/tmp/t3-custody.tar.gz']).trim().split(/\s/)[0];
+        if (remoteHash !== digest(data)) throw new Error('rearm_archive_transfer_mismatch');
+        writeAtomic(tarFile, data);
+        writeAtomic(shaFile, digest(data));
+      }
+      ctx.call(['exec', name, '--', 'node', '-e', `const fs=require('node:fs');const p='/run/cm-cutover';
+        for(const n of fs.readdirSync(p)) fs.rmSync(p+'/'+n,{recursive:true});
+        fs.chmodSync(p,0o700);if(fs.readdirSync(p).length)process.exit(1);`]);
+      writeAtomic(emptiedMarker, `${readFileSync(shaFile, 'utf8').trim()}\n`);
+    } finally {
+      ctx.call(['delete', 'pod', name, '--ignore-not-found=true', '--wait=true', '--timeout=30s']);
+    }
   }
   for (const job of jobs.filter(j => j.metadata.name.startsWith('pgbackup-a4-'))) {
-    ctx.call(['delete', 'job', job.metadata.name, '--wait=true', '--timeout=30s']);
+    ctx.call(['delete', 'job', job.metadata.name, '--ignore-not-found=true', '--wait=true', '--timeout=30s']);
   }
-  renameSync(ctx.stateDir, join(archive, 'operator-state'));
-  mkdirSync(ctx.stateDir, { mode: 0o700 });
+  if (!existsSync(archivedStateDir)) renameSync(ctx.stateDir, archivedStateDir);
+  mkdirSync(ctx.stateDir, { recursive: true, mode: 0o700 });
   return { archive, nextOperation: nextConfig.request.operationId };
 }
