@@ -8,10 +8,35 @@ import { rearm } from './t3-rearm.mjs';
 import { saveState } from './t3-lib.mjs';
 import { inputs } from './t3-preflight.test.mjs';
 import { gzipSync } from 'node:zlib';
-import { digest } from './guards.mjs';
+import { canonical, digest } from './guards.mjs';
 
-function makeRearmHarness({ jobs = ['pgbackup-a4-1', 'pgbackup-a4-2'] } = {}) {
-  const next = inputs(), stateDir = mkdtempSync(join(tmpdir(), 't3-rearm-'));
+function inputsForTier(tier = 'preprod') {
+  if (tier === 'preprod') return inputs();
+  const ns = tier === 'restore' ? 'sentropic-restore-a4' : 'sentropic';
+  const f = inputs(tier === 'restore' ? 'https://app.restore-a4.test/api/v1/me' : undefined);
+  f.config.tier = tier; f.config.namespace = ns;
+  f.config.request = { ...f.config.request, format: 'prod-a4-request/1', namespace: 'sentropic',
+    emailCodeActiveKeyRef: 'email-code-hmac:v1:prod:15c2f8b66073655a' };
+  for (const path of ['/authorization', '/rehearsal']) {
+    const value = JSON.parse(f.files[path]); value.format = value.format.replace('preprod-', 'prod-');
+    if (value.namespace) value.namespace = 'sentropic'; f.files[path] = JSON.stringify(value);
+  }
+  f.files['/postgres-version'] = JSON.stringify({ ...JSON.parse(f.files['/postgres-version']), namespace: ns });
+  f.config.applicabilityReceiptPolicy.originalRehearsalSha256 = digest(f.files['/rehearsal']);
+  const annex = JSON.parse(f.files['/annex'].replaceAll('sentropic-preprod-a4-verification', `${ns}-a4-verification`));
+  annex.format = 'prod-a4-execution/1'; annex.namespace = 'sentropic';
+  annex.applicabilityReceiptPolicySha256 = digest(canonical(f.config.applicabilityReceiptPolicy));
+  f.files['/annex'] = JSON.stringify(annex); f.config.executionSha256 = digest(f.files['/annex']);
+  if (tier === 'restore') {
+    const iso = u => { const url = new URL(u); url.hostname = url.hostname.startsWith('idp.') ? 'auth.restore-a4.test' : 'app.restore-a4.test'; return url.href; };
+    for (const k of Object.keys(f.config.endpoints)) f.config.endpoints[k] = iso(f.config.endpoints[k]);
+    for (const p of [...f.config.externalProbes, ...f.config.restrictedProbes]) p.url = iso(p.url);
+  }
+  return f;
+}
+
+function makeRearmHarness({ jobs = ['pgbackup-a4-1', 'pgbackup-a4-2'], tier = 'restore' } = {}) {
+  const next = inputsForTier(tier), stateDir = mkdtempSync(join(tmpdir(), 't3-rearm-'));
   saveState(stateDir, { step: 'DONE', commitVerified: false, operationId: 'old' });
   const config = { ...next.config, request: { operationId: 'old' }, executionSha256: '0'.repeat(64),
     legacyImages: { api: 'legacy-api', 'auth-idp': 'legacy-idp', ui: 'legacy-ui' } };
@@ -176,3 +201,12 @@ for (const fault of ['before-wipe', 'delete-pod-after-wipe', 'between-jobs', 'af
     assert.throws(() => h.run(), /rearm_archive_exists/);
   });
 }
+
+test('R12 MIN-9: rearm pod sets priorityClassName on prod and restore tiers only, aligned with prioritized(tier)', () => {
+  for (const [tier, expected] of [['preprod', undefined], ['prod', 'sentropic-t3-critical'], ['restore', 'sentropic-t3-critical']]) {
+    const h = makeRearmHarness({ jobs: [], tier });
+    h.run();
+    assert.equal(h.cluster.createdPods.length, 1);
+    assert.equal(h.cluster.createdPods[0].spec.priorityClassName, expected, `unexpected priorityClassName for tier=${tier}`);
+  }
+});
