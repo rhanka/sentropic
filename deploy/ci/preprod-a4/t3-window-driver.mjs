@@ -91,7 +91,7 @@ export function delivered(ctx, script, env, timeoutMs) {
   const started = chronoStart();
   const chronoEnv = { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE ?? (ctx.stateDir ? `${ctx.stateDir}/t3-chrono.jsonl` : '') };
   const res = supervisedSync('node', [join(HERE, script)],
-    { env: { ...kubectlProxyEnv(process.env), ...chronoEnv, ...env }, encoding: 'utf8', timeout: timeoutMs }, ctx.stateDir);
+    { env: { ...kubectlProxyEnv(process.env, { kubeconfig: env.A4_KUBECONFIG_FILE ?? ctx.config?.kubeconfigFile }), ...chronoEnv, ...env }, encoding: 'utf8', timeout: timeoutMs }, ctx.stateDir);
   chrono('delivered', started, { script, operation: env.A4_OPERATION ?? env.A4_ACTION ?? env.A4_PHASE, status: res.status }, chronoEnv);
   try {
     if (ctx.stateDir) {

@@ -90,13 +90,13 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
     const p = prepare(args, input);
     if (!p) return '';
     return finishResult(p.effective, p.line, p.started, supervisedSync('kubectl', p.argv,
-      { input, encoding: 'utf8', env: kubectlProxyEnv(process.env), timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir));
+      { input, encoding: 'utf8', env: kubectlProxyEnv(process.env, { kubeconfig }), timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir));
   };
   call.async = async (args, input, overrideMs, opts = {}) => {
     const p = prepare(args, input);
     if (!p) return '';
     return finishResult(p.effective, p.line, p.started, await supervisedAsync('kubectl', p.argv,
-      { input, env: kubectlProxyEnv(process.env), timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024, signal: opts.signal }, stateDir));
+      { input, env: kubectlProxyEnv(process.env, { kubeconfig }), timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024, signal: opts.signal }, stateDir));
   };
   return call;
 }
