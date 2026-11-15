@@ -17,7 +17,7 @@ export function rehearsalFixture(dir,config,baselineBytes) {
   writeFileSync(paths.postgresVersionFile,JSON.stringify({ version: 't3-postgres-version/1',
     namespace: config.namespace ?? 'sentropic-preprod',postgresVersion: PROD_POSTGRES_VERSION,
     serverImage: PROD_POSTGRES_IMAGE,pgbackupClientImage: PROD_POSTGRES_TOOL_IMAGE,
-    identityExportClientImage: PROD_POSTGRES_TOOL_IMAGE }), { mode: 0o600 });
+    identityExportInitContainer: 'export-sql',identityExportClientImage: PROD_POSTGRES_TOOL_IMAGE }), { mode: 0o600 });
   return { ...paths,applicabilityReceiptPolicy: { originalRehearsalSha256: digest(bytes),baselineSha256: digest(baselineBytes),
     reviewRef: 'track:qualified-applicability',allowedChanges: ['sourceContentSha256'] },
     snapshot: { ...original,format: 'preprod-a4-snapshot/1',operationId: config.operationId,
