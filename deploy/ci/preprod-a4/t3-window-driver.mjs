@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { supervisedSync } from './t3-processes.mjs';
-import { kubectlProxyEnv, stripOwnedProxyEnv } from './t3-kubectl-proxy.mjs';
+import { enterProxyDirectFallback, exitProxyDirectFallback, kubectlProxyEnv, stripOwnedProxyEnv } from './t3-kubectl-proxy.mjs';
 import { chrono, chronoSince, chronoStart } from './t3-chrono.mjs';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -235,6 +235,7 @@ export async function recover(ctx, state, reason) {
     }
   }
   RECOVERY_IN_FLIGHT = true;
+  enterProxyDirectFallback();
   try {
     const now = ctx.now ?? monoMs;
     // Nominal work stops at 175 s, reserving recovery within the SAME fence.
@@ -339,6 +340,7 @@ export async function recover(ctx, state, reason) {
     saveState(ctx.stateDir, state);
     return 4;
   } finally {
+    exitProxyDirectFallback();
     RECOVERY_IN_FLIGHT = false;
   }
 }
