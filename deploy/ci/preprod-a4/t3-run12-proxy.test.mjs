@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict';
 import { connect, createServer } from 'node:net';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import { Worker } from 'node:worker_threads';
+import { kubectl } from './guards.mjs';
+import { summarize } from './t3-chrono.mjs';
+import { applicabilityFixture } from './t3-applicability.test.mjs';
+import { PROD_POSTGRES_IMAGE, PROD_POSTGRES_TOOL_IMAGE } from './t3-fixture.mjs';
 import * as proxyMod from './t3-kubectl-proxy.mjs';
 import { loadState, monoMs, runKubectl, saveState } from './t3-lib.mjs';
 import { inputs } from './t3-preflight.test.mjs';
+import { verificationSecret } from './t3-probe-fixture.mjs';
 import { templateDigest } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
 import { drive, recover } from './t3-window-driver.mjs';
@@ -172,6 +177,126 @@ export const createDialer = (mode, server) => ({ host, port }) => {
     process.env.PATH = savedPath;
     await resetKubectlProxyForTests();
     await apiWorker.terminate();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('R12 MIN-2: shared CONNECT counter exposed to chrono, W0 tunnel assertion, bypass traces and runbook kill-switch', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 't3-r12-min2-'));
+  const base = inputs(), tpl = { spec: { containers: [{ name: 'c', image: 'legacy' }] } }, dig = templateDigest(tpl);
+  const templateDigests = { api: dig, 'auth-idp': dig, ui: dig }, ctrl2 = new Int32Array(new SharedArrayBuffer(4));
+  const fullWorker = new Worker(`import { createServer } from 'node:net'; import { workerData as w } from 'node:worker_threads';
+    const srv = createServer(sock => { let buf = ''; sock.on('data', c => {
+      buf += c.toString('utf8'); if (!buf.includes('\\n')) return;
+      const req = JSON.parse(buf.split('\\n')[0]), [verb, kind, name] = req.args; let body = '{}';
+      if (verb === 'auth') body = 'yes\\n';
+      else if (verb === 'exec') {
+        if (req.stdin.includes('SHOW server_version')) body = '17.11\\n';
+        else if (req.stdin.includes('AS acl_sha256')) body = 'a'.repeat(64);
+        else if (req.stdin.includes('cutover-applicability-v1')) body = w.app;
+        else if (req.stdin.includes('AS k,')) body = 'enc-key||3\\n';
+      } else if (verb === 'get' && kind === 'secret') body = name === 'a4-verification-auth' ? w.vSec : '{"data":{"EMAIL_VERIFICATION_PEPPER":"eA=="}}';
+      else if (verb === 'get' && kind === 'pod') body = JSON.stringify({ status: { containerStatuses: [{ name: 'postgres', imageID: 'docker.io/library/' + w.pgImg }] } });
+      else if (verb === 'get' && kind === 'cronjob') body = JSON.stringify({ spec: { suspend: true, jobTemplate: { spec: { template: { spec: { initContainers: [{ name: name === 'pgbackup' ? 'dump' : 'export-sql', image: w.pgTool }] } } } } } });
+      else if (verb === 'get' && kind === 'deployment') body = w.depJson;
+      sock.end(body); }); });
+    srv.listen(0, '127.0.0.1', () => { Atomics.store(w.ctrl, 0, srv.address().port); Atomics.notify(w.ctrl, 0); });`, {
+    eval: true,
+    workerData: { ctrl: ctrl2, app: JSON.stringify(applicabilityFixture()), vSec: JSON.stringify(verificationSecret),
+      pgImg: PROD_POSTGRES_IMAGE, pgTool: PROD_POSTGRES_TOOL_IMAGE, depJson: JSON.stringify({ spec: { template: tpl } }) },
+  });
+  Atomics.wait(ctrl2, 0, 0, 5_000);
+  const port = Atomics.load(ctrl2, 0);
+  const kube = join(dir, 'private-kube.yaml');
+  writeFileSync(kube, `apiVersion: v1\nkind: Config\nclusters:\n- name: c\n  cluster:\n    server: https://k8s.gra.ovh.net:${port}\ncontexts:\n- name: ctx\n  context:\n    cluster: c\ncurrent-context: ctx\n`, { mode: 0o600 });
+  const localDialer = join(dir, 'local-dialer.mjs');
+  writeFileSync(localDialer, `import { connect } from 'node:net';\nexport const createDialer = () => ({ port }) => connect({ host: '127.0.0.1', port });\n`);
+  const shim = join(dir, 'kubectl');
+  writeFileSync(shim, `#!/usr/bin/env node
+import { readFileSync } from 'node:fs'; import { connect } from 'node:net';
+const a = process.argv.slice(2), i = a.indexOf('--request-timeout=60s'), args = i >= 0 ? a.slice(i + 1) : a;
+const kc = readFileSync(a[a.indexOf('--kubeconfig') + 1], 'utf8'), hp = /server:\\s*https:\\/\\/([^\\s]+)/.exec(kc)[1];
+const [, port] = hp.split(':'), stdin = args.includes('-i') ? readFileSync(0, 'utf8') : '';
+const noProxy = (process.env.NO_PROXY ?? '').includes('ovh.net') || process.env.NO_PROXY === '*';
+const kcProxy = /proxy-url:\\s*\\S+/.test(kc), ignoreProxy = process.env.TEST_SHIM_IGNORE_PROXY === '1';
+const run = s => { s.write(JSON.stringify({ args, stdin }) + '\\n'); let d = ''; s.on('data', c => d += c); s.on('end', () => { process.stdout.write(d); process.exit(0); }); };
+if (ignoreProxy || noProxy || kcProxy || !process.env.HTTPS_PROXY || process.env.HTTPS_PROXY.includes('external-corp')) {
+  const s = connect(Number(port), '127.0.0.1', () => run(s));
+} else {
+  const p = new URL(process.env.HTTPS_PROXY), s = connect(Number(p.port), p.hostname, () => s.write(\`CONNECT \${hp} HTTP/1.1\\r\\nHost: \${hp}\\r\\n\\r\\n\`));
+  let b = ''; s.on('data', function onD(c) { b += c.toString('latin1'); if (!b.includes('\\r\\n\\r\\n')) return; s.removeListener('data', onD); run(s); });
+}\n`, { mode: 0o755 });
+  chmodSync(shim, 0o755);
+  const saved = { PATH: process.env.PATH, T3_CHRONO_FILE: process.env.T3_CHRONO_FILE };
+  process.env.PATH = `${dir}:${saved.PATH}`;
+  try {
+    const dialModule = pathToFileURL(localDialer).href;
+    await resetKubectlProxyForTests();
+    registerKubectlProxy({ kubeconfig: kube, dialModule });
+    const chronoFile = join(dir, 'chrono.jsonl');
+    process.env.T3_CHRONO_FILE = chronoFile;
+    kubectl(kube, ['auth', 'can-i', 'get', 'pods'], undefined, 'sentropic-preprod');
+    const summary1 = summarize(readFileSync(chronoFile, 'utf8'));
+    assert.equal(summary1.proxyConnects, 1);
+    assert.doesNotMatch(readFileSync(chronoFile, 'utf8'), /private-kube/);
+
+    const baselinePath = join(dir, 'baseline.json');
+    writeFileSync(baselinePath, base.files['/baseline'], { mode: 0o600 });
+    const makeDrv = (stateSub, kubePath = kube, extraPrint = []) => {
+      const sd = join(dir, stateSub);
+      const call = runKubectl({ kubeconfig: kubePath, namespace: 'sentropic-preprod', stateDir: sd });
+      const config = { ...base.config, kubeconfigFile: kubePath, applicabilityBaselineFile: baselinePath, templateDigests, preCmDir: null };
+      return { sd, extraPrint, ctx: { call, config, stateDir: sd, tier: 'preprod', postgresPod: 'postgres-0',
+        probe: async () => new Response('ok', { status: 200 }), print: m => extraPrint.push(m), read: base.read,
+        delivered: c => { saveState(c.stateDir, { ...loadState(c.stateDir), fenceStarted: false }); throw new Error('stop_at_w1'); } } };
+    };
+    delete process.env.T3_CHRONO_FILE;
+
+    // 1. Active tunnel passes W0 checkDialProxy and sets t0MonoMs before W1.
+    const okRun = makeDrv('w0-ok');
+    await drive(okRun.ctx);
+    assert.equal(typeof loadState(okRun.sd).t0MonoMs, 'number', 'W0 passed with active tunnel');
+    const okSummary = summarize(readFileSync(join(okRun.sd, 't3-chrono.jsonl'), 'utf8'));
+    assert.ok(okSummary.proxyConnects >= 1);
+
+    // 2. Unexplained zero-CONNECT tunnel bypass fails closed in W0 before t0.
+    process.env.TEST_SHIM_IGNORE_PROXY = '1';
+    try {
+      const badRun = makeDrv('w0-unverified');
+      assert.equal(await drive(badRun.ctx), 1);
+      assert.equal(loadState(badRun.sd).t0MonoMs, undefined);
+      assert.equal(loadState(badRun.sd).refusalReason, 'throw:kubectl_proxy_unverified');
+    } finally { delete process.env.TEST_SHIM_IGNORE_PROXY; }
+
+    // 3. Explicit overrides emit dialProxy: bypassed(<reason>).
+    const kubeProxy = join(dir, 'kube-proxy.yaml');
+    writeFileSync(kubeProxy, readFileSync(kube, 'utf8').replace('clusters:\n- name: c\n  cluster:\n', 'clusters:\n- name: c\n  cluster:\n    proxy-url: http://corp:3128\n'), { mode: 0o600 });
+    for (const [label, envPatch, kcPath] of [
+      ['disabled', { T3_KUBECTL_PROXY_DISABLE: '1' }, kube],
+      ['https_proxy', { HTTPS_PROXY: 'http://external-corp:8080' }, kube],
+      ['no_proxy', { NO_PROXY: '*.ovh.net' }, kube],
+      ['kubeconfig_proxy_url', {}, kubeProxy],
+    ]) {
+      await resetKubectlProxyForTests();
+      registerKubectlProxy({ kubeconfig: kcPath, dialModule });
+      Object.assign(process.env, envPatch);
+      try {
+        const bRun = makeDrv(`w0-${label}`, kcPath);
+        await drive(bRun.ctx);
+        assert.ok(bRun.extraPrint.includes(`dialProxy: bypassed(${label})`), `expected dialProxy: bypassed(${label}), got ${bRun.extraPrint.join(',')}`);
+      } finally {
+        for (const k of Object.keys(envPatch)) delete process.env[k];
+      }
+    }
+
+    const runbook = readFileSync(new URL('../../../docs/runbooks/t3-window.md', import.meta.url), 'utf8');
+    assert.match(runbook, /T3_KUBECTL_PROXY_DISABLE=1/);
+    assert.match(runbook, /dialProxy: bypassed\(/);
+  } finally {
+    process.env.PATH = saved.PATH;
+    if (saved.T3_CHRONO_FILE === undefined) delete process.env.T3_CHRONO_FILE; else process.env.T3_CHRONO_FILE = saved.T3_CHRONO_FILE;
+    await resetKubectlProxyForTests();
+    await fullWorker.terminate();
     rmSync(dir, { recursive: true, force: true });
   }
 });
