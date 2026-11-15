@@ -64,10 +64,10 @@ An enrolled Cloud Code seat must get the same answers through llm-mesh as throug
   - [x] New `tests/transport/cloud-code-client-identity.test.ts` (fixture of the measured server gate; fails before the fix); update `tests/enrollment/cloud-code.test.ts`.
   - [x] Lot gate: `make test-llm-mesh ENV=test-llm-mesh-argon`, `make typecheck-llm-mesh ENV=test-llm-mesh-argon`.
 
-- [ ] **Lot 2 — Release bookkeeping**
-  - [ ] Bump `@sentropic/llm-mesh` 0.38.0 -> 0.38.1 (npm latest 0.38.0), CHANGELOG entry, `tests/decision-public-surface.test.ts` version.
-  - [ ] BRLMA-EX1 root lock line; BRLMA-EX2 cluster-mesh train and selected fixtures.
-  - [ ] Lot gate: `make test-cluster-mesh ENV=test-llm-mesh-argon`, `make pack-llm-mesh ENV=test-llm-mesh-argon`.
+- [x] **Lot 2 — Release bookkeeping**
+  - [x] Bump `@sentropic/llm-mesh` 0.38.0 -> 0.38.1 (npm latest 0.38.0), CHANGELOG entry, `tests/decision-public-surface.test.ts` version.
+  - [x] BRLMA-EX1 root lock line; BRLMA-EX2 cluster-mesh train and selected fixtures.
+  - [x] Lot gate: `make test-cluster-mesh ENV=test-llm-mesh-argon`, `make pack-llm-mesh ENV=test-llm-mesh-argon`.
 
 - [ ] **Lot 3 — PR and CI**
   - [ ] Push, open PR (no merge, no publish), CI green on the exact head.
