@@ -96,7 +96,7 @@ const kubeconfigYaml = hp => `apiVersion: v1\nkind: Config\nclusters:\n- name: c
 const NODE_KUBECTL_SHIM = `#!/usr/bin/env node
 import { readFileSync } from 'node:fs'; import { request } from 'node:https'; import { connect } from 'node:net'; import { connect as tlsConnect } from 'node:tls';
 const args = process.argv.slice(2), rest = []; let kc = '';
-for (let i = 0; i < args.length; i++) { if (args[i] === '--kubeconfig' || args[i] === '--namespace') { if (args[i] === '--kubeconfig') kc = args[i + 1]; i++; } else if (!args[i].startsWith('--request-timeout=')) rest.push(args[i]); }
+for (let i = 0; i < args.length; i++) { if (args[i] === '--kubeconfig' || args[i] === '--namespace' || args[i] === '--cache-dir') { if (args[i] === '--kubeconfig') kc = args[i + 1]; i++; } else if (!args[i].startsWith('--request-timeout=')) rest.push(args[i]); }
 const auth = /server:\\s*https:\\/\\/([^\\s]+)/.exec(readFileSync(kc, 'utf8'))[1], [host, portStr] = auth.split(':'), port = Number(portStr);
 const openTls = () => new Promise((res, rej) => {
   const dHost = host === 'apiserver.t3.local' ? '127.0.0.1' : host;
@@ -104,7 +104,7 @@ const openTls = () => new Promise((res, rej) => {
   if (!process.env.HTTPS_PROXY) { const raw = connect(port, dHost, () => up(raw)); raw.on('error', rej); return; }
   const p = new URL(process.env.HTTPS_PROXY); let ok = false, b = Buffer.alloc(0);
   const raw = connect(Number(p.port), p.hostname, () => raw.write(\`CONNECT \${auth} HTTP/1.1\\r\\nHost: \${auth}\\r\\n\\r\\n\`));
-  raw.on('error', e => rej(new Error(e.code === 'ECONNREFUSED' ? \`Unable to connect to the server: proxyconnect tcp: dial tcp \${p.host}: connect: connection refused\` : String(e))));
+  raw.on('error', e => rej(new Error(e.code === 'ECONNREFUSED' ? (rest[0] === 'auth' ? \`The connection to the server \${auth} was refused - did you specify the right host or port?\` : \`Unable to connect to the server: proxyconnect tcp: dial tcp \${p.host}: connect: connection refused\`) : String(e))));
   raw.on('close', () => { if (!ok) rej(new Error('Unable to connect to the server: proxyconnect tcp: EOF')); });
   raw.on('data', function onD(c) { b = Buffer.concat([b, c]); const i = b.indexOf('\\r\\n\\r\\n'); if (i < 0) return; raw.removeListener('data', onD);
     if (!b.subarray(0, i).toString().startsWith('HTTP/1.1 200')) { raw.destroy(); rej(new Error('Unable to connect to the server: Bad Gateway')); return; } ok = true; up(raw); });
