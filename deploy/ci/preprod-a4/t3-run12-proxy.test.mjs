@@ -118,7 +118,7 @@ const run = sock => { sock.write(JSON.stringify({ args, stdin }) + '\\n'); let d
 if (!process.env.HTTPS_PROXY) { const s = connect(Number(port), host, () => run(s)); s.on('error', e => { process.stderr.write(String(e)); process.exit(1); }); }
 else { const p = new URL(process.env.HTTPS_PROXY); let ok = false, b = '';
   const s = connect(Number(p.port), p.hostname, () => s.write(\`CONNECT \${hp} HTTP/1.1\\r\\nHost: \${hp}\\r\\n\\r\\n\`));
-  s.on('error', e => { process.stderr.write(\`proxyconnect \${p.host}: \${e.code}\`); process.exit(1); });
+  s.on('error', e => { process.stderr.write(\`Unable to connect to the server: proxyconnect tcp: dial tcp \${p.host}: connect: connection refused (\${e.code})\`); process.exit(1); });
   s.on('close', () => { if (!ok) { process.stderr.write('proxyconnect: EOF'); process.exit(1); } });
   s.on('data', function onD(c) { b += c.toString('latin1'); const k = b.indexOf('\\r\\n\\r\\n'); if (k < 0) return; s.removeListener('data', onD);
     if (!b.startsWith('HTTP/1.1 200')) { process.stderr.write('proxy_502'); process.exit(1); } ok = true; run(s); }); }
@@ -298,5 +298,57 @@ if (ignoreProxy || noProxy || kcProxy || !process.env.HTTPS_PROXY || process.env
     await resetKubectlProxyForTests();
     await fullWorker.terminate();
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('R13 MIN-1: reuse mode never replays and raises kubectl_proxy_down, anchored proxyconnect regex ignores remote exec ECONNREFUSED, and T3_KUBECTL_PROXY_FALLBACK_DIRECT is removed', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 't3-r13-min1-')), ctrl = new Int32Array(new SharedArrayBuffer(16));
+  const srvWorker = new Worker(`import { createServer } from 'node:net'; import { workerData as c } from 'node:worker_threads';
+    const api = createServer(s => { Atomics.add(c, 2, 1); s.end('direct-ok\\n'); });
+    const prx = createServer(s => { Atomics.add(c, 3, 1); s.once('data', () => s.end('HTTP/1.1 200 Connection Established\\r\\n\\r\\n')); });
+    api.listen(0, '127.0.0.1', () => prx.listen(0, '127.0.0.1', () => {
+      Atomics.store(c, 0, api.address().port); Atomics.store(c, 1, prx.address().port); Atomics.notify(c, 0); }));`, { eval: true, workerData: ctrl });
+  Atomics.wait(ctrl, 0, 0, 5_000);
+  const apiPort = Atomics.load(ctrl, 0), liveProxyPort = Atomics.load(ctrl, 1), dead = await listenTcp(s => s.destroy());
+  await new Promise(r => dead.srv.close(r));
+  const kube = join(dir, 'kube.yaml'), shim = join(dir, 'kubectl');
+  writeFileSync(kube, `apiVersion: v1\nkind: Config\nclusters:\n- name: c\n  cluster:\n    server: https://127.0.0.1:${apiPort}\ncontexts:\n- name: ctx\n  context:\n    cluster: c\ncurrent-context: ctx\n`, { mode: 0o600 });
+  writeFileSync(shim, `#!/usr/bin/env node\nimport { connect } from 'node:net';\nconst mode = process.env.TEST_EXEC_STDERR || '';
+if (!process.env.HTTPS_PROXY) { const s = connect(${apiPort}, '127.0.0.1', () => { let d = ''; s.on('data', c => d += c); s.on('end', () => { process.stdout.write(d); process.exit(0); }); }); }
+else { const p = new URL(process.env.HTTPS_PROXY), s = connect(Number(p.port), p.hostname, () => s.write('CONNECT 127.0.0.1:${apiPort} HTTP/1.1\\r\\n\\r\\n'));
+  s.on('error', () => { process.stderr.write(\`Unable to connect to the server: proxyconnect tcp: dial tcp \${p.host}: connect: connection refused\\n\`); process.exit(1); });
+  s.once('data', () => { s.destroy(); if (mode) { process.stderr.write(mode); process.exit(1); } process.stdout.write('proxied-ok\\n'); process.exit(0); }); }\n`, { mode: 0o755 });
+  chmodSync(shim, 0o755);
+  const envKeys = ['T3_KUBECTL_PROXY_URL', 'T3_KUBECTL_PROXY_TARGET', 'HTTPS_PROXY', 'T3_KUBECTL_PROXY_FALLBACK_DIRECT', 'TEST_EXEC_STDERR'];
+  const savedPath = process.env.PATH, savedEnv = Object.fromEntries(envKeys.map(k => [k, process.env[k]]));
+  process.env.PATH = `${dir}:${savedPath}`;
+  try {
+    await resetKubectlProxyForTests();
+    const liveUrl = `http://127.0.0.1:${liveProxyPort}`, deadUrl = `http://127.0.0.1:${dead.port}`, target = `127.0.0.1:${apiPort}`;
+    Object.assign(process.env, { T3_KUBECTL_PROXY_URL: liveUrl, T3_KUBECTL_PROXY_TARGET: target, HTTPS_PROXY: liveUrl });
+    for (const msg of [`Error: connect ECONNREFUSED 127.0.0.1:5432\n`, `Error: connect ECONNREFUSED 127.0.0.1:${liveProxyPort}\n`,
+      `proxyconnect tcp: dial tcp 127.0.0.1:${dead.port}: connect: connection refused\n`]) {
+      process.env.TEST_EXEC_STDERR = msg; Atomics.store(ctrl, 3, 0);
+      const reuseCall = runKubectl({ kubeconfig: kube, namespace: 'sentropic-preprod', stateDir: dir, proxyFallbackDirect: true });
+      assert.throws(() => reuseCall(['exec', 'postgres-0', '--', 'node', '-e', '1']), /kubectl_failed/);
+      assert.deepEqual([Atomics.load(ctrl, 3), Atomics.load(ctrl, 2)], [1, 0], 'remote exec error must never trigger direct replay');
+    }
+    delete process.env.TEST_EXEC_STDERR;
+    Object.assign(process.env, { T3_KUBECTL_PROXY_URL: deadUrl, T3_KUBECTL_PROXY_TARGET: target, HTTPS_PROXY: deadUrl });
+    proxyMod.enterProxyDirectFallback();
+    try {
+      const reuseCall = runKubectl({ kubeconfig: kube, namespace: 'sentropic-preprod', stateDir: dir, proxyFallbackDirect: true });
+      assert.throws(() => reuseCall(['patch', 'secret', 'sentropic-api', '-p', '{}']), /kubectl_proxy_down/);
+      await assert.rejects(() => reuseCall.async(['patch', 'secret', 'sentropic-api', '-p', '{}']), /kubectl_proxy_down/);
+      assert.throws(() => kubectl(kube, ['get', 'pods'], undefined, 'sentropic-preprod'), /kubectl_proxy_down/);
+      assert.equal(Atomics.load(ctrl, 2), 0, 'reuse mode without owned Worker must never replay directly');
+    } finally { proxyMod.exitProxyDirectFallback(); }
+    process.env.T3_KUBECTL_PROXY_FALLBACK_DIRECT = '1';
+    assert.equal(proxyMod.isProxyDirectFallback(), false);
+    assert.doesNotMatch(readFileSync(new URL('./t3-kubectl-proxy.mjs', import.meta.url), 'utf8'), /T3_KUBECTL_PROXY_FALLBACK_DIRECT/);
+  } finally {
+    process.env.PATH = savedPath;
+    for (const [k, v] of Object.entries(savedEnv)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    await resetKubectlProxyForTests(); await srvWorker.terminate(); rmSync(dir, { recursive: true, force: true });
   }
 });
