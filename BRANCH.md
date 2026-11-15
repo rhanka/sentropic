@@ -4,7 +4,7 @@
 - [ ] Cut the stable 0.26.0 release from 0.26.0-dev.27 so npm publishes a cluster-mesh whose llm-mesh peer admits 0.38.x (h2a #458).
 
 ## Scope / Guardrails
-- [x] Worktree tmp/worktrees/cluster-mesh-0260; branch chore/cluster-mesh-0.26.0 from origin/main 5c6db5a08.
+- [x] Worktree tmp/worktrees/cluster-mesh-0260; branch chore/cluster-mesh-0.26.0 from origin/main 5c6db5a08, rebased onto dc3082113.
 - [x] Release convention copied from 0.25.0 (a50c18f91 + c72558e9b): stable version, root/api lock version metadata, selected fixture tarball pin, comments self-range, next-minor refusal test.
 - [x] Test env if needed: ENV=test-cm-0260 API_PORT=9182 UI_PORT=5382 MAILDEV_UI_PORT=1282; Make only, ENV last, docker-slot.sh.
 - [x] No merge: merging publishes to npm and needs the owner GO via the conductor.
@@ -36,6 +36,7 @@
 - [x] Inventory vs published 0.25.0: no removed or remapped export; 13 subpaths added; peers widened (llm-mesh <0.39.0, llm-gateway <0.24.0, auth-hono ^0.18.0); 3 optional UI peers added; runtime dependencies unchanged.
 - [x] Behavior notes: pending_admin_approval accounts can be disabled/deleted; ClusterMeshProviderModuleId adds notifications.
 - [x] Installed lane (packaging.mk test-lazy-package, ENV=test-cm-0260) on 43c354f64 under host load 18-35: run 1 142/143 (prepare-artifacts frozen-pin case 5000 ms timeout), run 2 141/143 (two consumer-topology cases 5000 ms timeout); every case passed in at least one run; no timeout increase; CI lazy lane is the gate.
+- [x] Rebased onto origin/main dc3082113 (#1036, llm-mesh 0.38.1 now in the selected fixture); 0.26.0 > published 0.25.0. Focused prepare-artifacts.spec.ts at load 11-14: branch 20/20 twice (frozen-pin case 2.6 s, 3.0 s), main baseline 20/20 (1.5 s); the 18 s failure ran at load 18.
 - [ ] attention: post-publication follow-up (separate PR, as after 0.25.0): freeze the 0.26.0 consumer closure in scripts/ci/consumer-locks.json, roll RESERVED_NEXT to 0.27.0 and LATEST_PUBLISHED_CLUSTER_MESH to 0.26.0 in both mirrors.
 
 ## AI Flaky tests
