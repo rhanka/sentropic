@@ -25,7 +25,7 @@ export const JOSE_RANGE = '^5.10.0';
  * Spelled as a bounded interval: the minimal release-range parser has no `||`. */
 export const AUTH_HONO_RANGE = '>=0.15.0 <0.19.0';
 export const COMMENTS_RANGE = '^0.3.0';
-export const NOTIFICATIONS_RANGE = '>=0.21.0 <0.26.0';
+export const NOTIFICATIONS_RANGE = '>=0.21.0 <0.27.0';
 
 export interface PeerRequirement {
   readonly packageName: string;
@@ -117,7 +117,7 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
     subpath: './memory-substrate', range: ENGRAM_MEMORY_RANGE, meshCoherence: false, authPeers: [],
     requiredMembers: ['openModuleStorageCanonicalMemoryStoreV1', 'createMemoryPortV2'],
   },
-  comments: { id: 'comments', owner: 'comments', packageName: '@sentropic/cluster-mesh', subpath: './comments', range: '>=0.21.0 <0.26.0',
+  comments: { id: 'comments', owner: 'comments', packageName: '@sentropic/cluster-mesh', subpath: './comments', range: '>=0.21.0 <0.27.0',
     requiredMembers: ['createCommentsModule', 'createCommentsPostgresStorage'], namespace: '/comments', meshCoherence: false,
     authPeers: [{ packageName: '@sentropic/comments', subpath: '.', range: COMMENTS_RANGE, requiredMembers: ['createAnnotationRevision', 'validateCapacityDescriptor', 'hashRecord'] }] },
   notifications: { id: 'notifications', owner: 'notifications', packageName: '@sentropic/cluster-mesh', subpath: './notifications',
