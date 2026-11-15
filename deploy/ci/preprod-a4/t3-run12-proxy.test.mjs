@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { connect, createServer } from 'node:net';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -16,8 +16,8 @@ import { inputs } from './t3-preflight.test.mjs';
 import { verificationSecret } from './t3-probe-fixture.mjs';
 import { templateDigest } from './t3-rollback.mjs';
 import { poll } from './t3-watchdog.mjs';
-import { drive, recover } from './t3-window-driver.mjs';
-const { kubectlProxyEnv, registerKubectlProxy, resetKubectlProxyForTests } = proxyMod;
+import { checkDialProxy, drive, recover } from './t3-window-driver.mjs';
+const { inspectDialProxyBypass, kubectlProxyEnv, parseKubeconfigInfo, registerKubectlProxy, resetKubectlProxyForTests } = proxyMod;
 
 function listenTcp(onSocket) {
   const srv = createServer(onSocket);
@@ -350,5 +350,41 @@ else { const p = new URL(process.env.HTTPS_PROXY), s = connect(Number(p.port), p
     process.env.PATH = savedPath;
     for (const [k, v] of Object.entries(savedEnv)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
     await resetKubectlProxyForTests(); await srvWorker.terminate(); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('R13 MIN-4: unresolved kubeconfig raises kubectl_proxy_target_unresolved or traces bypassed(kubeconfig_unparsed) without opaque 403, normalizes YAML/authorities, and memoizes per path', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 't3-r13-min4-'));
+  const echo = await listenTcp(s => s.end());
+  try {
+    await resetKubectlProxyForTests();
+    const unparsed = join(dir, 'unparsed.yaml');
+    writeFileSync(unparsed, 'apiVersion: v1\nclusters:\n- name: c\n  cluster:\n    server: http://plain.local:8080\n', { mode: 0o600 });
+    assert.throws(() => registerKubectlProxy({ kubeconfig: unparsed }), /kubectl_proxy_target_unresolved/);
+    assert.equal(kubectlProxyEnv({}, { kubeconfig: unparsed }).HTTPS_PROXY, undefined, 'must not set HTTPS_PROXY to a 403 Worker');
+    assert.equal(inspectDialProxyBypass({}, unparsed), 'kubeconfig_unparsed');
+    const prints = [], stateDir = join(dir, 'state');
+    mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+    checkDialProxy({ call: Object.assign(() => '', { kubectlProxyKubeconfig: unparsed }), stateDir, print: m => prints.push(m) }, 0);
+    assert.deepEqual(prints, ['dialProxy: bypassed(kubeconfig_unparsed)']);
+    assert.match(readFileSync(join(stateDir, 't3-chrono.jsonl'), 'utf8'), /"bypassed":"kubeconfig_unparsed"/);
+
+    // Memoize parseKubeconfigInfo per path (zero re-reads after initial parse until test reset).
+    const memo = join(dir, 'memo.yaml');
+    writeFileSync(memo, `apiVersion: v1\nclusters:\n- name: prod\n  cluster:\n    server: https://K8S.GRA.OVH.NET.:${echo.port}\n    extensions:\n    - name: ext\n      extension:\n        server: https://wrong.invalid:9999\ncontexts:\n- name: ctx\n  context:\n    cluster: prod\n    extensions:\n    - name: ctx-ext\n      extension:\n        cluster: wrong\ncurrent-context: ctx\n`, { mode: 0o600 });
+    const first = parseKubeconfigInfo(memo);
+    assert.equal(first.allowedTarget, `k8s.gra.ovh.net:${echo.port}`);
+    rmSync(memo);
+    assert.equal(parseKubeconfigInfo(memo).allowedTarget, `k8s.gra.ovh.net:${echo.port}`, 'memoized per path without disk re-read');
+
+    // Authority normalization: uncompressed IPv6 in CONNECT matches compressed IPv6 in kubeconfig.
+    const v6Kube = join(dir, 'v6.yaml'), localDialer = join(dir, 'v6-dial.mjs');
+    writeFileSync(v6Kube, `apiVersion: v1\nclusters:\n- name: v6\n  cluster:\n    server: https://[::1]:${echo.port}\ncontexts:\n- name: c\n  context:\n    cluster: v6\ncurrent-context: c\n`, { mode: 0o600 });
+    writeFileSync(localDialer, `import { connect } from 'node:net';\nexport const createDialer = () => ({ port }) => connect({ host: '127.0.0.1', port });\n`);
+    const v6Proxy = registerKubectlProxy({ kubeconfig: v6Kube, dialModule: pathToFileURL(localDialer).href });
+    assert.match(await sendConnect(v6Proxy.url, `[0:0:0:0:0:0:0:1]:${echo.port}`), /^HTTP\/1\.1 200 Connection Established\r\n/);
+    await v6Proxy.close();
+  } finally {
+    await resetKubectlProxyForTests(); echo.srv.close(); rmSync(dir, { recursive: true, force: true });
   }
 });
