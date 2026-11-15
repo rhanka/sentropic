@@ -58,11 +58,11 @@ An enrolled Cloud Code seat must get the same answers through llm-mesh as throug
   - [x] Confirm Cloud Code transport is identical between llm-mesh 0.26.0 (f3e2b0afc) and 0.38.0.
   - [x] Capture agy and mesh request structure through a local redacting proxy; reproduce on 0.38.0 (catalogue without Argon, 404 on generation with the mesh identity).
 
-- [ ] **Lot 1 — Client identity parity**
-  - [ ] Single `CLOUD_CODE_USER_AGENT` / `CLOUD_CODE_CLIENT_VERSION` in `src/enrollment/cloud-code.ts`, mirroring agy 1.5.9; transport re-exports it; enrollment metadata `cloudCodeUserAgentVersion` derives from it.
-  - [ ] Catalogue miss throws `statusCode: 404`, `code: 'model_not_found'` in `src/transport/cloud-code-runtime-client.ts`.
-  - [ ] New `tests/transport/cloud-code-client-identity.test.ts` (fixture of the measured server gate; fails before the fix); update `tests/enrollment/cloud-code.test.ts`.
-  - [ ] Lot gate: `make test-llm-mesh ENV=test-llm-mesh-argon`, `make typecheck-llm-mesh ENV=test-llm-mesh-argon`.
+- [x] **Lot 1 — Client identity parity**
+  - [x] Single `CLOUD_CODE_USER_AGENT` / `CLOUD_CODE_CLIENT_VERSION` in `src/enrollment/cloud-code.ts`, mirroring agy 1.5.9; transport re-exports it; enrollment metadata `cloudCodeUserAgentVersion` derives from it.
+  - [x] Catalogue miss throws `statusCode: 404`, `code: 'model_not_found'` in `src/transport/cloud-code-runtime-client.ts`.
+  - [x] New `tests/transport/cloud-code-client-identity.test.ts` (fixture of the measured server gate; fails before the fix); update `tests/enrollment/cloud-code.test.ts`.
+  - [x] Lot gate: `make test-llm-mesh ENV=test-llm-mesh-argon`, `make typecheck-llm-mesh ENV=test-llm-mesh-argon`.
 
 - [ ] **Lot 2 — Release bookkeeping**
   - [ ] Bump `@sentropic/llm-mesh` 0.38.0 -> 0.38.1 (npm latest 0.38.0), CHANGELOG entry, `tests/decision-public-surface.test.ts` version.
