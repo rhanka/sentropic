@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.26.0
+
+- Stable release of the 0.26.0 line (`0.26.0-dev.5` to `0.26.0-dev.27` below).
+  No public subpath is removed or remapped; 13 subpaths are added:
+  `./compile/contract`, `./notifications`, `./loaders/notifications`,
+  `./sessions/relay`, `./identity/auth-hono`, `./ui/management`,
+  `./ui/management-ports`, `./ui/auth-flow` and five `./ui/*.svelte` screens.
+- Peer ranges widen: `@sentropic/llm-mesh` `0.19.2 || >=0.22.0 <0.39.0`
+  (admits 0.38.x), `@sentropic/llm-gateway` `>=0.19.0 <0.24.0`,
+  `@sentropic/auth-hono` adds `^0.18.0`. New optional peers for the UI
+  screens only: `svelte ^5.0.0`, `@sentropic/design-system-svelte ^0.34.0`,
+  `@sentropic/auth-ui ^0.9.0`. Runtime dependencies are unchanged.
+- Behavior changes: `createUserAccounts` now disables and deletes accounts in
+  `pending_admin_approval` (deletion refusal message reads `User must be
+  pending or disabled before deletion`); `ClusterMeshProviderModuleId` adds
+  `notifications`, so exhaustive host switches or records over that union
+  need the new member.
+- Extend the comments and notifications self-version ranges to
+  `>=0.21.0 <0.27.0` so this released leaf admits itself. The next minor
+  remains refused until qualified.
+
 ## 0.26.0-dev.24
 
 - T5a CM providers, code only (flag-gated, no state move, no migration): CMP-L1
