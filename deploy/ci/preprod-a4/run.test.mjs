@@ -30,6 +30,20 @@ test('should clone only the reviewed tenant backup template and suppress backup 
   assert.equal(JSON.parse(last.input).backupKey, 'pg/20261106T150000Z.sql.gz');
   assert.equal(JSON.parse(last.input).dryRun, false);
 });
+// Each worker invocation loads the whole API bundle (about 9 s under the inherited 500m limit, r9).
+test('should load the bundle once for an executed checkpoint, between two fence assertions', () => {
+  const fake = fixture();
+  assertDigestOutput(run({ ...env, A4_PHASE: 'checkpoint', A4_DRY_RUN: '0' }, fake.call, read));
+  assert.deepEqual(fake.calls.map(({ args }) => args[0] === 'exec' ? 'worker' : args[1].split(',')[0]),
+    ['cronjob', 'deployments', 'pods', 'worker', 'deployments', 'pods']);
+  assert.equal(JSON.parse(fake.calls.find(({ args }) => args[0] === 'exec').input).dryRun, false);
+});
+test('should keep the pre-backup state proof: two worker invocations around the snapshot Job', () => {
+  const fake = fixture();
+  run({ ...env, A4_PHASE: 'snapshot', A4_DRY_RUN: '0' }, fake.call, read);
+  const order = fake.calls.map(({ args, input }) => args[0] === 'exec' ? `worker:${JSON.parse(input).dryRun}` : args[0]);
+  assert.deepEqual(order.filter(step => step.startsWith('worker') || step === 'create'), ['worker:true', 'create', 'worker:false']);
+});
 test('should reject a changed backup template before creating any Job', () => {
   const fake = fixture(); fake.data.cron.spec.jobTemplate.spec.backoffLimit = 7;
   assert.throws(() => run({ ...env, A4_DRY_RUN: '0' }, fake.call, read));
