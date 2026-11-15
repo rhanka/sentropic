@@ -41,9 +41,11 @@ export function chrono(name, startNs, extra = {}, env = process.env) {
 
 export function summarize(text) {
   const groups = {};
+  let proxyConnects = 0;
   for (const line of text.split('\n').filter(Boolean)) {
-    const { name, elapsedMs } = JSON.parse(line);
+    const rec = JSON.parse(line), { name, elapsedMs } = rec;
     if (typeof name !== 'string' || !Number.isFinite(elapsedMs)) throw new Error('chrono_record_invalid');
+    if (Number.isFinite(rec.proxyConnects)) proxyConnects += rec.proxyConnects;
     const group = groups[name] ??= { count: 0, maxMs: 0 };
     group.count += 1;
     group.maxMs = Math.max(group.maxMs, elapsedMs);
@@ -51,7 +53,7 @@ export function summarize(text) {
   for (const [name, thresholdMs] of Object.entries(THRESHOLDS_MS)) {
     if (groups[name]) Object.assign(groups[name], { thresholdMs, pass: groups[name].maxMs <= thresholdMs });
   }
-  return { version: 't3-chrono/1', groups, pass: Object.values(groups).every(group => group.pass !== false) };
+  return { version: 't3-chrono/1', groups, proxyConnects, pass: Object.values(groups).every(group => group.pass !== false) };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
