@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { supervisedSync } from './t3-processes.mjs';
 import { enterProxyDirectFallback, exitProxyDirectFallback, inspectDialProxyBypass,
-  kubectlProxyConnectCount, kubectlProxyEnv, parseKubeconfigInfo, stripOwnedProxyEnv } from './t3-kubectl-proxy.mjs';
+  kubectlProxyConnectCount, kubectlProxyEnv, stripOwnedProxyEnv } from './t3-kubectl-proxy.mjs';
 import { chrono, chronoSince, chronoStart } from './t3-chrono.mjs';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -529,7 +529,7 @@ export function checkTemplateDigests(ctx, state) {
 export function checkDialProxy(ctx, connectsBefore = 0) {
   if (ctx.dryRun && !ctx.probeReadOnly) return;
   const kc = ctx.call?.kubectlProxyKubeconfig;
-  if (!kc || !parseKubeconfigInfo(kc).hasHttpsServer) return;
+  if (!kc) return;
   const bypass = inspectDialProxyBypass(process.env, kc);
   const proxyConnects = kubectlProxyConnectCount(kc) - connectsBefore;
   chrono('dialProxy', chronoStart(), { proxyConnects, bypassed: bypass },
