@@ -7,6 +7,7 @@ import {
   CLOUD_CODE_FETCH_AVAILABLE_MODELS_URL,
   CLOUD_CODE_LOAD_CODE_ASSIST_URL,
   CLOUD_CODE_TOKEN_URL,
+  CLOUD_CODE_CLIENT_VERSION,
   CLOUD_CODE_USER_AGENT,
   CloudCodeEnrollmentProvider,
   fetchAvailableModels,
@@ -245,7 +246,7 @@ describe('CloudCodeEnrollmentProvider', () => {
 
     const meta = await provider.resolve(cred);
     expect(meta.cloudaicompanionProject).toBe('sentropic-cloud-code-proj');
-    expect(meta.cloudCodeUserAgentVersion).toBe('1.1.10');
+    expect(meta.cloudCodeUserAgentVersion).toBe(CLOUD_CODE_CLIENT_VERSION);
   });
 
   it('prefers the paid entitlement over a free compatibility tier', async () => {
