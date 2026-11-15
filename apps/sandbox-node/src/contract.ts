@@ -5,6 +5,22 @@
 
 export const EXECUTION_NODE_CONTRACT_VERSION = 'execution-node.v1' as const;
 
+/** AMD-ISO: compile-only host profile; this declaration advertises no agent capability.
+ * Shared schemas live at the named public package subpath; the agent stays standalone.
+ */
+export const EXECUTION_NODE_V1_AMD_ISO = {
+  amendment: 'AMD-ISO',
+  profile: 'isolate.local-isolated-vm.compile-only.v1',
+  apiVersion: 1,
+  recipeVersion: 1,
+  contractModule: '@sentropic/cluster-mesh/compile/contract',
+  trustLane: 'isolate-untrusted',
+  execution: 'compile-only',
+  network: 'none',
+  executesUserCode: false,
+  hostTrustedFirstParty: false,
+} as const;
+
 export const EXECUTION_TICKET_TTL_MS = 30_000 as const;
 
 export const EXECUTION_NODE_TENANTS = ['sentropic', 'immo'] as const;
