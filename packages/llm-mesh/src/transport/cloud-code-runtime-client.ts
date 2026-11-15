@@ -201,9 +201,11 @@ const resolveWireModelId = (
   const tieredModelId = `${modelId}-tiered`;
   if (available.has(tieredModelId)) return tieredModelId;
   const effort = thinkingLevel?.toLowerCase() ?? 'default';
-  throw new Error(
+  // Typed like an upstream 404 so routing reports an unknown model instead of
+  // a generic account-unavailable 503.
+  throw Object.assign(new Error(
     `Cloud Code model ${modelId} with effort ${effort} is not available in this account's catalogue`,
-  );
+  ), { statusCode: 404, code: 'model_not_found' });
 };
 
 const providerRequest = (request: GenerateRequest, wireModelId: string): ProviderRequest => {
