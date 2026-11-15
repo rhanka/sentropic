@@ -13,8 +13,9 @@ patches:
   - path: patch-artifact-content-config.yaml
   - path: patch-api-config.yaml
   - path: patch-postgres-storageclass.yaml
-  # Preserve each live production image (hono 4.13.17 / @hono/node-server 2.1.6 maintenance builds, 2026-11-07): remove at the A4 prod cutover.
-  # API and IdP use different releases from the same repository.
+  # T3 A4 prod cutover: candidate pins api=IdP 405a2759 / ui 18ad65c8 (train T3, T2-GO).
+  # Apply only while the fence is held or after resume (runbook prod-a4-cutover.md After-1);
+  # make k8s-deploy targets overlays/prod-a4 so the A4 wiring is preserved.
   - patch: |
       apiVersion: apps/v1
       kind: Deployment
@@ -25,7 +26,7 @@ patches:
           spec:
             containers:
               - name: api
-                image: ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05
+                image: ghcr.io/rhanka/sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce
   - patch: |
       apiVersion: apps/v1
       kind: Deployment
@@ -36,8 +37,8 @@ patches:
           spec:
             containers:
               - name: auth-idp
-                image: ghcr.io/rhanka/sentropic-api@sha256:4b78a02fc743ae85ce9f5819d5ebc6b49e02fca7b3161a87ea06afa401a3dc34
-  # Content is not deployed yet; retain the serving API release while closed.
+                image: ghcr.io/rhanka/sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce
+  # Content is not deployed yet; pin the candidate API image (same as api), no activation.
   - patch: |
       apiVersion: apps/v1
       kind: Deployment
@@ -48,7 +49,7 @@ patches:
           spec:
             containers:
               - name: artifact-content
-                image: ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05
+                image: ghcr.io/rhanka/sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce
   - patch: |
       apiVersion: apps/v1
       kind: StatefulSet
@@ -70,4 +71,4 @@ patches:
           spec:
             containers:
               - name: ui
-                image: ghcr.io/rhanka/sentropic-ui@sha256:1f33dd0cde7733d2061f02ab1a5a14eb1a6276ce99001c697f5c697e2c0c9d4e
+                image: ghcr.io/rhanka/sentropic-ui@sha256:18ad65c8b93c425b82647659dcf6d134c42a8e8112aa68fbbe0f115de87a749d
