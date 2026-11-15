@@ -1,5 +1,6 @@
 import { supervisedAsync, supervisedSync } from './t3-processes.mjs';
-import { kubectlProxyEnv } from './t3-kubectl-proxy.mjs';
+import { isKubectlProxyDown, isProxyDirectFallback, kubectlProxyConnectCount,
+  kubectlProxyEnv, markKubectlProxyDown, stripOwnedProxyEnv } from './t3-kubectl-proxy.mjs';
 import { chrono, chronoStart, kubectlClass, monoMs } from './t3-chrono.mjs';
 export { monoMs };
 import { closeSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
@@ -52,7 +53,7 @@ export function recoveryDeadline(stateDir = process.env.T3_STATE_DIR) {
   return deadlineMs;
 }
 
-export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, execIsReadOnly = false, timeoutRef = null, print = () => {}, stateDir = null }) {
+export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, execIsReadOnly = false, timeoutRef = null, print = () => {}, stateDir = null, proxyFallbackDirect = false }) {
   const track = (childPid) => {
     if (!stateDir) return;
     try {
@@ -86,17 +87,38 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
     return { effective, line, started: chronoStart(),
       argv: ['--kubeconfig', kubeconfig, '--namespace', namespace, '--request-timeout=60s', ...effective] };
   };
+  const proxyDeadAfterCall = (kEnv, before, res) => Boolean(kEnv.T3_KUBECTL_PROXY_URL
+    && (res.error || res.status !== 0) && kubectlProxyConnectCount(kubeconfig) === before
+    && (isKubectlProxyDown(kubeconfig) || /127\.0\.0\.1:\d+.*(?:ECONNREFUSED|connection refused)/i.test(res.stderr ?? '')));
   const call = (args, input, overrideMs) => {
     const p = prepare(args, input);
     if (!p) return '';
-    return finishResult(p.effective, p.line, p.started, supervisedSync('kubectl', p.argv,
-      { input, encoding: 'utf8', env: kubectlProxyEnv(process.env, { kubeconfig }), timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir));
+    const fallback = proxyFallbackDirect || isProxyDirectFallback(), before = kubectlProxyConnectCount(kubeconfig);
+    const kEnv = kubectlProxyEnv(process.env, { kubeconfig, fallbackDirect: fallback });
+    let res = supervisedSync('kubectl', p.argv, { input, encoding: 'utf8', env: kEnv,
+      timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir);
+    if (proxyDeadAfterCall(kEnv, before, res)) {
+      markKubectlProxyDown(kubeconfig);
+      if (!fallback) throw new Error('kubectl_proxy_down');
+      res = supervisedSync('kubectl', p.argv, { input, encoding: 'utf8', env: stripOwnedProxyEnv(process.env),
+        timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir);
+    }
+    return finishResult(p.effective, p.line, p.started, res);
   };
   call.async = async (args, input, overrideMs, opts = {}) => {
     const p = prepare(args, input);
     if (!p) return '';
-    return finishResult(p.effective, p.line, p.started, await supervisedAsync('kubectl', p.argv,
-      { input, env: kubectlProxyEnv(process.env, { kubeconfig }), timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024, signal: opts.signal }, stateDir));
+    const fallback = proxyFallbackDirect || isProxyDirectFallback(), before = kubectlProxyConnectCount(kubeconfig);
+    const kEnv = kubectlProxyEnv(process.env, { kubeconfig, fallbackDirect: fallback });
+    let res = await supervisedAsync('kubectl', p.argv, { input, env: kEnv,
+      timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024, signal: opts.signal }, stateDir);
+    if (proxyDeadAfterCall(kEnv, before, res)) {
+      markKubectlProxyDown(kubeconfig);
+      if (!fallback) throw new Error('kubectl_proxy_down');
+      res = await supervisedAsync('kubectl', p.argv, { input, env: stripOwnedProxyEnv(process.env),
+        timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024, signal: opts.signal }, stateDir);
+    }
+    return finishResult(p.effective, p.line, p.started, res);
   };
   return call;
 }

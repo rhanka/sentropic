@@ -80,7 +80,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const probeReadOnly = argv.includes('--probe-readonly');
   const timeoutRef = {};
   const call = runKubectl({ kubeconfig: config.kubeconfigFile, namespace: config.namespace,
-    dryRun, probeReadOnly, execIsReadOnly: probeReadOnly, timeoutRef, print: console.log, stateDir });
+    dryRun, probeReadOnly, execIsReadOnly: probeReadOnly, timeoutRef, print: console.log, stateDir, proxyFallbackDirect: true });
   const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly,
     tier: config.tier, postgresPod: config.postgresPod ?? 'postgres-0',
     probe: fetch, print: console.log };
