@@ -27,14 +27,22 @@ function writeAtomic(file, content) {
   renameSync(tmp, file);
 }
 
+function manifestLines(text) {
+  if (text === '') return [];
+  if (!text.endsWith('\n')) throw new Error('rearm_archive_invalid');
+  return text.slice(0, -1).split('\n');
+}
+
 function verifyArchivedCustody(tarFile, shaFile, manifestFile) {
-  if (!existsSync(tarFile) || !existsSync(shaFile) || !existsSync(manifestFile)) throw new Error('rearm_archive_invalid');
+  if (!existsSync(tarFile) || !existsSync(shaFile)) throw new Error('rearm_archive_invalid');
   const data = readFileSync(tarFile);
   const expected = readFileSync(shaFile, 'utf8').trim();
   if (!/^[a-f0-9]{64}$/.test(expected) || digest(data) !== expected) throw new Error('rearm_archive_invalid');
   let unpacked;
   try { unpacked = gunzipSync(data); } catch { throw new Error('rearm_archive_invalid'); }
   if (unpacked.length < 1024 || unpacked.length % 512 !== 0) throw new Error('rearm_archive_invalid');
+  if (existsSync(manifestFile) && manifestLines(readFileSync(manifestFile, 'utf8'))
+    .some(l => !/^(?:[DO] .+|(?:[FL] [a-f0-9]{64} .+))$/.test(l))) throw new Error('rearm_archive_invalid');
 }
 
 export function assertRearmState(state, claim, nextOperation) {
@@ -122,8 +130,17 @@ function rearmArchive(ctx, nextConfig, archive, archivedStateDir) {
         writeAtomic(tarFile, data);
         writeAtomic(manifestFile, manifest);
         writeAtomic(shaFile, digest(data));
-      } else if (ctx.call(['exec', name, '--', 'node', '-e', MANIFEST_SCRIPT]) !== readFileSync(manifestFile, 'utf8')) {
-        throw new Error('rearm_custody_pvc_mismatch');
+      } else {
+        const live = ctx.call(['exec', name, '--', 'node', '-e', MANIFEST_SCRIPT]);
+        if (!existsSync(manifestFile)) {
+          if (live !== '') throw new Error('rearm_manifest_missing');
+        } else {
+          const archived = new Set(manifestLines(readFileSync(manifestFile, 'utf8')));
+          if ((live !== '' && !live.endsWith('\n'))
+            || (live === '' ? [] : live.slice(0, -1).split('\n')).some(line => !archived.has(line))) {
+            throw new Error('rearm_custody_pvc_mismatch');
+          }
+        }
       }
       ctx.call(['exec', name, '--', 'node', '-e', `const fs=require('node:fs');const p='/run/cm-cutover';
         for(const n of fs.readdirSync(p)) fs.rmSync(p+'/'+n,{recursive:true});

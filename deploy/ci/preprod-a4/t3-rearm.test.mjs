@@ -166,13 +166,26 @@ test('R11 D3: sentropic-a4-rearm pod sets priorityClassName, 1s grace, SIGTERM e
   assert.ok(res.elapsedMs < 500, `SIGTERM exit took ${res.elapsedMs}ms`);
 });
 
-for (const fault of ['before-wipe', 'delete-pod-after-wipe', 'between-jobs', 'after-state-rename']) {
-  test(`R11 D3: rearm is resumable and idempotent across interruption (${fault})`, () => {
-    const h = makeRearmHarness();
+for (const fault of ['before-wipe', 'partial-wipe', 'after-wipe-before-marker', 'delete-pod-after-wipe', 'between-jobs', 'after-state-rename']) {
+  test(`R11 D3: rearm is resumable and idempotent across interruption (${fault})`, t => {
+    const pvcDir = fault === 'partial-wipe' ? mkdtempSync(join(tmpdir(), 't3-rearm-part-')) : null;
+    if (pvcDir) {
+      mkdirSync(join(pvcDir, 'nested'));
+      writeFileSync(join(pvcDir, 'receipt.json'), '{"committed":false}\n');
+      writeFileSync(join(pvcDir, 'nested', 'witness.bin'), 'immutable-custody-bytes');
+    }
+    const h = makeRearmHarness({ pvcDir });
+    t.after(() => {
+      if (pvcDir) rmSync(pvcDir, { recursive: true, force: true });
+      rmSync(h.stateDir, { recursive: true, force: true });
+      rmSync(h.archive, { recursive: true, force: true });
+    });
     let faulted = false;
     h.setFailOn((args, line) => {
       if (faulted) return false;
       if (fault === 'before-wipe' && line.includes('fs.rmSync')) { faulted = true; return true; }
+      if (fault === 'partial-wipe' && line.includes('fs.rmSync')) { rmSync(join(pvcDir, 'receipt.json')); faulted = true; return true; }
+      if (fault === 'after-wipe-before-marker' && line.includes('fs.rmSync')) { h.cluster.custodyEmpty = true; faulted = true; return true; }
       if (fault === 'delete-pod-after-wipe' && line.startsWith('delete pod sentropic-a4-rearm') && h.cluster.custodyEmpty) {
         faulted = true; return true;
       }
@@ -184,6 +197,7 @@ for (const fault of ['before-wipe', 'delete-pod-after-wipe', 'between-jobs', 'af
       rmSync(h.stateDir, { recursive: true, force: true });
     } else {
       assert.throws(() => h.run(), /injected_interrupt/);
+      if (fault === 'after-wipe-before-marker' || fault === 'partial-wipe') assert.equal(existsSync(join(h.archive, '.custody-emptied')), false);
     }
     h.setFailOn(null);
     const resumed = h.run();
@@ -192,6 +206,7 @@ for (const fault of ['before-wipe', 'delete-pod-after-wipe', 'between-jobs', 'af
       'resumed rearm must never overwrite custody.tar.gz with the emptied PVC');
     assert.equal(readFileSync(join(h.archive, 'custody.sha256'), 'utf8').trim(), digest(h.originalArchive));
     assert.equal(h.cluster.custodyEmpty, true);
+    if (pvcDir) assert.deepEqual(readdirSync(pvcDir), []);
     assert.equal(h.cluster.podExists, false);
     assert.deepEqual(h.cluster.jobs, []);
     assert.ok(existsSync(join(h.archive, 'operator-state', 't3-window-state.json')));
@@ -311,4 +326,50 @@ test('R12 MIN-5: resumed rearm re-verifies live PVC per-file manifest before emp
   } finally {
     rmSync(pvcDir, { recursive: true, force: true });
   }
+});
+
+test('R13 MAJOR-1: resumed rearm accepts partial/full wipe, refuses subset drift/addition, and enforces empty-PVC rule for manifest-less archives', t => {
+  const pvcDir = mkdtempSync(join(tmpdir(), 't3-rearm-maj1-'));
+  mkdirSync(join(pvcDir, 'nested'));
+  writeFileSync(join(pvcDir, 'receipt.json'), '{"committed":false}\n');
+  writeFileSync(join(pvcDir, 'nested', 'witness.bin'), 'immutable-custody-bytes');
+  const h = makeRearmHarness({ pvcDir });
+  const r11 = makeRearmHarness();
+  t.after(() => {
+    for (const p of [pvcDir, h.stateDir, h.archive, r11.stateDir, r11.archive]) rmSync(p, { recursive: true, force: true });
+  });
+  let faulted = false;
+  h.setFailOn((_args, line) => {
+    if (!faulted && line.includes('fs.rmSync')) { rmSync(join(pvcDir, 'receipt.json')); faulted = true; return true; }
+    return false;
+  });
+  assert.throws(() => h.run(), /injected_interrupt/);
+  h.setFailOn(null);
+
+  // Drift on a remaining file after partial wipe is refused without wiping.
+  writeFileSync(join(pvcDir, 'nested', 'witness.bin'), 'drifted-bytes');
+  assert.throws(() => h.run(), /rearm_custody_pvc_mismatch/);
+  assert.ok(existsSync(join(pvcDir, 'nested', 'witness.bin')));
+
+  // New file added after partial wipe is refused without wiping.
+  writeFileSync(join(pvcDir, 'nested', 'witness.bin'), 'immutable-custody-bytes');
+  writeFileSync(join(pvcDir, 'extra.bin'), 'unexpected');
+  assert.throws(() => h.run(), /rearm_custody_pvc_mismatch/);
+  rmSync(join(pvcDir, 'extra.bin'));
+
+  // Intact subset after partial wipe resumes and empties PVC cleanly.
+  assert.equal(h.run().archive, h.archive);
+  assert.deepEqual(readdirSync(pvcDir), []);
+
+  // Pre-R12 archive without custody.manifest: refused with rearm_manifest_missing if live PVC is non-empty, accepted only when empty.
+  mkdirSync(r11.archive, { recursive: true, mode: 0o700 });
+  writeFileSync(join(r11.archive, 'custody.tar.gz'), r11.originalArchive, { mode: 0o600 });
+  writeFileSync(join(r11.archive, 'custody.sha256'), `${digest(r11.originalArchive)}\n`, { mode: 0o600 });
+  assert.throws(() => r11.run(), /rearm_manifest_missing/);
+  assert.equal(r11.cluster.custodyEmpty, false);
+  r11.cluster.custodyEmpty = true;
+  assert.equal(r11.run().archive, r11.archive);
+  assert.ok(existsSync(join(r11.archive, '.custody-emptied')));
+  assert.deepEqual(r11.cluster.jobs, []);
+  assert.equal(r11.run().archive, r11.archive, 'manifest-less archive replay after completion');
 });
