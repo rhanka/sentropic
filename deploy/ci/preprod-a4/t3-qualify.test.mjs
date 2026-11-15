@@ -72,7 +72,7 @@ test('postgres qualification requires the pinned prod server bytes, both client 
   const { PROD_POSTGRES_IMAGE, PROD_POSTGRES_TOOL_IMAGE } = await import('./t3-fixture.mjs');
   const base = { tier: 'restore', namespace: 'sentropic-restore-a4', postgresVersionFile: '/private/pg-version' };
   const deps = ({ version = '17.11', imageID = `docker.io/library/${PROD_POSTGRES_IMAGE}`,
-    client = PROD_POSTGRES_TOOL_IMAGE, exportClient = PROD_POSTGRES_TOOL_IMAGE } = {}) => {
+    client = PROD_POSTGRES_TOOL_IMAGE, exportInitName = 'export-sql', exportClient = PROD_POSTGRES_TOOL_IMAGE } = {}) => {
     const calls = [], receipts = [];
     return { calls, receipts, write: (path, value) => receipts.push({ path, value }), call: (args, input) => {
       calls.push(args.join(' '));
@@ -81,17 +81,22 @@ test('postgres qualification requires the pinned prod server bytes, both client 
       if (args[2] === 'pgbackup') {
         return JSON.stringify({ spec: { jobTemplate: { spec: { template: { spec: { initContainers: [{ name: 'dump', image: client }] } } } } } });
       }
-      return JSON.stringify({ spec: { jobTemplate: { spec: { template: { spec: { initContainers: [{ name: 'export-sql', image: exportClient }] } } } } } });
+      return JSON.stringify({ spec: { jobTemplate: { spec: { template: { spec: { initContainers: [{ name: exportInitName, image: exportClient }] } } } } } });
     } };
   };
   const ok = deps();
   const receipt = await qualify('postgres-version', base, ok);
   assert.deepEqual(receipt, { version: 't3-postgres-version/1', namespace: 'sentropic-restore-a4',
     postgresVersion: '17.11', serverImage: PROD_POSTGRES_IMAGE, pgbackupClientImage: PROD_POSTGRES_TOOL_IMAGE,
-    identityExportClientImage: PROD_POSTGRES_TOOL_IMAGE });
+    identityExportInitContainer: 'export-sql', identityExportClientImage: PROD_POSTGRES_TOOL_IMAGE });
   assert.deepEqual(ok.receipts, [{ path: '/private/pg-version', value: receipt }]);
   assert.ok(ok.calls.every(line => /^(get pod postgres-0 |get cronjob (?:pgbackup|sentropic-idp-identity-export) |exec postgres-0 )/.test(line)), 'read-only');
   await assert.rejects(qualify('postgres-version', { ...base, postgresVersionFile: undefined }, deps()), /postgres_version_receipt_missing/);
+  for (const exportInitName of ['export', '', 'pre-sync-dump']) {
+    const bad = deps({ exportInitName });
+    await assert.rejects(qualify('postgres-version', base, bad), /identity_export_init_container_invalid/, exportInitName);
+    assert.equal(bad.receipts.length, 0);
+  }
   for (const drift of [{ version: '17.12' }, { imageID: `docker.io/library/postgres@sha256:${'d'.repeat(64)}` }, { imageID: '' },
     { client: 'postgres:17-alpine' }, { client: `postgres:17-alpine@sha256:${'d'.repeat(64)}` },
     { exportClient: 'postgres:17-alpine' }, { exportClient: `postgres:17-alpine@sha256:${'d'.repeat(64)}` }]) {

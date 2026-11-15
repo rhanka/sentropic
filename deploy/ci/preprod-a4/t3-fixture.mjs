@@ -89,6 +89,7 @@ export function validatePostgresVersionReceipt(receipt, namespace) {
     || receipt.namespace !== namespace || receipt.postgresVersion !== PROD_POSTGRES_VERSION
     || receipt.serverImage !== PROD_POSTGRES_IMAGE
     || receipt.pgbackupClientImage !== PROD_POSTGRES_TOOL_IMAGE
+    || receipt.identityExportInitContainer !== 'export-sql'
     || receipt.identityExportClientImage !== PROD_POSTGRES_TOOL_IMAGE) {
     throw new Error('postgres_version_receipt_invalid');
   }
@@ -107,15 +108,19 @@ export function inspectPostgresVersion(ctx, psqlFn) {
   const imageID = pod.status?.containerStatuses?.find(status => status.name === 'postgres')?.imageID ?? '';
   const dumpClient = pgbackup.spec?.jobTemplate?.spec?.template?.spec?.initContainers
     ?.find(container => container.name === 'dump')?.image;
-  const exportClient = identityExport.spec?.jobTemplate?.spec?.template?.spec?.initContainers
-    ?.find(container => container.name === 'export-sql')?.image;
+  const exportInit = identityExport.spec?.jobTemplate?.spec?.template?.spec?.initContainers?.[0];
+  if (exportInit?.name !== 'export-sql') {
+    throw new Error('identity_export_init_container_invalid');
+  }
+  const exportClient = exportInit.image;
   const version = psqlFn(ctx, 'SHOW server_version').trim();
   if (version !== PROD_POSTGRES_VERSION || !imageID.endsWith(`@${PROD_POSTGRES_IMAGE.split('@')[1]}`)
     || dumpClient !== PROD_POSTGRES_TOOL_IMAGE || exportClient !== PROD_POSTGRES_TOOL_IMAGE) {
     throw new Error('postgres_version_unqualified');
   }
   return { version: 't3-postgres-version/1', namespace: ctx.config.namespace, postgresVersion: version,
-    serverImage: PROD_POSTGRES_IMAGE, pgbackupClientImage: dumpClient, identityExportClientImage: exportClient };
+    serverImage: PROD_POSTGRES_IMAGE, pgbackupClientImage: dumpClient,
+    identityExportInitContainer: 'export-sql', identityExportClientImage: exportClient };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

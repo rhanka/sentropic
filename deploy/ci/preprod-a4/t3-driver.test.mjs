@@ -141,8 +141,10 @@ export function makeCall(scenario = {}) {
         initContainers: [{ name: 'dump', image: scenario.pgbackupImage ?? PROD_POSTGRES_TOOL_IMAGE }] } } } } } });
     }
     if (cmd === 'get cronjob sentropic-idp-identity-export -o json') {
-      return JSON.stringify({ spec: { suspend: scenario.exportSuspended !== false, jobTemplate: { spec: { template: { spec: {
-        initContainers: [{ name: 'export-sql', image: scenario.identityExportImage ?? PROD_POSTGRES_TOOL_IMAGE }] } } } } } });
+      const initContainers = scenario.identityExportInitContainers ?? [
+        { name: scenario.identityExportInitName ?? 'export-sql', image: scenario.identityExportImage ?? PROD_POSTGRES_TOOL_IMAGE },
+      ];
+      return JSON.stringify({ spec: { suspend: scenario.exportSuspended !== false, jobTemplate: { spec: { template: { spec: { initContainers } } } } } });
     }
     if (cmd.startsWith('patch cronjob sentropic-idp-identity-export')) {
       scenario.exportSuspended = true;
@@ -1311,4 +1313,33 @@ test('R9 a writer pod that overruns W3 or never leaves routes through drive with
     assert.equal(loadState(ctx.stateDir).recoveryReason, 'throw:pods_not_zero: api');
   }
   assert.ok(monoMs() - realStart < 3_000);
+});
+
+test('R11 W0 refuses T0 when CronJob sentropic-idp-identity-export initContainer name is not export-sql', async () => {
+  for (const scenario of [
+    { identityExportInitName: 'export' },
+    { identityExportInitContainers: [] },
+    { identityExportInitContainers: [{ name: 'export', image: PROD_POSTGRES_TOOL_IMAGE }, { name: 'export-sql', image: PROD_POSTGRES_TOOL_IMAGE }] },
+  ]) {
+    const { ctx } = makeCtx({ scenario });
+    ctx.delivered = () => assert.fail('fence started');
+    assert.equal(await drive(ctx), 1, JSON.stringify(scenario));
+    const state = loadState(ctx.stateDir);
+    assert.equal(state.refusalReason, 'throw:identity_export_init_container_invalid');
+    assert.equal(state.t0MonoMs, undefined);
+    assert.equal(state.fenceStarted, false);
+  }
+  const probe = makeCtx({ scenario: { identityExportInitName: 'export' } });
+  probe.ctx.dryRun = true; probe.ctx.probeReadOnly = true;
+  assert.equal(await drive(probe.ctx), 1);
+  assert.equal(loadState(probe.ctx.stateDir).refusalReason, 'throw:identity_export_init_container_invalid');
+
+  const staleReceipt = makeCtx();
+  const receipt = JSON.parse(readFileSync(staleReceipt.ctx.config.postgresVersionFile, 'utf8'));
+  receipt.identityExportInitContainer = 'export';
+  writeFileSync(staleReceipt.ctx.config.postgresVersionFile, JSON.stringify(receipt));
+  staleReceipt.ctx.delivered = () => assert.fail('fence started');
+  assert.equal(await drive(staleReceipt.ctx), 1);
+  assert.equal(loadState(staleReceipt.ctx.stateDir).refusalReason, 'throw:postgres_version_receipt_invalid');
+  assert.equal(loadState(staleReceipt.ctx.stateDir).t0MonoMs, undefined);
 });

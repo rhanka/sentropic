@@ -39,7 +39,8 @@ export function inputs(witnessUrl = 'https://app.test/api/v1/me') {
   files['/acl-receipt'] = JSON.stringify({ aclCatalogSha256: 'a'.repeat(64),aclSqlSha256: digest(files['/acl']),aclFormulaSha256: aclFormulaSha256() });
   files['/postgres-version'] = JSON.stringify({ version: 't3-postgres-version/1',namespace: 'sentropic-preprod',
     postgresVersion: PROD_POSTGRES_VERSION,serverImage: PROD_POSTGRES_IMAGE,
-    pgbackupClientImage: PROD_POSTGRES_TOOL_IMAGE,identityExportClientImage: PROD_POSTGRES_TOOL_IMAGE });
+    pgbackupClientImage: PROD_POSTGRES_TOOL_IMAGE,identityExportInitContainer: 'export-sql',
+    identityExportClientImage: PROD_POSTGRES_TOOL_IMAGE });
   const policy = { originalRehearsalSha256: digest(files['/rehearsal']),baselineSha256: digest(files['/baseline']),
     reviewRef: 'track:qualified-applicability',allowedChanges: ['sourceContentSha256'] };
   annex.applicabilityReceiptPolicySha256 = digest(canonical(policy)); files['/annex'] = JSON.stringify(annex);
@@ -144,9 +145,12 @@ test('offline preflight requires a bound postgres-version qualification receipt'
   assert.throws(() => preflight(missing.config, missing.read), /postgres_version_receipt_invalid/);
   for (const patch of [{ postgresVersion: '17.12' }, { namespace: 'sentropic' },
     { serverImage: 'postgres:17-alpine' }, { pgbackupClientImage: 'postgres:17-alpine' },
+    { identityExportInitContainer: 'export' }, { identityExportInitContainer: undefined },
     { identityExportClientImage: 'postgres:17-alpine' }]) {
     const f = inputs();
-    f.files['/postgres-version'] = JSON.stringify({ ...JSON.parse(f.files['/postgres-version']), ...patch });
-    assert.throws(() => preflight(f.config, f.read), /postgres_version_receipt_invalid/);
+    const next = { ...JSON.parse(f.files['/postgres-version']), ...patch };
+    if ('identityExportInitContainer' in patch && patch.identityExportInitContainer === undefined) delete next.identityExportInitContainer;
+    f.files['/postgres-version'] = JSON.stringify(next);
+    assert.throws(() => preflight(f.config, f.read), /postgres_version_receipt_invalid/, JSON.stringify(patch));
   }
 });
