@@ -90,7 +90,7 @@ export function supervisedAsync(command, args, options = {}, stateDir) {
     const finish = (status, exitSignal, spawnErr) => {
       if (settled) return;
       settled = true; clearTimeout(timer); options.signal?.removeEventListener('abort', onAbort);
-      cleanupRecord(record);
+      try { cleanupRecord(record); } catch (e) { error ??= e; }
       resolve({ pid: child.pid ?? null, status, signal: exitSignal, error: error ?? spawnErr ?? null,
         stdout: Buffer.concat(outChunks).toString('utf8'), stderr: Buffer.concat(errChunks).toString('utf8') });
     };
