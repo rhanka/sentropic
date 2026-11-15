@@ -1,5 +1,4 @@
 import { connect, createServer } from 'node:net';
-import { unlinkSync } from 'node:fs';
 import { isMainThread, Worker, workerData } from 'node:worker_threads';
 
 export const KUBECTL_DIAL_TIMEOUT_MS = 2_000;
@@ -16,17 +15,9 @@ function parseAuthority(authority) {
   return { host: m[1].replace(/^\[|\]$/g, ''), port };
 }
 
-function dialOnce(host, port, timeoutMs, stallOnceFile) {
-  if (stallOnceFile) {
-    let claimed = false;
-    try { unlinkSync(stallOnceFile); claimed = true; } catch { /* absent */ }
-    if (claimed) {
-      return new Promise((_, reject) => setTimeout(
-        () => reject(Object.assign(new Error('dial_timeout'), { code: 'ETIMEDOUT' })), timeoutMs));
-    }
-  }
+function dialOnce(host, port, timeoutMs, dial) {
   return new Promise((resolve, reject) => {
-    const sock = connect({ host, port });
+    const sock = dial({ host, port });
     let done = false;
     const fail = err => {
       if (done) return;
@@ -41,12 +32,12 @@ function dialOnce(host, port, timeoutMs, stallOnceFile) {
   });
 }
 
-async function dialBounded(host, port, clientSocket, cfg) {
+async function dialBounded(host, port, clientSocket, cfg, dial) {
   let lastErr = null;
   for (let attempt = 1; attempt <= cfg.maxAttempts; attempt += 1) {
     if (clientSocket.destroyed) throw new Error('client_closed');
     try {
-      return await dialOnce(host, port, cfg.dialTimeoutMs, cfg.stallOnceFile);
+      return await dialOnce(host, port, cfg.dialTimeoutMs, dial);
     } catch (err) {
       lastErr = err;
       if (attempt >= cfg.maxAttempts || !RETRYABLE_DIAL_CODES.has(err?.code)) throw err;
@@ -55,8 +46,8 @@ async function dialBounded(host, port, clientSocket, cfg) {
   throw lastErr ?? new Error('dial_failed');
 }
 
-function runProxyWorker(cfg) {
-  const override = cfg.testTarget ? parseAuthority(cfg.testTarget) : null;
+async function runProxyWorker(cfg) {
+  const dial = cfg.dialModule ? (await import(cfg.dialModule)).createDialer(cfg.dialState) : connect;
   const server = createServer(client => {
     client.setNoDelay(true);
     let buf = Buffer.alloc(0), connected = false;
@@ -71,10 +62,9 @@ function runProxyWorker(cfg) {
       const m = /^CONNECT ([^\s]+) HTTP\/1\.[01]$/.exec(firstLine);
       const target = m ? parseAuthority(m[1]) : null;
       if (!target) { client.end('HTTP/1.1 400 Bad Request\r\n\r\n'); return; }
-      const dest = override && target.host === 'apiserver.t3.local' ? override : target;
       const head = buf.subarray(idx + 4);
       try {
-        const upstream = await dialBounded(dest.host, dest.port, client, cfg);
+        const upstream = await dialBounded(target.host, target.port, client, cfg, dial);
         if (client.destroyed) { upstream.destroy(); return; }
         connected = true;
         upstream.setNoDelay(true);
@@ -105,23 +95,37 @@ function runProxyWorker(cfg) {
 if (!isMainThread && workerData?.t3KubectlProxy) runProxyWorker(workerData);
 
 const workers = new Map();
-function ensureProxyWorker(env) {
-  const testTarget = env.T3_KUBECTL_PROXY_TEST_TARGET ?? '';
-  const stallOnceFile = env.T3_KUBECTL_PROXY_STALL_ONCE_FILE ?? '';
-  const key = `${testTarget}|${stallOnceFile}`;
-  if (workers.has(key)) return workers.get(key);
-  const state = new Int32Array(new SharedArrayBuffer(8));
+function spawnProxyWorker(key, extra = {}) {
+  const state = new Int32Array(new SharedArrayBuffer(16));
   const worker = new Worker(new URL(import.meta.url), {
     execArgv: [],
     workerData: { t3KubectlProxy: true, state, dialTimeoutMs: KUBECTL_DIAL_TIMEOUT_MS,
-      maxAttempts: KUBECTL_DIAL_MAX_ATTEMPTS, testTarget, stallOnceFile },
+      maxAttempts: KUBECTL_DIAL_MAX_ATTEMPTS, ...extra },
   });
   worker.unref();
   Atomics.wait(state, 0, 0, 5_000);
   if (Atomics.load(state, 0) !== 1) throw new Error('kubectl_proxy_start_failed');
-  const url = `http://127.0.0.1:${Atomics.load(state, 1)}`;
-  workers.set(key, url);
-  return url;
+  const entry = { key, url: `http://127.0.0.1:${Atomics.load(state, 1)}`, state, worker };
+  workers.set(key, entry);
+  return entry;
+}
+
+function ensureProxyWorker(kubeconfig = '') {
+  const key = kubeconfig || 'default';
+  return (workers.get(key) ?? spawnProxyWorker(key)).url;
+}
+
+export function registerKubectlProxy({ kubeconfig = '', dialModule = null, dialState = null,
+  dialTimeoutMs = KUBECTL_DIAL_TIMEOUT_MS, maxAttempts = KUBECTL_DIAL_MAX_ATTEMPTS } = {}) {
+  const key = kubeconfig || 'default', prev = workers.get(key);
+  if (prev) { workers.delete(key); prev.worker.terminate(); }
+  const entry = spawnProxyWorker(key, { dialModule, dialState, dialTimeoutMs, maxAttempts });
+  return { url: entry.url, close: async () => { if (workers.get(key) === entry) workers.delete(key); await entry.worker.terminate(); } };
+}
+
+export async function resetKubectlProxyForTests() {
+  const list = [...workers.values()]; workers.clear();
+  await Promise.all(list.map(e => e.worker.terminate()));
 }
 
 export function stripOwnedProxyEnv(env = process.env) {
@@ -133,12 +137,10 @@ export function stripOwnedProxyEnv(env = process.env) {
   return next;
 }
 
-export function kubectlProxyEnv(env = process.env) {
+export function kubectlProxyEnv(env = process.env, opts = {}) {
   if (env.T3_KUBECTL_PROXY_DISABLE === '1') return stripOwnedProxyEnv(env);
   if (env.HTTPS_PROXY && env.HTTPS_PROXY !== env.T3_KUBECTL_PROXY_URL) return env;
   if (env.https_proxy && env.https_proxy !== env.T3_KUBECTL_PROXY_URL) return env;
-  const url = (env.T3_KUBECTL_PROXY_URL && !env.T3_KUBECTL_PROXY_TEST_TARGET)
-    ? env.T3_KUBECTL_PROXY_URL
-    : ensureProxyWorker(env);
+  const url = env.T3_KUBECTL_PROXY_URL || ensureProxyWorker(opts.kubeconfig);
   return { ...env, T3_KUBECTL_PROXY_URL: url, HTTPS_PROXY: url, https_proxy: url };
 }
