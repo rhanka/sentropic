@@ -48,6 +48,6 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: rules read, 0.24.0/0.25.0 release commits inventoried, branch verified.
-- [ ] Lot 1: version 0.26.0, lock and fixture pins, self-ranges <0.27.0, next-minor refusal at 0.27.0, CHANGELOG 0.26.0.
-  - [ ] Lot gate: scoped cluster-mesh registry and packaging tests through make.
+- [x] Lot 1: version 0.26.0, lock and fixture pins, self-ranges <0.27.0, next-minor refusal at 0.27.0, CHANGELOG 0.26.0.
+  - [x] Lot gate: scoped cluster-mesh tests, ENV=test-cm-0260: tests/modules 101 pass; tests/packaging 92 pass, 60 installed-only skips; tests/notifications-module.spec.ts 2 pass.
 - [ ] Lot N: PR with this text as body, CI green on the exact head, then drop BRANCH.md; merge only on owner GO via the conductor.
