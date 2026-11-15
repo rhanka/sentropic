@@ -18,8 +18,16 @@ export const CLOUD_CODE_LOAD_CODE_ASSIST_URL =
   'https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist';
 export const CLOUD_CODE_FETCH_AVAILABLE_MODELS_URL =
   'https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels';
+/**
+ * Client identity announced on every Cloud Code request (catalogue and
+ * generation). It mirrors the provider CLI (agy 1.5.9) byte for byte: Cloud
+ * Code gates catalogue entries and model access on it, and an older identity
+ * (antigravity/cli/1.1.10) hides gemini-4-argon (catalogue miss, 404 on
+ * generation) while the CLI on the same seat is served.
+ */
+export const CLOUD_CODE_CLIENT_VERSION = '1.5.9';
 export const CLOUD_CODE_USER_AGENT =
-  'antigravity/cli/1.1.10 (aidev_client; os_type=linux; arch=amd64; auth_method=consumer)';
+  `antigravity/cli/${CLOUD_CODE_CLIENT_VERSION} (aidev_client; os_type=linux; arch=amd64; cl=1021519450; auth_method=consumer)`;
 
 export const CLOUD_CODE_CLIENT_ID =
   '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
@@ -343,7 +351,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
 
     return {
       cloudaicompanionProject: context.cloudaicompanionProject,
-      cloudCodeUserAgentVersion: '1.1.10',
+      cloudCodeUserAgentVersion: CLOUD_CODE_CLIENT_VERSION,
       ...(effectiveTier ? { cloudCodeTier: effectiveTier } : {}),
     };
   }
