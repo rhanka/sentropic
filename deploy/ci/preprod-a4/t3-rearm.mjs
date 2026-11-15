@@ -8,8 +8,16 @@ import { prioritized, t3PriorityClass } from './ops.mjs';
 import { gunzipSync } from 'node:zlib';
 
 const REARM_HOLD = "process.on('SIGTERM',()=>process.exit(0));process.on('SIGINT',()=>process.exit(0));setInterval(()=>{},1000)";
+const MANIFEST_SCRIPT = `const fs=require('node:fs'),crypto=require('node:crypto'),root='/run/cm-cutover',out=[];
+const walk=d=>{for(const e of fs.readdirSync(d,{withFileTypes:true}).sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0)){
+const p=d+'/'+e.name,r=p.slice(root.length+1);
+if(e.isDirectory()){out.push('D '+r);walk(p);}
+else if(e.isSymbolicLink())out.push('L '+crypto.createHash('sha256').update(fs.readlinkSync(p)).digest('hex')+' '+r);
+else if(e.isFile())out.push('F '+crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex')+' '+r);
+else out.push('O '+r);}};walk(root);process.stdout.write(out.join('\\n')+(out.length?'\\n':''));`;
 const ARCHIVE_ENTRIES = new Set([
   'custody.tar.gz', 'custody.tar.gz.tmp', 'custody.sha256', 'custody.sha256.tmp',
+  'custody.manifest', 'custody.manifest.tmp',
   '.custody-emptied', '.custody-emptied.tmp', 'rearm-chrono.jsonl', 'operator-state',
 ]);
 
@@ -19,8 +27,8 @@ function writeAtomic(file, content) {
   renameSync(tmp, file);
 }
 
-function verifyArchivedCustody(tarFile, shaFile) {
-  if (!existsSync(tarFile) || !existsSync(shaFile)) throw new Error('rearm_archive_invalid');
+function verifyArchivedCustody(tarFile, shaFile, manifestFile) {
+  if (!existsSync(tarFile) || !existsSync(shaFile) || !existsSync(manifestFile)) throw new Error('rearm_archive_invalid');
   const data = readFileSync(tarFile);
   const expected = readFileSync(shaFile, 'utf8').trim();
   if (!/^[a-f0-9]{64}$/.test(expected) || digest(data) !== expected) throw new Error('rearm_archive_invalid');
@@ -83,10 +91,10 @@ function rearmArchive(ctx, nextConfig, archive, archivedStateDir) {
   const jobs = JSON.parse(ctx.call(['get', 'jobs', '-o', 'json'])).items;
   if (jobs.some(j => j.metadata.name.startsWith('pgbackup-a4-') && j.status?.active)) throw new Error('rearm_backup_active');
   const tarFile = join(archive, 'custody.tar.gz'), shaFile = join(archive, 'custody.sha256');
-  const emptiedMarker = join(archive, '.custody-emptied');
+  const manifestFile = join(archive, 'custody.manifest'), emptiedMarker = join(archive, '.custody-emptied');
   const archiveDone = existsSync(shaFile);
   if (archiveDone || existsSync(emptiedMarker) || existsSync(archivedStateDir)) {
-    verifyArchivedCustody(tarFile, shaFile);
+    verifyArchivedCustody(tarFile, shaFile, manifestFile);
   }
   const name = 'sentropic-a4-rearm';
   ctx.call(['delete', 'pod', name, '--ignore-not-found=true', '--wait=true', '--timeout=30s']);
@@ -103,6 +111,7 @@ function rearmArchive(ctx, nextConfig, archive, archivedStateDir) {
     try {
       ctx.call(['wait', '--for=condition=Ready', `pod/${name}`, '--timeout=30s']);
       if (!archiveDone) {
+        const manifest = ctx.call(['exec', name, '--', 'node', '-e', MANIFEST_SCRIPT]);
         const bytes = ctx.call(['exec', name, '--', 'sh', '-ec',
           'tar czf /tmp/t3-custody.tar.gz -C /run/cm-cutover . && tar tzf /tmp/t3-custody.tar.gz >/dev/null && base64 < /tmp/t3-custody.tar.gz']);
         const data = Buffer.from(bytes.replace(/\s/g, ''), 'base64');
@@ -111,7 +120,10 @@ function rearmArchive(ctx, nextConfig, archive, archivedStateDir) {
         const remoteHash = ctx.call(['exec', name, '--', 'sha256sum', '/tmp/t3-custody.tar.gz']).trim().split(/\s/)[0];
         if (remoteHash !== digest(data)) throw new Error('rearm_archive_transfer_mismatch');
         writeAtomic(tarFile, data);
+        writeAtomic(manifestFile, manifest);
         writeAtomic(shaFile, digest(data));
+      } else if (ctx.call(['exec', name, '--', 'node', '-e', MANIFEST_SCRIPT]) !== readFileSync(manifestFile, 'utf8')) {
+        throw new Error('rearm_custody_pvc_mismatch');
       }
       ctx.call(['exec', name, '--', 'node', '-e', `const fs=require('node:fs');const p='/run/cm-cutover';
         for(const n of fs.readdirSync(p)) fs.rmSync(p+'/'+n,{recursive:true});

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { chmodSync, mkdtempSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { chmodSync, mkdirSync, mkdtempSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rearm } from './t3-rearm.mjs';
@@ -36,7 +36,7 @@ function inputsForTier(tier = 'preprod') {
   return f;
 }
 
-function makeRearmHarness({ jobs = ['pgbackup-a4-1', 'pgbackup-a4-2'], tier = 'restore' } = {}) {
+function makeRearmHarness({ jobs = ['pgbackup-a4-1', 'pgbackup-a4-2'], tier = 'restore', pvcDir = null } = {}) {
   const next = inputsForTier(tier), stateDir = mkdtempSync(join(tmpdir(), 't3-rearm-'));
   saveState(stateDir, { step: 'DONE', commitVerified: false, operationId: 'old' });
   const config = { ...next.config, request: { operationId: 'old' }, executionSha256: '0'.repeat(64),
@@ -44,7 +44,7 @@ function makeRearmHarness({ jobs = ['pgbackup-a4-1', 'pgbackup-a4-2'], tier = 'r
   const originalPayload = Buffer.alloc(1024, 0x41);
   const originalArchive = gzipSync(originalPayload);
   const emptyArchive = gzipSync(Buffer.alloc(1024, 0x00));
-  const cluster = { custodyEmpty: false, podExists: false, jobs: [...jobs], createdPods: [] };
+  const cluster = { custodyEmpty: false, podExists: false, jobs: [...jobs], createdPods: [], pvcDir };
   const calls = [];
   let failOn = null;
   const makeCall = () => (args, input) => {
@@ -75,6 +75,12 @@ function makeRearmHarness({ jobs = ['pgbackup-a4-1', 'pgbackup-a4-2'], tier = 'r
       return `${digest(current)}  /tmp/t3-custody.tar.gz`;
     }
     if (args[0] === 'exec' && args.includes('node')) {
+      if (cluster.pvcDir) {
+        const out = execFileSync(process.execPath, ['-e', args.at(-1).replaceAll('/run/cm-cutover', cluster.pvcDir)], { encoding: 'utf8' });
+        if (line.includes('fs.rmSync')) cluster.custodyEmpty = true;
+        return out;
+      }
+      if (!line.includes('fs.rmSync')) return cluster.custodyEmpty ? '' : `F ${digest(originalPayload)} custody.bin\n`;
       cluster.custodyEmpty = true;
       return '';
     }
@@ -104,6 +110,7 @@ for (const mode of ['success','tar-error','corrupt-transfer','wrong-hash']) test
     calls.push(args.join(' '));
     if (args[0] === 'exec' && String(input).includes('journal_present')) return 'f|0';
     if (args[0] === 'exec' && args.includes('node')) {
+      if (!args.at(-1).includes('fs.rmSync')) return 'F ' + 'b'.repeat(64) + ' custody.bin\n';
       assert.ok(existsSync(join(archive,'custody.tar.gz')), 'archive exists before erasure');
       assert.match(readFileSync(join(archive,'custody.sha256'),'utf8'),/^[a-f0-9]{64}$/);
       return '';
@@ -165,7 +172,7 @@ for (const fault of ['before-wipe', 'delete-pod-after-wipe', 'between-jobs', 'af
     let faulted = false;
     h.setFailOn((args, line) => {
       if (faulted) return false;
-      if (fault === 'before-wipe' && args[0] === 'exec' && args.includes('node')) { faulted = true; return true; }
+      if (fault === 'before-wipe' && line.includes('fs.rmSync')) { faulted = true; return true; }
       if (fault === 'delete-pod-after-wipe' && line.startsWith('delete pod sentropic-a4-rearm') && h.cluster.custodyEmpty) {
         faulted = true; return true;
       }
@@ -261,5 +268,47 @@ else if (args[0] === 'exec' && args.includes('node') && !args.at(-1).includes('f
     if (prevState === undefined) delete process.env.T3_STATE_DIR; else process.env.T3_STATE_DIR = prevState;
     if (prevChrono === undefined) delete process.env.T3_CHRONO_FILE; else process.env.T3_CHRONO_FILE = prevChrono;
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('R12 MIN-5: resumed rearm re-verifies live PVC per-file manifest before emptying and refuses drifted PVC', () => {
+  const pvcDir = mkdtempSync(join(tmpdir(), 't3-rearm-pvc-'));
+  try {
+    mkdirSync(join(pvcDir, 'nested'));
+    writeFileSync(join(pvcDir, 'receipt.json'), '{"committed":false}\n');
+    writeFileSync(join(pvcDir, 'nested', 'witness.bin'), 'immutable-custody-bytes');
+    const h = makeRearmHarness({ jobs: [], pvcDir });
+    let faulted = false;
+    h.setFailOn((_args, line) => {
+      if (!faulted && line.includes('fs.rmSync')) { faulted = true; return true; }
+      return false;
+    });
+    assert.throws(() => h.run(), /injected_interrupt/);
+    h.setFailOn(null);
+    assert.ok(existsSync(join(h.archive, 'custody.manifest')), 'per-file manifest written at capture time');
+
+    // Mutate live PVC file after capture: resume must refuse before emptying.
+    writeFileSync(join(pvcDir, 'nested', 'witness.bin'), 'drifted-custody-bytes');
+    assert.throws(() => h.run(), /rearm_custody_pvc_mismatch/);
+    assert.equal(h.cluster.custodyEmpty, false);
+    assert.ok(existsSync(join(pvcDir, 'receipt.json')), 'drifted PVC must not be wiped');
+
+    // Add an unarchived file on PVC: resume must also refuse before emptying.
+    writeFileSync(join(pvcDir, 'nested', 'witness.bin'), 'immutable-custody-bytes');
+    writeFileSync(join(pvcDir, 'unarchived.txt'), 'new');
+    assert.throws(() => h.run(), /rearm_custody_pvc_mismatch/);
+    rmSync(join(pvcDir, 'unarchived.txt'));
+
+    // Corrupt local archive while custody.sha256 exists: fails closed without purge or recapture.
+    const goodTar = readFileSync(join(h.archive, 'custody.tar.gz'));
+    writeFileSync(join(h.archive, 'custody.tar.gz'), 'corrupt');
+    assert.throws(() => h.run(), /rearm_archive_invalid/);
+    writeFileSync(join(h.archive, 'custody.tar.gz'), goodTar);
+
+    // Restoring matching PVC and valid archive allows resume to verify and empty PVC cleanly.
+    assert.equal(h.run().archive, h.archive);
+    assert.deepEqual(readdirSync(pvcDir), []);
+  } finally {
+    rmSync(pvcDir, { recursive: true, force: true });
   }
 });
