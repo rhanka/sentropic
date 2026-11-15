@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { supervisedSync } from './t3-processes.mjs';
-import { enterProxyDirectFallback, exitProxyDirectFallback, kubectlProxyEnv, stripOwnedProxyEnv } from './t3-kubectl-proxy.mjs';
+import { enterProxyDirectFallback, exitProxyDirectFallback, inspectDialProxyBypass,
+  kubectlProxyConnectCount, kubectlProxyEnv, parseKubeconfigInfo, stripOwnedProxyEnv } from './t3-kubectl-proxy.mjs';
 import { chrono, chronoSince, chronoStart } from './t3-chrono.mjs';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -88,11 +89,13 @@ export function delivered(ctx, script, env, timeoutMs) {
       if (cur) { cur.childPid = process.pid; saveState(ctx.stateDir, cur); }
     }
   } catch { /* observability only */ }
-  const started = chronoStart();
+  const started = chronoStart(), kc = env.A4_KUBECONFIG_FILE ?? ctx.config?.kubeconfigFile;
+  const before = kubectlProxyConnectCount(kc);
   const chronoEnv = { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE ?? (ctx.stateDir ? `${ctx.stateDir}/t3-chrono.jsonl` : '') };
   const res = supervisedSync('node', [join(HERE, script)],
-    { env: { ...kubectlProxyEnv(process.env, { kubeconfig: env.A4_KUBECONFIG_FILE ?? ctx.config?.kubeconfigFile }), ...chronoEnv, ...env }, encoding: 'utf8', timeout: timeoutMs }, ctx.stateDir);
-  chrono('delivered', started, { script, operation: env.A4_OPERATION ?? env.A4_ACTION ?? env.A4_PHASE, status: res.status }, chronoEnv);
+    { env: { ...kubectlProxyEnv(process.env, { kubeconfig: kc }), ...chronoEnv, ...env }, encoding: 'utf8', timeout: timeoutMs }, ctx.stateDir);
+  chrono('delivered', started, { script, operation: env.A4_OPERATION ?? env.A4_ACTION ?? env.A4_PHASE, status: res.status,
+    proxyConnects: kubectlProxyConnectCount(kc) - before }, chronoEnv);
   try {
     if (ctx.stateDir) {
       const cur = loadState(ctx.stateDir);
@@ -523,6 +526,18 @@ export function checkTemplateDigests(ctx, state) {
   }
 }
 
+export function checkDialProxy(ctx, connectsBefore = 0) {
+  if (ctx.dryRun && !ctx.probeReadOnly) return;
+  const kc = ctx.call?.kubectlProxyKubeconfig;
+  if (!kc || !parseKubeconfigInfo(kc).hasHttpsServer) return;
+  const bypass = inspectDialProxyBypass(process.env, kc);
+  const proxyConnects = kubectlProxyConnectCount(kc) - connectsBefore;
+  chrono('dialProxy', chronoStart(), { proxyConnects, bypassed: bypass },
+    { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE, T3_STATE_DIR: ctx.stateDir });
+  if (bypass) { ctx.print?.(`dialProxy: bypassed(${bypass})`); return; }
+  if (proxyConnects < 1) throw new Error('kubectl_proxy_unverified');
+}
+
 // The watchdog and the recovery start from the configuration alone: same private file, read again.
 const verificationOf = ctx => ctx.verification
   ?? (ctx.dryRun ? null : verificationCredential(ctx.config.verificationCredentialFile, ctx.read).header);
@@ -565,13 +580,14 @@ function assertPreviewSafe(ctx) {
 }
 
 async function driveInner(ctx, state) {
-  const now = ctx.now ?? monoMs;
+  const now = ctx.now ?? monoMs, connectsBefore = kubectlProxyConnectCount(ctx.call?.kubectlProxyKubeconfig);
   checkRbac(ctx);
   checkApplicability(ctx, psql, 'W0');
   ctx.verification = checkVerification(ctx);
   checkPostgresVersion(ctx, psql);
   checkPriorityAdmission(ctx);
   checkTemplateDigests(ctx, state);
+  checkDialProxy(ctx, connectsBefore);
   const t0 = now();
   state.t0MonoMs = t0;
   const cutoff = ms => t0 + ms;

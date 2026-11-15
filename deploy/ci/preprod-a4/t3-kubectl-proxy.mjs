@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { connect, createServer } from 'node:net';
+import { BlockList, connect, createServer, isIP } from 'node:net';
 import { isMainThread, Worker, workerData } from 'node:worker_threads';
 
 export const KUBECTL_DIAL_TIMEOUT_MS = 2_000;
@@ -233,6 +233,35 @@ export function stripOwnedProxyEnv(env = process.env) {
   if (owned && next.HTTPS_PROXY === owned) delete next.HTTPS_PROXY;
   if (owned && next.https_proxy === owned) delete next.https_proxy;
   return next;
+}
+
+export function inspectDialProxyBypass(env = process.env, kubeconfig = '') {
+  if (env.T3_KUBECTL_PROXY_DISABLE === '1') return 'disabled';
+  if ((env.HTTPS_PROXY && env.HTTPS_PROXY !== env.T3_KUBECTL_PROXY_URL)
+    || (env.https_proxy && env.https_proxy !== env.T3_KUBECTL_PROXY_URL)) return 'https_proxy';
+  const info = parseKubeconfigInfo(kubeconfig);
+  if (info.proxyUrl) return 'kubeconfig_proxy_url';
+  const rawNo = env.NO_PROXY || env.no_proxy || '';
+  if (rawNo && info.hasHttpsServer) {
+    for (const part of rawNo.split(',').map(s => s.trim()).filter(Boolean)) {
+      if (part === '*') return 'no_proxy';
+      if (part.includes('/') && isIP(info.host)) {
+        const [netAddr, pfx] = part.split('/'), fam = isIP(info.host), n = Number(pfx);
+        if (fam === isIP(netAddr) && Number.isInteger(n)) {
+          const bl = new BlockList(); bl.addSubnet(netAddr, n, fam === 6 ? 'ipv6' : 'ipv4');
+          if (bl.check(info.host, fam === 6 ? 'ipv6' : 'ipv4')) return 'no_proxy';
+        }
+        continue;
+      }
+      const m = /^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/.exec(part);
+      if (!m || (m[2] && Number(m[2]) !== info.port)) continue;
+      const h = m[1].replace(/^\[|\]$/g, '').toLowerCase();
+      if (h.startsWith('*.') ? info.host.endsWith(h.slice(1))
+        : h.startsWith('.') ? info.host.endsWith(h)
+          : info.host === h || info.host.endsWith(`.${h}`)) return 'no_proxy';
+    }
+  }
+  return null;
 }
 
 export function kubectlProxyEnv(env = process.env, opts = {}) {
