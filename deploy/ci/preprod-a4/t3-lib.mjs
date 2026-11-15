@@ -1,16 +1,9 @@
-import { supervisedSync } from './t3-processes.mjs';
+import { supervisedAsync, supervisedSync } from './t3-processes.mjs';
+import { handleProxyCallFailure, isProxyDirectFallback, kubectlProxyConnectCount,
+  kubectlProxyEnv, stripOwnedProxyEnv } from './t3-kubectl-proxy.mjs';
+import { chrono, chronoStart, kubectlClass, monoMs } from './t3-chrono.mjs';
+export { monoMs };
 import { closeSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
-
-// Monotonic milliseconds shared by driver and watchdog. CLOCK_BOOTTIME via
-// /proc/uptime is immune to NTP steps; Date.now is log-only, never budget.
-export function monoMs() {
-  try {
-    const first = readFileSync('/proc/uptime', 'utf8').trim().split(/\s+/)[0];
-    const seconds = Number(first);
-    if (Number.isFinite(seconds) && seconds >= 0) return Math.floor(seconds * 1000);
-  } catch { /* fall through to wall clock (tests, non-Linux) */ }
-  return Date.now();
-}
 
 // Real pod selectors from deploy/k8s/base/30-api.yaml (B1: never `app=api`,
 // which matches nothing and would fake a zero-pod proof).
@@ -23,7 +16,9 @@ export const podLabels = {
 const READ_ONLY = new Set(['get', 'auth', 'describe', 'logs', 'top', 'version', 'api-resources', 'kustomize', 'diff']);
 
 export function isReadOnly(args, execIsReadOnly = false) {
-  return READ_ONLY.has(args[0]) || (execIsReadOnly && args[0] === 'exec');
+  return READ_ONLY.has(args[0])
+    || (execIsReadOnly && args[0] === 'exec')
+    || (args[0] === 'create' && args.includes('--dry-run=server'));
 }
 
 // kubectl runner with a hard timeout (Fable B1: the pilot kills its
@@ -58,7 +53,7 @@ export function recoveryDeadline(stateDir = process.env.T3_STATE_DIR) {
   return deadlineMs;
 }
 
-export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, execIsReadOnly = false, timeoutRef = null, print = () => {}, stateDir = null }) {
+export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun = false, probeReadOnly = false, execIsReadOnly = false, timeoutRef = null, print = () => {}, stateDir = null, proxyFallbackDirect = false }) {
   const track = (childPid) => {
     if (!stateDir) return;
     try {
@@ -69,20 +64,11 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
       saveState(stateDir, cur);
     } catch { /* best-effort observability only */ }
   };
-  return (args, input, overrideMs) => {
-    const effective = withExecStdin(args, input);
-    const line = `kubectl --namespace ${namespace} ${effective.join(' ')}`;
-    if (dryRun && (!probeReadOnly || !isReadOnly(args, execIsReadOnly))) {
-      print(dryRunLine(line, input !== undefined));
-      return '';
-    }
-    track(process.pid);
-    const started = monoMs();
-    const result = supervisedSync('kubectl',
-      ['--kubeconfig', kubeconfig, '--namespace', namespace, '--request-timeout=60s', ...effective],
-      { input, encoding: 'utf8', timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir);
+  const finishResult = (effective, line, started, result, proxyConnects = 0) => {
     track(result?.pid ?? null);
-    if (probeReadOnly) print(`# ${(monoMs() - started)}ms ${line}`);
+    const timing = chrono(kubectlClass(effective), started, { command: effective.slice(0, 3).join(' '), status: result.status, proxyConnects },
+      { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE, T3_STATE_DIR: stateDir ?? process.env.T3_STATE_DIR });
+    if (probeReadOnly) print(`# ${timing.elapsedMs.toFixed(3)}ms ${line}`);
     if (result.error || result.status !== 0) {
       const err = new Error(`kubectl_failed: ${effective.slice(0, 3).join(' ')}`);
       err.cause = result.error?.message ?? result.stderr?.slice(0, 300);
@@ -90,6 +76,45 @@ export function runKubectl({ kubeconfig, namespace, timeoutMs = 60_000, dryRun =
     }
     return result.stdout;
   };
+  const prepare = (args, input) => {
+    const effective = withExecStdin(args, input);
+    const line = `kubectl --namespace ${namespace} ${effective.join(' ')}`;
+    if (dryRun && (!probeReadOnly || !isReadOnly(args, execIsReadOnly))) {
+      print(dryRunLine(line, input !== undefined));
+      return null;
+    }
+    track(process.pid);
+    return { effective, line, started: chronoStart(),
+      argv: ['--kubeconfig', kubeconfig, '--namespace', namespace, '--request-timeout=60s', ...effective] };
+  };
+  const call = (args, input, overrideMs) => {
+    const p = prepare(args, input);
+    if (!p) return '';
+    const fallback = proxyFallbackDirect || isProxyDirectFallback(), before = kubectlProxyConnectCount(kubeconfig);
+    const kEnv = kubectlProxyEnv(process.env, { kubeconfig, fallbackDirect: fallback });
+    let res = supervisedSync('kubectl', p.argv, { input, encoding: 'utf8', env: kEnv,
+      timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir);
+    if (handleProxyCallFailure({ kEnv, kubeconfig, before, result: res, fallback })) {
+      res = supervisedSync('kubectl', p.argv, { input, encoding: 'utf8', env: stripOwnedProxyEnv(process.env),
+        timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024 }, stateDir);
+    }
+    return finishResult(p.effective, p.line, p.started, res, kubectlProxyConnectCount(kubeconfig) - before);
+  };
+  call.async = async (args, input, overrideMs, opts = {}) => {
+    const p = prepare(args, input);
+    if (!p) return '';
+    const fallback = proxyFallbackDirect || isProxyDirectFallback(), before = kubectlProxyConnectCount(kubeconfig);
+    const kEnv = kubectlProxyEnv(process.env, { kubeconfig, fallbackDirect: fallback });
+    let res = await supervisedAsync('kubectl', p.argv, { input, env: kEnv,
+      timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024, signal: opts.signal }, stateDir);
+    if (handleProxyCallFailure({ kEnv, kubeconfig, before, result: res, fallback })) {
+      res = await supervisedAsync('kubectl', p.argv, { input, env: stripOwnedProxyEnv(process.env),
+        timeout: effectiveTimeout(overrideMs ?? timeoutMs, timeoutRef), maxBuffer: 32 * 1024 * 1024, signal: opts.signal }, stateDir);
+    }
+    return finishResult(p.effective, p.line, p.started, res, kubectlProxyConnectCount(kubeconfig) - before);
+  };
+  call.kubectlProxyKubeconfig = kubeconfig;
+  return call;
 }
 
 // Exact W8d probe URLs are operator inputs (qualified in P-0.4): the driver
@@ -111,8 +136,44 @@ export function buildProbes(config) {
       headers: { ...config.emailProbe?.headers, 'content-type': 'application/json', origin: new URL(url).origin },
       body: JSON.stringify({ email: config.emailProbe?.email }) } });
   }
-  return { probes, externalProbes: config.externalProbes ?? [] };
+  return { probes, externalProbes: config.externalProbes ?? [],restrictedProbes: config.restrictedProbes ?? [] };
 }
+
+// S-1/S-2: a request without the verification credential is refused by Traefik itself, which answers
+// basicAuth with 401 and a Basic challenge (the former 403 was the answer of the source-range rule).
+export const OBSERVER_REFUSAL = 401;
+const isHttpUrl = url => URL.canParse(url) && ['http:', 'https:'].includes(new URL(url).protocol);
+export function validateObservers(config) {
+  const restricted = [];
+  for (const id of ['S-1','S-2']) {
+    const p = config?.restrictedProbes?.find(p => p.id === id);
+    if (!p || p.expect !== OBSERVER_REFUSAL || !isHttpUrl(p.url)) throw new Error('restricted_observer_missing');
+    restricted.push(p);
+  }
+  if (!Array.isArray(config?.externalProbes) || config.externalProbes.length < 2
+    || config.externalProbes.some(p => !isHttpUrl(p.url) || p.expect !== 200)) throw new Error('external_probes_missing');
+  const probes = config?.probes ?? (config?.endpoints ? buildProbes(config).probes : []);
+  const s3 = probes.find(p => p.id === 'S-3'), s4 = probes.find(p => p.id === 'S-4');
+  if (s3 && s4 && isHttpUrl(s3.url) && isHttpUrl(s4.url)) {
+    const want = new Set([new URL(s3.url).origin, new URL(s4.url).origin]);
+    const got = new Set(restricted.map(p => new URL(p.url).origin));
+    if (got.size !== want.size || [...want].some(origin => !got.has(origin))) {
+      throw new Error('restricted_observer_origin_mismatch');
+    }
+    const ext = new Set(config.externalProbes.map(p => new URL(p.url).origin));
+    if ([...want].some(origin => !ext.has(origin))) throw new Error('external_observer_origin_mismatch');
+  }
+}
+
+// Qualified probe paths (plan section 4, corrected by rehearsal r9). The product origin answers
+// /api/v1/me and the IdP /api/v1/auth/me; both issue email codes on /api/v1/auth/email/verify-request.
+// The earlier literal URLs (/api/v1/auth/me on the product, /api/v1/auth/email/send-code) return 404
+// on the candidate: W8 could then never reach ACCEPTED after COMMIT. Refused here, before the fence.
+export const PROBE_PATHS = Object.freeze({ 'S-3': '/api/v1/health', 'S-4': '/.well-known/openid-configuration',
+  'S-5': '/.well-known/jwks.json', 'S-6': '/api/v1/auth/oauth/authorize', 'S-7': '/api/v1/me',
+  'S-8': '/api/v1/auth/me', 'S-9a': '/api/v1/auth/email/verify-request', 'S-9b': '/api/v1/auth/email/verify-request' });
+// Product-origin probes, then IdP-origin probes: each group targets one origin.
+export const PROBE_ORIGINS = Object.freeze([['S-3', 'S-7', 'S-9a'], ['S-4', 'S-5', 'S-6', 'S-8', 'S-9b']]);
 
 export function validateProbes(probes) {
   const required = { 'S-3': 200, 'S-4': 200, 'S-5': 200, 'S-6': 302,
@@ -122,12 +183,18 @@ export function validateProbes(probes) {
     if (!p || p.expect !== status || !URL.canParse(p.url) || !['http:', 'https:'].includes(new URL(p.url).protocol)) {
       throw new Error(`mandatory_probes_missing: ${id}`);
     }
+    if (new URL(p.url).pathname !== PROBE_PATHS[id]) throw new Error(`probe_path_unqualified: ${id}`);
     if (id.startsWith('S-9')) {
       let email;
       try { email = JSON.parse(p.options?.body).email; } catch { /* invalid input */ }
       if (p.options?.method !== 'POST' || new Headers(p.options?.headers).get('content-type') !== 'application/json'
         || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
         || Buffer.byteLength(email.split('@')[0]) > 36 || Buffer.byteLength(email) > 226) throw new Error(`email_probe_input: ${id}`);
+    }
+  }
+  for (const group of PROBE_ORIGINS) {
+    if (new Set(group.map(id => new URL(probes.find(p => p.id === id).url).origin)).size !== 1) {
+      throw new Error(`probe_origin_mixed: ${group.join(',')}`);
     }
   }
   if (!probes.find(p => p.id === 'S-5')?.signingKid) throw new Error('signing_kid_missing');
@@ -204,4 +271,53 @@ export function claimDead(claim) {
 // or delivered sub-command must never outlive the step that owns it.
 export function stepTimeoutMs(requestedMs, deadlineMonoMs, nowMs = monoMs()) {
   return effectiveTimeout(requestedMs, { deadlineMs: deadlineMonoMs }, nowMs);
+}
+
+// Traefik v3 EndpointSlice/Ingress/Middleware informers converge asynchronously
+// (< 3 s M-6 budget). Retries stay inside existing step/recovery deadlines and
+// never retry application JSON errors, redirects or non-Basic 401/403/5xx refusals.
+export const TRAEFIK_SYNC_MS = 3_000;
+const TRAEFIK_RETRY_DELAY_MS = 50;
+const TRAEFIK_MAX_RETRIES = Math.ceil(TRAEFIK_SYNC_MS / TRAEFIK_RETRY_DELAY_MS);
+
+export function traefikSyncDeadline(opts = {}, now = opts?.now ?? monoMs) {
+  return Math.min(opts?.deadlineMs ?? Infinity, now() + TRAEFIK_SYNC_MS);
+}
+
+function isStaleTraefikResponse(res, expectRefusal) {
+  const json = /^application\/json(?:;|$)/i.test(res.headers?.get('content-type') ?? '');
+  if (!json && (res.status === 404 || res.status === 502 || res.status === 503)) return true;
+  return !expectRefusal && res.status === 401 && /^Basic\b/i.test(res.headers?.get('www-authenticate') ?? '');
+}
+
+function isRetryableTransportError(err) {
+  if (!err || err.message === 'budget_exhausted') return false;
+  return !/redirect/i.test(`${err.message ?? ''} ${err.cause?.message ?? ''}`);
+}
+
+export async function probeWithTraefikRetry(send, opts = {}) {
+  const now = opts.now ?? monoMs;
+  const retryUntilMs = opts.retryUntilMs ?? null;
+  for (let retries = 0; ; retries += 1) {
+    let res;
+    try {
+      res = await send();
+    } catch (err) {
+      if (retryUntilMs == null || retries >= TRAEFIK_MAX_RETRIES
+        || !isRetryableTransportError(err) || now() >= retryUntilMs) throw err;
+      effectiveTimeout(1, opts, now());
+      const waitMs = Math.min(TRAEFIK_RETRY_DELAY_MS, retryUntilMs - now());
+      if (waitMs > 0 && now === monoMs) await new Promise(resolve => setTimeout(resolve, waitMs));
+      continue;
+    }
+    if (retryUntilMs != null && retries < TRAEFIK_MAX_RETRIES
+      && isStaleTraefikResponse(res, opts.refusal === true) && now() < retryUntilMs) {
+      await res.body?.cancel?.();
+      effectiveTimeout(1, opts, now());
+      const waitMs = Math.min(TRAEFIK_RETRY_DELAY_MS, retryUntilMs - now());
+      if (waitMs > 0 && now === monoMs) await new Promise(resolve => setTimeout(resolve, waitMs));
+      continue;
+    }
+    return res;
+  }
 }
