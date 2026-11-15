@@ -91,8 +91,14 @@ async function dialBounded(host, port, clientSocket, cfg, dial) {
 }
 
 async function runProxyWorker(cfg) {
-  const dial = cfg.dialModule ? (await import(cfg.dialModule)).createDialer(cfg.dialState) : connect;
-  const server = createServer(client => {
+  const markDead = () => { Atomics.store(cfg.state, 0, -1); Atomics.notify(cfg.state, 0); };
+  process.on('exit', markDead);
+  process.on('uncaughtException', err => { markDead(); throw err; });
+  let server;
+  const dial = cfg.dialModule
+    ? (await import(cfg.dialModule)).createDialer(cfg.dialState, { emit: (...a) => server.emit(...a) })
+    : connect;
+  server = createServer(client => {
     client.setNoDelay(true);
     let buf = Buffer.alloc(0), connected = false;
     const hdrTimer = setTimeout(() => { if (!connected) client.destroy(); }, 5_000);
@@ -116,6 +122,7 @@ async function runProxyWorker(cfg) {
         const upstream = await dialBounded(target.host, target.port, client, cfg, dial);
         if (client.destroyed) { upstream.destroy(); return; }
         connected = true;
+        Atomics.add(cfg.state, 2, 1);
         upstream.setNoDelay(true);
         upstream.setKeepAlive(true, 10_000);
         // Strictly after upstream TCP establishment: once 200 is written, TLS/HTTP/SPDY
@@ -134,6 +141,10 @@ async function runProxyWorker(cfg) {
     client.on('error', () => clearTimeout(hdrTimer));
     client.on('data', onData);
   });
+  server.on('error', () => {
+    Atomics.store(cfg.state, 0, -1); Atomics.notify(cfg.state, 0);
+    try { server.close(); } catch { /* closing */ }
+  });
   server.listen(0, '127.0.0.1', () => {
     Atomics.store(cfg.state, 1, server.address().port);
     Atomics.store(cfg.state, 0, 1);
@@ -143,7 +154,22 @@ async function runProxyWorker(cfg) {
 
 if (!isMainThread && workerData?.t3KubectlProxy) runProxyWorker(workerData);
 
-const workers = new Map();
+const workers = new Map(), downKeys = new Set(), closedConnects = new Map();
+let fallbackDirectDepth = 0;
+export const enterProxyDirectFallback = () => { fallbackDirectDepth += 1; };
+export const exitProxyDirectFallback = () => { fallbackDirectDepth = Math.max(0, fallbackDirectDepth - 1); };
+export const isProxyDirectFallback = (env = process.env) =>
+  fallbackDirectDepth > 0 || env.T3_KUBECTL_PROXY_FALLBACK_DIRECT === '1';
+
+function retireEntry(key, entry, markDown) {
+  if (!entry) return;
+  closedConnects.set(key, (closedConnects.get(key) ?? 0) + Atomics.load(entry.state, 2));
+  if (workers.get(key) === entry) workers.delete(key);
+  if (markDown) downKeys.add(key);
+  entry.closing = true;
+  return entry.worker.terminate();
+}
+
 function spawnProxyWorker(key, extra = {}) {
   const state = new Int32Array(new SharedArrayBuffer(16));
   const worker = new Worker(new URL(import.meta.url), {
@@ -151,10 +177,12 @@ function spawnProxyWorker(key, extra = {}) {
     workerData: { t3KubectlProxy: true, state, dialTimeoutMs: KUBECTL_DIAL_TIMEOUT_MS,
       maxAttempts: KUBECTL_DIAL_MAX_ATTEMPTS, ...extra },
   });
-  worker.unref();
+  const entry = { key, url: '', state, worker, closing: false };
+  const onDown = () => { if (!entry.closing) { Atomics.store(state, 0, -1); Atomics.notify(state, 0); retireEntry(key, entry, true); } };
+  worker.on('error', onDown); worker.on('exit', onDown); worker.unref();
   Atomics.wait(state, 0, 0, 5_000);
-  if (Atomics.load(state, 0) !== 1) throw new Error('kubectl_proxy_start_failed');
-  const entry = { key, url: `http://127.0.0.1:${Atomics.load(state, 1)}`, state, worker };
+  if (Atomics.load(state, 0) !== 1) { retireEntry(key, entry, true); throw new Error('kubectl_proxy_down'); }
+  entry.url = `http://127.0.0.1:${Atomics.load(state, 1)}`;
   workers.set(key, entry);
   return entry;
 }
@@ -163,23 +191,37 @@ function workerKey(kubeconfig) {
   const { allowedTarget } = parseKubeconfigInfo(kubeconfig);
   return { key: allowedTarget || kubeconfig || 'default', allowedTarget };
 }
-
+export function isKubectlProxyDown(kubeconfig = '') {
+  const { key } = workerKey(kubeconfig), entry = workers.get(key);
+  if (entry && Atomics.load(entry.state, 0) !== 1) retireEntry(key, entry, true);
+  return downKeys.has(key);
+}
+export function markKubectlProxyDown(kubeconfig = '') {
+  const { key } = workerKey(kubeconfig); downKeys.add(key); retireEntry(key, workers.get(key), true);
+}
+export function kubectlProxyConnectCount(kubeconfig = '') {
+  const { key } = workerKey(kubeconfig), entry = workers.get(key);
+  return (closedConnects.get(key) ?? 0) + (entry ? Atomics.load(entry.state, 2) : 0);
+}
 function ensureProxyWorker(kubeconfig = '') {
+  if (isKubectlProxyDown(kubeconfig)) throw new Error('kubectl_proxy_down');
   const { key, allowedTarget } = workerKey(kubeconfig);
   return { ...(workers.get(key) ?? spawnProxyWorker(key, { allowedTarget })), allowedTarget };
 }
 
 export function registerKubectlProxy({ kubeconfig = '', dialModule = null, dialState = null,
   dialTimeoutMs = KUBECTL_DIAL_TIMEOUT_MS, maxAttempts = KUBECTL_DIAL_MAX_ATTEMPTS } = {}) {
-  const { key, allowedTarget } = workerKey(kubeconfig), prev = workers.get(key);
-  if (prev) { workers.delete(key); prev.worker.terminate(); }
+  const { key, allowedTarget } = workerKey(kubeconfig);
+  downKeys.delete(key);
+  retireEntry(key, workers.get(key), false);
   const entry = spawnProxyWorker(key, { allowedTarget, dialModule, dialState, dialTimeoutMs, maxAttempts });
-  return { url: entry.url, close: async () => { if (workers.get(key) === entry) workers.delete(key); await entry.worker.terminate(); } };
+  return { url: entry.url, close: async () => { await retireEntry(key, entry, false); } };
 }
 
 export async function resetKubectlProxyForTests() {
-  const list = [...workers.values()]; workers.clear();
-  await Promise.all(list.map(e => e.worker.terminate()));
+  const list = [...workers.entries()];
+  workers.clear(); downKeys.clear(); closedConnects.clear(); fallbackDirectDepth = 0;
+  await Promise.all(list.map(([, e]) => { e.closing = true; return e.worker.terminate(); }));
 }
 
 export function stripOwnedProxyEnv(env = process.env) {
@@ -187,19 +229,29 @@ export function stripOwnedProxyEnv(env = process.env) {
   const owned = next.T3_KUBECTL_PROXY_URL;
   delete next.T3_KUBECTL_PROXY_URL;
   delete next.T3_KUBECTL_PROXY_TARGET;
+  delete next.T3_KUBECTL_PROXY_FALLBACK_DIRECT;
   if (owned && next.HTTPS_PROXY === owned) delete next.HTTPS_PROXY;
   if (owned && next.https_proxy === owned) delete next.https_proxy;
   return next;
 }
 
 export function kubectlProxyEnv(env = process.env, opts = {}) {
+  const fallback = Boolean(opts.fallbackDirect || isProxyDirectFallback(env));
   if (env.T3_KUBECTL_PROXY_DISABLE === '1') return stripOwnedProxyEnv(env);
   if (env.HTTPS_PROXY && env.HTTPS_PROXY !== env.T3_KUBECTL_PROXY_URL) return env;
   if (env.https_proxy && env.https_proxy !== env.T3_KUBECTL_PROXY_URL) return env;
-  const reqTarget = opts.kubeconfig ? parseKubeconfigInfo(opts.kubeconfig).allowedTarget : '';
-  const reuse = env.T3_KUBECTL_PROXY_URL && (!reqTarget || env.T3_KUBECTL_PROXY_TARGET === reqTarget);
-  const { url, allowedTarget } = reuse
-    ? { url: env.T3_KUBECTL_PROXY_URL, allowedTarget: env.T3_KUBECTL_PROXY_TARGET ?? '' }
-    : ensureProxyWorker(opts.kubeconfig);
-  return { ...env, T3_KUBECTL_PROXY_URL: url, T3_KUBECTL_PROXY_TARGET: allowedTarget, HTTPS_PROXY: url, https_proxy: url };
+  try {
+    if (isKubectlProxyDown(opts.kubeconfig)) throw new Error('kubectl_proxy_down');
+    const reqTarget = opts.kubeconfig ? parseKubeconfigInfo(opts.kubeconfig).allowedTarget : '';
+    const reuse = Boolean(env.T3_KUBECTL_PROXY_URL && workers.size === 0
+      && (!reqTarget || env.T3_KUBECTL_PROXY_TARGET === reqTarget));
+    const { url, allowedTarget } = reuse
+      ? { url: env.T3_KUBECTL_PROXY_URL, allowedTarget: env.T3_KUBECTL_PROXY_TARGET ?? '' }
+      : ensureProxyWorker(opts.kubeconfig);
+    return { ...env, T3_KUBECTL_PROXY_URL: url, T3_KUBECTL_PROXY_TARGET: allowedTarget, HTTPS_PROXY: url, https_proxy: url,
+      ...(fallback ? { T3_KUBECTL_PROXY_FALLBACK_DIRECT: '1' } : {}) };
+  } catch (err) {
+    if (fallback) return { ...stripOwnedProxyEnv(env), T3_KUBECTL_PROXY_FALLBACK_DIRECT: '1' };
+    throw err;
+  }
 }
