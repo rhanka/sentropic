@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rearm } from './t3-rearm.mjs';
-import { saveState } from './t3-lib.mjs';
+import { runKubectl, saveState } from './t3-lib.mjs';
+import { summarize } from './t3-chrono.mjs';
 import { inputs } from './t3-preflight.test.mjs';
 import { gzipSync } from 'node:zlib';
 import { canonical, digest } from './guards.mjs';
@@ -208,5 +209,57 @@ test('R12 MIN-9: rearm pod sets priorityClassName on prod and restore tiers only
     h.run();
     assert.equal(h.cluster.createdPods.length, 1);
     assert.equal(h.cluster.createdPods[0].spec.priorityClassName, expected, `unexpected priorityClassName for tier=${tier}`);
+  }
+});
+
+test('R12 MIN-4: rearm through runKubectl routes chrono to archive without polluting new stateDir and passes second full replay', () => {
+  const dir = mkdtempSync(join(tmpdir(), 't3-rearm-rk-'));
+  const stateDir = join(dir, 'state'), archive = `${stateDir}-attempt-old`;
+  const tarBytes = gzipSync(Buffer.alloc(1024, 0x42)), tarSha = digest(tarBytes);
+  const next = inputs();
+  const config = { ...next.config, request: { operationId: 'old' }, executionSha256: '0'.repeat(64),
+    legacyImages: { api: 'legacy-api', 'auth-idp': 'legacy-idp', ui: 'legacy-ui' } };
+  saveState(stateDir, { step: 'DONE', commitVerified: false, operationId: 'old' });
+  const binFile = join(dir, 'kubectl');
+  writeFileSync(binFile, `#!/usr/bin/env node
+const fs = require('node:fs');
+const a = process.argv.slice(2);
+const i = a.indexOf('--request-timeout=60s');
+const args = i >= 0 ? a.slice(i + 1) : a;
+const stdin = args.includes('-i') ? fs.readFileSync(0, 'utf8') : '';
+if (args[0] === 'exec' && stdin.includes('journal_present')) process.stdout.write('f|0');
+else if (args[0] === 'get' && args[1] === 'deployment') {
+  const n = args[2], img = ${JSON.stringify(config.legacyImages)}[n];
+  process.stdout.write(JSON.stringify({ spec: { replicas: 1, template: { spec: { containers: [{ name: n, image: img }] } } }, status: { readyReplicas: 1 } }));
+} else if (args[0] === 'get' && args[1] === 'jobs') process.stdout.write('{"items":[]}');
+else if (args[0] === 'exec' && args.includes('sh')) process.stdout.write(${JSON.stringify(tarBytes.toString('base64'))});
+else if (args[0] === 'exec' && args.includes('sha256sum')) process.stdout.write('${tarSha}  /tmp/t3-custody.tar.gz');
+else if (args[0] === 'exec' && args.includes('node') && !args.at(-1).includes('fs.rmSync')) process.stdout.write('F ${'a'.repeat(64)} custody.bin\\n');
+`, { mode: 0o755 });
+  chmodSync(binFile, 0o755);
+  const prevPath = process.env.PATH, prevState = process.env.T3_STATE_DIR, prevChrono = process.env.T3_CHRONO_FILE;
+  process.env.PATH = `${dir}:${prevPath}`;
+  process.env.T3_STATE_DIR = stateDir;
+  delete process.env.T3_CHRONO_FILE;
+  try {
+    const call = runKubectl({ kubeconfig: '/private/kube', namespace: 'sentropic-preprod' });
+    const runOnce = () => rearm({ config, stateDir, call }, next.config, next.read);
+    assert.equal(runOnce().archive, archive);
+    assert.deepEqual(readdirSync(stateDir), [], 'fresh stateDir must stay empty after initial rearm');
+    // Simulate after-state-rename interruption + resume + second full replay.
+    rmSync(stateDir, { recursive: true, force: true });
+    assert.equal(runOnce().archive, archive);
+    assert.deepEqual(readdirSync(stateDir), [], 'resumed rearm must not pollute new stateDir with t3-chrono.jsonl');
+    assert.equal(runOnce().archive, archive, 'first full replay after resume');
+    assert.equal(runOnce().archive, archive, 'second full replay through runKubectl must succeed');
+    assert.deepEqual(readdirSync(stateDir), [], 'second full replay must leave stateDir empty');
+    const rearmChrono = join(archive, 'rearm-chrono.jsonl');
+    assert.ok(existsSync(rearmChrono), 'rearm chrono routed into archive');
+    assert.equal(summarize(readFileSync(rearmChrono, 'utf8')).pass, true);
+  } finally {
+    process.env.PATH = prevPath;
+    if (prevState === undefined) delete process.env.T3_STATE_DIR; else process.env.T3_STATE_DIR = prevState;
+    if (prevChrono === undefined) delete process.env.T3_CHRONO_FILE; else process.env.T3_CHRONO_FILE = prevChrono;
+    rmSync(dir, { recursive: true, force: true });
   }
 });
