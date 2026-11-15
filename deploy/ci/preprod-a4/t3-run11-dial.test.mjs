@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { createServer } from 'node:https';
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -42,13 +43,14 @@ function readWsStdin(buf) {
   return { rest: buf.subarray(off), sql, eof };
 }
 
-function runMockKubeWorker({ ctrl, candidateImage, bindHost = '127.0.0.1' }) {
+function runMockKubeWorker({ ctrl, dialState = null, candidateImage, bindHost = '127.0.0.1' }) {
   const server = createServer(ephemeralTlsIdentity(), (req, res) => {
     req.on('data', () => {});
     req.on('end', () => {
       if (req.method === 'PATCH') {
         Atomics.add(ctrl, 2, 1);
         if (Atomics.load(ctrl, 4) === 1) { req.socket.destroy(); return; }
+        if (Atomics.load(ctrl, 4) === 3 && dialState) { Atomics.store(dialState, 3, 2); Atomics.notify(dialState, 3); return; }
       }
       const u = req.url.split('?')[0];
       res.setHeader('content-type', 'application/json');
@@ -72,6 +74,7 @@ function runMockKubeWorker({ ctrl, candidateImage, bindHost = '127.0.0.1' }) {
       buf = Buffer.concat([buf, chunk]);
       const parsed = readWsStdin(buf); buf = parsed.rest; fullSql += parsed.sql;
       if (Atomics.load(ctrl, 4) === 2 && fullSql.length > 0) { socket.destroy(); return; }
+      if (Atomics.load(ctrl, 4) === 4 && fullSql.length > 0 && dialState) { Atomics.store(dialState, 3, 2); Atomics.notify(dialState, 3); return; }
       if (parsed.eof) {
         const out = fullSql.includes('journal_present') ? 't|0\n' : fullSql.includes('identity_committed') ? 't\n'
           : fullSql.includes('asset_column_present') ? 'f\n' : 'control.artifact_host_kv|t\n';
@@ -96,15 +99,18 @@ const args = process.argv.slice(2), rest = []; let kc = '';
 for (let i = 0; i < args.length; i++) { if (args[i] === '--kubeconfig' || args[i] === '--namespace') { if (args[i] === '--kubeconfig') kc = args[i + 1]; i++; } else if (!args[i].startsWith('--request-timeout=')) rest.push(args[i]); }
 const auth = /server:\\s*https:\\/\\/([^\\s]+)/.exec(readFileSync(kc, 'utf8'))[1], [host, portStr] = auth.split(':'), port = Number(portStr);
 const openTls = () => new Promise((res, rej) => {
+  const dHost = host === 'apiserver.t3.local' ? '127.0.0.1' : host;
   const up = raw => { const s = tlsConnect({ socket: raw, rejectUnauthorized: false }, () => res(s)); s.on('error', rej); };
-  if (!process.env.HTTPS_PROXY) { const raw = connect(port, host, () => up(raw)); raw.on('error', rej); return; }
-  const p = new URL(process.env.HTTPS_PROXY), raw = connect(Number(p.port), p.hostname, () => raw.write(\`CONNECT \${auth} HTTP/1.1\\r\\nHost: \${auth}\\r\\n\\r\\n\`));
-  let b = Buffer.alloc(0); raw.on('error', rej);
+  if (!process.env.HTTPS_PROXY) { const raw = connect(port, dHost, () => up(raw)); raw.on('error', rej); return; }
+  const p = new URL(process.env.HTTPS_PROXY); let ok = false, b = Buffer.alloc(0);
+  const raw = connect(Number(p.port), p.hostname, () => raw.write(\`CONNECT \${auth} HTTP/1.1\\r\\nHost: \${auth}\\r\\n\\r\\n\`));
+  raw.on('error', e => rej(new Error(e.code === 'ECONNREFUSED' ? \`Unable to connect to the server: proxyconnect tcp: dial tcp \${p.host}: connect: connection refused\` : String(e))));
+  raw.on('close', () => { if (!ok) rej(new Error('Unable to connect to the server: proxyconnect tcp: EOF')); });
   raw.on('data', function onD(c) { b = Buffer.concat([b, c]); const i = b.indexOf('\\r\\n\\r\\n'); if (i < 0) return; raw.removeListener('data', onD);
-    if (!b.subarray(0, i).toString().startsWith('HTTP/1.1 200')) { raw.destroy(); rej(new Error('proxy_502')); return; } up(raw); });
+    if (!b.subarray(0, i).toString().startsWith('HTTP/1.1 200')) { raw.destroy(); rej(new Error('Unable to connect to the server: Bad Gateway')); return; } ok = true; up(raw); });
 });
 const maskFrame = p => { const h = p.length < 126 ? Buffer.of(0x82, 0x80 | p.length) : Buffer.of(0x82, 0xfe, p.length >> 8, p.length & 0xff); return Buffer.concat([h, Buffer.alloc(4), p]); };
-const sock = await openTls();
+const sock = await openTls().catch(e => { process.stderr.write(\`\${e.message || e}\\n\`); process.exit(1); });
 if (rest[0] === 'exec') {
   const stdin = readFileSync(0); sock.write(\`GET /api/v1/namespaces/sentropic-preprod/pods/postgres-0/exec HTTP/1.1\\r\\nHost: \${auth}\\r\\nConnection: Upgrade\\r\\nUpgrade: websocket\\r\\nSec-WebSocket-Version: 13\\r\\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\\r\\nSec-WebSocket-Protocol: v5.channel.k8s.io\\r\\n\\r\\n\`);
   let b = Buffer.alloc(0), up = false, out = '', ok = false;
@@ -184,6 +190,96 @@ export const createDialer = s => ({ host, port }) => {
     const mean = a => a.reduce((s, v) => s + v, 0) / a.length, deltaMed = proxyMs[15] - directMs[15], deltaMean = mean(proxyMs) - mean(directMs);
     console.log(`# dial_proxy_overhead_ms n=30 directMedian=${directMs[15].toFixed(2)} proxyMedian=${proxyMs[15].toFixed(2)} deltaMedian=${deltaMed.toFixed(2)} deltaMean=${deltaMean.toFixed(2)}`);
     assert.ok(deltaMed < 15, `per-call median overhead too high: ${deltaMed.toFixed(2)}ms`);
+  } finally {
+    await proxyMod.resetKubectlProxyForTests?.();
+    await apiWorker.terminate();
+    process.env.PATH = saved.PATH;
+    if (saved.disable === undefined) delete process.env.T3_KUBECTL_PROXY_DISABLE; else process.env.T3_KUBECTL_PROXY_DISABLE = saved.disable;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+if (isMainThread) test('R13 MIN-2: proxy dies after the tunnel is established, in fallback mode: no replay', async () => {
+  if (process.env.T3_REAL_KUBECTL) assert.ok(existsSync(process.env.T3_REAL_KUBECTL), `pinned kubectl required at ${process.env.T3_REAL_KUBECTL}`);
+  const realKubectl = process.env.T3_REAL_KUBECTL ?? '/opt/t3-kubectl/kubectl';
+  const dir = mkdtempSync(join(tmpdir(), 't3-r13-min2-')), candidate = `ghcr.io/rhanka/sentropic-api@sha256:${'d'.repeat(64)}`;
+  const binPath = join(dir, 'kubectl');
+  if (existsSync(realKubectl)) symlinkSync(realKubectl, binPath);
+  else writeFileSync(binPath, NODE_KUBECTL_SHIM, { mode: 0o700 });
+  const bindHost = Object.values(networkInterfaces()).flat().find(i => !i.internal && i.family === 'IPv4')?.address ?? '127.0.0.1';
+  const kubeHost = bindHost === '127.0.0.1' ? 'apiserver.t3.local' : bindHost;
+  const dialerFile = join(dir, 'kill-dialer.mjs');
+  writeFileSync(dialerFile, `import { connect } from 'node:net';
+export const createDialer = s => {
+  const w = Atomics.waitAsync(s, 3, 0);
+  if (w.async) w.value.then(() => { if (Atomics.load(s, 3) === 2) process.exit(2); });
+  return ({ host, port }) => connect({ host: host === 'apiserver.t3.local' ? '127.0.0.1' : host, port });
+};\n`);
+  const ctrl = new Int32Array(new SharedArrayBuffer(20)), dialState = new Int32Array(new SharedArrayBuffer(16));
+  const apiWorker = new Worker(new URL(import.meta.url), { workerData: { mockKube: true, ctrl, dialState, candidateImage: candidate, bindHost } });
+  Atomics.wait(ctrl, 0, 0, 5_000);
+  const port = Atomics.load(ctrl, 1), kube = join(dir, 'kube.yaml'), dialModule = pathToFileURL(dialerFile).href;
+  writeFileSync(kube, kubeconfigYaml(`${kubeHost}:${port}`), { mode: 0o600 });
+  const saved = { PATH: process.env.PATH, disable: process.env.T3_KUBECTL_PROXY_DISABLE };
+  process.env.PATH = `${dir}:${saved.PATH}`; delete process.env.T3_KUBECTL_PROXY_DISABLE;
+  try {
+    await proxyMod.resetKubectlProxyForTests();
+    const fallbackCall = runKubectl({ kubeconfig: kube, namespace: 'sentropic-preprod', stateDir: dir, proxyFallbackDirect: true });
+    proxyMod.enterProxyDirectFallback();
+    try {
+      // 1. Proxy Worker dies AFTER tunnel establishment during PATCH in fallback mode: 1 request on server, zero direct replay.
+      const p1 = proxyMod.registerKubectlProxy({ kubeconfig: kube, dialModule, dialState });
+      assert.equal(fallbackCall(['auth', 'can-i', 'get', 'pods']).trim(), 'yes');
+      Atomics.store(ctrl, 2, 0); Atomics.store(ctrl, 4, 3);
+      assert.throws(() => fallbackCall(['patch', 'secret', 'sentropic-api', '--type=merge', '-p', '{"stringData":{"k":"v"}}']), /kubectl_failed/);
+      assert.equal(proxyMod.isKubectlProxyDown(kube), true);
+      assert.equal(Atomics.load(ctrl, 2), 1, 'PATCH after tunnel establishment must count 1 request on server with zero replay');
+
+      // Validate anchored proxyconnect regex against the real kubectl v1.35.0 stderr (get pods emits raw proxyconnect via memcache.go; cached auth emits helpers.go rewrite).
+      const target = `${kubeHost}:${port}`, deadPort = new URL(p1.url).port;
+      const deadGet = spawnSync(binPath, ['--kubeconfig', kube, '--namespace', 'sentropic-preprod', '--request-timeout=5s',
+        '--cache-dir', join(dir, 'cold-cache'), 'get', 'pods'], { encoding: 'utf8', env: { ...process.env, HTTPS_PROXY: p1.url, https_proxy: p1.url } });
+      assert.notEqual(deadGet.status, 0);
+      if (existsSync(realKubectl)) assert.match(deadGet.stderr, new RegExp(`proxyconnect tcp: dial tcp 127\\.0\\.0\\.1:${deadPort}:`));
+      assert.equal(proxyMod.isProxyConnectRefused(deadGet.stderr, p1.url), true, `expected anchored match on real stderr: ${deadGet.stderr}`);
+      assert.equal(proxyMod.isProxyConnectRefused(deadGet.stderr, 'http://127.0.0.1:1'), false);
+      assert.equal(proxyMod.isProxyConnectRefused(`Error: connect ECONNREFUSED 127.0.0.1:${deadPort}`, p1.url, target), false);
+
+      const deadAuth = spawnSync(binPath, ['--kubeconfig', kube, '--namespace', 'sentropic-preprod', '--request-timeout=5s',
+        'auth', 'can-i', 'get', 'pods'], { encoding: 'utf8', env: { ...process.env, HTTPS_PROXY: p1.url, https_proxy: p1.url } });
+      assert.notEqual(deadAuth.status, 0);
+      assert.equal(proxyMod.isProxyConnectRefused(deadAuth.stderr, p1.url, target), true);
+      assert.equal(proxyMod.isProxyConnectRefused(deadAuth.stderr, p1.url, 'other.invalid:6443'), false);
+
+      // Live proxy with closed non-loopback upstream returns HTTP 502 Bad Gateway (never misidentified as dead local proxy).
+      Atomics.store(dialState, 3, 0);
+      const closedTarget = `${kubeHost}:1`, closedKube = join(dir, 'closed-kube.yaml');
+      writeFileSync(closedKube, kubeconfigYaml(closedTarget), { mode: 0o600 });
+      const live502 = proxyMod.registerKubectlProxy({ kubeconfig: closedKube, dialModule, dialState, maxAttempts: 1, dialTimeoutMs: 250 });
+      const gwRes = spawnSync(binPath, ['--kubeconfig', closedKube, '--namespace', 'sentropic-preprod', '--request-timeout=5s',
+        'auth', 'can-i', 'get', 'pods'], { encoding: 'utf8', env: { ...process.env, HTTPS_PROXY: live502.url, https_proxy: live502.url } });
+      assert.notEqual(gwRes.status, 0);
+      assert.match(gwRes.stderr, /Bad Gateway/i);
+      assert.equal(proxyMod.isProxyConnectRefused(gwRes.stderr, live502.url, closedTarget), false);
+      await live502.close();
+
+      // 2. Proxy Worker dies AFTER tunnel establishment during W7b exec -i in fallback mode: 1 request on server, zero direct replay.
+      Atomics.store(dialState, 3, 0);
+      proxyMod.registerKubectlProxy({ kubeconfig: kube, dialModule, dialState });
+      assert.equal(fallbackCall(['auth', 'can-i', 'get', 'pods']).trim(), 'yes');
+      Atomics.store(ctrl, 3, 0); Atomics.store(ctrl, 4, 4);
+      assert.throws(() => classify({ call: fallbackCall, postgresPod: 'postgres-0', config: { candidateImage: candidate } }), /kubectl_failed/);
+      assert.equal(proxyMod.isKubectlProxyDown(kube), true);
+      assert.equal(Atomics.load(ctrl, 3), 1, 'exec -i after tunnel establishment must count 1 request on server with zero replay');
+      Atomics.store(ctrl, 4, 0);
+
+      // Subsequent call in fallback mode after proxy death falls back cleanly to direct dial.
+      if (bindHost !== '127.0.0.1' || !existsSync(realKubectl)) {
+        assert.equal(fallbackCall(['auth', 'can-i', 'get', 'pods']).trim(), 'yes');
+      }
+    } finally {
+      proxyMod.exitProxyDirectFallback();
+    }
   } finally {
     await proxyMod.resetKubectlProxyForTests?.();
     await apiWorker.terminate();
