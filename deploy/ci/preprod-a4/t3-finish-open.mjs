@@ -14,8 +14,7 @@ function podsOf(call, component) {
   return out ? JSON.parse(out).items ?? [] : [];
 }
 
-function deployReady(call, deploy, image) {
-  const out = call(['get', 'deployment', deploy, '-o', 'json']);
+function parseDeployReady(out, deploy, image) {
   if (!out) return false;
   const d = JSON.parse(out || '{}');
   if (!d.spec) return false;
@@ -23,6 +22,14 @@ function deployReady(call, deploy, image) {
   return d.spec?.replicas === 1 && d.status?.readyReplicas === 1
     && d.status?.observedGeneration === d.metadata?.generation && current === image;
 }
+
+function deployReady(call, deploy, image) {
+  return parseDeployReady(call(['get', 'deployment', deploy, '-o', 'json']), deploy, image);
+}
+
+const callAsync = (call, args, signal) => call.async
+  ? call.async(args, undefined, undefined, { signal })
+  : Promise.resolve().then(() => call(args));
 
 export function ensureStarted(call, deploy, image, opts = {}) {
   if (opts.dryRun) {
@@ -41,6 +48,35 @@ export function ensureStarted(call, deploy, image, opts = {}) {
   call(['scale', `deployment/${deploy}`, '--replicas=1']);
   call(['rollout', 'status', `deployment/${deploy}`, '--timeout=120s']);
   if (!deployReady(call, deploy, image)) throw new Error(`${deploy}_not_ready`);
+}
+
+export async function ensureStartedAsync(call, deploy, image, opts = {}) {
+  if (opts.dryRun) { ensureStarted(call, deploy, image, opts); return; }
+  const { signal } = opts;
+  const initial = await callAsync(call, ['get', 'deployment', deploy, '-o', 'json'], signal);
+  if (parseDeployReady(initial, deploy, image)) return;
+  const d = JSON.parse(initial || '{}');
+  const current = d.spec?.template?.spec?.containers?.find(c => c.name === deploy)?.image;
+  if (current !== image) await callAsync(call, ['set', 'image', `deployment/${deploy}`, `${deploy}=${image}`], signal);
+  await callAsync(call, ['scale', `deployment/${deploy}`, '--replicas=1'], signal);
+  await callAsync(call, ['rollout', 'status', `deployment/${deploy}`, '--timeout=120s'], signal);
+  if (!parseDeployReady(await callAsync(call, ['get', 'deployment', deploy, '-o', 'json'], signal), deploy, image)) {
+    throw new Error(`${deploy}_not_ready`);
+  }
+}
+
+export async function ensureFrontalsStarted(call, images, opts = {}) {
+  if (opts.dryRun) {
+    ensureStarted(call, 'ui', images.ui, opts);
+    ensureStarted(call, 'auth-idp', images.candidate, opts);
+    return;
+  }
+  const ac = new AbortController();
+  let firstError = null;
+  const startOne = (deploy, image) => ensureStartedAsync(call, deploy, image, { ...opts, signal: ac.signal })
+    .catch(err => { if (!firstError) { firstError = err; ac.abort(); } });
+  await Promise.allSettled([startOne('ui', images.ui), startOne('auth-idp', images.candidate)]);
+  if (firstError) throw firstError;
 }
 
 // Repair without ever opening traffic: frontals to zero before touching the
@@ -108,8 +144,7 @@ export async function finishOpen(ctx) {
     // database must restart the candidate api here before any opening, or the
     // post-commit convergence would leave prod fenced with api at 0 replicas.
     ensureStarted(call, 'api', images.candidate, dry);
-    ensureStarted(call, 'ui', images.ui, dry);
-    ensureStarted(call, 'auth-idp', images.candidate, dry);
+    await ensureFrontalsStarted(call, images, dry);
     // Observers are sent bare (no credential, no caller option); the functional probes carry it.
     const restrictSyncUntilMs = traefikSyncDeadline(dry);
     for (const p of restrictedProbes) {
@@ -127,8 +162,7 @@ export async function finishOpen(ctx) {
   // ensureStarted is idempotent: a ready deployment is left alone.
   if (['ACCEPTED', 'BACKUP_RESUMED', 'ONE_HOST_OPEN', 'TWO_HOSTS_OPEN'].includes(state.substate)) {
     ensureStarted(call, 'api', images.candidate, dry);
-    ensureStarted(call, 'ui', images.ui, dry);
-    ensureStarted(call, 'auth-idp', images.candidate, dry);
+    await ensureFrontalsStarted(call, images, dry);
   }
   if (state.substate === 'ACCEPTED') {
     if (ctx.dryRun) {
