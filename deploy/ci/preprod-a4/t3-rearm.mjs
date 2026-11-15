@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { loadState, readRecoveryClaim, claimDead } from './t3-lib.mjs';
 import { classify } from './t3-window-driver.mjs';
 import { preflight } from './t3-preflight-static.mjs';
-import { digest } from './guards.mjs';
-import { t3PriorityClass } from './ops.mjs';
+import { digest, tierOf } from './guards.mjs';
+import { prioritized, t3PriorityClass } from './ops.mjs';
 import { gunzipSync } from 'node:zlib';
 
 const REARM_HOLD = "process.on('SIGTERM',()=>process.exit(0));process.on('SIGINT',()=>process.exit(0));setInterval(()=>{},1000)";
@@ -79,9 +79,10 @@ export function rearm(ctx, nextConfig, read) {
   const name = 'sentropic-a4-rearm';
   ctx.call(['delete', 'pod', name, '--ignore-not-found=true', '--wait=true', '--timeout=30s']);
   if (!existsSync(emptiedMarker)) {
+    const tier = tierOf({ A4_TIER: config.tier });
     const pod = { apiVersion: 'v1', kind: 'Pod', metadata: { name, namespace: config.namespace }, spec: {
       restartPolicy: 'Never', automountServiceAccountToken: false,
-      terminationGracePeriodSeconds: 1, priorityClassName: t3PriorityClass,
+      terminationGracePeriodSeconds: 1, ...(prioritized(tier).length ? { priorityClassName: t3PriorityClass } : {}),
       containers: [{ name: 'rearm', image: config.images.candidate, command: ['node', '-e', REARM_HOLD],
         securityContext: { runAsUser: 0, allowPrivilegeEscalation: false, capabilities: { drop: ['ALL'] } },
         volumeMounts: [{ name: 'custody', mountPath: '/run/cm-cutover' }] }],
