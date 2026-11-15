@@ -108,10 +108,11 @@ export function reconcileRestrictSafe(ctx, state) {
   // Pods linger in Terminating after the scale call: wait for them instead
   // of failing the repair on the first sighting (a real cluster never
   // reaches zero in the same millisecond).
-  const deadline = Math.min(ctx.deadlineMs ?? Infinity, monoMs() + (ctx.frontalsTimeoutMs ?? 30_000));
+  const now = ctx.now ?? monoMs;
+  const deadline = Math.min(ctx.deadlineMs ?? Infinity, now() + (ctx.frontalsTimeoutMs ?? 30_000));
   for (const component of ['ui', 'auth-idp']) {
     while (podsOf(call, component).length > 0) {
-      if (monoMs() > deadline) throw new Error(`frontal_not_zero: ${component}`);
+      if (now() > deadline) throw new Error(`frontal_not_zero: ${component}`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
     }
   }
@@ -130,16 +131,20 @@ export function reconcileRestrictSafe(ctx, state) {
 }
 
 export async function finishOpen(ctx) {
-  const { call, probe, state, save, images, probes = [], externalProbes = [],restrictedProbes = [] } = ctx;
+  const { probe, state, save, images, probes = [], externalProbes = [],restrictedProbes = [] } = ctx;
+  const now = ctx.now ?? monoMs, rawCall = ctx.call;
+  const call = ctx.deadlineMs == null ? rawCall
+    : Object.assign((args, input, cap) => rawCall(args, input, effectiveTimeout(cap ?? 60_000, ctx, now())),
+      rawCall?.async ? { async: (args, input, cap, opts) => rawCall.async(args, input, effectiveTimeout(cap ?? 60_000, ctx, now()), opts) } : {});
   const dry = { dryRun: ctx.dryRun === true, print: ctx.print ?? (() => {}),
-    deadlineMs: ctx.deadlineMs, now: ctx.now };
-  effectiveTimeout(1, ctx, (ctx.now ?? monoMs)());
+    deadlineMs: ctx.deadlineMs, now };
+  effectiveTimeout(1, ctx, now());
   if (state.substate === 'POSTCOMMIT_RESTRICTED' || !state.substate) {
     validateProbes(probes);
     validateObservers({ probes, restrictedProbes, externalProbes });
     // Acceptance crosses the restricted Ingresses: without the credential no probe can pass.
     if (!dry.dryRun && !ctx.verification) throw new Error('verification_credential_missing');
-    reconcileRestrictSafe(ctx, state);
+    reconcileRestrictSafe({ ...ctx, call }, state);
     // The emergency classifier stops api before reading the truth: a committed
     // database must restart the candidate api here before any opening, or the
     // post-commit convergence would leave prod fenced with api at 0 replicas.
