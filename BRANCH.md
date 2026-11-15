@@ -58,13 +58,13 @@
   - [x] Verify council generation stays clean via `make check-llm-model-equivalences API_PORT=9178 UI_PORT=5378 MAILDEV_UI_PORT=1278 ENV=test-llm-mesh-carbon`.
   - [x] Lot gate: `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make test-llm-mesh`, and `make test-llm-gateway` green on `ENV=test-llm-mesh-carbon`.
 
-- [ ] **Lot 2 — Package version bump (0.38.1), changelog & companion tuple pins**
-  - [ ] Bump `packages/llm-mesh/package.json` to `0.38.1`, update `packages/llm-mesh/tests/decision-public-surface.test.ts`, and add `## 0.38.1` entry in `packages/llm-mesh/CHANGELOG.md`.
-  - [ ] Sync `package-lock.json` (`BR40-EX1`) and refresh `packages/cluster-mesh/tests/fixtures/train.ts` + `packages/cluster-mesh/tests/packaging/fixtures/selected/{package.json,package-lock.json}` (`BR40-EX2`) via `pack-candidate-siblings` and `refresh-lazy-package-lock`.
-  - [ ] Lot gate: `make test-llm-mesh`, `make test-llm-gateway`, `make cluster-mesh-workspace CM_ACTION=mesh-check`, and `make pack-publishable-manifest PACKAGE=llm-mesh` green on `ENV=test-llm-mesh-carbon`.
+- [x] **Lot 2 — Package version bump (0.38.1), changelog & companion tuple pins**
+  - [x] Bump `packages/llm-mesh/package.json` to `0.38.1`, update `packages/llm-mesh/tests/decision-public-surface.test.ts`, and add `## 0.38.1` entry in `packages/llm-mesh/CHANGELOG.md`.
+  - [x] Sync `package-lock.json` (`BR40-EX1`) and refresh `packages/cluster-mesh/tests/fixtures/train.ts` + `packages/cluster-mesh/tests/packaging/fixtures/selected/{package.json,package-lock.json}` (`BR40-EX2`) via `pack-candidate-siblings` and `refresh-lazy-package-lock`.
+  - [x] Lot gate: `make test-llm-mesh`, `make test-llm-gateway`, `make test-cluster-mesh SCOPE="tests/integrations"`, `make -f packages/cluster-mesh/packaging.mk test-lazy-package`, and `make pack-llm-mesh` green on `ENV=test-llm-mesh-carbon`.
 
 - [ ] **Lot N — Final validation & PR qualification (no merge)**
-  - [ ] Verify `make scope-check` passes before every atomic commit (< 150 lines, no trailers).
+  - [x] Verify `make scope-check` passes before every atomic commit (< 150 lines, no trailers).
   - [ ] Push `feat/llm-mesh-gemini-4-carbon` and open PR against `main` using `BRANCH.md` as PR body.
   - [ ] Wait for all GitHub Actions CI checks to complete green on the exact PR HEAD SHA (do not merge; keep `BRANCH.md` on PR branch for conductor merge).
   - [ ] Tear down isolated volumes (`make down-volumes ... ENV=test-llm-mesh-carbon`) and write `.tmp/rv/llm-mesh-carbon.md` + `.tmp/rv/llm-mesh-carbon.done`.
