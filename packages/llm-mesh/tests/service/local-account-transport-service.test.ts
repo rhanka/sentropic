@@ -1,12 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AccountTransportAcquireError } from '../../src/account-transports.js';
+import { createDefaultProviderAdapters } from '../../src/adapters.js';
+import { CLOUD_CODE_FETCH_AVAILABLE_MODELS_URL } from '../../src/enrollment/cloud-code.js';
 import type { EnrollmentProvider, PreparedCredential } from '../../src/enrollment/contracts.js';
+import { createLlmMesh } from '../../src/mesh.js';
 import { MuseEnrollmentProvider } from '../../src/enrollment/muse.js';
 import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
+import { createProviderRegistry } from '../../src/registry.js';
 import { InMemoryRoutePlanner } from '../../src/route-planner.js';
 import { LAUNCH_ALIAS_TARGET_MAPPINGS } from '../../src/routing-targets.js';
 import type { KeyringAdapter } from '../../src/service/facade.js';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
+import { CloudCodeRuntimeClient } from '../../src/transport/cloud-code-runtime-client.js';
+import { CLOUD_CODE_STREAM_URL } from '../../src/transport/cloud-code-transport.js';
 
 describe('LocalAccountTransportService', () => {
   it('persists a changed Muse CLI schema version on refresh and restores it', async () => {
@@ -1379,5 +1385,52 @@ describe('LocalAccountTransportService', () => {
     await service.importSeatBundle({ bundle: parseCliSeatProfile(profile(2, 'op-single-02')), ownerScope: 'owner-seat-01' });
     const accounts = await service.listAccounts('owner-seat-01');
     expect(accounts.map((account) => account.accountId)).toEqual(['seat-claude-seat-single-01']);
+  });
+
+  it('plans and dispatches gemini-4-carbon and effort variants on Cloud Code with reasoning effort', async () => {
+    const fetchFn = vi.fn(async (url: string | URL | Request) => {
+      if (url.toString() === CLOUD_CODE_FETCH_AVAILABLE_MODELS_URL) {
+        const models = ['gemini-4-carbon-low', 'gemini-4-carbon-medium', 'gemini-4-carbon-high', 'gemini-4-carbon-tiered'];
+        return new Response(JSON.stringify({
+          models: Object.fromEntries(models.map((id) => [id, {}])),
+          tieredModelIds: { flash: [], flashLite: [], pro: ['gemini-4-carbon-tiered'] },
+          defaultAgentModelId: 'gemini-4-carbon-tiered', deprecatedModelIds: [],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      const sse = `data: ${JSON.stringify({
+        response: { candidates: [{ content: { parts: [{ text: 'ok' }] } }],
+          usageMetadata: { promptTokenCount: 4, candidatesTokenCount: 2, totalTokenCount: 6 } },
+      })}\n\n`;
+      return new Response(sse, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    });
+    const service = new LocalAccountTransportService(new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } });
+    service.registerAccount({
+      accountId: 'cloud-carbon', targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+      accessToken: 'cloud-token', status: 'active', ownerScopeRef: 'tenant-1:user-1',
+      enrollmentCompletedAt: '2026-11-15T00:00:00Z', metadata: { cloudaicompanionProject: 'proj-carbon' },
+    });
+    const runtime = createLlmMesh({
+      registry: createProviderRegistry(createDefaultProviderAdapters({ gemini: new CloudCodeRuntimeClient(fetchFn) })),
+    });
+    const planner = new InMemoryRoutePlanner({ directory: service.createRouteDirectory(runtime) });
+    const subject = { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' };
+    for (const [requestedModel, wireModel, thinkingLevel] of [
+      ['gemini-4-carbon', 'gemini-4-carbon-tiered', undefined],
+      ['gemini-4-carbon-low', 'gemini-4-carbon-low', 'LOW'],
+      ['gemini-4-carbon-medium', 'gemini-4-carbon-medium', 'MEDIUM'],
+      ['gemini-4-carbon-high', 'gemini-4-carbon-high', 'HIGH'],
+    ] as const) {
+      const plan = await planner.plan(subject, { requestedModel });
+      expect(plan.diagnostics[0]).toMatchObject({
+        requestedModel, actualProviderId: 'gemini', actualModelId: 'gemini-4-carbon', actualTransportProviderId: 'cloud-code',
+      });
+      const attempt = await planner.prepareAttempt(subject, plan.planRef, plan.candidateRefs[0]!, `req-${requestedModel}`, 0);
+      const response = await attempt.generate({ messages: [{ role: 'user', content: 'ping' }] });
+      await attempt.complete();
+      expect(response.modelId).toBe('gemini-4-carbon');
+      const sent = JSON.parse(String(fetchFn.mock.calls.filter(([u]) => u.toString() === CLOUD_CODE_STREAM_URL).at(-1)?.[1]?.body));
+      expect(sent.model).toBe(wireModel);
+      expect(sent.request.generationConfig.thinkingConfig).toEqual(thinkingLevel ? { thinkingLevel } : undefined);
+    }
   });
 });
