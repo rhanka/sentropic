@@ -245,8 +245,13 @@ export async function recover(ctx, state, reason) {
       globalDeadline - (ctx.recoverOwner ? 0 : 65_000));
     if (deadlineMs <= now()) throw new Error('budget_exhausted');
     const originalCall = ctx.call;
-    ctx = { ...ctx, call: (args, input, cap) => originalCall(args, input,
-      effectiveTimeout(cap ?? 60_000, { deadlineMs }, now())) };
+    const boundedCall = (args, input, cap) => originalCall(args, input,
+      effectiveTimeout(cap ?? 60_000, { deadlineMs }, now()));
+    if (originalCall?.async) {
+      boundedCall.async = (args, input, cap, opts) => originalCall.async(args, input,
+        effectiveTimeout(cap ?? 60_000, { deadlineMs }, now()), opts);
+    }
+    ctx = { ...ctx, call: boundedCall };
     state.stepDeadlineMonoMs = deadlineMs;
     if (ctx.timeoutRef) {
       ctx.timeoutRef.deadlineMs = deadlineMs;
