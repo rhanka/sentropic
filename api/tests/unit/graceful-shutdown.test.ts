@@ -136,6 +136,15 @@ describe('graceful shutdown', () => {
     }
   });
 
+  it('should run every one-shot argv CLI branch before installing the API shutdown handler', () => {
+    const source = readFileSync(fileURLToPath(new URL('../../src/index.ts', import.meta.url)), 'utf8');
+    const installAt = source.indexOf('const shutdown = installGracefulShutdown(');
+    const cliBranches = [...source.matchAll(/if \(process\.argv\.includes\('(--[a-z-]+)'\)\)/g)];
+    expect(installAt).toBeGreaterThan(0);
+    expect(cliBranches.map((match) => match[1])).toContain('--placement-migrate');
+    for (const match of cliBranches) expect(match.index).toBeLessThan(installAt);
+  });
+
   it('should stop every periodic sweep interval and pause QueueManager on API shutdown', () => {
     const source = readFileSync(fileURLToPath(new URL('../../src/index.ts', import.meta.url)), 'utf8');
     const allIntervals = source.match(/\bsetInterval\(/g) ?? [];
