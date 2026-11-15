@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { chrono, chronoStart, kubectlClass } from './t3-chrono.mjs';
-import { isKubectlProxyDown, isProxyDirectFallback, kubectlProxyConnectCount,
-  kubectlProxyEnv, markKubectlProxyDown, stripOwnedProxyEnv } from './t3-kubectl-proxy.mjs';
+import { handleProxyCallFailure, isProxyDirectFallback, kubectlProxyConnectCount,
+  kubectlProxyEnv, stripOwnedProxyEnv } from './t3-kubectl-proxy.mjs';
 
 // A4 operator tiers. Each owner-signed input names its tier in `format` and `namespace`, and every
 // kubectl call runs in that namespace only. The operator names the tier explicitly (A4_TIER).
@@ -27,14 +27,11 @@ export const canonical = value => JSON.stringify(value && typeof value === 'obje
 
 export function kubectl(config, args, input, namespace) {
   if (namespace !== 'sentropic-restore-a4' && !Object.values(tiers).some(tier => tier.namespace === namespace)) throw new Error('namespace_invalid');
-  const started = chronoStart(), before = kubectlProxyConnectCount(config);
-  const kEnv = kubectlProxyEnv(process.env, { kubeconfig: config });
+  const started = chronoStart(), fallback = isProxyDirectFallback(), before = kubectlProxyConnectCount(config);
+  const kEnv = kubectlProxyEnv(process.env, { kubeconfig: config, fallbackDirect: fallback });
   let result = spawnSync('kubectl', ['--kubeconfig', config, '--namespace', namespace,
     '--request-timeout=60s', ...args], { input, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, env: kEnv });
-  if ((result.status !== 0 || result.error) && kEnv.T3_KUBECTL_PROXY_URL && kubectlProxyConnectCount(config) === before
-    && (isKubectlProxyDown(config) || /127\.0\.0\.1:\d+.*(?:ECONNREFUSED|connection refused)/i.test(result.stderr ?? ''))) {
-    markKubectlProxyDown(config);
-    if (!isProxyDirectFallback()) throw new Error('kubectl_proxy_down');
+  if (handleProxyCallFailure({ kEnv, kubeconfig: config, before, result, fallback })) {
     result = spawnSync('kubectl', ['--kubeconfig', config, '--namespace', namespace,
       '--request-timeout=60s', ...args], { input, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, env: stripOwnedProxyEnv(process.env) });
   }
