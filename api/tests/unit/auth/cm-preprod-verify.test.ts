@@ -20,10 +20,15 @@ vi.mock('../../../src/scripts/cm-preprod-contract', async original => ({
 }));
 const migrationHash = readMigrationFiles({ migrationsFolder: './drizzle/control' }).find(row => row.folderMillis === 1793577600000)!.hash;
 let failure = '', queries: string[] = [];
-const client = { async query(sql: string) {
+const evidenceRelations = ['public.__drizzle_control_migrations', 'control.app_cm_identity_cutover',
+  'cm_identity.identity_import_receipts'];
+const client = { async query(sql: string, params: unknown[] = []) {
   queries.push(sql);
-  if (sql.includes('SELECT to_regclass')) return { rows: [{ relation: sql.includes('public.users')
-    ? failure === 'legacy' ? 'public.users' : null : failure === 'relation' ? null : 'present' }] };
+  if (sql.includes('SELECT to_regclass')) {
+    const relation = String(params[0]);
+    if (evidenceRelations.includes(relation)) return { rows: [{ relation: failure === 'relation' ? null : relation }] };
+    return { rows: [{ relation: failure === 'legacy' && relation === 'public.user_sessions' ? relation : null }] };
+  }
   if (sql.includes('SELECT hash')) return { rows: failure === 'journal' ? [] : [{ hash: migrationHash }] };
   if (sql.includes("phase='pre-deletion-checkpoint'")) return { rows: [{ candidate: failure === 'candidate' ? 'wrong' : candidate,
     source: hash, rehearsal: 'track:rehearsal', remote: hash, mapping: hash, manifest: hash }] };
