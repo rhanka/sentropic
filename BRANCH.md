@@ -35,6 +35,7 @@
 ## Feedback Loop
 - [x] Inventory vs published 0.25.0: no removed or remapped export; 13 subpaths added; peers widened (llm-mesh <0.39.0, llm-gateway <0.24.0, auth-hono ^0.18.0); 3 optional UI peers added; runtime dependencies unchanged.
 - [x] Behavior notes: pending_admin_approval accounts can be disabled/deleted; ClusterMeshProviderModuleId adds notifications.
+- [x] Installed lane (packaging.mk test-lazy-package, ENV=test-cm-0260) on 43c354f64 under host load 18-35: run 1 142/143 (prepare-artifacts frozen-pin case 5000 ms timeout), run 2 141/143 (two consumer-topology cases 5000 ms timeout); every case passed in at least one run; no timeout increase; CI lazy lane is the gate.
 - [ ] attention: post-publication follow-up (separate PR, as after 0.25.0): freeze the 0.26.0 consumer closure in scripts/ci/consumer-locks.json, roll RESERVED_NEXT to 0.27.0 and LATEST_PUBLISHED_CLUSTER_MESH to 0.26.0 in both mirrors.
 
 ## AI Flaky tests
