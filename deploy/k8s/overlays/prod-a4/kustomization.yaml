@@ -10,3 +10,21 @@ resources:
   - ../preprod/a4-runtime
 components:
   - ../../components/a4-wiring
+# T3 window: the pods the cutover recreates (api, auth-idp, ui) take the queue priority of the
+# platform PriorityClass sentropic-t3-critical (value 100000, preemptionPolicy Never), so they do not
+# wait behind other tenants on full nodes. The fenced wire sets the same field on the live templates
+# (deploy/ci/preprod-a4/ops.mjs) and the driver sets it on the custodian: this apply rolls nothing.
+# The class must exist for as long as this overlay names it; a pod naming a missing class is refused.
+patches:
+  - target:
+      kind: Deployment
+      name: (api|auth-idp|ui)
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: t3-priority
+      spec:
+        template:
+          spec:
+            priorityClassName: sentropic-t3-critical

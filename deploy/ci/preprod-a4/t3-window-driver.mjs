@@ -1,13 +1,23 @@
 import { spawn } from 'node:child_process';
 import { supervisedSync } from './t3-processes.mjs';
+import { enterProxyDirectFallback, exitProxyDirectFallback, inspectDialProxyBypass,
+  kubectlProxyConnectCount, kubectlProxyEnv, stripOwnedProxyEnv } from './t3-kubectl-proxy.mjs';
+import { chrono, chronoSince, chronoStart } from './t3-chrono.mjs';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { buildProbes, claimDead, claimRecovery, effectiveTimeout, monoMs, readRecoveryClaim, releaseRecovery,
-  runKubectl, loadState, saveState, stepTimeoutMs, utcNow, validateProbes } from './t3-lib.mjs';
-import { ROTATED_KEYS, preCommitRollback, waitZeroPods } from './t3-rollback.mjs';
+  runKubectl, loadState, saveState, stepTimeoutMs, utcNow, validateObservers, validateProbes } from './t3-lib.mjs';
+import { ROTATED_KEYS, preCommitRollback, templateDigest, waitZeroPods } from './t3-rollback.mjs';
 import { ensureStarted, finishOpen } from './t3-finish-open.mjs';
+import { checkApplicability } from './t3-applicability.mjs';
+import { preflight } from './t3-preflight-static.mjs';
+import { prepareFencedReceipt } from './t3-rehearsal.mjs';
+import { VERIFICATION_SECRET, assertVerificationSecret, verificationCredential } from './verification-boundary.mjs';
+import { tierOf } from './guards.mjs';
+import { prioritized, t3PriorityClass } from './ops.mjs';
+import { inspectPostgresVersion, validatePostgresVersionReceipt } from './t3-fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const TOTAL_BUDGET_MS = 300_000;
@@ -79,8 +89,13 @@ export function delivered(ctx, script, env, timeoutMs) {
       if (cur) { cur.childPid = process.pid; saveState(ctx.stateDir, cur); }
     }
   } catch { /* observability only */ }
+  const started = chronoStart(), kc = env.A4_KUBECONFIG_FILE ?? ctx.config?.kubeconfigFile;
+  const before = kubectlProxyConnectCount(kc);
+  const chronoEnv = { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE ?? (ctx.stateDir ? `${ctx.stateDir}/t3-chrono.jsonl` : '') };
   const res = supervisedSync('node', [join(HERE, script)],
-    { env: { ...process.env, ...env }, encoding: 'utf8', timeout: timeoutMs }, ctx.stateDir);
+    { env: { ...kubectlProxyEnv(process.env, { kubeconfig: kc }), ...chronoEnv, ...env }, encoding: 'utf8', timeout: timeoutMs }, ctx.stateDir);
+  chrono('delivered', started, { script, operation: env.A4_OPERATION ?? env.A4_ACTION ?? env.A4_PHASE, status: res.status,
+    proxyConnects: kubectlProxyConnectCount(kc) - before }, chronoEnv);
   try {
     if (ctx.stateDir) {
       const cur = loadState(ctx.stateDir);
@@ -98,12 +113,12 @@ export function psql(ctx, statement, timeoutMs = 30_000) {
     ctx.print(`# dry-run sql: ${statement.split('\n')[0]}...`);
     return '';
   }
-  const started = monoMs();
+  const started = chronoStart();
   // Explicit role: exec lands as OS root, which has no DB role (trust auth
   // admits the existing app role without a password).
   const out = ctx.call(['exec', ctx.postgresPod, '--',
     'psql', '-U', ctx.postgresUser ?? 'app', '-v', 'ON_ERROR_STOP=1', '-X', '-qAt'], statement);
-  if (ctx.probeReadOnly) ctx.print(`# ${(monoMs() - started)}ms psql ${statement.split('\n')[0]}...`);
+  if (ctx.probeReadOnly) ctx.print(`# ${chrono('psql', started, {}, {}).elapsedMs.toFixed(3)}ms psql ${statement.split('\n')[0]}...`);
   return out;
 }
 
@@ -159,11 +174,17 @@ export const STEP_CUTOFFS = { W1: 25_000, W2: 35_000, W3: 50_000, W4: 70_000,
 // phases (W0 matrix, rollout waits) legitimately block heartbeats, so staleness
 // alone is not a fault — staleness past the deadline is.
 function heartbeat(ctx, state, step) {
+  const now = ctx.now ?? monoMs;
   state.step = step;
-  state.heartbeatMonoMs = monoMs();
+  state.heartbeatMonoMs = now();
+  // Step entry measured from the fence, on the same chronometer as every kubectl round trip.
+  if (state.t0MonoMs != null) {
+    chrono(`step:${step}`, chronoSince(state.heartbeatMonoMs - state.t0MonoMs), {},
+      { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE, T3_STATE_DIR: ctx.stateDir });
+  }
   state.stepDeadlineMonoMs = state.t0MonoMs != null && STEP_CUTOFFS[step] != null
     ? state.t0MonoMs + STEP_CUTOFFS[step]
-    : monoMs() + 600_000;
+    : now() + 600_000;
   saveState(ctx.stateDir, state);
   if (ctx.timeoutRef) ctx.timeoutRef.deadlineMs = state.stepDeadlineMonoMs;
 }
@@ -186,6 +207,13 @@ export async function recover(ctx, state, reason) {
       saveState(ctx.stateDir, state);
       return 1;
     }
+  }
+  // Reconcile child-persisted fence intent before saving the handoff state.
+  if (!ctx.recoverOwner && state.watchdogArmed && state.watchdogPid) {
+    state.recoveryRequested = reason;
+    saveState(ctx.stateDir,state);
+    ctx.print?.('# recovery handed to armed watchdog');
+    return 5;
   }
   // In-process single-flight: a second concurrent recover() (overlapping
   // watchdog ticks, or a drive() catch racing the watchdog) stands down
@@ -210,6 +238,7 @@ export async function recover(ctx, state, reason) {
     }
   }
   RECOVERY_IN_FLIGHT = true;
+  enterProxyDirectFallback();
   try {
     const now = ctx.now ?? monoMs;
     // Nominal work stops at 175 s, reserving recovery within the SAME fence.
@@ -221,8 +250,13 @@ export async function recover(ctx, state, reason) {
       globalDeadline - (ctx.recoverOwner ? 0 : 65_000));
     if (deadlineMs <= now()) throw new Error('budget_exhausted');
     const originalCall = ctx.call;
-    ctx = { ...ctx, call: (args, input, cap) => originalCall(args, input,
-      effectiveTimeout(cap ?? 60_000, { deadlineMs }, now())) };
+    const boundedCall = (args, input, cap) => originalCall(args, input,
+      effectiveTimeout(cap ?? 60_000, { deadlineMs }, now()));
+    if (originalCall?.async) {
+      boundedCall.async = (args, input, cap, opts) => originalCall.async(args, input,
+        effectiveTimeout(cap ?? 60_000, { deadlineMs }, now()), opts);
+    }
+    ctx = { ...ctx, call: boundedCall };
     state.stepDeadlineMonoMs = deadlineMs;
     if (ctx.timeoutRef) {
       ctx.timeoutRef.deadlineMs = deadlineMs;
@@ -243,7 +277,7 @@ export async function recover(ctx, state, reason) {
     } catch (err) {
       ctx.print?.(`# scale api 0 failed: ${err.message}`);
     }
-    waitZeroPods(ctx.call, Math.min(deadlineMs, monoMs() + 40_000), ['api']);
+    waitZeroPods(ctx.call, Math.min(deadlineMs, now() + 40_000), ['api'], now);
     let info;
     if (ctx.dryRun && !ctx.probeReadOnly) {
       // Pure dry-run executes nothing, not even reads: simulate the
@@ -279,8 +313,9 @@ export async function recover(ctx, state, reason) {
       ctx.print?.(`# recover: missing artifact relations: ${missingRelations.map(r => r.name).join(',')}`);
     }
     if (!info.committed) {
-      await preCommitRollback({ call: ctx.call, revisions: ctx.config.revisions, preCmDir: ctx.config.preCmDir,
-        dryRun: ctx.dryRun, note: ctx.print, probe: ctx.probe,
+      await preCommitRollback({ call: ctx.call,
+        templateDigests: state.templateDigests ?? ctx.config.templateDigests, preCmDir: ctx.config.preCmDir,
+        dryRun: ctx.dryRun, probeReadOnly: ctx.probeReadOnly, note: ctx.print, probe: ctx.probe,
         healthUrl: ctx.config.endpoints?.appHealth, jwksUrl: ctx.config.endpoints?.idpJwks,
         witness: ctx.config.witness,
         deadlineMs,
@@ -294,20 +329,21 @@ export async function recover(ctx, state, reason) {
       saveState(ctx.stateDir, state);
       return 3;
     }
-    const { probes, externalProbes } = buildProbes(ctx.config);
+    const { probes, externalProbes, restrictedProbes } = buildProbes(ctx.config);
     // The api was frozen above, so a committed database always restarts the
     // api here before converging. Never boots a legacy image: ensureStarted
     // pins the candidate image.
     ctx.print?.('# recover: restarting committed api before finish-open');
     ensureStarted(ctx.call, 'api', ctx.config.images.candidate, { dryRun: ctx.dryRun, print: ctx.print });
-    await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
-      save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes, deadlineMs, now });
+    await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print, verification: verificationOf(ctx),
+      save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes, restrictedProbes, deadlineMs, now });
     // Same single-writer guard on the post-commit branch.
     state.step = 'DONE';
     state.watchdogDone = true;
     saveState(ctx.stateDir, state);
     return 4;
   } finally {
+    exitProxyDirectFallback();
     RECOVERY_IN_FLIGHT = false;
   }
 }
@@ -382,6 +418,130 @@ export function applyRotationKeys(ctx) {
   ctx.print?.('# W3 rotation keys posed: JWT_SECRET, SECRET_ENCRYPTION_KEY, auth-idp-session-signing');
 }
 
+// The fence returns as soon as the Deployments are scaled, but the legacy api and auth-idp pods
+// stay Terminating for their whole grace period (about 31 s in rehearsal r9: Node as PID 1 ignores
+// SIGTERM). Until they are gone they can still write, they hold the CPU requests and limits the
+// custodian needs, and the W5 fence assertion rejects them. The wait spends W3 slack only: its
+// deadline is the W3 cutoff, so a pod that never leaves routes to the pre-commit rollback.
+export function awaitWritersGone(ctx, deadlineMs) {
+  if (ctx.dryRun && ctx.probeReadOnly) {
+    ctx.print('# note: legacy pods not awaited (no fence here)');
+    return;
+  }
+  const started = chronoStart();
+  try {
+    waitZeroPods(ctx.call, deadlineMs, undefined, ctx.now ?? monoMs);
+  } finally {
+    chrono('writersGone', started, {}, { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE, T3_STATE_DIR: ctx.stateDir });
+  }
+}
+
+// W0, before the fence: the credential the probes will send must be the one Traefik will accept.
+// With a missing or different Secret the restricted routers answer nothing useful after COMMIT,
+// when only the probes can accept the candidate; refused here, nothing is written.
+export function checkVerification(ctx) {
+  if (ctx.dryRun && !ctx.probeReadOnly) {
+    ctx.print?.(`# dry-run: secret ${VERIFICATION_SECRET} not compared with the local verification credential`);
+    return null;
+  }
+  const { header, users } = verificationCredential(ctx.config.verificationCredentialFile, ctx.read);
+  let secret;
+  try { secret = JSON.parse(ctx.call(['get', 'secret', VERIFICATION_SECRET, '-o', 'json'])); }
+  catch { throw new Error('verification_secret_missing'); }
+  assertVerificationSecret(secret, users);
+  return header;
+}
+
+export function checkPostgresVersion(ctx, psqlFn) {
+  if (ctx.dryRun && !ctx.probeReadOnly) {
+    ctx.print?.('# dry-run: postgres-version server and client pins');
+    return;
+  }
+  let receipt;
+  try {
+    const raw = ctx.read ? ctx.read(ctx.config.postgresVersionFile)
+      : readFileSync(ctx.config.postgresVersionFile, 'utf8');
+    receipt = JSON.parse(raw);
+  } catch {
+    throw new Error('postgres_version_receipt_invalid');
+  }
+  validatePostgresVersionReceipt(receipt, ctx.config.namespace);
+  inspectPostgresVersion(ctx, psqlFn);
+}
+
+export function checkPriorityAdmission(ctx) {
+  const tierName = ctx.tier ?? ctx.config?.tier;
+  if (!tierName && ctx.dryRun && !ctx.probeReadOnly) return;
+  const tier = tierOf({ A4_TIER: tierName });
+  if (!prioritized(tier).length) return;
+  if (ctx.dryRun && !ctx.probeReadOnly) {
+    ctx.print?.(`# dry-run: priority class ${t3PriorityClass} server admission`);
+    return;
+  }
+  const pod = {
+    apiVersion: 'v1',
+    kind: 'Pod',
+    metadata: { name: 'sentropic-t3-priority-probe', namespace: ctx.config.namespace },
+    spec: {
+      priorityClassName: t3PriorityClass,
+      automountServiceAccountToken: false,
+      restartPolicy: 'Never',
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: 'RuntimeDefault' } },
+      containers: [{
+        name: 'probe',
+        image: ctx.config.candidateImage,
+        command: ['true'],
+        resources: { requests: { cpu: '10m', memory: '32Mi' }, limits: { cpu: '50m', memory: '64Mi' } },
+        securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ['ALL'] }, readOnlyRootFilesystem: true },
+      }],
+    },
+  };
+  let admitted;
+  try {
+    admitted = JSON.parse(ctx.call(['create', '--dry-run=server', '-o', 'json', '-f', '-'], JSON.stringify(pod)) || '{}');
+  } catch {
+    throw new Error('priority_class_unadmitted');
+  }
+  if (admitted.spec?.priorityClassName !== t3PriorityClass) throw new Error('priority_class_unadmitted');
+}
+
+export function checkTemplateDigests(ctx, state) {
+  if (ctx.dryRun && !ctx.probeReadOnly) {
+    ctx.print?.('# dry-run: deployment template digests');
+    return;
+  }
+  const configured = ctx.config.templateDigests;
+  const recorded = {};
+  for (const deploy of ['api', 'auth-idp', 'ui']) {
+    const expected = configured?.[deploy];
+    if (!/^[a-f0-9]{64}$/.test(String(expected ?? ''))) throw new Error(`template_digest_missing: ${deploy}`);
+    const live = JSON.parse(ctx.call(['get', 'deployment', deploy, '-o', 'json']) || '{}');
+    const actual = templateDigest(live.spec?.template);
+    if (actual !== expected) throw new Error(`template_digest_stale_before_fence: ${deploy}`);
+    recorded[deploy] = actual;
+  }
+  if (state) {
+    state.templateDigests = recorded;
+    saveState(ctx.stateDir, state);
+  }
+}
+
+export function checkDialProxy(ctx, connectsBefore = 0) {
+  if (ctx.dryRun && !ctx.probeReadOnly) return;
+  const kc = ctx.call?.kubectlProxyKubeconfig;
+  if (!kc) return;
+  const bypass = inspectDialProxyBypass(process.env, kc);
+  const proxyConnects = kubectlProxyConnectCount(kc) - connectsBefore;
+  chrono('dialProxy', chronoStart(), { proxyConnects, bypassed: bypass },
+    { T3_CHRONO_FILE: process.env.T3_CHRONO_FILE, T3_STATE_DIR: ctx.stateDir });
+  if (bypass) { ctx.print?.(`dialProxy: bypassed(${bypass})`); return; }
+  if (proxyConnects < 1) throw new Error('kubectl_proxy_unverified');
+}
+
+// The watchdog and the recovery start from the configuration alone: same private file, read again.
+const verificationOf = ctx => ctx.verification
+  ?? (ctx.dryRun ? null : verificationCredential(ctx.config.verificationCredentialFile, ctx.read).header);
+
 function baseEnv(ctx, extra = {}) {
   return { A4_TIER: ctx.tier, A4_KUBECONFIG_FILE: ctx.config.kubeconfigFile,
     A4_REQUEST_FILE: `${ctx.stateDir}/request.json`, A4_DRY_RUN: ctx.dryRun ? '1' : '0', ...extra };
@@ -400,10 +560,13 @@ export async function drive(ctx) {
 
 function initializeState(ctx) {
   assertPreviewSafe(ctx);
-  validateProbes(buildProbes(ctx.config).probes);
+  const built = buildProbes(ctx.config);
+  validateProbes(built.probes);
+  validateObservers(built);
   const state = { version: 1, step: 'W0', fenceStarted: false, startedAtUtc: utcNow(), driverPid: process.pid,
     watchdogPid: ctx.watchdogPid,
-    childPid: process.pid, namespace: ctx.config.namespace, middlewareSpec: ctx.config.middlewareSpec ?? null,
+    childPid: process.pid, namespace: ctx.config.namespace, operationId: ctx.config.request?.operationId,
+    middlewareSpec: ctx.config.middlewareSpec ?? null,
     stepDeadlineMonoMs: monoMs() + 600_000 };
   saveState(ctx.stateDir, state);
   return state;
@@ -417,15 +580,22 @@ function assertPreviewSafe(ctx) {
 }
 
 async function driveInner(ctx, state) {
+  const now = ctx.now ?? monoMs, connectsBefore = kubectlProxyConnectCount(ctx.call?.kubectlProxyKubeconfig);
   checkRbac(ctx);
-  const t0 = monoMs();
+  checkApplicability(ctx, psql, 'W0');
+  ctx.verification = checkVerification(ctx);
+  checkPostgresVersion(ctx, psql);
+  checkPriorityAdmission(ctx);
+  checkTemplateDigests(ctx, state);
+  checkDialProxy(ctx, connectsBefore);
+  const t0 = now();
   state.t0MonoMs = t0;
   const cutoff = ms => t0 + ms;
-  const left = () => cutoff(TOTAL_BUDGET_MS) - monoMs();
+  const left = () => cutoff(TOTAL_BUDGET_MS) - now();
   // Per-command timeout: never outlive the current step's hard cutoff nor
   // the total budget. A sub-command that cannot finish in time fails fast
   // and routes to recovery instead of overrunning the step.
-  const to = (ms, step) => Math.min(stepTimeoutMs(ms, t0 + STEP_CUTOFFS[step]), left());
+  const to = (ms, step) => Math.min(stepTimeoutMs(ms, t0 + STEP_CUTOFFS[step], now()), left());
   heartbeat(ctx, state, 'W1');
   // Injected executors own their mutation boundary; real execution records
   // it inside t3-fence after authorization validation, before kubectl.
@@ -434,7 +604,7 @@ async function driveInner(ctx, state) {
     A4_AUTHORIZATION_FILE: ctx.config.authorizationFile,
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(30_000, 'W1'));
   state.fenceStarted = loadState(ctx.stateDir)?.fenceStarted === true;
-  if (monoMs() > cutoff(25_000)) return recover(ctx, state, 'W1_cutoff');
+  if (now() > cutoff(25_000)) return recover(ctx, state, 'W1_cutoff');
   heartbeat(ctx, state, 'W2');
   writeFileSync(`${ctx.stateDir}/request.json`, JSON.stringify(ctx.config.request), { mode: 0o600 });
   // B3: restrict only AFTER request.json exists (it asserts legacyWritersStopped).
@@ -457,16 +627,17 @@ async function driveInner(ctx, state) {
     if (missing && !ctx.probeReadOnly && !ctx.dryRun) throw new Error('middleware_missing_after_restrict');
     if (missing) ctx.print('# note: no a4-verification middleware (no fence here)');
   }
-  state.storesSha256 = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
+  checkApplicability(ctx, psql, 'W2');
   saveState(ctx.stateDir, state);
-  if (monoMs() > cutoff(35_000)) return recover(ctx, state, 'W2_cutoff');
+  if (now() > cutoff(35_000)) return recover(ctx, state, 'W2_cutoff');
   heartbeat(ctx, state, 'W3');
   ctx.d3 = (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'wire',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(60_000, 'W3'));
   applyRotationKeys(ctx);
   (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'budgets',
     A4_BUDGETS_FILE: ctx.config.budgetsFile }, to(60_000, 'W3'));
-  if (monoMs() > cutoff(50_000)) return recover(ctx, state, 'W3_cutoff');
+  awaitWritersGone(ctx, cutoff(STEP_CUTOFFS.W3));
+  if (now() > cutoff(50_000)) return recover(ctx, state, 'W3_cutoff');
   for (const [step, script, env] of [
     ['W4', 'ops.mjs', { A4_OPERATION: 'custodian' }],
     ['W5', 'run.mjs', { A4_PHASE: 'snapshot' }],
@@ -476,19 +647,20 @@ async function driveInner(ctx, state) {
     heartbeat(ctx, state, step);
     (ctx.delivered ?? delivered)(ctx, script, { ...baseEnv(ctx), ...env,
       A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(120_000, step));
+    let rehearsalFile = ctx.config.rehearsalFile;
+    if (step === 'W5') {
+      checkApplicability(ctx, psql, 'W5');
+      rehearsalFile = prepareFencedReceipt(ctx,psql);
+    }
     if (step === 'W4' || step === 'W5') {
       (ctx.delivered ?? delivered)(ctx, 'ops.mjs', { ...baseEnv(ctx), A4_OPERATION: 'stage',
         A4_STAGE: step === 'W4' ? 'inputs' : 'rehearsal',
-        A4_REMOTE_FILE: ctx.config.remoteFile, A4_REHEARSAL_FILE: ctx.config.rehearsalFile }, to(30_000, step));
+        A4_REMOTE_FILE: ctx.config.remoteFile, A4_REHEARSAL_FILE: rehearsalFile }, to(30_000, step));
     }
-    if (step === 'W5') {
-      const now = hashRows(psql(ctx, splitSql(loadSql('t3-classify.sql')).Q6));
-      if (now !== state.storesSha256) throw new Error('encrypted_stores_drift');
-    }
-    if (monoMs() > cutoff(STEP_CUTOFFS[step])) return recover(ctx, state, `${step}_cutoff`);
+    if (now() > cutoff(STEP_CUTOFFS[step])) return recover(ctx, state, `${step}_cutoff`);
   }
   heartbeat(ctx, state, 'W7b');
-  if (monoMs() > cutoff(COMMIT_CUTOFF_MS)) return recover(ctx, state, 'W7_cutoff');
+  if (now() > cutoff(COMMIT_CUTOFF_MS)) return recover(ctx, state, 'W7_cutoff');
   (ctx.delivered ?? delivered)(ctx, 'execution.mjs', { ...baseEnv(ctx), A4_ACTION: 'start-api',
     A4_EXECUTION_FILE: ctx.config.executionFile, A4_EXECUTION_SHA256: ctx.config.executionSha256 }, to(120_000, 'W7b'));
   let info;
@@ -510,16 +682,16 @@ async function driveInner(ctx, state) {
   if (!info.committed) return recover(ctx, state, 'commit_unverified');
   if (!info.apiReady) return recover(ctx, state, 'api_not_ready');
   heartbeat(ctx, state, 'W8');
-  if (monoMs() > cutoff(FINISH_CUTOFF_MS)) return recover(ctx, state, 'W8_cutoff');
-  const { probes, externalProbes } = buildProbes(ctx.config);
-  await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print,
-    save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes,
-    deadlineMs: t0 + FINISH_CUTOFF_MS });
+  if (now() > cutoff(FINISH_CUTOFF_MS)) return recover(ctx, state, 'W8_cutoff');
+  const { probes, externalProbes, restrictedProbes } = buildProbes(ctx.config);
+  await finishOpen({ call: ctx.call, probe: ctx.probe, state, dryRun: ctx.dryRun, print: ctx.print, verification: verificationOf(ctx),
+    save: next => saveState(ctx.stateDir, next), images: ctx.config.images, probes, externalProbes,restrictedProbes,
+    deadlineMs: t0 + FINISH_CUTOFF_MS, now });
   heartbeat(ctx, state, 'W9');
-  if (monoMs() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
+  if (now() > cutoff(TOTAL_BUDGET_MS)) return recover(ctx, state, 'total_budget');
   state.step = 'DONE';
   state.watchdogDone = true;
-  state.heartbeatMonoMs = monoMs();
+  state.heartbeatMonoMs = now();
   saveState(ctx.stateDir, state);
   return 0;
 }
@@ -544,11 +716,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const ctx = { call, timeoutRef, config, stateDir, dryRun, probeReadOnly, tier: config.tier,
     postgresPod: config.postgresPod ?? 'postgres-0', probe: fetch, print: console.log };
   try {
+    if (!dryRun) preflight(config);
     ctx.initialState = initializeState(ctx);
     const watchdog = spawn(process.execPath, [join(HERE, 't3-watchdog.mjs'),
       '--state-dir', stateDir, '--config', configPath,
       ...(dryRun ? ['--dry-run'] : []), ...(probeReadOnly ? ['--probe-readonly'] : [])],
-      { detached: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+      { detached: true, env: stripOwnedProxyEnv(process.env), stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
     try {
       await new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('watchdog_arm_timeout')), 2000);

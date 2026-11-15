@@ -1,6 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { buildProbes, effectiveTimeout, loadState, monoMs, podLabels, recoveryDeadline, runKubectl, saveState, validateProbes } from './t3-lib.mjs';
+import { canonical } from './guards.mjs';
+import { buildProbes, effectiveTimeout, loadState, monoMs, podLabels, probeWithTraefikRetry, recoveryDeadline,
+  runKubectl, saveState, traefikSyncDeadline, validateProbes, validateObservers } from './t3-lib.mjs';
+import { verificationCredential, verificationSpecValid } from './verification-boundary.mjs';
 
 // Post-commit convergence, idempotent across restarts (Astra v2 M3).
 // States: POSTCOMMIT_RESTRICTED -> ACCEPTED -> BACKUP_RESUMED ->
@@ -11,8 +14,7 @@ function podsOf(call, component) {
   return out ? JSON.parse(out).items ?? [] : [];
 }
 
-function deployReady(call, deploy, image) {
-  const out = call(['get', 'deployment', deploy, '-o', 'json']);
+function parseDeployReady(out, deploy, image) {
   if (!out) return false;
   const d = JSON.parse(out || '{}');
   if (!d.spec) return false;
@@ -20,6 +22,14 @@ function deployReady(call, deploy, image) {
   return d.spec?.replicas === 1 && d.status?.readyReplicas === 1
     && d.status?.observedGeneration === d.metadata?.generation && current === image;
 }
+
+function deployReady(call, deploy, image) {
+  return parseDeployReady(call(['get', 'deployment', deploy, '-o', 'json']), deploy, image);
+}
+
+const callAsync = (call, args, signal) => call.async
+  ? call.async(args, undefined, undefined, { signal })
+  : Promise.resolve().then(() => call(args));
 
 export function ensureStarted(call, deploy, image, opts = {}) {
   if (opts.dryRun) {
@@ -40,12 +50,43 @@ export function ensureStarted(call, deploy, image, opts = {}) {
   if (!deployReady(call, deploy, image)) throw new Error(`${deploy}_not_ready`);
 }
 
+export async function ensureStartedAsync(call, deploy, image, opts = {}) {
+  if (opts.dryRun) { ensureStarted(call, deploy, image, opts); return; }
+  const { signal } = opts;
+  const initial = await callAsync(call, ['get', 'deployment', deploy, '-o', 'json'], signal);
+  if (parseDeployReady(initial, deploy, image)) return;
+  const d = JSON.parse(initial || '{}');
+  const current = d.spec?.template?.spec?.containers?.find(c => c.name === deploy)?.image;
+  if (current !== image) await callAsync(call, ['set', 'image', `deployment/${deploy}`, `${deploy}=${image}`], signal);
+  await callAsync(call, ['scale', `deployment/${deploy}`, '--replicas=1'], signal);
+  await callAsync(call, ['rollout', 'status', `deployment/${deploy}`, '--timeout=120s'], signal);
+  if (!parseDeployReady(await callAsync(call, ['get', 'deployment', deploy, '-o', 'json'], signal), deploy, image)) {
+    throw new Error(`${deploy}_not_ready`);
+  }
+}
+
+export async function ensureFrontalsStarted(call, images, opts = {}) {
+  if (opts.dryRun) {
+    ensureStarted(call, 'ui', images.ui, opts);
+    ensureStarted(call, 'auth-idp', images.candidate, opts);
+    return;
+  }
+  const ac = new AbortController();
+  let firstError = null;
+  const startOne = (deploy, image) => ensureStartedAsync(call, deploy, image, { ...opts, signal: ac.signal })
+    .catch(err => { if (!firstError) { firstError = err; ac.abort(); } });
+  await Promise.allSettled([startOne('ui', images.ui), startOne('auth-idp', images.candidate)]);
+  if (firstError) throw firstError;
+}
+
 // Repair without ever opening traffic: frontals to zero before touching the
 // boundary, middleware patched in place (never create over an existing one,
 // which would fail AlreadyExists), annotations re-applied from the W1 record.
 export function reconcileRestrictSafe(ctx, state) {
   const call = ctx.call;
   const mw = state.middlewareSpec;
+  if (!mw && !ctx.dryRun) throw new Error('middleware_spec_missing');
+  if (mw && !verificationSpecValid(mw)) throw new Error('traffic_boundary_invalid');
   const want = `${state.namespace}-a4-verification@kubernetescrd`;
   const key = 'traefik.ingress.kubernetes.io/router.middlewares';
   let existing = null;
@@ -57,7 +98,8 @@ export function reconcileRestrictSafe(ctx, state) {
   for (const name of ['sentropic', 'auth-idp']) {
     ingresses[name] = JSON.parse(call(['get', 'ingress', name, '-o', 'json']) || '{}');
   }
-  const conform = existing && JSON.stringify(existing) === JSON.stringify(mw)
+  const sameSpec = Boolean(existing && mw) && canonical(existing) === canonical(mw);
+  const conform = sameSpec
     && Object.values(ingresses).every(i => i.metadata?.annotations?.[key] === want);
   if (conform) return;
   for (const component of ['ui', 'auth-idp']) {
@@ -66,19 +108,20 @@ export function reconcileRestrictSafe(ctx, state) {
   // Pods linger in Terminating after the scale call: wait for them instead
   // of failing the repair on the first sighting (a real cluster never
   // reaches zero in the same millisecond).
-  const deadline = Math.min(ctx.deadlineMs ?? Infinity, monoMs() + (ctx.frontalsTimeoutMs ?? 30_000));
+  const now = ctx.now ?? monoMs;
+  const deadline = Math.min(ctx.deadlineMs ?? Infinity, now() + (ctx.frontalsTimeoutMs ?? 30_000));
   for (const component of ['ui', 'auth-idp']) {
     while (podsOf(call, component).length > 0) {
-      if (monoMs() > deadline) throw new Error(`frontal_not_zero: ${component}`);
+      if (now() > deadline) throw new Error(`frontal_not_zero: ${component}`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
     }
   }
-  if (!mw && !ctx.dryRun) throw new Error('middleware_spec_missing');
   if (!existing) {
     call(['create', '-f', '-'], JSON.stringify({ apiVersion: 'traefik.io/v1alpha1', kind: 'Middleware',
-      metadata: { name: 'a4-verification', namespace: state.namespace }, spec: mw }));
-  } else if (JSON.stringify(existing) !== JSON.stringify(mw)) {
-    call(['patch', 'middleware', 'a4-verification', '--type=merge', '-p', JSON.stringify({ spec: mw })]);
+      metadata: { name: 'a4-verification', namespace: state.namespace }, spec: mw ?? {} }));
+  } else if (!sameSpec) {
+    call(['patch', 'middleware', 'a4-verification', '--type=json', '-p',
+      JSON.stringify([{ op: 'replace', path: '/spec', value: mw }])]);
   }
   for (const name of ['sentropic', 'auth-idp']) {
     if (ingresses[name].metadata?.annotations?.[key] !== want) {
@@ -88,20 +131,32 @@ export function reconcileRestrictSafe(ctx, state) {
 }
 
 export async function finishOpen(ctx) {
-  const { call, probe, state, save, images, probes = [], externalProbes = [] } = ctx;
+  const { probe, state, save, images, probes = [], externalProbes = [],restrictedProbes = [] } = ctx;
+  const now = ctx.now ?? monoMs, rawCall = ctx.call;
+  const call = ctx.deadlineMs == null ? rawCall
+    : Object.assign((args, input, cap) => rawCall(args, input, effectiveTimeout(cap ?? 60_000, ctx, now())),
+      rawCall?.async ? { async: (args, input, cap, opts) => rawCall.async(args, input, effectiveTimeout(cap ?? 60_000, ctx, now()), opts) } : {});
   const dry = { dryRun: ctx.dryRun === true, print: ctx.print ?? (() => {}),
-    deadlineMs: ctx.deadlineMs, now: ctx.now };
-  effectiveTimeout(1, ctx, (ctx.now ?? monoMs)());
+    deadlineMs: ctx.deadlineMs, now };
+  effectiveTimeout(1, ctx, now());
   if (state.substate === 'POSTCOMMIT_RESTRICTED' || !state.substate) {
     validateProbes(probes);
-    reconcileRestrictSafe(ctx, state);
+    validateObservers({ probes, restrictedProbes, externalProbes });
+    // Acceptance crosses the restricted Ingresses: without the credential no probe can pass.
+    if (!dry.dryRun && !ctx.verification) throw new Error('verification_credential_missing');
+    reconcileRestrictSafe({ ...ctx, call }, state);
     // The emergency classifier stops api before reading the truth: a committed
     // database must restart the candidate api here before any opening, or the
     // post-commit convergence would leave prod fenced with api at 0 replicas.
     ensureStarted(call, 'api', images.candidate, dry);
-    ensureStarted(call, 'ui', images.ui, dry);
-    ensureStarted(call, 'auth-idp', images.candidate, dry);
-    for (const p of probes) await runProbe(probe, p, dry);
+    await ensureFrontalsStarted(call, images, dry);
+    // Observers are sent bare (no credential, no caller option); the functional probes carry it.
+    const restrictSyncUntilMs = traefikSyncDeadline(dry);
+    for (const p of restrictedProbes) {
+      await runProbe(probe, { id: p.id, url: p.url, expect: p.expect, timeoutMs: p.timeoutMs },
+        { ...dry, refusal: true, retryUntilMs: restrictSyncUntilMs });
+    }
+    for (const p of probes) await runProbe(probe, p, { ...dry, verification: ctx.verification });
     state.substate = 'ACCEPTED';
     state.acceptedSha256 = createHash('sha256').update(JSON.stringify(probes.map(p => p.id))).digest('hex');
     save(state);
@@ -112,8 +167,7 @@ export async function finishOpen(ctx) {
   // ensureStarted is idempotent: a ready deployment is left alone.
   if (['ACCEPTED', 'BACKUP_RESUMED', 'ONE_HOST_OPEN', 'TWO_HOSTS_OPEN'].includes(state.substate)) {
     ensureStarted(call, 'api', images.candidate, dry);
-    ensureStarted(call, 'ui', images.ui, dry);
-    ensureStarted(call, 'auth-idp', images.candidate, dry);
+    await ensureFrontalsStarted(call, images, dry);
   }
   if (state.substate === 'ACCEPTED') {
     if (ctx.dryRun) {
@@ -145,7 +199,8 @@ export async function finishOpen(ctx) {
     save(state);
   }
   if (state.substate === 'TWO_HOSTS_OPEN') {
-    for (const p of externalProbes) await runProbe(probe, p, dry);
+    const openSyncUntilMs = traefikSyncDeadline(dry);
+    for (const p of externalProbes) await runProbe(probe, p, { ...dry, retryUntilMs: openSyncUntilMs });
   }
   effectiveTimeout(1, ctx, (ctx.now ?? monoMs)());
   return state;
@@ -165,9 +220,18 @@ async function runProbe(probe, p, opts = {}) {
     options = { ...options, body: JSON.stringify({ ...body,
       email: `${local}+t3-${randomBytes(12).toString('hex')}@${domain}` }) };
   }
-  const res = await probe(p.url, { ...options, redirect: 'manual', signal: AbortSignal.timeout(
-    effectiveTimeout(p.timeoutMs ?? 5000, opts, (opts.now ?? monoMs)())) });
+  if (opts.verification) options = { ...options, headers: { ...options?.headers, authorization: opts.verification } };
+  const now = opts.now ?? monoMs;
+  const res = await probeWithTraefikRetry(
+    () => probe(p.url, { ...options, redirect: 'manual', signal: AbortSignal.timeout(
+      effectiveTimeout(p.timeoutMs ?? 5000, opts, now())) }),
+    opts);
   if (res.status !== p.expect) throw new Error(`probe_failed: ${p.id}`);
+  // The refusal must come from the boundary: Traefik answers with a Basic challenge, which an
+  // application 401 never carries.
+  if (opts.refusal && !/^Basic\b/i.test(res.headers?.get('www-authenticate') ?? '')) {
+    throw new Error(`probe_failed: ${p.id} boundary_challenge`);
+  }
   if (p.id === 'S-6') {
     const location = res.headers?.get('location');
     const login = location && URL.canParse(location, p.url) ? new URL(location, p.url) : null;
@@ -219,11 +283,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const fromEndpoints = buildProbes(config);
   const probes = config.probes ?? fromEndpoints.probes;
   const externalProbes = config.externalProbes ?? fromEndpoints.externalProbes;
+  const restrictedProbes = config.restrictedProbes ?? fromEndpoints.restrictedProbes;
   try {
-    const done = await finishOpen({ call, probe: fetch, state,
+    if (!dryRun) validateObservers({ probes, restrictedProbes, externalProbes });
+    const verification = dryRun ? null : verificationCredential(config.verificationCredentialFile).header;
+    const done = await finishOpen({ call, probe: fetch, state, verification,
       save: dryRun ? () => {} : next => saveState(stateDir, next), images: config.images,
-      probes, externalProbes, deadlineMs,
+      probes, externalProbes, restrictedProbes, deadlineMs,
       dryRun, print: console.log });
+    if (!dryRun) {
+      Object.assign(done,{ step: 'DONE',watchdogDone: true,commitVerified: true }); saveState(stateDir,done);
+    }
     console.log(`finish_open_ok substate=${done.substate}`);
   } catch (err) {
     console.error(`finish_open_failed: ${err.message}`);
