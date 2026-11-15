@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import type { AccountTransportAcquisition } from '../account-transports.js';
+import { CLOUD_CODE_USER_AGENT } from '../enrollment/cloud-code.js';
 import type {
   ProviderAdapter,
   ProviderEvent,
@@ -8,8 +9,7 @@ import type {
 
 export const CLOUD_CODE_STREAM_URL =
   'https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse';
-export const CLOUD_CODE_USER_AGENT =
-  'antigravity/cli/1.1.10 (aidev_client; os_type=linux; arch=amd64; auth_method=consumer)';
+export { CLOUD_CODE_USER_AGENT };
 
 export interface CloudCodeEnvelope {
   project: string;
