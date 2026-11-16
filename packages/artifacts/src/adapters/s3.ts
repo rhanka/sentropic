@@ -16,8 +16,12 @@ import {
   PutObjectCommand,
   type S3Client,
 } from '@aws-sdk/client-s3';
-import type { PublicationBlobStore } from '../server/publication.js';
+import type { BlobKeyPage, BlobKeyPageResult, PublicationBlobStore } from '../server/publication.js';
 import { assertBlobPrefix } from '../server/blob-prefix.js';
+import { cloneBlobBytes, verifyBytesForKey, verifyStoredBytesForKey } from '../server/blob-bridge.js';
+
+/** Per-call fetch cap: one page never materializes more than this (S3 MaxKeys bound). */
+const PAGE_FETCH_CAP = 1000;
 
 const BLOB_KEY_PATTERN = /^artifacts\/[A-Za-z0-9_-]+\/blobs\/sha256\/[0-9a-f]{64}$/;
 
@@ -35,12 +39,32 @@ function assertBlobKey(key: string): void {
 
 /** Create an S3-backed blob store over an injected client (no env reads). */
 export function createS3BlobStore(options: S3BlobStoreOptions): PublicationBlobStore {
-  return {
+  const store: PublicationBlobStore = {
     async putBlob(key: string, bytes: Uint8Array): Promise<void> {
-      assertBlobKey(key);
-      await options.client.send(
-        new PutObjectCommand({ Bucket: options.bucket, Key: key, Body: bytes }),
-      );
+      // CR-1: clone before verification, then verify before any I/O.
+      const snapshot = cloneBlobBytes(bytes);
+      verifyBytesForKey(key, snapshot);
+      try {
+        await options.client.send(
+          new PutObjectCommand({ Bucket: options.bucket, Key: key, Body: snapshot, IfNoneMatch: '*' }),
+        );
+      } catch (error) {
+        // Create-only: the key already exists. Settle by read-back — identical
+        // bytes are idempotent (verified digest match), different bytes fail
+        // closed without overwrite.
+        if (typeof error === 'object' && error !== null && 'name' in error &&
+          (error as { name?: unknown }).name === 'PreconditionFailed') {
+          const stored = await store.getBlob(key);
+          if (stored !== undefined) {
+            verifyStoredBytesForKey(key, stored);
+            return;
+          }
+        }
+        throw error;
+      }
+      const stored = await store.getBlob(key);
+      if (stored === undefined) throw new Error(`blob missing after write: ${key}`);
+      verifyStoredBytesForKey(key, stored);
     },
     async getBlob(key: string): Promise<Uint8Array | undefined> {
       assertBlobKey(key);
@@ -50,7 +74,8 @@ export function createS3BlobStore(options: S3BlobStoreOptions): PublicationBlobS
         );
         if (out.Body === undefined) return undefined;
         const collected = await out.Body.transformToByteArray();
-        return new Uint8Array(collected);
+        // CR-2: digest and length verified before serving bytes as verified.
+        return verifyStoredBytesForKey(key, new Uint8Array(collected));
       } catch (error) {
         if (typeof error === 'object' && error !== null && 'name' in error) {
           const name = (error as { name?: unknown }).name;
@@ -100,5 +125,30 @@ export function createS3BlobStore(options: S3BlobStoreOptions): PublicationBlobS
       assertBlobKey(key);
       await options.client.send(new DeleteObjectCommand({ Bucket: options.bucket, Key: key }));
     },
+    async listKeysPaged(prefix: string, page: BlobKeyPage): Promise<BlobKeyPageResult> {
+      assertBlobPrefix(prefix);
+      if (!Number.isSafeInteger(page.maxItems) || page.maxItems < 1) throw new Error('invalid blob page maxItems');
+      if (page.startAfter !== undefined) {
+        if (!page.startAfter.startsWith(prefix)) {
+          throw new Error(`invalid blob page resume key: ${page.startAfter}`);
+        }
+        assertBlobKey(page.startAfter);
+      }
+      // Keyset resume: one bounded ListObjectsV2 from the resume key (no
+      // full-prefix load). The caller replays byte-trimmed tails by key.
+      const maxKeys = Math.min(page.maxItems + 1, PAGE_FETCH_CAP);
+      const out = await options.client.send(
+        new ListObjectsV2Command({ Bucket: options.bucket, Prefix: prefix,
+          StartAfter: page.startAfter, MaxKeys: maxKeys }),
+      );
+      const keys = (out.Contents ?? []).flatMap((entry) => entry.Key === undefined ? [] : [entry.Key])
+        .filter((key) => key.startsWith(prefix))
+        .sort();
+      return {
+        keys: keys.slice(0, page.maxItems),
+        hasMore: out.IsTruncated === true || keys.length > page.maxItems,
+      };
+    },
   };
+  return store;
 }

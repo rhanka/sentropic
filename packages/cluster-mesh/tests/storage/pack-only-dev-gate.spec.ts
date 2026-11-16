@@ -8,23 +8,23 @@ import {
 
 describe('isPackOnlyDevBump', () => {
   it.each([
-    ['@sentropic/cluster-mesh', '0.26.0-dev.1', '0.25.0', '0.26.0', true],
-    ['@sentropic/cluster-mesh', '0.26.0-dev.2', '0.25.0', '0.26.0', true],
-    ['@sentropic/cluster-mesh', '0.26.0-dev.99', '0.25.0', '0.26.0', true],
-    ['@sentropic/cluster-mesh', '0.22.1', '0.25.0', '0.26.0', false],
-    ['@sentropic/cluster-mesh', '0.25.0', '0.25.0', '0.26.0', false],
-    ['@sentropic/cluster-mesh', '0.25.0-dev.1', '0.25.0', '0.26.0', false],
-    ['@sentropic/cluster-mesh', '0.23.0-dev.14', '0.25.0', '0.26.0', false],
-    ['@sentropic/cluster-mesh', '0.26.0-dev.1', '0.25.0', '0.25.0', false],
-    ['@sentropic/cluster-mesh', '0.27.0-dev.1', '0.25.0', '0.26.0', false],
-    ['@sentropic/cluster-mesh', '0.25.0-dev.14', '0.25.0', '0.26.0', false],
-    ['@sentropic/cluster-mesh', '0.26.0-dev.1', '0.25.0', '0.27.0', false],
-    ['@sentropic/cluster-mesh', '0.26.0-dev.1', '0.22.1', '0.26.0', false],
-    ['@sentropic/cluster-mesh', '0.26.0-dev.2', '0.22.4', '0.26.0', false],
-    ['@sentropic/cluster-mesh', '0.26.0-dev.1', '0.26.0', '0.26.0', false],
-    ['@sentropic/cluster-mesh', '0.26.0-rc.1', '0.25.0', '0.26.0', false],
-    ['@sentropic/other', '0.26.0-dev.1', '0.25.0', '0.26.0', false],
-    ['@sentropic/cluster-mesh', undefined, '0.25.0', '0.26.0', false],
+    ['@sentropic/cluster-mesh', '0.27.0-dev.1', '0.26.0', '0.27.0', true],
+    ['@sentropic/cluster-mesh', '0.27.0-dev.2', '0.26.0', '0.27.0', true],
+    ['@sentropic/cluster-mesh', '0.27.0-dev.99', '0.26.0', '0.27.0', true],
+    ['@sentropic/cluster-mesh', '0.22.1', '0.26.0', '0.27.0', false],
+    ['@sentropic/cluster-mesh', '0.26.0', '0.26.0', '0.27.0', false],
+    ['@sentropic/cluster-mesh', '0.26.0-dev.1', '0.26.0', '0.27.0', false],
+    ['@sentropic/cluster-mesh', '0.23.0-dev.14', '0.26.0', '0.27.0', false],
+    ['@sentropic/cluster-mesh', '0.27.0-dev.1', '0.26.0', '0.26.0', false],
+    ['@sentropic/cluster-mesh', '0.28.0-dev.1', '0.26.0', '0.27.0', false],
+    ['@sentropic/cluster-mesh', '0.26.0-dev.14', '0.26.0', '0.27.0', false],
+    ['@sentropic/cluster-mesh', '0.27.0-dev.1', '0.26.0', '0.28.0', false],
+    ['@sentropic/cluster-mesh', '0.27.0-dev.1', '0.22.1', '0.27.0', false],
+    ['@sentropic/cluster-mesh', '0.27.0-dev.2', '0.22.4', '0.27.0', false],
+    ['@sentropic/cluster-mesh', '0.27.0-dev.1', '0.27.0', '0.27.0', false],
+    ['@sentropic/cluster-mesh', '0.27.0-rc.1', '0.26.0', '0.27.0', false],
+    ['@sentropic/other', '0.27.0-dev.1', '0.26.0', '0.27.0', false],
+    ['@sentropic/cluster-mesh', undefined, '0.26.0', '0.27.0', false],
   ])('isPackOnlyDevBump(%s, %s, %s, %s) === %s', (packageName, workspaceVersion, publishedPin, reservedNext, expected) => {
     expect(isPackOnlyDevBump(packageName, workspaceVersion, publishedPin, reservedNext)).toBe(expected);
   });
@@ -43,7 +43,7 @@ describe('acceptsCommentsRefusal', () => {
   it('should accept the out-of-range refusal for a reserved-next dev candidate', () => {
     expect(acceptsCommentsRefusal({
       packageName: PACK_ONLY_PACKAGE, installedVersion: `${RESERVED_NEXT}-dev.5`,
-      publishedPin: '0.25.0', reservedNext: RESERVED_NEXT,
+      publishedPin: '0.26.0', reservedNext: RESERVED_NEXT,
       reason: 'incompatible_version', code: 'incompatible_version',
     })).toBe(true);
   });

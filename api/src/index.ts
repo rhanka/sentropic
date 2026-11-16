@@ -103,6 +103,13 @@ if (process.argv.includes('--secret-reencrypt')) {
   process.exit(process.exitCode ?? 0);
 }
 
+// CMF-S3 placement migration (both directions, never deletes the source).
+if (process.argv.includes('--placement-migrate')) {
+  const { runPlacementMigrateCli } = await import('./scripts/cm-placement-migrate');
+  await runPlacementMigrateCli();
+  process.exit(process.exitCode ?? 0);
+}
+
 // A served process exits on SIGTERM instead of holding its pod Terminating for the whole grace period.
 // Outside production nothing is drained: a development reload must not wait for open event streams.
 const shutdown = installGracefulShutdown({ log: logger, drainMs: env.NODE_ENV === 'production' ? undefined : 0 });

@@ -13,16 +13,18 @@ export const createPgFixture = async (extra: Partial<PostgresStorageOptions> = {
     complete: async (session, receipt) => { await session.execute({ text: `INSERT INTO "${name}".host_history VALUES((SELECT COALESCE(MAX(ordinal),0)+1 FROM "${name}".host_history),$1::jsonb)`, values: [JSON.stringify(receipt)] }); },
   };
   const tx = new PgTransactions(connection.driver);
-  await tx.run(false, async (session) => {
-    await session.execute({ text: `CREATE SCHEMA "${name}"; CREATE TABLE "${name}".host_history(ordinal integer PRIMARY KEY,receipt jsonb NOT NULL)`, values: [] });
-    await applyPgMigrations(session, layout, extra.assets ?? await loadPgAssets(), history, { id: 'neutral-host/001', checksum: 'a'.repeat(64) });
-  });
+  try {
+    await tx.run(false, async (session) => {
+      await session.execute({ text: `CREATE SCHEMA "${name}"; CREATE TABLE "${name}".host_history(ordinal integer PRIMARY KEY,receipt jsonb NOT NULL)`, values: [] });
+      await applyPgMigrations(session, layout, extra.assets ?? await loadPgAssets(), history, { id: 'neutral-host/001', checksum: 'a'.repeat(64) });
+    });
+  } catch (error) { await connection.close(); throw error; }
   const options = { moduleId: 'comments' as const, driver: connection.driver, layout, history, cursorSecret: 'qualification-host-secret', ...extra };
   return {
     options, tx, name, open: () => createPostgresKernel(options), disconnect: connection.close,
     close: async () => {
-      await tx.run(false, (session) => session.execute({ text: `DROP SCHEMA "${name}" CASCADE`, values: [] }));
-      await connection.close();
+      try { await tx.run(false, (session) => session.execute({ text: `DROP SCHEMA "${name}" CASCADE`, values: [] })); }
+      finally { await connection.close(); }
     },
   };
 };

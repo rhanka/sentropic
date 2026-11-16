@@ -239,6 +239,18 @@ test.describe('Dashboard DOCX flow', () => {
   });
 
   test('viewer sees read-only lock icon on dashboard', async ({ browser }) => {
+    // Both initial presence responses must include an established collaborator,
+    // regardless of whether the viewer's GET or POST finishes first.
+    const collaborator = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    try {
+      const joined = await collaborator.post(`/api/v1/locks/presence?workspace_id=${encodeURIComponent(workspaceId)}`, {
+        data: { objectType: 'folder', objectId: folderId },
+      });
+      expect(joined.ok()).toBeTruthy();
+      expect((await joined.json()).total).toBeGreaterThan(0);
+    } finally {
+      await collaborator.dispose();
+    }
     const context = await browser.newContext({
       storageState: await withWorkspaceAndFolderStorageState(USER_B_STATE, workspaceId, folderId),
     });

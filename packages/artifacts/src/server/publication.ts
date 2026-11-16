@@ -55,6 +55,26 @@ export interface PublicationStateStore {
   compareAndSwapCurrent(artifactId: string, expected: string | null, next: string): Promise<boolean>;
 }
 
+/**
+ * CMF-S1 (CR-4) — bounded keyset page over a digest-addressed blob prefix.
+ * `startAfter` resumes after a full key (exclusive); absent starts at the
+ * prefix. Stores return at most `maxItems` keys (fewer under `maxEncodedBytes`
+ * only when the caller trims; see `cutBlobKeysByBudget`); `hasMore` is true
+ * when unreturned keys remain. Resume is by key, never by offset, so a
+ * trimmed page replays exactly (bounded re-read, no skip, no duplication).
+ * Enumerating the whole prefix still uses `listKeys` (GC/crash recovery).
+ */
+export interface BlobKeyPage {
+  readonly maxItems: number;
+  readonly maxEncodedBytes: number;
+  readonly startAfter?: string;
+}
+
+export interface BlobKeyPageResult {
+  readonly keys: string[];
+  readonly hasMore: boolean;
+}
+
 export interface PublicationBlobStore {
   putBlob(key: string, bytes: Uint8Array): Promise<void>;
   getBlob(key: string): Promise<Uint8Array | undefined>;
@@ -65,8 +85,14 @@ export interface PublicationBlobStore {
   getBlobRange?(key: string, start: number, endInclusive: number): Promise<Uint8Array | undefined>;
   /** List keys under a prefix (orphan enumeration for crash recovery/GC). */
   listKeys(prefix: string): Promise<string[]>;
+  /**
+   * CMF-S1 (CR-4): bounded keyset page. Optional: the bridge
+   * (`listBlobKeysPaged`) falls back to `listKeys` + in-memory slicing when
+   * absent. Every in-repo store implements it.
+   */
+  listKeysPaged?(prefix: string, page: BlobKeyPage): Promise<BlobKeyPageResult>;
   /** Delete a key (strict: unknown keys fail so callers notice). */
-  deleteBlob(key: string): Promise<void>;
+  deleteBlob(key: string, transaction?: import('./commit/types.js').FinalizeTxClient): Promise<void>;
 }
 
 /** Derive the `sha256:<hex>` digest from a digest-addressed blob key. */
@@ -125,6 +151,17 @@ export function createMemoryBlobStore(): PublicationBlobStore {
     async listKeys(prefix: string): Promise<string[]> {
       assertBlobPrefix(prefix);
       return [...blobs.keys()].filter((key) => key.startsWith(prefix)).sort();
+    },
+    async listKeysPaged(prefix: string, page: BlobKeyPage): Promise<BlobKeyPageResult> {
+      assertBlobPrefix(prefix);
+      const ordered = [...blobs.keys()].filter((key) => key.startsWith(prefix)).sort();
+      const start = page.startAfter === undefined ? 0 : (() => {
+        if (!page.startAfter.startsWith(prefix)) throw new Error(`invalid blob page resume key: ${page.startAfter}`);
+        const index = ordered.findIndex((key) => key > page.startAfter!);
+        return index === -1 ? ordered.length : index;
+      })();
+      const keys = ordered.slice(start, start + page.maxItems);
+      return { keys, hasMore: start + page.maxItems < ordered.length };
     },
     deleteBlob(key: string): Promise<void> {
       if (!blobs.has(key)) throw new Error(`unknown blob: ${key}`);
@@ -434,7 +471,7 @@ export interface PublicationUnitWriter {
   readAuthorization(artifactId: string): Promise<{ state: ArtifactState; acl: ArtifactAcl | undefined }>;
   putSource(artifactId: string, source: SourceRef): Promise<void>;
   putRelease(release: ReleaseRecord): Promise<void>;
-  registerBlob(storageScopeId: string, digest: string, size: number): Promise<void>;
+  registerBlob(storageScopeId: string, digest: string, size: number, placement?: 'db' | 'object'): Promise<void>;
   promoteCurrentLatestWins(artifactId: string, releaseId: string): Promise<void>;
   addReleaseRef(digest: string, holder: string): Promise<void>;
   completeIntent(intentId: string): Promise<void>;
@@ -483,11 +520,11 @@ export function createPostgresPublicationUnitWriter(client: FinalizeTxClient): P
           release.authorPrincipalId ?? null, release.parentReleaseId ?? null, release.revertedFromReleaseId ?? null],
       );
     },
-    async registerBlob(storageScopeId: string, digest: string, size: number): Promise<void> {
+    async registerBlob(storageScopeId: string, digest: string, size: number, placement: 'db' | 'object' = 'object'): Promise<void> {
       await client.query(
-        `INSERT INTO artifacts.blobs (storage_scope_id, digest, size)
-         VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-        [storageScopeId, digest, size],
+        `INSERT INTO artifacts.blobs (storage_scope_id, digest, size, placement)
+         VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+        [storageScopeId, digest, size, placement],
       );
     },
     async promoteCurrentLatestWins(artifactId: string, releaseId: string): Promise<void> {
@@ -551,6 +588,14 @@ export interface GuardedPublicationDeps {
   readonly blobConcurrency?: number;
   /** Per-publish blob-staging budget in ms; one shared deadline for every concurrent blob operation. */
   readonly blobDeadlineMs?: number;
+  /**
+   * CMF-S2 — DB placement promotion. Decides, per staged blob size, whether
+   * the finalized `artifacts.blobs` row reads 'db' (bytes in `blob_bytes`)
+   * instead of the default 'object'. Absent = 'object' (current behavior).
+   * Promotion only; a publication never demotes a row (mode changes go
+   * through placement migration).
+   */
+  readonly placementForSize?: (sizeBytes: number) => 'db' | 'object';
 }
 
 export interface GuardedPublicationService {
@@ -705,7 +750,8 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
             createdAt: new Date(nowMs).toISOString(),
           });
           for (const staged of prepared.entries) {
-            await unit.registerBlob(input.storageScopeId, staged.entry.digest, staged.entry.size);
+            const placement = deps.placementForSize?.(staged.entry.size) ?? 'object';
+            await unit.registerBlob(input.storageScopeId, staged.entry.digest, staged.entry.size, placement);
             await unit.addReleaseRef(staged.entry.digest, releaseId);
             addedRefs.push(staged.entry.digest);
           }
