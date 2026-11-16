@@ -104,6 +104,10 @@ describe('garbage collection', () => {
     expect(report2.failures).toHaveLength(1);
     expect(report2.failures[0]?.error).toMatch(/store exploded/);
     expect(report2.failures[0]?.key).toBe(KEY_A);
+    expect(await claims.isClaimed(digestOf(KEY_A))).toBe(true);
+    const resumed = await gc.collect(blobs, 'artifacts/scope-1/blobs/', claims);
+    expect(resumed.deleted).toEqual([KEY_A]);
+    expect(resumed.failures).toEqual([]);
     expect(await claims.isClaimed(digestOf(KEY_A))).toBe(false);
   });
 

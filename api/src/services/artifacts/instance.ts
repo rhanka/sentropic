@@ -1,13 +1,15 @@
 import { S3Client } from '@aws-sdk/client-s3';
 import type { Context } from 'hono';
 import type { PublicationBlobStore } from '@sentropic/artifacts/server/publication';
+import { placementForPut } from '@sentropic/artifacts/adapters/composite-blob';
 import { pool } from '../../db/client';
 import { env } from '../../config/env';
 import { resolveOAuthIssuer } from '../../routes/auth/oauth';
 import { isOriginAllowed, parseAllowedOrigins } from '../../utils/cors';
 import { resolveCmTenant } from '../identity/cm-tenancy';
 import { createArtifactHost } from './composition';
-import { createPrivateArtifactStorage } from './lifecycle';
+import { createLazyArtifactBlobs, createPrivateArtifactStorage } from './lifecycle';
+import { createPlacementBlobStore, parseBlobInlineMaxBytes, parseBlobPlacementMode } from './blob-placement';
 import { artifactCredential, ARTIFACT_SESSION_CLIENT, createCurrentArtifactIdentity } from './credentials';
 import { createArtifactTransport } from './transport';
 import { createWorkspaceDirectory } from './workspace-directory';
@@ -39,19 +41,37 @@ function privateStorage() {
   }
   return storage;
 }
-const blobs: PublicationBlobStore = {
-  putBlob: async (key, bytes) => (await privateStorage()).blobs.putBlob(key, bytes),
-  getBlob: async key => (await privateStorage()).blobs.getBlob(key),
-  deleteBlob: async key => (await privateStorage()).blobs.deleteBlob(key),
-  listKeys: async prefix => (await privateStorage()).blobs.listKeys(prefix),
+const placementMode = parseBlobPlacementMode(process.env.APP_ARTIFACT_STORAGE_PLACEMENT);
+const placementInlineMaxBytes = parseBlobInlineMaxBytes(process.env.APP_ARTIFACT_STORAGE_INLINE_MAX_BYTES);
+function s3EnvConfigured(): boolean {
+  return Boolean(process.env.APP_ARTIFACT_S3_BUCKET && process.env.APP_ARTIFACT_S3_REGION &&
+    process.env.APP_ARTIFACT_S3_ACCESS_KEY_ID && process.env.APP_ARTIFACT_S3_SECRET_ACCESS_KEY);
+}
+if ((placementMode === 's3' || placementMode === 'db+s3') && artifactHostEnabled() && !s3EnvConfigured()) {
+  throw new Error(`Artifact blob placement mode '${placementMode}' requires object-store env (APP_ARTIFACT_S3_*)`);
+}
+const objectBlobs = createLazyArtifactBlobs(privateStorage);
+/** Inert object side for `db` mode without object-store env: reads miss, lists empty, deletes no-op. */
+const inertObjectBlobs: PublicationBlobStore = {
+  putBlob: async (key) => { throw new Error(`Object placement not configured (put ${key})`); },
+  getBlob: async () => undefined,
+  getBlobRange: async () => undefined,
+  listKeys: async () => [],
+  listKeysPaged: async () => ({ keys: [], hasMore: false }),
+  deleteBlob: async () => {},
 };
+const objectSide: PublicationBlobStore = s3EnvConfigured() ? objectBlobs : inertObjectBlobs;
+/** CMF-S2: every mode reads through the composite so `db`-placed blobs stay readable (spec §2.4.1). */
+const blobs: PublicationBlobStore =
+  createPlacementBlobStore({ pool, s3: objectSide, mode: placementMode, inlineMaxBytes: placementInlineMaxBytes });
 
 const currentIdentity = createCurrentArtifactIdentity(resource);
 /** The builder's dependency cache objects live in the same dedicated private artifact storage. */
 export const productPrivateCacheBlobs: PrivateCacheBlobs = {
-  put: (key, bytes) => blobs.putBlob(key, bytes), get: key => blobs.getBlob(key), delete: key => blobs.deleteBlob(key),
+  put: (key, bytes) => objectBlobs.putBlob(key, bytes), get: key => objectBlobs.getBlob(key), delete: key => objectBlobs.deleteBlob(key),
 };
-export const productArtifactHost = createArtifactHost({ pool, blobs, quotaBytes, currentIdentity });
+export const productArtifactHost = createArtifactHost({ pool, blobs, quotaBytes, currentIdentity,
+  placementForSize: (size) => placementForPut(placementMode, size, placementInlineMaxBytes) });
 /** Same credential reader as the host, so a listed workspace matches its bind() authority. */
 export const productWorkspaceDirectory = createWorkspaceDirectory({ pool, currentIdentity });
 export const productArtifactTransport = createArtifactTransport(productArtifactHost);

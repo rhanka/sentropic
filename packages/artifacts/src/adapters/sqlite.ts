@@ -46,7 +46,34 @@ export function openSqliteDatabase(path: string): SqliteDatabase {
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(DDL_ARTIFACTS);
   db.exec(DDL_ACTIVATION);
+  applySqliteBlobPlacementUpgrade(db);
   return db;
+}
+
+/**
+ * CMF-S2 — idempotent DB blob placement upgrade for local files.
+ * `CREATE TABLE IF NOT EXISTS` re-runs cleanly on every open; the `blobs`
+ * placement column is added only when missing so existing files reopen.
+ */
+export function applySqliteBlobPlacementUpgrade(db: SqliteDatabase): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS blob_bytes (
+    storage_scope_id TEXT NOT NULL,
+    digest TEXT NOT NULL,
+    bytes BLOB NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (storage_scope_id, digest)
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS upload_staging_bytes (
+    storage_scope_id TEXT NOT NULL,
+    upload_id TEXT NOT NULL,
+    bytes BLOB NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (storage_scope_id, upload_id)
+  )`);
+  const columns = db.prepare('SELECT name FROM pragma_table_info(?)').all('blobs') as { name: string }[];
+  if (!columns.some((column) => column.name === 'placement')) {
+    db.exec(`ALTER TABLE blobs ADD COLUMN placement TEXT NOT NULL DEFAULT 'object'`);
+  }
 }
 
 /** Create the serialized writer over one database connection. */
@@ -90,6 +117,7 @@ export { createSqliteArtifactStore, createSqliteCommitExecutor };
 export { createSqliteManagementUnit } from './sqlite-management.js';
 export { createSqliteActivationStore, type SqliteActivationStore } from './sqlite-activation.js';
 export { createLocalBlobStore } from './local-blob.js';
+export { createSqliteDbBlobStore } from './sqlite-blob.js';
 
 /** One-call wiring: open a file, create the writer, build store + executor. */
 export function openSqliteArtifacts(path: string): {
