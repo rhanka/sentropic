@@ -2,7 +2,7 @@ import { seedCmArtifactIdentity } from '../utils/cm-artifact-fixture';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { GetPublicAccessBlockCommand, ListObjectsV2Command, PutObjectCommand, type S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, GetPublicAccessBlockCommand, ListObjectsV2Command, PutObjectCommand, type S3Client } from '@aws-sdk/client-s3';
 import { blobDigestOfKey, createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
 import { createHmacGrantSigner } from '@sentropic/artifacts/content/grants';
 import { createPostgresArtifactStore } from '@sentropic/artifacts/adapters/postgres';
@@ -15,6 +15,8 @@ let pool: Pool;
 let databaseName: string;
 const scope = 'workspace-opaque';
 const key = (hex: string) => `artifacts/${scope}/blobs/sha256/${hex.repeat(64)}`;
+const s3Bytes = new Uint8Array([1]);
+const s3Key = `artifacts/${scope}/blobs/sha256/${createHash('sha256').update(s3Bytes).digest('hex')}`;
 beforeEach(async () => {
   databaseName = `w1d_${randomUUID().replaceAll('-', '')}`;
   await admin.query(`CREATE DATABASE "${databaseName}"`);
@@ -31,8 +33,16 @@ afterAll(() => admin.end());
 
 function fixture(allow = true) {
   const blobs = createMemoryBlobStore();
-  const page = vi.fn(async (prefix: string, limit: number, _cursor?: string): Promise<ArtifactBlobPage> =>
-    ({ keys: (await blobs.listKeys(prefix)).slice(0, limit) }));
+  const upstreamPage = blobs.listKeysPaged!;
+  const page = vi.fn(async (prefix: string, limit: number, cursor?: string): Promise<ArtifactBlobPage> => {
+    const result = await upstreamPage(prefix, { maxItems: limit, maxEncodedBytes: limit * 256,
+      ...(cursor === undefined ? {} : { startAfter: cursor }) });
+    return { keys: result.keys, cursor: result.hasMore ? result.keys.at(-1) : undefined };
+  });
+  blobs.listKeysPaged = async (prefix, request) => {
+    const result = await page(prefix, request.maxItems, request.startAfter);
+    return { keys: result.keys, hasMore: result.cursor !== undefined };
+  };
   const authorize = vi.fn(async () => allow);
   const jobs = createArtifactHostJobs({ pool, blobs, page, authorize, batchSize: 2 });
   return { blobs, page, authorize, jobs, store: createPostgresArtifactStore(pool) };
@@ -167,7 +177,7 @@ describe('artifact host recovery', () => {
     const first = await jobs.collect(scope);
     page.mockResolvedValueOnce({ keys: [key('b')] });
     expect((await jobs.collect(scope, first.cursor)).deleted).toEqual([key('b')]);
-    expect(page).toHaveBeenLastCalledWith(`artifacts/${scope}/blobs/sha256/`, 2, 'next');
+    expect(page).toHaveBeenLastCalledWith(`artifacts/${scope}/blobs/sha256/`, 2, key('a'));
   });
 
   it('should deny erasure when maintenance authority is revoked during a digest wait', async () => {
@@ -294,16 +304,36 @@ describe('artifact host recovery', () => {
     let now = 1000;
     let safe = true;
     const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
-    const send = vi.fn(async (command: unknown) => command instanceof GetPublicAccessBlockCommand
-      ? { PublicAccessBlockConfiguration: { BlockPublicAcls: safe, IgnorePublicAcls: true,
-        BlockPublicPolicy: true, RestrictPublicBuckets: true } } : {});
+    // Privacy-focused double with a storing object side: create-only puts
+    // read back through GetObject, so the mock must retain bytes.
+    const stored = new Map<string, Uint8Array>();
+    const send = vi.fn(async (command: unknown) => {
+      if (command instanceof GetPublicAccessBlockCommand) {
+        return { PublicAccessBlockConfiguration: { BlockPublicAcls: safe, IgnorePublicAcls: true,
+          BlockPublicPolicy: true, RestrictPublicBuckets: true } };
+      }
+      if (command instanceof PutObjectCommand) {
+        stored.set(command.input?.Key as string, new Uint8Array(command.input?.Body as Uint8Array));
+        return {};
+      }
+      if (command instanceof GetObjectCommand) {
+        const bytes = stored.get(command.input?.Key as string);
+        if (bytes === undefined) {
+          const missing = new Error('missing');
+          (missing as { name?: string }).name = 'NoSuchKey';
+          throw missing;
+        }
+        return { Body: { transformToByteArray: async () => new Uint8Array(bytes) } };
+      }
+      return {};
+    });
     const checks = () => send.mock.calls.filter(([command]) => command instanceof GetPublicAccessBlockCommand).length;
     try {
       const storage = await createPrivateArtifactStorage({ client: { send } as unknown as S3Client, bucket: 'private' });
-      const read = () => storage.blobs.getBlob(key('a'));
-      const write = () => storage.blobs.putBlob(key('a'), new Uint8Array([1]));
-      await Promise.all([read(), write(), storage.blobs.deleteBlob(key('a')),
-        storage.blobs.listKeys(key('a')), storage.page(key('a'), 1)]);
+      const read = () => storage.blobs.getBlob(s3Key);
+      const write = () => storage.blobs.putBlob(s3Key, new Uint8Array([1]));
+      await Promise.all([read(), write(), storage.blobs.deleteBlob(s3Key),
+        storage.blobs.listKeys(s3Key), storage.page(s3Key, 1)]);
       expect(checks()).toBe(1);
       now += 29999;
       await read();
@@ -331,20 +361,34 @@ describe('artifact host recovery', () => {
   it('should require all public access blocks and write through the private upstream S3 adapter', async () => {
     const blocks = { BlockPublicAcls: true, IgnorePublicAcls: true,
       BlockPublicPolicy: true, RestrictPublicBuckets: true };
+    const stored = new Map<string, Uint8Array>();
     const send = vi.fn(async (command: unknown) => {
       if (command instanceof GetPublicAccessBlockCommand) return { PublicAccessBlockConfiguration: blocks };
-      if (command instanceof ListObjectsV2Command) return { Contents: [{ Key: key('a') }],
+      if (command instanceof ListObjectsV2Command) return { Contents: [{ Key: s3Key }],
         IsTruncated: true, NextContinuationToken: 'next' };
+      if (command instanceof PutObjectCommand) {
+        stored.set(command.input?.Key as string, new Uint8Array(command.input?.Body as Uint8Array));
+        return {};
+      }
+      if (command instanceof GetObjectCommand) {
+        const bytes = stored.get(command.input?.Key as string);
+        if (bytes === undefined) {
+          const missing = new Error('missing');
+          (missing as { name?: string }).name = 'NoSuchKey';
+          throw missing;
+        }
+        return { Body: { transformToByteArray: async () => new Uint8Array(bytes) } };
+      }
       return {};
     });
     const client = { send } as unknown as S3Client;
     const storage = await createPrivateArtifactStorage({ client, bucket: 'private-artifacts' });
-    await storage.blobs.putBlob(key('a'), new Uint8Array([1]));
+    await storage.blobs.putBlob(s3Key, new Uint8Array([1]));
     const put = send.mock.calls.map(([command]) => command).find(command => command instanceof PutObjectCommand);
-    expect((put as PutObjectCommand).input).toMatchObject({ Bucket: 'private-artifacts', Key: key('a') });
+    expect((put as PutObjectCommand).input).toMatchObject({ Bucket: 'private-artifacts', Key: s3Key });
     expect((put as PutObjectCommand).input.ACL).toBeUndefined();
     expect(await storage.page(`artifacts/${scope}/blobs/sha256/`, 2, 'previous'))
-      .toEqual({ keys: [key('a')], cursor: 'next' });
+      .toEqual({ keys: [s3Key], cursor: 'next' });
     const listed = send.mock.calls.map(([command]) => command).find(command => command instanceof ListObjectsV2Command);
     expect((listed as ListObjectsV2Command).input).toMatchObject({ MaxKeys: 2, ContinuationToken: 'previous' });
     for (const field of Object.keys(blocks)) {

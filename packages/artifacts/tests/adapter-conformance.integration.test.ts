@@ -44,7 +44,7 @@ function s3Env(name: string): string {
   return value;
 }
 
-const MIGRATIONS = ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0004_terminal_controls.sql', '0005_metadata.sql', '0006_sharing.sql', '0007_uploads.sql', '0008_reader_consent.sql']
+const MIGRATIONS = ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0004_terminal_controls.sql', '0005_metadata.sql', '0006_sharing.sql', '0007_uploads.sql', '0008_reader_consent.sql', '0009_upload_pages.sql', '0010_git_bindings.sql', '0011_live_drafts.sql', '0012_git_attach_intents.sql', '0013_live_invitations.sql', '0014_db_blob_placement.sql']
   .map((name) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', name), 'utf8'));
 
 const s3 = new S3Client({
@@ -108,7 +108,8 @@ const postgresBackend: ConformanceBackend & { open(reuseBucket?: string): Promis
         }
         return {
           blobs: createS3BlobStore({ client: s3, bucket }),
-          verifiesDigest: false,
+          // CMF-S1: the S3 adapter verifies digests pre-I/O and writes create-only.
+          verifiesDigest: true,
           cleanup: async () => {
             try {
               const listed = await s3.send(new ListObjectsV2Command({ Bucket: bucket as string }));
