@@ -59,7 +59,7 @@ describe('llm-mesh-enroll probe (muse-wonder-1.0)', () => {
         { fetchFn, writers, env },
       );
       expect(code).toBe(EXIT_CODES.ok);
-      expect(calls[0]).toBe('https://api.meta.ai/v1/chat/completions');
+      expect(calls[0]).toBe('https://api.meta.ai/v1/responses');
       expect(writers.outLines).toHaveLength(1);
       const result = JSON.parse(writers.outLines[0] as string) as Record<string, unknown>;
       expect(result.status).toBe('ok');

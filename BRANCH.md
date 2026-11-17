@@ -1,22 +1,25 @@
-# Feature: UI SvelteKit SCA remediation
+# Feature: llm-mesh Muse client emulation for seat serving
 
 ## Objective
-Clear the `security-code-ui (sca)` HIGH finding on `@sveltejs/kit` (`npm_audit_ui_@sveltejs_kit_high`) by bumping the UI kit dependency to a fixed 2.x release.
+MuseRuntimeClient emulates the real Muse Code client (Responses wire `/v1/responses` + `muse-build` client headers) so enrolled Muse seats are served instead of refused with `403 client_attestation_denied` on the legacy Chat wire.
 
 ## Scope / Guardrails
-- Scope limited to `ui/package.json` + `ui/package-lock.json` (dependency bump only).
+- Scope limited to `packages/llm-mesh` Muse transport + its tests, and the llm-gateway muse fixture consumer.
 - Make-only workflow, no direct Docker commands.
-- Branch development in isolated worktree `tmp/fix-ui-kit-sca`.
-- Test campaigns on `ENV=test-ui-kit-sca`, never on root dev.
+- Branch development in isolated worktree `tmp/fix-muse-headers`.
+- Test campaigns on `ENV=test-muse-headers`, never on root dev.
 - In every `make` command, `ENV=<env>` passed as the last argument.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `ui/package.json`
-  - `ui/package-lock.json`
-  - `package-lock.json` (root workspace lock line for the same kit entry)
-  - `.security/vulnerability-register.yaml` (time-boxed acceptance for the kit-3-only advisories)
+  - `packages/llm-mesh/src/transport/muse-runtime-client.ts`
+  - `packages/llm-mesh/tests/transport/muse-runtime-client.test.ts`
+  - `packages/llm-mesh/tests/node/enroll-cli-probe.test.ts`
+  - `packages/llm-gateway/tests/responses-cli-fixtures.test.ts`
+  - `packages/llm-gateway/tests/request-model-receipt.test.ts`
+  - `packages/llm-gateway/tests/fixtures/**`
+  - `packages/llm-mesh/CHANGELOG.md`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -30,26 +33,30 @@ Clear the `security-code-ui (sca)` HIGH finding on `@sveltejs/kit` (`npm_audit_u
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- [x] `acknowledge`: finding reproduced from PR #1044 CI — `security-code-ui (sca)` fails repo-wide on the current UI lock (kit 2.60.1); dependabot major bump to 3.1.1 exists but a fixed 2.x keeps this remediation non-breaking.
+- [x] `acknowledge`: live A/B proof recorded 2026-11-17 — seat key on `POST /v1/chat/completions` returns `403 client_attestation_denied` with mesh and muse-client headers alike; the real muse client (captured locally) serves on `POST /v1/responses` with `muse-build/1.4.23` User-Agent + `x-client-id` + session headers, and that path returns 200 with the same seat key.
 
 ## AI Flaky tests
 - [ ] No flaky accepted without same-commit success + sign-off.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single dependency bump, one test cycle)
+- [x] **Mono-branch + cherry-pick** (single transport file, one test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: one package bump, no orthogonal sub-workstreams.
+- Rationale: one runtime client + its tests and one gateway fixture consumer.
 
 ## UAT Management (in orchestration context)
-- [ ] No UI behavior change expected; UAT on the integrated branch if CI asks for it.
+- [ ] No UI change, no UAT surface.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [x] Create isolated worktree `tmp/fix-ui-kit-sca` on `fix/ui-sveltekit-sca` from `origin/main`.
-  - [x] Confirm scope and guardrails.
-- [x] **Lot 1 — Kit bump**
-  - [x] Bump `@sveltejs/kit` to the latest fixed 2.x via the make install target.
-  - [x] Add the time-boxed register acceptance for the kit-3-only advisories (the remaining HIGH is fixed only by the kit 3 major line).
-  - [x] UI security SCA gate green (`make test-ui-security-sca ENV=test-ui-kit-sca`).
-- [ ] **Lot 2 — Publication**
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`.
+  - [x] Create isolated worktree `tmp/fix-muse-headers` on `fix/llm-mesh-muse-client-headers` from `origin/main` (llm-mesh 0.38.1).
+  - [x] Confirm live failure (403) and live success path (`/v1/responses`, 200) with the enrolled seat key.
+- [x] **Lot 1 — Responses-wire Muse client emulation**
+  - [x] Add failing tests: `/v1/responses` path, muse client headers, Responses SSE/JSON decoding.
+  - [x] Rewrite `MuseRuntimeClient` on the Responses wire with muse client identity headers.
+  - [x] Update the llm-gateway muse fixture to the Responses wire.
+- [ ] **Lot 2 — Proof & publication**
+  - [x] Mesh muse tests + full llm-mesh suite + typecheck green.
+  - [x] Live seat call through the built client returns 200 text.
+  - [x] Cross-provider cascade check (codex/mistral/cloud-code transports untouched, suites green).
   - [ ] Scope-check, commit, push, open PR.
