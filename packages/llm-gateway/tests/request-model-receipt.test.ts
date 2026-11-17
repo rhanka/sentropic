@@ -82,12 +82,18 @@ it('terminates without retry and records observedServedModel in the error receip
           return new Response(new ReadableStream<Uint8Array>({
             start(controller) {
               const enc = new TextEncoder();
-              controller.enqueue(enc.encode('data: {"model":"wrong-upstream-model","choices":[{"delta":{"content":"leak"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n'));
+              controller.enqueue(enc.encode('data: {"type":"response.created","response":{"id":"m1","model":"wrong-upstream-model"}}\n\n'));
+              controller.enqueue(enc.encode('data: {"type":"response.output_text.delta","delta":"leak"}\n\n'));
+              controller.enqueue(enc.encode('data: {"type":"response.completed","response":{"id":"m1","model":"wrong-upstream-model","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}\n\n'));
               controller.close();
             },
           }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
         }
-        return new Response(JSON.stringify({ id: 'm1', model: 'wrong-upstream-model', output_text: 'leak' }), {
+        return new Response(JSON.stringify({
+          id: 'm1', model: 'wrong-upstream-model', status: 'completed',
+          output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'leak' }] }],
+          usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+        }), {
           status: 200, headers: { 'content-type': 'application/json' },
         });
       },
