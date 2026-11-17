@@ -40,6 +40,7 @@ MuseRuntimeClient emulates the real Muse Code client (Responses wire `/v1/respon
 
 ## Feedback Loop
 - [x] `acknowledge`: live A/B proof recorded 2026-11-17 — seat key on `POST /v1/chat/completions` returns `403 client_attestation_denied` with mesh and muse-client headers alike; the real muse client (captured locally) serves on `POST /v1/responses` with `muse-build/1.4.23` User-Agent + `x-client-id` + session headers, and that path returns 200 with the same seat key.
+- [ ] `attention`: CI `security-code-ui (sca)` fails on `@sveltejs/kit` HIGH (`npm_audit_ui_@sveltejs_kit_high`) — pre-existing repo-wide finding (dependabot `sveltejs/kit-3.1.1` branches opened 2026-11-16), untouched by this branch; remediation belongs to those branches, not here.
 - [x] `MUSEHDR-EX1`: CI `enforce-package-bump` requires a semver bump for the `src/` change — bump `@sentropic/llm-mesh` 0.38.1 -> 0.38.2 with root lock line, train constant, selected fixtures and the public-surface version assertion. Reason: package publication rule (`rules/workflow.md`). Impact: release-train fixtures move to 0.38.2. Rollback: revert the bump commit.
 
 ## AI Flaky tests
