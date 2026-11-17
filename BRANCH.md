@@ -20,6 +20,12 @@ MuseRuntimeClient emulates the real Muse Code client (Responses wire `/v1/respon
   - `packages/llm-gateway/tests/request-model-receipt.test.ts`
   - `packages/llm-gateway/tests/fixtures/**`
   - `packages/llm-mesh/CHANGELOG.md`
+  - `packages/llm-mesh/package.json` (MUSEHDR-EX1 version bump)
+  - `package-lock.json` (MUSEHDR-EX1 root lock line)
+  - `packages/llm-mesh/tests/decision-public-surface.test.ts` (MUSEHDR-EX1)
+  - `packages/cluster-mesh/tests/fixtures/train.ts` (MUSEHDR-EX1)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (MUSEHDR-EX1)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (MUSEHDR-EX1)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -34,6 +40,7 @@ MuseRuntimeClient emulates the real Muse Code client (Responses wire `/v1/respon
 
 ## Feedback Loop
 - [x] `acknowledge`: live A/B proof recorded 2026-11-17 — seat key on `POST /v1/chat/completions` returns `403 client_attestation_denied` with mesh and muse-client headers alike; the real muse client (captured locally) serves on `POST /v1/responses` with `muse-build/1.4.23` User-Agent + `x-client-id` + session headers, and that path returns 200 with the same seat key.
+- [x] `MUSEHDR-EX1`: CI `enforce-package-bump` requires a semver bump for the `src/` change — bump `@sentropic/llm-mesh` 0.38.1 -> 0.38.2 with root lock line, train constant, selected fixtures and the public-surface version assertion. Reason: package publication rule (`rules/workflow.md`). Impact: release-train fixtures move to 0.38.2. Rollback: revert the bump commit.
 
 ## AI Flaky tests
 - [ ] No flaky accepted without same-commit success + sign-off.
