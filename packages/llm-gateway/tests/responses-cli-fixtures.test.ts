@@ -124,9 +124,9 @@ describe('synthetic provider replay per transport (spec §16.4)', () => {
   });
 
   it.each([
-    ['provider-muse-chat.sse', MuseRuntimeClient, 'muse', 'muse-spark-1.3-contributor', 'call_synth_9'],
+    ['provider-muse-responses.sse', MuseRuntimeClient, 'muse', 'muse-spark-1.3-contributor', 'call_synth_9'],
     ['provider-mistral-chat.sse', MistralRuntimeClient, 'mistral', 'mistral-medium-3.5', 'call_synth_7'],
-  ] as const)('drives translated Chat from %s', async (file, Client, provider, modelId, callId) => {
+  ] as const)('drives the provider wire from %s', async (file, Client, provider, modelId, callId) => {
     // Chat `generate` serves the non-stream JSON shape; the SSE wire is
     // consumed by `stream`, so the replay folds its events directly.
     const client = new Client({ fetch: async () => sse(file) });
