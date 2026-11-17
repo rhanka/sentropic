@@ -7,79 +7,6 @@ import { requalifyResponseToolName, responsesCarrierOf } from '../responses-wire
 import type { FinishReason, StreamEvent, TokenUsage } from '../streaming.js';
 import type { ToolCall } from '../tools.js';
 
-/** Canonical terminal reason: provider finish_reason wins over inference (spec §16.4). */
-const terminalFinish = (args: {
-  sawToolCalls: boolean; rawFinish?: string; sawText: boolean; sawCleanEnd?: boolean;
-}): FinishReason => {
-  if (args.sawToolCalls || args.rawFinish === 'tool_calls') return 'tool_calls';
-  if (args.rawFinish === 'length') return 'length';
-  if (args.rawFinish === 'content_filter') return 'content_filter';
-  // Spec §16.4 (R4-MIN-3): a stream that ends without finish_reason is a
-  // proven completion only behind the SSE clean terminator (`[DONE]`). A
-  // truncated close after text is `unknown`, never a `stop` success.
-  return args.sawText && args.sawCleanEnd ? 'stop' : 'unknown';
-};
-
-/** Latest string `choices[0].finish_reason` on a Chat JSON/SSE payload, if any. */
-const rawFinishOf = (payload: unknown): string | undefined => {
-  if (!payload || typeof payload !== 'object') return undefined;
-  const choices = (payload as Record<string, unknown>).choices;
-  if (!Array.isArray(choices) || choices.length === 0) return undefined;
-  const first = choices[0];
-  if (!first || typeof first !== 'object') return undefined;
-  const reason = (first as Record<string, unknown>).finish_reason;
-  return typeof reason === 'string' && reason ? reason : undefined;
-};
-
-/** Decode OpenAI Chat `message.tool_calls` — malformed entries are skipped, never fatal (spec §16.3). */
-const extractToolCalls = (message: unknown): ToolCall[] => {
-  if (!message || typeof message !== 'object') return [];
-  const calls = (message as Record<string, unknown>).tool_calls;
-  if (!Array.isArray(calls)) return [];
-  const decoded: ToolCall[] = [];
-  for (const entry of calls) {
-    if (!entry || typeof entry !== 'object') continue;
-    const record = entry as Record<string, unknown>;
-    const fn = record.function && typeof record.function === 'object'
-      ? (record.function as Record<string, unknown>)
-      : {};
-    if (typeof record.id !== 'string' || typeof fn.name !== 'string') continue;
-    decoded.push({
-      toolCallId: record.id,
-      providerCallId: record.id,
-      name: fn.name,
-      argumentsText: typeof fn.arguments === 'string' ? fn.arguments : '',
-    });
-  }
-  return decoded;
-};
-
-/** Decode OpenAI Chat SSE `choices[].delta.tool_calls[]` fragments keyed by stream index. */
-const extractToolDeltas = (raw: unknown): Array<{ index: number; id?: string; name?: string; fragment: string }> => {
-  if (!raw || typeof raw !== 'object') return [];
-  const choices = (raw as Record<string, unknown>).choices;
-  if (!Array.isArray(choices) || choices.length === 0) return [];
-  const delta = (choices[0] as Record<string, unknown>)?.delta;
-  if (!delta || typeof delta !== 'object') return [];
-  const calls = (delta as Record<string, unknown>).tool_calls;
-  if (!Array.isArray(calls)) return [];
-  const out: Array<{ index: number; id?: string; name?: string; fragment: string }> = [];
-  for (const entry of calls) {
-    if (!entry || typeof entry !== 'object') continue;
-    const record = entry as Record<string, unknown>;
-    const index = typeof record.index === 'number' ? record.index : out.length;
-    const fn = record.function && typeof record.function === 'object'
-      ? (record.function as Record<string, unknown>)
-      : {};
-    const name = typeof fn.name === 'string' && fn.name ? fn.name : undefined;
-    const id = typeof record.id === 'string' && record.id ? record.id : undefined;
-    const fragment = typeof fn.arguments === 'string' ? fn.arguments : '';
-    if (!id && !name && !fragment) continue;
-    out.push({ index, id, name, fragment });
-  }
-  return out;
-};
-
 export interface MuseRuntimeClientOptions {
   readonly fetch?: typeof fetch;
   readonly baseUrl?: string;
@@ -88,127 +15,43 @@ export interface MuseRuntimeClientOptions {
 }
 
 // Serving wire facts [MEASURED] from static analysis of the installed muse
-// CLI (ELF muse-bin-1.3.0-R3401.1, read-only): provider path
-// /muse-code/models joined to the configured base URL (default
-// https://api.meta.ai), Authorization: Bearer <api_key>, header slot
-// x-meta-ai-gateway-session-id.
-// [GAP] response schema: field extraction below tries the documented
-// Anthropic/OpenAI-adjacent shapes first and falls back to the raw JSON;
-// shapes observed live feed back here, nothing is asserted about Meta's.
+// CLI (ELF muse-bin-1.3.0-R3401.1, read-only) and a local header capture of
+// muse 1.4.23 (2026-11-17): the client serves on POST /v1/responses joined
+// to the configured base URL (default https://api.meta.ai), with
+// Authorization: Bearer <api_key> and the client identity headers below.
+// The legacy Chat path (/v1/chat/completions) refuses seat-billed keys with
+// 403 client_attestation_denied under every header set, while the same seat
+// key serves 200 on /v1/responses — so this client emulates the muse client
+// wire-for-wire, the way Cloud Code emulates the agy client.
+export const MUSE_CLIENT_VERSION = '1.4.23';
+export const MUSE_CLIENT_USER_AGENT =
+  `muse-build/${MUSE_CLIENT_VERSION} (non-interactive; linux-x86_64)`;
+export const MUSE_CLIENT_ID = 'tbh:exec';
+
 const MUSE_DEFAULT_BASE_URL = 'https://api.meta.ai';
-// Corrected by live probe (2026-09-21): POST /v1/chat/completions,
-// OpenAI body, returns 402 billing_not_configured (exists + parsed).
-// /muse-code/models is GET-only (models list).
-const MUSE_SERVING_PATH = '/v1/chat/completions';
+const MUSE_SERVING_PATH = '/v1/responses';
 
 const textOf = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null;
 
-// Canonical ToolChoice uses { type: 'tool' }; the Chat Completions wire
-// takes the nested OpenAI shape { type: 'function', function: { name } }
-// (spec §16.4) — the flat { type: 'function', name } form is Responses-only.
-// Strings pass through untouched.
-const openAiToolChoice = (choice: GenerateRequest['toolChoice']): unknown =>
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+
+// Canonical ToolChoice uses { type: 'tool' }; the Responses wire takes
+// { type: 'function', name } (spec §16.4). Strings pass through untouched.
+const responsesToolChoice = (choice: GenerateRequest['toolChoice']): unknown =>
   choice && typeof choice === 'object' && choice.type === 'tool'
-    ? { type: 'function', function: { name: choice.name } }
+    ? { type: 'function', name: choice.name }
     : choice;
 
 const numOf = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
-// Canonical history onto the Chat Completions wire (spec §16.4, R4-MAJ-2):
-// same projection rules as the Mistral translated client — developer maps to
-// system, reasoning parts have no wire slot and are dropped, images map to
-// the OpenAI-compat image_url shape, assistant tool calls project to
-// { id, type: 'function', function: { name, arguments } }, tool results
-// carry tool_call_id. Canonical extras (metadata.ingress, providerCallId,
-// arguments object) never reach the wire.
-type WireContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
-
-const toWireMessage = (message: LlmMeshMessage): Record<string, unknown> => {
-  const content = typeof message.content === 'string'
-    ? message.content
-    : message.content
-        .map((part): WireContentPart | null => {
-          if (part.type === 'text') return { type: 'text', text: part.text };
-          if (part.type === 'reasoning') return null;
-          if (part.type === 'image') {
-            const url = part.url ?? `data:${part.mediaType ?? 'image/png'};base64,${part.data ?? ''}`;
-            return { type: 'image_url', image_url: { url } };
-          }
-          return null;
-        })
-        .filter((part): part is WireContentPart => part !== null);
-  const wire: Record<string, unknown> = {
-    role: message.role === 'developer' ? 'system' : message.role,
-    content,
-  };
-  if (message.name !== undefined) wire.name = message.name;
-  if (message.role === 'assistant' && message.toolCalls?.length) {
-    wire.tool_calls = message.toolCalls.map((call) => ({
-      id: call.toolCallId,
-      type: 'function' as const,
-      function: { name: call.name, arguments: call.argumentsText },
-    }));
-  }
-  if (message.role === 'tool' && message.toolResult) {
-    wire.tool_call_id = message.toolResult.toolCallId;
-  }
-  return wire;
-};
-
-const extractText = (payload: unknown): string => {
-  if (typeof payload === 'string') return payload;
-  if (!payload || typeof payload !== 'object') return '';
-  const record = payload as Record<string, unknown>;
-  for (const key of ['output_text', 'text']) {
-    const direct = textOf(record[key]);
-    if (direct) return direct;
-  }
-  const message = record.message;
-  if (message && typeof message === 'object') {
-    const content = (message as Record<string, unknown>).content;
-    if (typeof content === 'string' && content) return content;
-    if (Array.isArray(content)) {
-      const text = content
-        .map((part) => {
-          if (typeof part === 'string') return part;
-          if (part && typeof part === 'object') {
-            return textOf((part as Record<string, unknown>).text) ?? '';
-          }
-          return '';
-        })
-        .join('');
-      if (text) return text;
-    }
-  }
-  const choices = record.choices;
-  if (Array.isArray(choices) && choices.length > 0) {
-    const first = choices[0] as Record<string, unknown>;
-    const inner = first.message ?? first;
-    if (inner && typeof inner === 'object') {
-      const content = (inner as Record<string, unknown>).content;
-      if (typeof content === 'string' && content) return content;
-    }
-    // Live Meta SSE chunks carry choices[].delta as an OBJECT
-    // ({ content, role }), not a string — read .content (probed 2026-09-22;
-    // the string-only read silently dropped every content delta).
-    const delta = first.delta;
-    if (typeof delta === 'string' && delta) return delta;
-    if (delta && typeof delta === 'object') {
-      const dContent = (delta as Record<string, unknown>).content;
-      if (typeof dContent === 'string' && dContent) return dContent;
-    }
-  }
-  return '';
-};
-
-const extractUsage = (payload: unknown): TokenUsage | undefined => {
-  if (!payload || typeof payload !== 'object') return undefined;
-  const record = payload as Record<string, unknown>;
-  const usage = record.usage;
-  if (!usage || typeof usage !== 'object') return undefined;
-  const u = usage as Record<string, unknown>;
+const usageOf = (usage: unknown): TokenUsage | undefined => {
+  const u = asRecord(usage);
+  if (!u) return undefined;
   const inputTokens = numOf(u.input_tokens) ?? numOf(u.inputTokens) ?? numOf(u.prompt_tokens);
   const outputTokens = numOf(u.output_tokens) ?? numOf(u.outputTokens) ?? numOf(u.completion_tokens);
   const totalTokens = numOf(u.total_tokens) ?? numOf(u.totalTokens);
@@ -222,9 +65,102 @@ const extractUsage = (payload: unknown): TokenUsage | undefined => {
   };
 };
 
+// Canonical history onto the Responses wire (spec §16.4): system/developer
+// text collects into `instructions`; other messages project to message items
+// (input_text in, output_text out, input_image for images); assistant tool
+// calls project to function_call items and tool results to
+// function_call_output. Canonical extras (metadata.ingress, providerCallId
+// duplication, arguments objects) never reach the wire.
+const contentOf = (message: LlmMeshMessage): unknown => {
+  if (typeof message.content === 'string') return message.content;
+  return message.content.map((part) => {
+    if (part.type === 'text' || part.type === 'reasoning') {
+      return {
+        type: message.role === 'assistant' ? 'output_text' : 'input_text',
+        text: part.text,
+      };
+    }
+    if (part.type === 'image') {
+      const imageUrl = part.url ?? (part.data
+        ? `data:${part.mediaType ?? 'application/octet-stream'};base64,${part.data}`
+        : '');
+      return { type: 'input_image', image_url: imageUrl };
+    }
+    const fileData = part.url ?? (part.data
+      ? `data:${part.mediaType ?? 'application/octet-stream'};base64,${part.data}`
+      : '');
+    return { type: 'input_file', filename: part.filename, file_data: fileData };
+  });
+};
+
+const stringify = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  try { return JSON.stringify(value ?? ''); } catch { return String(value ?? ''); }
+};
+
+const buildResponsesBody = (
+  request: GenerateRequest,
+  stream: boolean,
+): Record<string, unknown> => {
+  const instructions: string[] = [];
+  const input: unknown[] = [];
+  for (const message of request.messages) {
+    if (message.role === 'system' || message.role === 'developer') {
+      const text = typeof message.content === 'string'
+        ? message.content
+        : message.content
+          .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+          .join('');
+      if (text) instructions.push(text);
+      continue;
+    }
+    if (message.role === 'tool' && message.toolResult) {
+      input.push({
+        type: 'function_call_output',
+        call_id: message.toolResult.providerCallId ?? message.toolResult.toolCallId,
+        output: stringify(message.toolResult.output),
+      });
+      continue;
+    }
+    input.push({ type: 'message', role: message.role, content: contentOf(message) });
+    if (message.role === 'assistant') {
+      for (const call of message.toolCalls ?? []) {
+        input.push({
+          type: 'function_call',
+          call_id: call.providerCallId ?? call.toolCallId,
+          name: call.name,
+          arguments: call.argumentsText,
+        });
+      }
+    }
+  }
+  // Live-probed 2026-09-22: Meta 400s mesh-shape tools; the Responses wire
+  // takes flat function tools ({ type: 'function', name, parameters }).
+  const tools = request.tools?.map((tool) => ({
+    type: 'function' as const,
+    name: tool.name,
+    ...(tool.description ? { description: tool.description } : {}),
+    parameters: tool.inputSchema,
+    ...(tool.strict !== undefined ? { strict: tool.strict } : {}),
+  }));
+  return {
+    model: request.modelId ?? 'muse-spark-1.3',
+    ...(instructions.length ? { instructions: instructions.join('\n\n') } : {}),
+    input,
+    ...(stream ? { stream: true } : {}),
+    ...(tools?.length ? { tools } : {}),
+    ...(request.toolChoice ? { tool_choice: responsesToolChoice(request.toolChoice) } : {}),
+    ...(request.parallelToolCalls !== undefined
+      ? { parallel_tool_calls: request.parallelToolCalls } : {}),
+    ...(request.maxOutputTokens !== undefined
+      ? { max_output_tokens: request.maxOutputTokens } : {}),
+    ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+    ...(request.topP !== undefined ? { top_p: request.topP } : {}),
+  };
+};
+
 const parseSseJson = async function* (
   body: ReadableStream<Uint8Array>,
-  state?: { sawCleanEnd?: boolean },
 ): AsyncGenerator<unknown> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -243,9 +179,7 @@ const parseSseJson = async function* (
           .filter((line) => line.startsWith('data:'))
           .map((line) => line.slice(5).trim())
           .join('\n');
-        if (payload === '[DONE]') {
-          if (state) state.sawCleanEnd = true;
-        } else if (payload) {
+        if (payload && payload !== '[DONE]') {
           try {
             yield JSON.parse(payload);
           } catch {
@@ -255,22 +189,149 @@ const parseSseJson = async function* (
         boundary = buffer.indexOf('\n\n');
       }
     }
+    // Flush a trailing block that ends at EOF without a blank-line boundary.
+    const tail = buffer
+      .split('\n')
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim())
+      .join('\n');
+    if (tail && tail !== '[DONE]') {
+      try {
+        yield JSON.parse(tail);
+      } catch {
+        yield tail;
+      }
+    }
   } finally {
     reader.releaseLock();
   }
 };
 
+interface DecodedTerminal {
+  finishReason: FinishReason;
+  usage?: TokenUsage;
+  responseId?: string;
+  observedServedModelId?: string;
+  sawToolCalls: boolean;
+}
+
+/** Decode one Responses SSE event into canonical stream events. */
+const decodeMuseEvent = (
+  raw: unknown,
+  carrier: ReturnType<typeof responsesCarrierOf>,
+  state: { sawToolCalls: boolean; seenToolCallIds: Set<string> },
+): StreamEvent[] => {
+  const record = asRecord(raw);
+  const type = typeof record?.type === 'string' ? record.type : '';
+  if (type === 'response.created') {
+    const response = asRecord(record?.response);
+    const observedServedModelId = textOf(response?.model) ?? undefined;
+    return [{
+      type: 'status',
+      data: {
+        status: 'started', providerId: 'muse',
+        ...(typeof response?.id === 'string' ? { providerResponseId: response.id } : {}),
+        ...(observedServedModelId ? { metadata: { observedServedModelId } } : {}),
+      },
+    }];
+  }
+  if (type === 'response.output_text.delta' && typeof record?.delta === 'string') {
+    return [{ type: 'content_delta', data: { delta: record.delta } }];
+  }
+  if (type === 'response.reasoning_summary_text.delta' && typeof record?.delta === 'string') {
+    return [{ type: 'reasoning_delta', data: { delta: record.delta, kind: 'summary' } }];
+  }
+  if (type === 'response.output_item.added' || type === 'response.output_item.done') {
+    const item = asRecord(record?.item);
+    if (item?.type === 'function_call') {
+      state.sawToolCalls = true;
+      const callId = String(item.call_id ?? item.id ?? '');
+      // The done item repeats the added snapshot; emit one start per call.
+      if (type === 'response.output_item.done' && state.seenToolCallIds.has(callId)) return [];
+      state.seenToolCallIds.add(callId);
+      return [{
+        type: 'tool_call_start',
+        data: {
+          toolCallId: callId,
+          providerCallId: callId,
+          name: requalifyResponseToolName(String(item.name ?? ''), carrier),
+          argumentsText: String(item.arguments ?? ''),
+        },
+      }];
+    }
+    if (item?.type === 'reasoning' && Array.isArray(item.summary)) {
+      const text = item.summary
+        .map((part) => {
+          const entry = asRecord(part);
+          return entry?.type === 'summary_text' && typeof entry.text === 'string'
+            ? entry.text
+            : '';
+        })
+        .join('');
+      if (text) return [{ type: 'reasoning_delta', data: { delta: text, kind: 'summary_done' } }];
+    }
+    return [];
+  }
+  if (type === 'response.function_call_arguments.delta' && typeof record?.delta === 'string') {
+    return [{
+      type: 'tool_call_delta',
+      data: {
+        toolCallId: String(record.call_id ?? record.item_id ?? ''),
+        ...(record.call_id ? { providerCallId: String(record.call_id) } : {}),
+        delta: record.delta,
+      },
+    }];
+  }
+  if (type === 'error' || type === 'response.failed') {
+    const failure = asRecord(record?.error) ?? asRecord(asRecord(record?.response)?.error);
+    return [{
+      type: 'error',
+      data: {
+        providerId: 'muse',
+        message: String(failure?.message ?? 'Muse request failed'),
+        code: String(failure?.code ?? type),
+        retryable: Boolean(failure?.retryable),
+      },
+    }];
+  }
+  return [];
+};
+
+const terminalOf = (raw: unknown, sawToolCalls: boolean): DecodedTerminal | undefined => {
+  const record = asRecord(raw);
+  const type = typeof record?.type === 'string' ? record.type : '';
+  if (type !== 'response.completed' && type !== 'response.incomplete') return undefined;
+  const response = asRecord(record?.response);
+  const usage = usageOf(response?.usage);
+  const observedServedModelId = textOf(response?.model) ?? undefined;
+  const hasToolCall = Array.isArray(response?.output)
+    && response.output.some((item) => asRecord(item)?.type === 'function_call');
+  let finishReason: FinishReason = hasToolCall || sawToolCalls ? 'tool_calls' : 'stop';
+  if (type === 'response.incomplete') {
+    const reason = asRecord(response?.incomplete_details)?.reason;
+    finishReason = reason === 'max_output_tokens' ? 'length'
+      : reason === 'content_filter' ? 'content_filter' : 'unknown';
+  }
+  return {
+    finishReason,
+    ...(usage ? { usage } : {}),
+    ...(typeof response?.id === 'string' ? { responseId: response.id } : {}),
+    ...(observedServedModelId ? { observedServedModelId } : {}),
+    sawToolCalls: hasToolCall || sawToolCalls,
+  };
+};
+
 export class MuseRuntimeClient implements MuseAdapterClient {
   private readonly fetchFn: typeof fetch;
   private readonly baseUrl: string;
-  private readonly originator: string;
+  private readonly originator?: string;
   private readonly userAgent: string;
 
   constructor(options: MuseRuntimeClientOptions = {}) {
     this.fetchFn = options.fetch ?? fetch;
     this.baseUrl = (options.baseUrl ?? MUSE_DEFAULT_BASE_URL).replace(/\/+$/, '');
-    this.originator = options.originator ?? 'sentropic-llm-mesh';
-    this.userAgent = options.userAgent ?? '@sentropic/llm-mesh';
+    this.originator = options.originator;
+    this.userAgent = options.userAgent ?? MUSE_CLIENT_USER_AGENT;
   }
 
   private async post(
@@ -291,33 +352,6 @@ export class MuseRuntimeClient implements MuseAdapterClient {
     const metadata = 'metadata' in auth ? auth.metadata : undefined;
     const stableSessionId = typeof metadata?.stableSessionId === 'string'
       ? metadata.stableSessionId : undefined;
-    // Live-probed 2026-09-22: Meta 400s mesh-shape tools; the serving wire
-    // takes OpenAI function tools ({ function: { name, description,
-    // parameters } }), so project them (200 with the projection).
-    const openAiTools = request.tools?.map((tool) => ({
-      type: 'function' as const,
-      function: {
-        name: tool.name,
-        ...(tool.description ? { description: tool.description } : {}),
-        parameters: tool.inputSchema,
-        ...(tool.strict !== undefined ? { strict: tool.strict } : {}),
-      },
-    }));
-    const body: Record<string, unknown> = {
-      model: request.modelId ?? 'muse-spark-1.3',
-      messages: request.messages.map(toWireMessage),
-      // Live-probed 2026-09-22: without stream:true Meta answers 200 with a
-      // full JSON completion (content-type application/json) — no SSE frames,
-      // so the stream reader yields nothing and ends done/unknown.
-      ...(stream ? { stream: true } : {}),
-      ...(openAiTools?.length ? { tools: openAiTools } : {}),
-      ...(request.toolChoice ? { tool_choice: openAiToolChoice(request.toolChoice) } : {}),
-      ...(request.parallelToolCalls !== undefined
-        ? { parallel_tool_calls: request.parallelToolCalls } : {}),
-      ...(request.maxOutputTokens !== undefined ? { max_tokens: request.maxOutputTokens } : {}),
-      ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
-      ...(request.topP !== undefined ? { top_p: request.topP } : {}),
-    };
     const response = await this.fetchFn(`${this.baseUrl}${MUSE_SERVING_PATH}`, {
       method: 'POST',
       signal: request.signal,
@@ -325,11 +359,17 @@ export class MuseRuntimeClient implements MuseAdapterClient {
         authorization: `Bearer ${auth.accessToken}`,
         'content-type': 'application/json',
         accept,
-        originator: this.originator,
         'user-agent': this.userAgent,
-        ...(stableSessionId ? { 'x-meta-ai-gateway-session-id': stableSessionId } : {}),
+        'x-client-id': MUSE_CLIENT_ID,
+        ...(this.originator ? { originator: this.originator } : {}),
+        ...(stableSessionId ? {
+          'x-meta-ai-gateway-session-id': stableSessionId,
+          'x-tbh-session-id': stableSessionId,
+          'x-tbh-thread-id': stableSessionId,
+          'x-tbh-root-session-id': stableSessionId,
+        } : {}),
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(buildResponsesBody(request, stream)),
     });
     if (!response.ok) {
       // Key never enters the message: status + retry hint only.
@@ -352,89 +392,36 @@ export class MuseRuntimeClient implements MuseAdapterClient {
       return (async function* (): AsyncGenerator<StreamEvent> { yield done; })();
     }
     return (async function* (): AsyncGenerator<StreamEvent> {
-      let sawText = false;
-      let sawToolCalls = false;
-      let rawFinish: string | undefined;
-      let stashedUsage: TokenUsage | undefined;
+      const state = { sawToolCalls: false, seenToolCallIds: new Set<string>() };
+      let terminal: DecodedTerminal | undefined;
       let observedServedModelId: string | undefined;
-      const sseState: { sawCleanEnd?: boolean } = {};
-      const toolCallIds = new Map<number, string>();
-      for await (const raw of parseSseJson(response.body!, sseState)) {
-        const rawModel = raw && typeof raw === 'object'
-          ? textOf((raw as Record<string, unknown>).model)
-          : null;
-        if (rawModel && rawModel !== observedServedModelId) {
-          observedServedModelId = rawModel;
-          yield {
-            type: 'status',
-            data: { status: 'started', providerId: 'muse', metadata: { observedServedModelId } },
-          };
+      let failed = false;
+      for await (const raw of parseSseJson(response.body!)) {
+        const done = terminalOf(raw, state.sawToolCalls);
+        if (done) {
+          terminal = done;
+          if (done.observedServedModelId) observedServedModelId = done.observedServedModelId;
+          continue;
         }
-        const text = extractText(raw);
-        const usage = extractUsage(raw);
-        const finish = rawFinishOf(raw);
-        if (finish) rawFinish = finish;
-        if (text) {
-          sawText = true;
-          yield { type: 'content_delta', data: { delta: text } };
-        }
-        for (const toolDelta of extractToolDeltas(raw)) {
-          const known = toolCallIds.get(toolDelta.index);
-          const toolCallId = known ?? toolDelta.id ?? `muse-call-${toolDelta.index}`;
-          if (!known) {
-            toolCallIds.set(toolDelta.index, toolCallId);
-            sawToolCalls = true;
-            yield {
-              type: 'tool_call_start',
-              data: {
-                toolCallId,
-                providerCallId: toolDelta.id ?? toolCallId,
-                name: requalifyResponseToolName(toolDelta.name ?? '', carrier),
-                argumentsText: '',
-              },
-            };
-            // A first fragment carrying only an id/name emits no empty
-            // delta; argument text arrives as real fragments.
-            if (!toolDelta.fragment) continue;
-          } else if (!toolDelta.fragment && !toolDelta.name) {
-            continue;
+        for (const event of decodeMuseEvent(raw, carrier, state)) {
+          if (event.type === 'status') {
+            const served = event.data.metadata?.observedServedModelId;
+            if (typeof served === 'string') observedServedModelId = served;
           }
-          yield {
-            type: 'tool_call_delta',
-            data: {
-              toolCallId,
-              providerCallId: toolDelta.id ?? toolCallId,
-              delta: toolDelta.fragment,
-              ...(toolDelta.name ? { name: requalifyResponseToolName(toolDelta.name, carrier) } : {}),
-            },
-          };
+          if (event.type === 'error') failed = true;
+          yield event;
         }
-        if (usage) {
-          // Only a usage chunk carrying a finish reason terminates (the
-          // live Meta shape). A finish-less usage chunk is accounting:
-          // stash the latest and continue (spec §16.4, R4-MIN-3).
-          if (!rawFinish) {
-            stashedUsage = usage;
-            continue;
-          }
-          yield {
-            type: 'done',
-            data: {
-              finishReason: terminalFinish({ sawToolCalls, rawFinish, sawText }),
-              ...(rawFinish ? { providerRawFinishReason: rawFinish } : {}),
-              usage,
-              ...(observedServedModelId ? { metadata: { observedServedModelId } } : {}),
-            },
-          };
-          return;
-        }
+        if (failed) return;
       }
+      // Spec §16.4 (R4-MIN-3): only a provider terminal (response.completed /
+      // response.incomplete) is a served completion. A truncated close is
+      // `unknown`, never a `stop` success.
       yield {
         type: 'done',
         data: {
-          finishReason: terminalFinish({ sawToolCalls, rawFinish, sawText, sawCleanEnd: sseState.sawCleanEnd }),
-          ...(rawFinish ? { providerRawFinishReason: rawFinish } : {}),
-          ...(stashedUsage ? { usage: stashedUsage } : {}),
+          finishReason: terminal?.finishReason ?? 'unknown',
+          ...(terminal?.responseId ? { providerResponseId: terminal.responseId } : {}),
+          ...(terminal?.usage ? { usage: terminal.usage } : {}),
           ...(observedServedModelId ? { metadata: { observedServedModelId } } : {}),
         },
       };
@@ -444,31 +431,48 @@ export class MuseRuntimeClient implements MuseAdapterClient {
   async generate(request: GenerateRequest, context?: ProviderRuntimeContext): Promise<GenerateResponse> {
     const response = await this.post(request, context, 'application/json');
     const payload: unknown = await response.json();
-    const text = extractText(payload);
-    const usage = extractUsage(payload);
-    const rawId = payload && typeof payload === 'object'
-      ? textOf((payload as Record<string, unknown>).id)
-      : null;
-    const observedServedModelId = payload && typeof payload === 'object'
-      ? textOf((payload as Record<string, unknown>).model)
-      : null;
-    const id = rawId ?? 'muse_response';
-    const firstChoice = payload && typeof payload === 'object'
-      && Array.isArray((payload as Record<string, unknown>).choices)
-      ? ((payload as Record<string, unknown>).choices as Array<unknown>)[0]
-      : undefined;
-    const choiceMessage = firstChoice && typeof firstChoice === 'object'
-      ? (firstChoice as Record<string, unknown>).message
-      : undefined;
+    const record = asRecord(payload);
     const carrier = responsesCarrierOf(request.providerOptions);
-    const toolCalls = extractToolCalls(choiceMessage).map((call) => ({
-      ...call, name: requalifyResponseToolName(call.name, carrier),
-    }));
-    const rawFinish = firstChoice && typeof firstChoice === 'object'
-      ? textOf((firstChoice as Record<string, unknown>).finish_reason)
-      : null;
+    const output = Array.isArray(record?.output) ? record.output : [];
+    let text = '';
+    const toolCalls: ToolCall[] = [];
+    for (const item of output) {
+      const entry = asRecord(item);
+      if (!entry) continue;
+      if (entry.type === 'message' && Array.isArray(entry.content)) {
+        for (const part of entry.content) {
+          const content = asRecord(part);
+          if (content?.type === 'output_text' && typeof content.text === 'string') {
+            text += content.text;
+          }
+        }
+      }
+      if (entry.type === 'function_call') {
+        const callId = textOf(entry.call_id) ?? textOf(entry.id);
+        const name = textOf(entry.name);
+        if (!callId || !name) continue;
+        toolCalls.push({
+          toolCallId: callId,
+          providerCallId: callId,
+          name: requalifyResponseToolName(name, carrier),
+          argumentsText: typeof entry.arguments === 'string' ? entry.arguments : '',
+        });
+      }
+    }
+    if (!text) {
+      const direct = textOf(record?.output_text) ?? textOf(record?.text);
+      if (direct) text = direct;
+    }
+    const usage = usageOf(record?.usage);
+    const observedServedModelId = textOf(record?.model) ?? undefined;
+    const incompleteReason = asRecord(record?.incomplete_details)?.reason;
+    const finishReason: FinishReason = toolCalls.length > 0 ? 'tool_calls'
+      : record?.status === 'incomplete'
+        ? incompleteReason === 'max_output_tokens' ? 'length'
+          : incompleteReason === 'content_filter' ? 'content_filter' : 'unknown'
+        : text ? 'stop' : 'unknown';
     return {
-      id,
+      id: textOf(record?.id) ?? 'muse_response',
       providerId: 'muse',
       modelId: request.modelId ?? 'muse-spark-1.3',
       message: {
@@ -478,12 +482,8 @@ export class MuseRuntimeClient implements MuseAdapterClient {
       },
       text,
       toolCalls,
-      finishReason: toolCalls.length > 0 ? 'tool_calls'
-        : rawFinish === 'length' ? 'length'
-        : rawFinish === 'content_filter' ? 'content_filter'
-        : text ? 'stop' : 'unknown',
+      finishReason,
       ...(usage ? { usage } : {}),
-      ...(rawFinish ? { providerRawFinishReason: rawFinish } : {}),
       ...(observedServedModelId ? { providerMetadata: { observedServedModelId } } : {}),
     };
   }

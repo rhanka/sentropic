@@ -72,8 +72,8 @@
       "sha256": "synthetic"
     },
     {
-      "file": "provider-muse-chat.sse",
-      "scenario": "SYNTHETIC provider replay: meta chat SSE (text delta, two-fragment tool call, tool_calls finish, terminal usage)",
+      "file": "provider-muse-responses.sse",
+      "scenario": "SYNTHETIC provider replay: meta Responses SSE (text delta, two-fragment tool call, tool_calls finish, terminal usage)",
       "originalPath": "synthetic",
       "originalLength": 0,
       "sha256": "synthetic"
