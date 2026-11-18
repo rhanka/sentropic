@@ -56,6 +56,13 @@ export interface PreparedCredential {
   expiresAt: string;
   authClientConfigVersion: string;
   accountEmail?: string;
+  /**
+   * Device-flow grant token (Meta `dca_token`) used to mint the serving key.
+   * Sealed secret: persisted only in the credential envelope, never in public
+   * records, logs, or receipts. Present for muse-code device seats; absent
+   * for CLI imports and direct keys.
+   */
+  museDeviceAccessToken?: string;
 }
 
 // RefreshInput: internal LocalAccountTransportService use only
@@ -63,6 +70,7 @@ export interface RefreshInput {
   accountId: string;
   refreshToken?: string;
   credentialVersion: string;
+  museDeviceAccessToken?: string;
 }
 
 export interface ResolvedProviderMetadata {
@@ -86,6 +94,7 @@ export interface CredentialEnvelope {
   refreshToken?: string;
   expiresAt: string;
   authClientConfigVersion: string;
+  museDeviceAccessToken?: string;
 }
 
 export interface CompletedEnrollment {
