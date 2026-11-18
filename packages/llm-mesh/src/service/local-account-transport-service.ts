@@ -171,6 +171,8 @@ const VERIFIED_CLOUD_CODE_MODEL_IDS = [
   'gemini-3.8-flash',
   'gemini-4-argon',
   'gemini-4-carbon',
+  'gemini-4-hydrogen',
+  'gemini-4-neon',
   'gemini-3.1-pro',
 ] as const;
 

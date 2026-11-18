@@ -426,6 +426,30 @@ export const modelProfiles = [
   },
   {
     providerId: 'gemini',
+    modelId: 'gemini-4-hydrogen',
+    label: 'Gemini 4 Hydrogen',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: {
+      ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }),
+      contextWindowTokens: 1_000_000,
+      maxOutputTokens: 65_536,
+    },
+  },
+  {
+    providerId: 'gemini',
+    modelId: 'gemini-4-neon',
+    label: 'Gemini 4 Neon',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: {
+      ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }),
+      contextWindowTokens: 1_000_000,
+      maxOutputTokens: 65_536,
+    },
+  },
+  {
+    providerId: 'gemini',
     modelId: 'gemini-4-carbon',
     label: 'Gemini 4 Carbon',
     reasoningTier: 'advanced',
