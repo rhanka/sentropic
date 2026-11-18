@@ -859,6 +859,55 @@ describe('explicitly selected canonical mapping tables', () => {
     });
   });
 
+  it('routes the haiku-5-5 family like sonnet-5-5 with Hydrogen on the cloud slot', () => {
+    // Owner mapping 2026-11-18: the new Haiku 5.5 family mirrors Sonnet 5.5
+    // (Wonder Full on max, Wonder on xhigh, Spark elsewhere; Sol 6.1 at +1
+    // rung on the codex slot; Hydrogen at the row-aligned effort on the
+    // cloud slot) with no faithful Anthropic target.
+    const plusOne: Readonly<Record<string, string>> = {
+      base: 'high', high: 'xhigh', xhigh: 'max', max: 'max', medium: 'high', low: 'medium',
+    };
+    const museModel: Readonly<Record<string, string>> = {
+      base: 'muse-spark-1.3-contributor', high: 'muse-spark-1.3-contributor',
+      xhigh: 'muse-wonder-1.0', max: 'muse-wonder-full-1.0',
+      medium: 'muse-spark-1.3-contributor', low: 'muse-spark-1.3-contributor',
+    };
+    const cloud: Readonly<Record<string, { model: string; effort: string }>> = {
+      base: { model: 'gemini-4-hydrogen', effort: 'high' },
+      high: { model: 'gemini-4-hydrogen', effort: 'high' },
+      xhigh: { model: 'gemini-4-hydrogen', effort: 'xhigh' },
+      max: { model: 'gemini-4-hydrogen', effort: 'xhigh' },
+      medium: { model: 'gemini-4-hydrogen', effort: 'medium' },
+      low: { model: 'gemini-4-hydrogen', effort: 'low' },
+    };
+    for (const [suffix, effort] of Object.entries(plusOne)) {
+      const alias = suffix === 'base' ? 'claude-haiku-5-5' : `claude-haiku-5-5-${suffix}`;
+      const glmEffort = suffix === 'high' || suffix === 'xhigh' || suffix === 'max' ? 'max' : 'high';
+      expect(resolveCandidates(alias)).toEqual([
+        {
+          providerId: 'muse', transportProviderId: 'muse',
+          model: museModel[suffix], effort,
+        },
+        {
+          providerId: 'openai', transportProviderId: 'codex',
+          model: 'gpt-6.1-sol', effort,
+        },
+        {
+          providerId: 'gemini', transportProviderId: 'cloud-code',
+          ...cloud[suffix],
+        },
+        {
+          providerId: 'mistral', transportProviderId: 'mistral-vibe',
+          model: 'zai-glm-5-3', effort: glmEffort,
+        },
+      ]);
+    }
+    expect(resolve('claude-haiku-5-5')).toEqual({
+      providerId: 'muse', transportProviderId: 'muse',
+      model: 'muse-spark-1.3-contributor', effort: 'high',
+    });
+  });
+
   it('maps the Neon/Hydrogen table on the muse and cloud slots (owner mapping 2026-11-18)', () => {
     const spark = 'muse-spark-1.3-contributor';
     const wonder = 'muse-wonder-1.0';
