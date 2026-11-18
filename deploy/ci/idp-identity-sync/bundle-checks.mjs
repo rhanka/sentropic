@@ -5,7 +5,7 @@ export const s5cmdImage = 'peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6
 // api image. Prod preserves the serving API digest; preprod follows its parent
 // overlay pin. Bind the exact reference to the two runner containers only.
 export const apiImage = 'ghcr.io/rhanka/sentropic-api:main';
-const prodApiImage = 'ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05';
+const prodApiImage = 'ghcr.io/rhanka/sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce';
 const runnerContainers = ['export-replica', 'replica-sync'];
 export const envValue = (container, name) => container.env.find(e => e.name === name)?.value;
 export function checkBundle(objects, tier) {
@@ -54,7 +54,7 @@ export function checkBundle(objects, tier) {
     assert.deepEqual(sqlLeg.command, ['sh', '/sql/export-prod.sh']);
     const replicaLeg = pod.initContainers[1];
     assert.equal(replicaLeg.image, runnerImage);
-    assert(replicaLeg.command.join(' ').includes('/app/dist/scripts/identity-replica-export.js'), 'runner entrypoint');
+    assert(replicaLeg.command.join(' ').includes('node /workspace/api/dist/scripts/identity-replica-export.js'), 'runner entrypoint');
     assert.equal(envValue(replicaLeg, 'SOURCE_PLACEMENT'), 'prod');
     assert(replicaLeg.env.some(e => e.name === 'CM_IDENTITY_DELETION_BUDGETS_JSON' && e.valueFrom?.secretKeyRef?.name === 'sentropic-identity-budgets'), 'runner budgets');
     const sql = get('ConfigMap', 'sentropic-idp-identity-export-sql').data;
@@ -92,7 +92,7 @@ export function checkBundle(objects, tier) {
     assert(pod.initContainers[2].args.includes('s3://$(S3_BUCKET)/idp-identity/latest/*'));
     const replicaSync = pod.initContainers[3];
     assert.equal(replicaSync.image, apiImage);
-    assert(replicaSync.command.join(' ').includes('/app/dist/scripts/identity-replica-sync.js'), 'runner entrypoint');
+    assert(replicaSync.command.join(' ').includes('node /workspace/api/dist/scripts/identity-replica-sync.js'), 'runner entrypoint');
     assert(replicaSync.command.join(' ').includes('/work/cm-sync.log'), 'phase-1 log feeds the phase-2 shell');
     assert.equal(envValue(replicaSync, 'DRY_RUN'), '1');
     assert.equal(envValue(replicaSync, 'MAX_SNAPSHOT_AGE_S'), '7200');

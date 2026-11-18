@@ -40,9 +40,9 @@ spec:
               securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
               resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
             - name: export-replica
-              image: ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05
+              image: ghcr.io/rhanka/sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce
               workingDir: /work
-              command: ["node", "/app/dist/scripts/identity-replica-export.js"]
+              command: ["node", "/workspace/api/dist/scripts/identity-replica-export.js"]
               env:
                 - { name: PGUSER, valueFrom: { secretKeyRef: { name: sentropic-idp-identity-reader, key: PGUSER } } }
                 - { name: PGPASSWORD, valueFrom: { secretKeyRef: { name: sentropic-idp-identity-reader, key: PGPASSWORD } } }
