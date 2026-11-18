@@ -834,6 +834,19 @@ Normative detail lives in `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16.3/§
   council listing (owner request 2026-10-14); same `gemini-3.8-flash` pattern
   (`gemini-4-argon-low|medium|high` resolve per effort through the generic Cloud Code
   wire suffix, no transport change).
+- Gemini 4 Neon (`gemini-4-neon`) and Gemini 4 Hydrogen (`gemini-4-hydrogen`):
+  catalog entries, `gemini`/`cloud-code` routing targets, council listings
+  (owner request 2026-11-18); same wire-suffix pattern as Argon
+  (`gemini-4-neon-low|medium|high` and `gemini-4-hydrogen-low|medium|high`
+  resolve per effort through the generic Cloud Code wire suffix, no transport
+  change). Neon at high effort serves the Opus 5.5 (base/medium/high/xhigh/max)
+  and Fable 5.1 launch-alias rows, replacing Argon (which stays in the catalog
+  as an available model but leaves the alias mapping); Carbon keeps the
+  Fable 5.2 rows (owner mapping 2026-11-10, unchanged); Hydrogen serves every
+  Sonnet 5.5 and new Haiku 5.5 row at the row-aligned effort (base/high ->
+  high, xhigh/max -> xhigh, medium -> medium, low -> low). The Haiku 5.5
+  codex slot follows the default policy (GPT-6.1 Sol at +1 effort rung); the
+  owner may change this mapping.
 
 ## Generic Decision Capability (BR96 Evolution)
 
