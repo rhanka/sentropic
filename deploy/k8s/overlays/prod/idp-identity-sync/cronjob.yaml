@@ -42,7 +42,7 @@ spec:
             - name: export-replica
               image: ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05
               workingDir: /work
-              command: ["node", "/app/dist/scripts/identity-replica-export.js"]
+              command: ["node", "/workspace/api/dist/scripts/identity-replica-export.js"]
               env:
                 - { name: PGUSER, valueFrom: { secretKeyRef: { name: sentropic-idp-identity-reader, key: PGUSER } } }
                 - { name: PGPASSWORD, valueFrom: { secretKeyRef: { name: sentropic-idp-identity-reader, key: PGPASSWORD } } }
