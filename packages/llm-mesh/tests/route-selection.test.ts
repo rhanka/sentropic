@@ -382,7 +382,7 @@ describe('route candidate selection', () => {
       {
         accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
         targetProviderId: 'gemini', transportProviderId: 'cloud-code',
-        supportedModelIds: ['gemini-4-argon'], enrollmentCompletedAt: '2026-08-04T00:00:00Z',
+        supportedModelIds: ['gemini-4-neon'], enrollmentCompletedAt: '2026-08-04T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
       {
@@ -511,7 +511,7 @@ describe('route candidate selection', () => {
     const cloudReady = {
       ...solReady, accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
       targetProviderId: 'gemini', transportProviderId: 'cloud-code',
-      supportedModelIds: ['gemini-4-argon'],
+      supportedModelIds: ['gemini-4-neon'],
     };
     const selectAlias = (
       extra: {
@@ -569,7 +569,7 @@ describe('route candidate selection', () => {
       {
         accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
         targetProviderId: 'gemini', transportProviderId: 'cloud-code',
-        supportedModelIds: ['gemini-4-argon'], enrollmentCompletedAt: '2026-08-03T00:00:00Z',
+        supportedModelIds: ['gemini-4-neon'], enrollmentCompletedAt: '2026-08-03T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
     ];
