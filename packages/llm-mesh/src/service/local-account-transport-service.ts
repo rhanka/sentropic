@@ -205,6 +205,12 @@ export class LocalAccountTransportService {
   /** enrollmentId → providerId, so poll completion reaches the owning provider. */
   private readonly enrollmentProviders = new Map<string, string>();
   /**
+   * Sealed device-flow grant tokens (Meta `dca_token`) per muse-code seat.
+   * Memory-only mirror of the envelope field: never written to the public
+   * record, never logged. Repopulated on restore from the sealed envelope.
+   */
+  private readonly museDeviceGrants = new Map<string, string>();
+  /**
    * Last credential issuance per account (enrollment, restore, or refresh).
    * The proactive window is derived from this issuance age, never from the
    * enrollment age: a refreshed credential restarts its own TTL.
@@ -395,6 +401,9 @@ export class LocalAccountTransportService {
         enrollmentCompletedAt: now,
         metadata: res.metadata,
       };
+      if (res.credential.museDeviceAccessToken) {
+        this.museDeviceGrants.set(res.credential.accountId, res.credential.museDeviceAccessToken);
+      }
       this.registerAccount(
         account,
         res.credential.authClientConfigVersion,
@@ -415,6 +424,7 @@ export class LocalAccountTransportService {
           refreshToken: res.credential.refreshToken,
           expiresAt: res.credential.expiresAt,
           authClientConfigVersion: res.credential.authClientConfigVersion,
+          ...(res.credential.museDeviceAccessToken ? { museDeviceAccessToken: res.credential.museDeviceAccessToken } : {}),
         },
         account,
       );
@@ -597,6 +607,9 @@ export class LocalAccountTransportService {
         auth_type: 'device-flow',
       },
     };
+    if (credential.museDeviceAccessToken) {
+      this.museDeviceGrants.set(credential.accountId, credential.museDeviceAccessToken);
+    }
     this.registerAccount(
       account,
       credential.authClientConfigVersion,
@@ -617,6 +630,7 @@ export class LocalAccountTransportService {
         refreshToken: credential.refreshToken,
         expiresAt: credential.expiresAt,
         authClientConfigVersion: credential.authClientConfigVersion,
+        ...(credential.museDeviceAccessToken ? { museDeviceAccessToken: credential.museDeviceAccessToken } : {}),
       },
       account,
     );
@@ -1065,6 +1079,7 @@ export class LocalAccountTransportService {
     this.credentialVersions.delete(accountId);
     this.credentialIssuedAtMs.delete(accountId);
     this.accountRemovalBarrierRefs.delete(accountId);
+    this.museDeviceGrants.delete(accountId);
     await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:envelope`);
     await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:public`);
     await this.keyring.deleteSecret(this.seatRecordKey(accountId));
@@ -1143,10 +1158,12 @@ export class LocalAccountTransportService {
       if (!externallyManaged && (expiresAtMs <= nowMs || this.refreshInFlight.has(account.accountId))) {
         try {
           const version = this.credentialVersions.get(account.accountId) ?? 'v1.0.0';
+          const deviceGrant = this.museDeviceGrants.get(account.accountId);
           const refreshed = await this.refreshToken({
             accountId: account.accountId,
             refreshToken: account.refreshToken ?? undefined,
             credentialVersion: version,
+            ...(deviceGrant ? { museDeviceAccessToken: deviceGrant } : {}),
           });
 
           // Update material with refreshed token
@@ -1261,15 +1278,19 @@ export class LocalAccountTransportService {
   /**
    * True when the account cannot recover on its own: its status already
    * flipped to reauth_required (a refresh failed), or its ACCESS token is
-   * expired with no refresh token to renew it. A merely expired access
-   * token with a live refresh token stays ready — acquire() refreshes it
-   * before dispatch.
+   * expired with no renewable grant. A merely expired access token with a
+   * live refresh token — or a device-flow Muse seat with a stored dca
+   * token for re-mint — stays ready: acquire() renews it before dispatch.
+   * Unknown expiry ('') is valid until the provider rejects it.
    */
   private requiresReauth(account: {
-    status?: string | null; refreshToken?: string | null; expiresAt?: string | null;
+    accountId?: string | null; status?: string | null; refreshToken?: string | null; expiresAt?: string | null;
   }): boolean {
     if (account.status === 'reauth_required') return true;
-    return this.isCredentialExpired(account) && !account.refreshToken;
+    if (!this.isCredentialExpired(account)) return false;
+    if (account.refreshToken) return false;
+    if (typeof account.accountId === 'string' && this.museDeviceGrants.has(account.accountId)) return false;
+    return true;
   }
 
   private async listRouteAccounts(
@@ -1402,16 +1423,31 @@ export class LocalAccountTransportService {
           }));
         }
         requestMayHaveBeenSent = true;
+        const withDeviceGrant = providerId === 'muse-code' && !input.museDeviceAccessToken
+          ? { museDeviceAccessToken: this.museDeviceGrants.get(input.accountId) }
+          : {};
         const refreshInput = providerId === 'claude-code'
-          ? { ...input, grantedScopes: account?.metadata?.scopes } : input;
+          ? { ...input, grantedScopes: account?.metadata?.scopes }
+          : providerId === 'muse-code'
+            ? { ...input, ...withDeviceGrant }
+            : input;
         const refreshed = await provider.refresh(refreshInput);
+        const refreshedExpiryMs = refreshed.expiresAt ? Date.parse(refreshed.expiresAt) : Number.NaN;
+        const refreshedExpiryUnknown = !refreshed.expiresAt;
+        const refreshedExpiryValid = refreshedExpiryUnknown
+          || (Number.isFinite(refreshedExpiryMs) && refreshedExpiryMs > this.nowMs());
         if (!account || refreshed.accountId !== input.accountId
           || !refreshed.accessToken?.trim() || /[\r\n]/.test(refreshed.accessToken)
-          || !Number.isFinite(Date.parse(refreshed.expiresAt))
-          || Date.parse(refreshed.expiresAt) <= this.nowMs()
+          || !refreshedExpiryValid
           || (providerId === 'claude-code' && refreshed.authClientConfigVersion !== input.credentialVersion)
           || (refreshed.refreshToken !== undefined && (!refreshed.refreshToken.trim()
             || /[\r\n]/.test(refreshed.refreshToken)))) throw new Error('Invalid refresh grant');
+        const nextDeviceGrant = refreshed.museDeviceAccessToken
+          ?? (providerId === 'muse-code' ? this.museDeviceGrants.get(input.accountId) : undefined)
+          ?? input.museDeviceAccessToken;
+        if (nextDeviceGrant) {
+          this.museDeviceGrants.set(input.accountId, nextDeviceGrant);
+        }
         const updated = { ...account, accessToken: refreshed.accessToken,
           refreshToken: refreshed.refreshToken ?? account.refreshToken, expiresAt: refreshed.expiresAt };
         if (providerId === 'claude-code') {
@@ -1420,16 +1456,19 @@ export class LocalAccountTransportService {
             enrollmentMethod: account.metadata?.enrollmentMethod };
         }
         const now = new Date().toISOString();
+        const persistedDeviceGrant = this.museDeviceGrants.get(input.accountId);
         await this.persistCredential({ accountId: account.accountId,
           accountLabel: account.accountLabel ?? undefined, providerId, status: 'active',
           createdAt: account.enrollmentCompletedAt ?? now, updatedAt: now },
-        { ...refreshed, refreshToken: updated.refreshToken ?? undefined }, updated);
+        { ...refreshed, refreshToken: updated.refreshToken ?? undefined,
+          ...(persistedDeviceGrant ? { museDeviceAccessToken: persistedDeviceGrant } : {}) }, updated);
         if (await this.isAccountRemoved(input.accountId)) throw new Error('Account removed');
         Object.assign(account, updated);
         this.credentialVersions.set(input.accountId, refreshed.authClientConfigVersion);
         // The refreshed credential restarts its own TTL from this issuance.
         this.credentialIssuedAtMs.set(input.accountId, this.nowMs());
-        return { ...refreshed, refreshToken: updated.refreshToken ?? undefined };
+        return { ...refreshed, refreshToken: updated.refreshToken ?? undefined,
+          ...(persistedDeviceGrant ? { museDeviceAccessToken: persistedDeviceGrant } : {}) };
       } catch (error) {
         if ((account && !this.accountsMap.has(input.accountId))
           || await this.isAccountRemoved(input.accountId).catch(() => false)) {
@@ -1730,6 +1769,7 @@ export class LocalAccountTransportService {
       this.credentialVersions.delete(accountId);
       this.credentialIssuedAtMs.delete(accountId);
       this.accountRemovalBarrierRefs.delete(accountId);
+      this.museDeviceGrants.delete(accountId);
     }
     const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
     for (const accountId of this.parseAccountIndex(rawIndex)) {
@@ -1764,6 +1804,9 @@ export class LocalAccountTransportService {
         if (restoredAccount.ownerScopeRef && !ownerClaim) {
           await this.claimAccountOwner(accountId, restoredAccount.ownerScopeRef);
           ownerClaim = await this.readOwnerClaim(accountId);
+        }
+        if (typeof envelope.museDeviceAccessToken === 'string' && envelope.museDeviceAccessToken) {
+          this.museDeviceGrants.set(accountId, envelope.museDeviceAccessToken);
         }
         this.registerAccount(
           {
@@ -1932,7 +1975,8 @@ export class LocalAccountTransportService {
         continue;
       }
       if (account.status === 'reauth_required') {
-        const reason: ReauthAlertReason = !account.refreshToken && expired
+        const hasRenewableGrant = !!account.refreshToken || this.museDeviceGrants.has(account.accountId);
+        const reason: ReauthAlertReason = !hasRenewableGrant && expired
           ? 'expired-no-grant'
           : 'refresh-failed';
         await this.emitReauthAlert(account, reason);
@@ -1942,13 +1986,16 @@ export class LocalAccountTransportService {
       }
       // A CLI-imported Muse credential carries no refresh grant, yet it IS
       // renewable: mesh refresh re-reads the CLI store and re-mints (same
-      // wire as the acquire path). Only direct-billed Muse keys
-      // (`auth_type: 'api_key'`, no CLI store) are truly grant-less.
+      // wire as the acquire path). A device-flow Muse seat with a stored
+      // dca token is likewise renewable via re-mint. Only direct-billed
+      // Muse keys (`auth_type: 'api_key'`, no CLI store) are truly grant-less.
       const metadata = account.metadata as Record<string, unknown> | undefined;
       const isMuseDirectKey = metadata?.['auth_type'] === 'api_key';
       const museCliRefreshable = account.transportProviderId === 'muse'
         && !isMuseDirectKey && !isDeviceFlowSeatAccount(account);
-      if (!account.refreshToken?.trim() && !museCliRefreshable) {
+      const museDeviceRenewable = isDeviceFlowSeatAccount(account)
+        && this.museDeviceGrants.has(account.accountId);
+      if (!account.refreshToken?.trim() && !museCliRefreshable && !museDeviceRenewable) {
         // No renewable grant: an expired credential cannot recover on its
         // own, so it flips to reauth_required and alerts (planned
         // re-enrollment). An unexpired one stays ready and warns once inside
@@ -1977,10 +2024,14 @@ export class LocalAccountTransportService {
         continue;
       }
       if (!Number.isFinite(expiredAt)) {
-        // The custodian cannot schedule a renewal without an expiry; the
-        // account reads not-ready until a successful acquire-time refresh
-        // records one. No flip: routing still serves the live credential.
-        accounts.push({ ...base, action: 'skipped-no-expiry', readiness: 'reauth-required' });
+        // No scheduled expiry: a device-flow Muse seat with unknown key
+        // lifetime stays ready and is validated on use (401/403 re-mints or
+        // flips). Other grant types cannot schedule a renewal and read
+        // not-ready until a successful acquire-time refresh records one.
+        // No flip: routing still serves the live credential.
+        const unknownReady = isDeviceFlowSeatAccount(account) && museDeviceRenewable;
+        accounts.push({ ...base, action: 'skipped-no-expiry',
+          readiness: unknownReady ? 'ready' : 'reauth-required' });
         continue;
       }
       const issuedAtMs = this.credentialIssuedAtMs.get(account.accountId);
@@ -2001,6 +2052,7 @@ export class LocalAccountTransportService {
           accountId: account.accountId,
           refreshToken: account.refreshToken ?? undefined,
           credentialVersion: version,
+          ...(museDeviceRenewable ? { museDeviceAccessToken: this.museDeviceGrants.get(account.accountId) } : {}),
         });
         this.alertedReauth.delete(account.accountId);
         this.warnedExpiringNoGrant.delete(account.accountId);
