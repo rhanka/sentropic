@@ -214,7 +214,7 @@ describe('describeTargetRoutes (discovery)', () => {
       },
       {
         providerId: 'gemini', transportProviderId: 'cloud-code',
-        model: 'gemini-4-argon', effort: 'high',
+        model: 'gemini-4-neon', effort: 'high',
       },
       {
         providerId: 'mistral', transportProviderId: 'mistral-vibe',
@@ -284,15 +284,16 @@ describe('describeTargetRoutes (discovery)', () => {
       providerId: 'gemini', transportProviderId: 'cloud-code',
       model: 'gemini-3.8-flash', effort: 'high',
     });
-    // Argon/Wonder slots (owner request 2026-10-15): the Fable 5.1 family
-    // serves Wonder + Argon high on the muse/cloud slots.
+    // Neon/Wonder slots (owner mapping 2026-11-18, replacing the 2026-10-15
+    // Argon mapping): the Fable 5.1 family serves Wonder + Neon high on the
+    // muse/cloud slots.
     const Wonder = (effort: string) => ({
       providerId: 'muse', transportProviderId: 'muse',
       model: 'muse-wonder-1.0', effort,
     });
-    const Argon = () => ({
+    const Neon = () => ({
       providerId: 'gemini', transportProviderId: 'cloud-code',
-      model: 'gemini-4-argon', effort: 'high',
+      model: 'gemini-4-neon', effort: 'high',
     });
     // Carbon slot (owner mapping 2026-11-10): the Fable 5.2 family serves
     // Gemini 4 Carbon at high effort on the cloud slot with no muse candidate.
@@ -314,9 +315,9 @@ describe('describeTargetRoutes (discovery)', () => {
       ['claude-fable-5-max', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud()]],
       ['claude-fable-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
       ['claude-fable-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud()]],
-      ['claude-fable-5-1-max', [Wonder('max'), Codex('gpt-6-astra', 'max'), Argon(), Glm()]],
-      ['claude-fable-5-1-medium', [Wonder('high'), Codex('gpt-6-astra', 'medium'), Argon(), Glm('high')]],
-      ['claude-fable-5-1-low', [Wonder('medium'), Codex('gpt-6-astra', 'low'), Argon(), Glm('high')]],
+      ['claude-fable-5-1-max', [Wonder('max'), Codex('gpt-6-astra', 'max'), Neon(), Glm()]],
+      ['claude-fable-5-1-medium', [Wonder('high'), Codex('gpt-6-astra', 'medium'), Neon(), Glm('high')]],
+      ['claude-fable-5-1-low', [Wonder('medium'), Codex('gpt-6-astra', 'low'), Neon(), Glm('high')]],
       ['claude-fable-5-2-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Carbon(), Glm()]],
       ['claude-fable-5-2-medium', [Muse('high'), Codex('gpt-6-astra', 'medium'), Carbon(), Glm('high')]],
       ['claude-fable-5-2-low', [Muse('medium'), Codex('gpt-6-astra', 'low'), Carbon(), Glm('high')]],
@@ -375,10 +376,11 @@ describe('describeTargetRoutes (discovery)', () => {
       providerId: 'gemini', transportProviderId: 'cloud-code',
       model: 'gemini-3.8-flash', effort: 'high',
     });
-    // Argon/Wonder slots (owner request 2026-10-15): Wonder Full on the top
-    // Opus 5.5 and Sonnet 5.5 rows, Wonder on the mid Opus 5.5 rows plus
-    // Sonnet 5.5 xhigh, Argon high on the cloud slot except the kept Flash
-    // rows (Opus 5.5 low + Sonnet 5.5 medium high, Sonnet 5.5 low medium).
+    // Neon slots (owner mapping 2026-11-18, replacing the 2026-10-15 Argon
+    // mapping): Wonder Full on the top Opus 5.5 rows, Wonder on the mid Opus
+    // 5.5 rows, Neon high on the cloud slot except the kept Flash row
+    // (Opus 5.5 low high). Hydrogen slots (owner mapping 2026-11-18): every
+    // Sonnet 5.5 and Haiku 5.5 row serves Hydrogen at the row-aligned effort.
     const Wonder = (effort: string) => ({
       providerId: 'muse', transportProviderId: 'muse',
       model: 'muse-wonder-1.0', effort,
@@ -387,13 +389,13 @@ describe('describeTargetRoutes (discovery)', () => {
       providerId: 'muse', transportProviderId: 'muse',
       model: 'muse-wonder-full-1.0', effort,
     });
-    const Argon = () => ({
+    const Neon = () => ({
       providerId: 'gemini', transportProviderId: 'cloud-code',
-      model: 'gemini-4-argon', effort: 'high',
+      model: 'gemini-4-neon', effort: 'high',
     });
-    const FlashMedium = () => ({
+    const Hydrogen = (effort: string) => ({
       providerId: 'gemini', transportProviderId: 'cloud-code',
-      model: 'gemini-3.8-flash', effort: 'medium',
+      model: 'gemini-4-hydrogen', effort,
     });
     // GLM 5.3 supplemental fallback (owner decision 2026-10-08): last fallback
     // for the Claude 5.5 families at +1 rung on the low/high/max ladder.
@@ -402,18 +404,24 @@ describe('describeTargetRoutes (discovery)', () => {
       model: 'zai-glm-5-3', effort,
     });
     const cases: ReadonlyArray<readonly [string, unknown[]]> = [
-      ['claude-opus-5-5', [Wonder('high'), Codex('gpt-6.1-sol', 'high'), Argon(), Glm('high')]],
-      ['claude-opus-5-5-high', [Wonder('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Argon(), Glm('max')]],
-      ['claude-opus-5-5-xhigh', [WonderFull('max'), Codex('gpt-6.1-sol', 'max'), Argon(), Glm('max')]],
-      ['claude-opus-5-5-max', [WonderFull('max'), Codex('gpt-6-astra', 'max'), Argon(), Glm('max')]],
-      ['claude-opus-5-5-medium', [Wonder('high'), Codex('gpt-6.1-sol', 'high'), Argon(), Glm('high')]],
+      ['claude-opus-5-5', [Wonder('high'), Codex('gpt-6.1-sol', 'high'), Neon(), Glm('high')]],
+      ['claude-opus-5-5-high', [Wonder('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Neon(), Glm('max')]],
+      ['claude-opus-5-5-xhigh', [WonderFull('max'), Codex('gpt-6.1-sol', 'max'), Neon(), Glm('max')]],
+      ['claude-opus-5-5-max', [WonderFull('max'), Codex('gpt-6-astra', 'max'), Neon(), Glm('max')]],
+      ['claude-opus-5-5-medium', [Wonder('high'), Codex('gpt-6.1-sol', 'high'), Neon(), Glm('high')]],
       ['claude-opus-5-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud(), Glm('high')]],
-      ['claude-sonnet-5-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud(), Glm('high')]],
-      ['claude-sonnet-5-5-high', [Muse('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Argon(), Glm('max')]],
-      ['claude-sonnet-5-5-xhigh', [Wonder('max'), Codex('gpt-6.1-sol', 'max'), Argon(), Glm('max')]],
-      ['claude-sonnet-5-5-max', [WonderFull('max'), Codex('gpt-6.1-sol', 'max'), Argon(), Glm('max')]],
-      ['claude-sonnet-5-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud(), Glm('high')]],
-      ['claude-sonnet-5-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), FlashMedium(), Glm('high')]],
+      ['claude-sonnet-5-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Hydrogen('high'), Glm('high')]],
+      ['claude-sonnet-5-5-high', [Muse('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Hydrogen('high'), Glm('max')]],
+      ['claude-sonnet-5-5-xhigh', [Wonder('max'), Codex('gpt-6.1-sol', 'max'), Hydrogen('xhigh'), Glm('max')]],
+      ['claude-sonnet-5-5-max', [WonderFull('max'), Codex('gpt-6.1-sol', 'max'), Hydrogen('xhigh'), Glm('max')]],
+      ['claude-sonnet-5-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Hydrogen('medium'), Glm('high')]],
+      ['claude-sonnet-5-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Hydrogen('low'), Glm('high')]],
+      ['claude-haiku-5-5', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Hydrogen('high'), Glm('high')]],
+      ['claude-haiku-5-5-high', [Muse('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Hydrogen('high'), Glm('max')]],
+      ['claude-haiku-5-5-xhigh', [Wonder('max'), Codex('gpt-6.1-sol', 'max'), Hydrogen('xhigh'), Glm('max')]],
+      ['claude-haiku-5-5-max', [WonderFull('max'), Codex('gpt-6.1-sol', 'max'), Hydrogen('xhigh'), Glm('max')]],
+      ['claude-haiku-5-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Hydrogen('medium'), Glm('high')]],
+      ['claude-haiku-5-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Hydrogen('low'), Glm('high')]],
     ];
     for (const [alias, expected] of cases) {
       expect(resolveCandidates(alias)).toEqual(expected);

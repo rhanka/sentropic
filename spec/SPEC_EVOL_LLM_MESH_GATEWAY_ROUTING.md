@@ -333,16 +333,21 @@ equivalence fallback is enabled for a group, its evidence must be fresh and its
 required capabilities must be satisfied. Stale evidence fails closed for
 automatic substitution while exact requested routes remain usable.
 
-The `claude-opus-5-5` and `claude-sonnet-5-5` families are standard
+The `claude-opus-5-5`, `claude-sonnet-5-5` and (owner mapping 2026-11-18,
+mirroring Sonnet 5.5) `claude-haiku-5-5` families are standard
 multi-candidate launch aliases (base/high/xhigh/max/medium/low): Muse
 contributor first, then Codex, then Cloud Code, with no Anthropic faithful
-target (no catalog profile exists for either family). Every launch alias
+target (no catalog profile exists for any of these families). Every launch alias
 carries Muse, Codex and Cloud Code candidates, so any single enrolled
 transport serves any requested id; `no-route` is returned only when no
 candidate transport holds a usable account. The Codex slot serves
 `gpt-6-astra` only for `claude-opus-5-5-max` and the `claude-fable-5-1`
 family, otherwise `gpt-6.1-sol` at +1 effort rung (base to high, high to
-xhigh, xhigh to max, max to max by clamp, medium to high, low to medium);
+xhigh, xhigh to max, max to max by clamp, medium to high, low to medium).
+The Cloud Code slot serves Gemini 4 Neon at high effort on the Opus 5.5
+(except low) and Fable 5.1 rows, Gemini 4 Carbon at high effort on the
+Fable 5.2 rows, and Gemini 4 Hydrogen at the row-aligned effort on every
+Sonnet 5.5 and Haiku 5.5 row (owner mapping 2026-11-18);
 the Muse candidate follows the same +1 rule. Serving choices are grounded
 on Artificial Analysis Intelligence Index v4.3.2 (opus-5.5-max 58,
 sonnet-5.5-max 56, astra-max 53, fable-5.1-max 53, sol-6.1 52, opus-5-max 51,
