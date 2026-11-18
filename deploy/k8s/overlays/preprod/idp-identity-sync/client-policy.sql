@@ -100,7 +100,7 @@ FROM selected_clients s LEFT JOIN cm_identity.identity_user_accounts a ON a.user
 -- is not allowlisted this matches no row and changes nothing.
 UPDATE transformed_clients
 SET allowed_scopes = allowed_scopes || ARRAY(
-  SELECT scope FROM unnest(ARRAY['immo:artifacts:read', 'immo:artifacts:write']) AS preprod_only_scopes(scope)
+  SELECT scope FROM unnest(ARRAY['immo:artifacts:read', 'immo:artifacts:write', 'immo:signals:write']) AS preprod_only_scopes(scope)
   WHERE NOT (scope = ANY(transformed_clients.allowed_scopes))
 )
 WHERE client_id = 'immo-mcp';
