@@ -69,6 +69,12 @@ const textOf = (value: unknown): string | null =>
 export interface MintedMuseApiKey {
   apiKey: string;
   email: string | null;
+  /**
+   * Provider-measured key expiry, when the mint response carries one
+   * (`expires_in` seconds or `expires_at` instant). Absent means unknown:
+   * the key is valid until the provider rejects it (401/403).
+   */
+  expiresAt?: string;
 }
 
 /**
@@ -99,12 +105,25 @@ export async function mintMuseApiKey(
   const payload = (await response.json()) as {
     api_key?: unknown;
     user_email?: unknown;
+    expires_in?: unknown;
+    expires_at?: unknown;
   };
   const apiKey = textOf(payload.api_key);
   if (!apiKey) {
     throw new Error('Muse key mint returned no api_key');
   }
-  return { apiKey, email: textOf(payload.user_email) };
+  // The mint endpoint is the authority for key lifetime. An OAuth
+  // `expires_in` must never be applied to the minted key.
+  let expiresAt: string | undefined;
+  if (typeof payload.expires_in === 'number' && payload.expires_in > 0) {
+    expiresAt = new Date(Date.now() + payload.expires_in * 1000).toISOString();
+  } else if (typeof payload.expires_at === 'string' && Number.isFinite(Date.parse(payload.expires_at))) {
+    expiresAt = new Date(payload.expires_at).toISOString();
+  } else if (typeof payload.expires_at === 'number' && Number.isFinite(payload.expires_at) && payload.expires_at > 0) {
+    const ms = payload.expires_at > 1e12 ? payload.expires_at : payload.expires_at * 1000;
+    expiresAt = new Date(ms).toISOString();
+  }
+  return { apiKey, email: textOf(payload.user_email), ...(expiresAt ? { expiresAt } : {}) };
 }
 
 export class MuseCodeEnrollmentProvider implements EnrollmentProvider {
@@ -227,17 +246,21 @@ export class MuseCodeEnrollmentProvider implements EnrollmentProvider {
     apiKey: string;
     email: string | null;
     refreshToken?: string;
-    expiresInSec?: number;
+    museDeviceAccessToken?: string;
+    expiresAt?: string;
   }): PreparedCredential {
     // Same stable-id convention as the CLI import so the same Meta login
     // converges on one account across enrollment paths.
     const stableId = input.email ?? input.apiKey;
     const accountId = `acct_muse_${createHash('sha256').update(stableId).digest('hex').slice(0, 12)}`;
+    // The minted key outlives the OAuth grant: unknown expiry ('') means
+    // valid until the provider rejects it, never the OAuth expires_in.
     return {
       accountId,
       accessToken: input.apiKey,
       ...(input.refreshToken ? { refreshToken: input.refreshToken } : {}),
-      expiresAt: new Date(Date.now() + (input.expiresInSec ?? 3600) * 1000).toISOString(),
+      ...(input.museDeviceAccessToken ? { museDeviceAccessToken: input.museDeviceAccessToken } : {}),
+      expiresAt: input.expiresAt ?? '',
       authClientConfigVersion: MUSE_NATIVE_CONFIG_VERSION,
       ...(input.email ? { accountEmail: input.email } : {}),
     };
@@ -263,12 +286,12 @@ export class MuseCodeEnrollmentProvider implements EnrollmentProvider {
     }
     const minted = await this.mintApiKey(accessToken);
     const refreshToken = textOf(grant.refresh_token) ?? undefined;
-    const expiresInSec = typeof grant.expires_in === 'number' ? grant.expires_in : 3600;
     const credential = this.buildCredential({
       apiKey: minted.apiKey,
       email: minted.email,
       refreshToken,
-      expiresInSec,
+      museDeviceAccessToken: accessToken,
+      ...(minted.expiresAt ? { expiresAt: minted.expiresAt } : {}),
     });
     // Same CompletedEnrollment shape as the codex device flow (mutualized
     // service handling); the caller binds the session ownerScope.
@@ -297,8 +320,34 @@ export class MuseCodeEnrollmentProvider implements EnrollmentProvider {
   }
 
   async refresh(input: RefreshInput): Promise<PreparedCredential> {
+    // No refresh_token grant on file: re-mint directly through the stored
+    // device-flow access token (the CLI path), like the native client does.
+    // Neither token may reach logs or receipts; the typed auth signal below
+    // must not surface as a transport failure downstream.
     if (!input.refreshToken) {
-      throw new Error('Muse native refresh requires a refresh token');
+      const deviceToken = textOf(input.museDeviceAccessToken);
+      if (!deviceToken) {
+        throw Object.assign(
+          new Error('Muse device grant missing; reauthentication required'),
+          { status: 401, code: 'AUTHENTICATION_FAILED' },
+        );
+      }
+      let minted: MintedMuseApiKey;
+      try {
+        minted = await this.mintApiKey(deviceToken);
+      } catch (error) {
+        throw new MusePostRotationError(error instanceof Error ? error.message : String(error));
+      }
+      const credential = this.buildCredential({
+        apiKey: minted.apiKey,
+        email: minted.email,
+        museDeviceAccessToken: deviceToken,
+        ...(minted.expiresAt ? { expiresAt: minted.expiresAt } : {}),
+      });
+      if (credential.accountId !== input.accountId) {
+        throw new Error('Muse account changed during refresh');
+      }
+      return credential;
     }
     const response = await this.fetchFn(MUSE_DEVICE_TOKEN_URL, {
       method: 'POST',
@@ -335,7 +384,8 @@ export class MuseCodeEnrollmentProvider implements EnrollmentProvider {
       apiKey: minted.apiKey,
       email: minted.email,
       refreshToken: textOf(payload.refresh_token) ?? undefined,
-      expiresInSec: typeof payload.expires_in === 'number' ? payload.expires_in : 3600,
+      museDeviceAccessToken: accessToken,
+      ...(minted.expiresAt ? { expiresAt: minted.expiresAt } : {}),
     });
     if (credential.accountId !== input.accountId) {
       throw new Error('Muse account changed during refresh');
