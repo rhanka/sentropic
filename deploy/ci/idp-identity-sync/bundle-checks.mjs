@@ -5,7 +5,7 @@ export const s5cmdImage = 'peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6
 // api image. Prod preserves the serving API digest; preprod follows its parent
 // overlay pin. Bind the exact reference to the two runner containers only.
 export const apiImage = 'ghcr.io/rhanka/sentropic-api:main';
-const prodApiImage = 'ghcr.io/rhanka/sentropic-api@sha256:405a2759af42d54e1bf24d60032bb3ca9ff5d5375def353d9fbb5fd5da0de1ce';
+const prodApiImage = 'ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05';
 const runnerContainers = ['export-replica', 'replica-sync'];
 export const envValue = (container, name) => container.env.find(e => e.name === name)?.value;
 export function checkBundle(objects, tier) {
