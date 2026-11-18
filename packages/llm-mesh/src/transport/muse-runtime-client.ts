@@ -347,7 +347,7 @@ export class MuseRuntimeClient implements MuseAdapterClient {
     }
     const auth = getSecretAuthMaterial(context?.auth);
     if (!auth || !('accessToken' in auth) || !auth.accessToken) {
-      throw Object.assign(new Error('Muse account token is missing'), { status: 401 });
+      throw Object.assign(new Error('Muse account token is missing'), { status: 401, code: 'AUTHENTICATION_FAILED' });
     }
     const metadata = 'metadata' in auth ? auth.metadata : undefined;
     const stableSessionId = typeof metadata?.stableSessionId === 'string'
@@ -372,10 +372,15 @@ export class MuseRuntimeClient implements MuseAdapterClient {
       body: JSON.stringify(buildResponsesBody(request, stream)),
     });
     if (!response.ok) {
-      // Key never enters the message: status + retry hint only.
+      // Key never enters the message: status + retry hint only. A 401/403
+      // is an auth rejection (expired or revoked key), never a transport
+      // failure: carry the typed code so consumers map it to reauth.
       const retryAfter = Number(response.headers.get('retry-after'));
       throw Object.assign(new Error(`Muse HTTP error (${response.status})`), {
         status: response.status,
+        ...((response.status === 401 || response.status === 403)
+          ? { code: 'AUTHENTICATION_FAILED' }
+          : {}),
         ...(Number.isFinite(retryAfter) && retryAfter > 0
           ? { retryAfterMs: retryAfter * 1_000 }
           : {}),
