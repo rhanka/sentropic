@@ -344,6 +344,8 @@ describe('LocalAccountTransportService', () => {
       'gemini-3.8-flash',
       'gemini-4-argon',
       'gemini-4-carbon',
+      'gemini-4-hydrogen',
+      'gemini-4-neon',
       'gemini-3.1-pro',
     ]);
     expect(accounts[0]?.supportedModelIds).not.toContain('gemini-3.5-flash');
@@ -1271,7 +1273,7 @@ describe('LocalAccountTransportService', () => {
       },
       {
         accountId: 'cloud-account', targetProviderId: 'gemini',
-        transportProviderId: 'cloud-code', modelIds: ['gemini-4-argon'],
+        transportProviderId: 'cloud-code', modelIds: ['gemini-4-neon'],
       },
       {
         accountId: 'muse-account', targetProviderId: 'muse',
