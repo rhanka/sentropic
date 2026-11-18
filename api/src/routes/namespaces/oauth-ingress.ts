@@ -63,6 +63,7 @@ export const createSentropicWellKnownIngress = (oauthPublicPath: string): Hono =
           'immo:documents:read',
           'immo:artifacts:read',
           'immo:artifacts:write',
+          'immo:signals:write',
         ],
       });
       const shell = new Hono();
