@@ -48,6 +48,8 @@ describe('model equivalence council', () => {
     expect(excluded).toContain('gemini:gemini-3.8-flash');
     expect(excluded).toContain('gemini:gemini-4-argon');
     expect(excluded).toContain('gemini:gemini-4-carbon');
+    expect(excluded).toContain('gemini:gemini-4-hydrogen');
+    expect(excluded).toContain('gemini:gemini-4-neon');
     expect(excluded).toContain('openai:gpt-6-astra');
   });
 

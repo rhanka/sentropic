@@ -304,6 +304,32 @@ describe('createLlmMesh', () => {
     expect(getModelProfile('gcp', 'google/gemini-4-carbon@gcp')).toBeNull();
   });
 
+  it('exposes Gemini 4 Neon as a Cloud Code model copied from Argon', () => {
+    const profile = getModelProfile('gemini', 'gemini-4-neon');
+
+    expect(profile).toMatchObject({
+      providerId: 'gemini', modelId: 'gemini-4-neon', label: 'Gemini 4 Neon',
+      reasoningTier: 'advanced',
+    });
+    expect(profile?.capabilities).toEqual(
+      getModelProfile('gemini', 'gemini-4-argon')?.capabilities,
+    );
+    expect(getModelProfile('gcp', 'google/gemini-4-neon@gcp')).toBeNull();
+  });
+
+  it('exposes Gemini 4 Hydrogen as a Cloud Code model copied from Argon', () => {
+    const profile = getModelProfile('gemini', 'gemini-4-hydrogen');
+
+    expect(profile).toMatchObject({
+      providerId: 'gemini', modelId: 'gemini-4-hydrogen', label: 'Gemini 4 Hydrogen',
+      reasoningTier: 'advanced',
+    });
+    expect(profile?.capabilities).toEqual(
+      getModelProfile('gemini', 'gemini-4-argon')?.capabilities,
+    );
+    expect(getModelProfile('gcp', 'google/gemini-4-hydrogen@gcp')).toBeNull();
+  });
+
   it('exposes Fable 5.2 next to Fable 5.1 with their family capabilities', () => {
     const fable = getModelProfile('anthropic', 'claude-fable-5-2');
 
