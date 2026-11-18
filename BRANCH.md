@@ -1,70 +1,71 @@
-# Feature: llm-mesh Muse client emulation for seat serving
-
+# Feature: llm-mesh Muse seat lifetime
 ## Objective
-MuseRuntimeClient emulates the real Muse Code client (Responses wire `/v1/responses` + `muse-build` client headers) so enrolled Muse seats are served instead of refused with `403 client_attestation_denied` on the legacy Chat wire.
-
+Fix the Muse device-flow seat expiry at t+1h by treating the minted key as valid until provider rejection.
 ## Scope / Guardrails
-- Scope limited to `packages/llm-mesh` Muse transport + its tests, and the llm-gateway muse fixture consumer.
+- Scope limited to packages/llm-mesh Muse enrollment, transport, service, tests, version bump.
 - Make-only workflow, no direct Docker commands.
-- Branch development in isolated worktree `tmp/fix-muse-headers`.
-- Test campaigns on `ENV=test-muse-headers`, never on root dev.
-- In every `make` command, `ENV=<env>` passed as the last argument.
+- Branch development in isolated worktree tmp/muse-seat-lifetime.
+- Test campaigns on ENV=test-muse-seat, never on root dev.
+- In every make command, ENV=<env> passed as the last argument.
 - All new text in English.
-
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/llm-mesh/src/transport/muse-runtime-client.ts`
-  - `packages/llm-mesh/tests/transport/muse-runtime-client.test.ts`
-  - `packages/llm-mesh/tests/node/enroll-cli-probe.test.ts`
-  - `packages/llm-gateway/tests/responses-cli-fixtures.test.ts`
-  - `packages/llm-gateway/tests/request-model-receipt.test.ts`
-  - `packages/llm-gateway/tests/fixtures/**`
-  - `packages/llm-mesh/CHANGELOG.md`
-  - `packages/llm-mesh/package.json` (MUSEHDR-EX1 version bump)
-  - `package-lock.json` (MUSEHDR-EX1 root lock line)
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts` (MUSEHDR-EX1)
-  - `packages/cluster-mesh/tests/fixtures/train.ts` (MUSEHDR-EX1)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (MUSEHDR-EX1)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (MUSEHDR-EX1)
-  - `BRANCH.md`
+  - packages/llm-mesh/src/enrollment/muse-code.ts
+  - packages/llm-mesh/src/enrollment/contracts.ts
+  - packages/llm-mesh/src/enrollment/muse.ts
+  - packages/llm-mesh/src/service/local-account-transport-service.ts
+  - packages/llm-mesh/src/service/custodian-refresh.ts
+  - packages/llm-mesh/src/transport/muse-runtime-client.ts
+  - packages/llm-mesh/tests/service/local-account-transport-service-muse.test.ts
+  - packages/llm-mesh/tests/service/custodian-refresh.test.ts
+  - packages/llm-mesh/tests/transport/muse-runtime-client.test.ts
+  - packages/llm-mesh/tests/enrollment/muse-device-flow-lifetime.test.ts
+  - packages/llm-mesh/CHANGELOG.md
+  - packages/llm-mesh/package.json
+  - packages/llm-mesh/tests/decision-public-surface.test.ts
+  - packages/cluster-mesh/tests/fixtures/train.ts
+  - packages/cluster-mesh/tests/packaging/fixtures/selected/package.json
+  - packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json
+  - package-lock.json
+  - BRANCH.md
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - Makefile
+  - docker-compose*.yml
+  - .cursor/rules/**
+  - plan/NN-BRANCH_*.md (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - None
 - **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Declare exception ID BRxx-EXn in ## Feedback Loop before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
-
+  - Mirror the same exception in this file under ## Feedback Loop (or ## Questions / Notes if not yet migrated).
 ## Feedback Loop
-- [x] `acknowledge`: live A/B proof recorded 2026-11-17 — seat key on `POST /v1/chat/completions` returns `403 client_attestation_denied` with mesh and muse-client headers alike; the real muse client (captured locally) serves on `POST /v1/responses` with `muse-build/1.4.23` User-Agent + `x-client-id` + session headers, and that path returns 200 with the same seat key.
-- [ ] `attention`: CI `security-code-ui (sca)` fails on `@sveltejs/kit` HIGH (`npm_audit_ui_@sveltejs_kit_high`) — pre-existing repo-wide finding (dependabot `sveltejs/kit-3.1.1` branches opened 2026-11-16), untouched by this branch; remediation belongs to those branches, not here.
-- [x] `MUSEHDR-EX1`: CI `enforce-package-bump` requires a semver bump for the `src/` change — bump `@sentropic/llm-mesh` 0.38.1 -> 0.38.2 with root lock line, train constant, selected fixtures and the public-surface version assertion. Reason: package publication rule (`rules/workflow.md`). Impact: release-train fixtures move to 0.38.2. Rollback: revert the bump commit.
-
+- [ ] attention: origin/main carries a stale BRANCH.md from fix-muse-headers, replaced here for this branch scope.
 ## AI Flaky tests
 - [ ] No flaky accepted without same-commit success + sign-off.
-
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single transport file, one test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: one runtime client + its tests and one gateway fixture consumer.
-
-## UAT Management (in orchestration context)
-- [ ] No UI change, no UAT surface.
-
+- [x] **Mono-branch + cherry-pick** (single package fix, one test cycle)
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`.
-  - [x] Create isolated worktree `tmp/fix-muse-headers` on `fix/llm-mesh-muse-client-headers` from `origin/main` (llm-mesh 0.38.1).
-  - [x] Confirm live failure (403) and live success path (`/v1/responses`, 200) with the enrolled seat key.
-- [x] **Lot 1 — Responses-wire Muse client emulation**
-  - [x] Add failing tests: `/v1/responses` path, muse client headers, Responses SSE/JSON decoding.
-  - [x] Rewrite `MuseRuntimeClient` on the Responses wire with muse client identity headers.
-  - [x] Update the llm-gateway muse fixture to the Responses wire.
-- [ ] **Lot 2 — Proof & publication**
-  - [x] Mesh muse tests + full llm-mesh suite + typecheck green.
-  - [x] Live seat call through the built client returns 200 text.
-  - [x] Cross-provider cascade check (codex/mistral/cloud-code transports untouched, suites green).
-  - [ ] Scope-check, commit, push, open PR.
+- [ ] Lot 0 - Baseline and constraints
+  - [ ] Read rules and confirm worktree on fix/llm-mesh-muse-seat-lifetime.
+  - [ ] Capture diagnosis with file:line evidence.
+  - [ ] Define test env ENV=test-muse-seat with API_PORT=9186 UI_PORT=5386 MAILDEV_UI_PORT=1286.
+- [ ] Lot 1 - Failing tests then fix
+  - [ ] Add enrollment lifetime test (minted key ignores OAuth expires_in, persists device token).
+  - [ ] Add service test (unknown expiry stays ready, re-mint on rejection path).
+  - [ ] Add transport test (401/403 carries auth code).
+  - [ ] Implement fix in src files.
+  - [ ] Lot gate:
+    - [ ] Scoped make test-llm-mesh runs green.
+- [ ] Lot 2 - Version and release alignment
+  - [ ] Bump 0.38.2 to 0.38.3 with CHANGELOG entry.
+  - [ ] Align root lock and train fixtures.
+  - [ ] Lot gate:
+    - [ ] Scoped make test-llm-mesh runs green.
+- [ ] Lot N - Final validation
+  - [ ] Typecheck and Lint
+  - [ ] Retest scoped suites
+  - [ ] Bumped affected packages/llm-mesh/package.json version (semver) for every package whose src/** changed in this branch.
+  - [ ] Final gate step 1: create/update PR using BRANCH.md text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both OK, commit removal of BRANCH.md, push, and merge.
