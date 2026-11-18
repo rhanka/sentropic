@@ -64,7 +64,7 @@ spec:
         - name: replica-sync
           image: ghcr.io/rhanka/sentropic-api:main
           workingDir: /work/in
-          command: ["sh", "-c", "node /app/dist/scripts/identity-replica-sync.js --relay-dir=/work/in > /work/cm-sync.log 2>&1; code=$?; cat /work/cm-sync.log; exit $code"]
+          command: ["sh", "-c", "node /workspace/api/dist/scripts/identity-replica-sync.js --relay-dir=/work/in > /work/cm-sync.log 2>&1; code=$?; cat /work/cm-sync.log; exit $code"]
           env:
             - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: sentropic-postgres, key: POSTGRES_PASSWORD } } }
             - { name: DATABASE_URL, value: "postgres://app:$(POSTGRES_PASSWORD)@postgres:5432/app" }
