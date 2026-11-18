@@ -397,6 +397,42 @@ describe('Cloud Code runtime client', () => {
     });
   });
 
+  it('uses an announced neon effort-suffixed wire id', async () => {
+    const fetchFn = createFetch(['gemini-4-neon-low', 'gemini-4-neon-medium', 'gemini-4-neon-high']);
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'gemini-4-neon',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'high' },
+    }, context);
+
+    expect(JSON.parse(String(streamInit(fetchFn).body))).toMatchObject({
+      model: 'gemini-4-neon-high',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } },
+    });
+  });
+
+  it('maps a hydrogen xhigh effort to the announced high wire id', async () => {
+    // Owner mapping 2026-11-18: the Sonnet/Haiku 5.5 xhigh/max rows carry a
+    // cloudEffort of xhigh. The generic Cloud Code scheme maps any effort
+    // above medium to the HIGH thinking level, so xhigh resolves to the
+    // announced gemini-4-hydrogen-high wire id (agy models, 2026-11-18).
+    const fetchFn = createFetch(['gemini-4-hydrogen-low', 'gemini-4-hydrogen-medium', 'gemini-4-hydrogen-high']);
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'gemini-4-hydrogen',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'xhigh' },
+    }, context);
+
+    expect(JSON.parse(String(streamInit(fetchFn).body))).toMatchObject({
+      model: 'gemini-4-hydrogen-high',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } },
+    });
+  });
+
   it('uses an announced base wire id with the requested thinking level', async () => {
     const fetchFn = createFetch(['claude-sonnet-4-6']);
     const client = new CloudCodeRuntimeClient(fetchFn);
