@@ -1480,6 +1480,8 @@ addTransportEquivalentFixture('openai', 'gpt-5.6-luna', 'gpt-6-luna', 'GPT-6 Lun
 addTransportEquivalentFixture('gemini', 'gemini-3.7-flash', 'gemini-3.8-flash', 'Gemini 3.8 Flash');
 addTransportEquivalentFixture('gemini', 'gemini-3.8-flash', 'gemini-4-argon', 'Gemini 4 Argon');
 addTransportEquivalentFixture('gemini', 'gemini-4-argon', 'gemini-4-carbon', 'Gemini 4 Carbon');
+addTransportEquivalentFixture('gemini', 'gemini-4-argon', 'gemini-4-neon', 'Gemini 4 Neon');
+addTransportEquivalentFixture('gemini', 'gemini-4-argon', 'gemini-4-hydrogen', 'Gemini 4 Hydrogen');
 // Meta Muse (S4): callLLMStream falls through to the OpenAI Responses
 // normalization path for `muse`, and mesh-dispatch delegates to the registry
 // provider (spy-interposable like every other row). Clone the reasoning-model
