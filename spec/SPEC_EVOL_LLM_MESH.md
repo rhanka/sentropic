@@ -836,17 +836,17 @@ Normative detail lives in `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16.3/§
   wire suffix, no transport change).
 - Gemini 4 Neon (`gemini-4-neon`) and Gemini 4 Hydrogen (`gemini-4-hydrogen`):
   catalog entries, `gemini`/`cloud-code` routing targets, council listings
-  (owner request 2026-11-18); same wire-suffix pattern as Argon
-  (`gemini-4-neon-low|medium|high` and `gemini-4-hydrogen-low|medium|high`
-  resolve per effort through the generic Cloud Code wire suffix, no transport
-  change). Neon at high effort serves the Opus 5.5 (base/medium/high/xhigh/max)
-  and Fable 5.1 launch-alias rows, replacing Argon (which stays in the catalog
-  as an available model but leaves the alias mapping); Carbon keeps the
-  Fable 5.2 rows (owner mapping 2026-11-10, unchanged); Hydrogen serves every
-  Sonnet 5.5 and new Haiku 5.5 row at the row-aligned effort (base/high ->
-  high, xhigh/max -> xhigh, medium -> medium, low -> low). The Haiku 5.5
-  codex slot follows the default policy (GPT-6.1 Sol at +1 effort rung); the
-  owner may change this mapping.
+  (owner request 2026-11-18); Neon and Hydrogen expose
+  `low|medium|high|xhigh` wire ids and the Cloud Code transport sends xhigh
+  for these models (Argon and Carbon keep the high clamp). Opus 5.5 rows use
+  Neon (base/medium -> medium, high -> high, xhigh/max -> xhigh, low -> low);
+  Fable 5.2 rows use Carbon (base/medium -> medium, high/xhigh/max -> high,
+  low -> low); Sonnet 5.5 and Haiku 5.5 rows use Hydrogen (base/medium ->
+  medium, high -> high, xhigh/max -> xhigh, low -> low). Argon stays in the
+  catalog and keeps the Fable 5.1 rows. Codex slots: Opus 5.5 on GPT-6.1 Sol
+  (max on GPT-6.2-Astra), Fable 5.2 on GPT-6.2-Astra, Sonnet 5.5 on
+  GPT-6.1 Terra, Haiku 5.5 on GPT-6 Luna, all at 1:1 effort with explicit
+  codexEffort and cloudEffort on every row.
 
 ## Generic Decision Capability (BR96 Evolution)
 
