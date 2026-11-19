@@ -742,4 +742,6 @@ const EXPECTED_UNENFORCED = [
   'openai/gpt-6-luna@codex',
   'openai/gpt-6-sol@codex',
   'openai/gpt-6.1-sol@codex',
+  'openai/gpt-6.1-terra@codex',
+  'openai/gpt-6.2-astra@codex',
 ];
