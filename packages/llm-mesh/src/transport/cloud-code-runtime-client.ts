@@ -135,10 +135,26 @@ const cloudCodeToolConfig = (request: GenerateRequest): unknown => {
   };
 };
 
-const cloudCodeThinkingLevel = (request: GenerateRequest): 'LOW' | 'MEDIUM' | 'HIGH' | undefined => {
+// Cloud Code models with an announced xhigh wire id (agy models,
+// 2026-11-18: gemini-4-neon-xhigh and gemini-4-hydrogen-xhigh; Argon and
+// Carbon have no xhigh). xhigh reaches the wire only for these models;
+// every other model keeps the existing clamping to high.
+const CLOUD_CODE_XHIGH_MODEL_IDS: ReadonlySet<string> = new Set([
+  'gemini-4-neon',
+  'gemini-4-hydrogen',
+]);
+
+const cloudCodeThinkingLevel = (request: GenerateRequest): 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | undefined => {
   const effort = request.reasoning?.effort;
   if (!effort || effort === 'none') return undefined;
-  return effort === 'low' ? 'LOW' : effort === 'medium' ? 'MEDIUM' : 'HIGH';
+  if (effort === 'low') return 'LOW';
+  if (effort === 'medium') return 'MEDIUM';
+  if (effort === 'xhigh') {
+    const modelId = request.modelId ?? (typeof request.model === 'string' ? request.model : undefined);
+    if (modelId && CLOUD_CODE_XHIGH_MODEL_IDS.has(modelId)) return 'XHIGH';
+    return 'HIGH';
+  }
+  return 'HIGH';
 };
 
 const cloudCodeThinkingConfig = (request: GenerateRequest): unknown => {
@@ -196,6 +212,10 @@ const resolveWireModelId = (
   if (thinkingLevel) {
     const suffixedModelId = `${modelId}-${thinkingLevel.toLowerCase()}`;
     if (available.has(suffixedModelId)) return suffixedModelId;
+    if (thinkingLevel === 'XHIGH') {
+      const highModelId = `${modelId}-high`;
+      if (available.has(highModelId)) return highModelId;
+    }
   }
   if (available.has(modelId)) return modelId;
   const tieredModelId = `${modelId}-tiered`;
