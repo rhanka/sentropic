@@ -341,17 +341,15 @@ target (no catalog profile exists for any of these families). Every launch alias
 carries Muse, Codex and Cloud Code candidates, so any single enrolled
 transport serves any requested id; `no-route` is returned only when no
 candidate transport holds a usable account. The Codex slot serves
-`gpt-6-astra` only for `claude-opus-5-5-max` and the `claude-fable-5-1`
-family, otherwise `gpt-6.1-sol` at +1 effort rung (base to high, high to
-xhigh, xhigh to max, max to max by clamp, medium to high, low to medium).
-The Cloud Code slot serves Gemini 4 Neon at high effort on the Opus 5.5
-(except low) and Fable 5.1 rows, Gemini 4 Carbon at high effort on the
-Fable 5.2 rows, and Gemini 4 Hydrogen at the row-aligned effort on every
-Sonnet 5.5 and Haiku 5.5 row (owner mapping 2026-11-18);
-the Muse candidate follows the same +1 rule. Serving choices are grounded
-on Artificial Analysis Intelligence Index v4.3.2 (opus-5.5-max 58,
-sonnet-5.5-max 56, astra-max 53, fable-5.1-max 53, sol-6.1 52, opus-5-max 51,
-muse-1.3-max 48, flash-3.8-high 41).
+GPT-6.1 Sol on Opus 5.5 (max on GPT-6.2-Astra), GPT-6.2-Astra on Fable 5.2,
+GPT-6.1 Terra on Sonnet 5.5, GPT-6 Luna on Haiku 5.5, and GPT-6 Astra on
+Fable 5.1, all at 1:1 effort with explicit codexEffort on every row
+(owner mapping 2026-11-18: base rows use medium, then 1:1 up to the top).
+The Cloud Code slot serves Gemini 4 Neon on Opus 5.5, Gemini 4 Carbon on
+Fable 5.2, Gemini 4 Hydrogen on Sonnet 5.5 and Haiku 5.5, and Gemini 4 Argon
+on Fable 5.1, with explicit cloudEffort on every row (Neon and Hydrogen use
+xhigh for xhigh and max; Carbon uses high for high, xhigh and max);
+the Muse candidate follows the same +1 rule.
 
 The first implementation ships a conservative coding council using only
 existing ratified aliases plus benchmark evidence available in the repository.
