@@ -631,29 +631,29 @@ describe('explicitly selected canonical mapping tables', () => {
   });
 
   it('routes every Claude tier to its mapped Cloud Code model', () => {
-    // Neon rows (owner mapping 2026-11-18, replacing the 2026-10-15 Argon
-    // mapping): Opus 5.5 base/medium/high/xhigh/max and every Fable 5.1 row
-    // serve Gemini 4 Neon at high effort; Carbon rows (owner mapping
-    // 2026-11-10): every Fable 5.2 row serves Gemini 4 Carbon at high effort;
-    // Hydrogen rows (owner mapping 2026-11-18): every Sonnet 5.5 and Haiku
-    // 5.5 row serves Gemini 4 Hydrogen at the row-aligned effort
-    // (base/high -> high, xhigh/max -> xhigh, medium -> medium, low -> low);
-    // every other row keeps 3.8 Flash at high effort.
-    const neonHigh = new Set([
+    // Owner mapping 2026-11-18: Opus 5.5 rows serve Gemini 4 Neon, Fable 5.2
+    // rows serve Gemini 4 Carbon, Sonnet 5.5 and Haiku 5.5 rows serve Gemini 4
+    // Hydrogen, Fable 5.1 rows stay on Gemini 4 Argon; every other row keeps
+    // 3.8 Flash at high effort.
+    const neonEffort: Readonly<Record<string, string>> = {
+      'claude-opus-5-5': 'medium', 'claude-opus-5-5-low': 'low',
+      'claude-opus-5-5-medium': 'medium', 'claude-opus-5-5-high': 'high',
+      'claude-opus-5-5-xhigh': 'xhigh', 'claude-opus-5-5-max': 'xhigh',
+    };
+    const carbonEffort: Readonly<Record<string, string>> = {
+      'claude-fable-5-2': 'medium', 'claude-fable-5-2-low': 'low',
+      'claude-fable-5-2-medium': 'medium', 'claude-fable-5-2-high': 'high',
+      'claude-fable-5-2-xhigh': 'high', 'claude-fable-5-2-max': 'high',
+    };
+    const argonHigh = new Set([
       'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
       'claude-fable-5-1-max', 'claude-fable-5-1-medium', 'claude-fable-5-1-low',
-      'claude-opus-5-5', 'claude-opus-5-5-high', 'claude-opus-5-5-xhigh',
-      'claude-opus-5-5-max', 'claude-opus-5-5-medium',
-    ]);
-    const carbonHigh = new Set([
-      'claude-fable-5-2', 'claude-fable-5-2-high', 'claude-fable-5-2-xhigh',
-      'claude-fable-5-2-max', 'claude-fable-5-2-medium', 'claude-fable-5-2-low',
     ]);
     const hydrogenEffort: Readonly<Record<string, string>> = {
-      'claude-sonnet-5-5': 'high', 'claude-sonnet-5-5-high': 'high',
+      'claude-sonnet-5-5': 'medium', 'claude-sonnet-5-5-high': 'high',
       'claude-sonnet-5-5-xhigh': 'xhigh', 'claude-sonnet-5-5-max': 'xhigh',
       'claude-sonnet-5-5-medium': 'medium', 'claude-sonnet-5-5-low': 'low',
-      'claude-haiku-5-5': 'high', 'claude-haiku-5-5-high': 'high',
+      'claude-haiku-5-5': 'medium', 'claude-haiku-5-5-high': 'high',
       'claude-haiku-5-5-xhigh': 'xhigh', 'claude-haiku-5-5-max': 'xhigh',
       'claude-haiku-5-5-medium': 'medium', 'claude-haiku-5-5-low': 'low',
     };
@@ -666,17 +666,19 @@ describe('explicitly selected canonical mapping tables', () => {
       'claude-sonnet-5-low', 'claude-sonnet-4-6',
       'claude-fable-5', 'claude-fable-5-high', 'claude-fable-5-xhigh',
       'claude-fable-5-max', 'claude-fable-5-medium', 'claude-fable-5-low',
-      ...neonHigh,
-      ...carbonHigh,
+      ...Object.keys(neonEffort),
+      ...Object.keys(carbonEffort),
+      ...argonHigh,
       ...Object.keys(hydrogenEffort),
-      'claude-opus-5-5-low',
     ];
 
     for (const alias of aliases) {
-      const expected = neonHigh.has(alias)
-        ? { model: 'gemini-4-neon', effort: 'high' }
-        : carbonHigh.has(alias)
-          ? { model: 'gemini-4-carbon', effort: 'high' }
+      const expected = alias in neonEffort
+        ? { model: 'gemini-4-neon', effort: neonEffort[alias]! }
+        : alias in carbonEffort
+          ? { model: 'gemini-4-carbon', effort: carbonEffort[alias]! }
+          : argonHigh.has(alias)
+            ? { model: 'gemini-4-argon', effort: 'high' }
           : alias in hydrogenEffort
           ? { model: 'gemini-4-hydrogen', effort: hydrogenEffort[alias]! }
           : { model: 'gemini-3.8-flash', effort: 'high' };
