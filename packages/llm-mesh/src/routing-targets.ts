@@ -88,6 +88,9 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'gpt-6-astra': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra',
   },
+  'gpt-6.2-astra': {
+    providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.2-astra',
+  },
   'gemini-3.7-flash': {
     providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
   },
@@ -108,6 +111,9 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   },
   'gpt-5.6-terra': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra',
+  },
+  'gpt-6.1-terra': {
+    providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.1-terra',
   },
   // Mistral Vibe faithful routes: these models are served on api.mistral.ai by
   // the plan-billed `mistral-vibe` account transport. `mistral-medium-3.5` is
