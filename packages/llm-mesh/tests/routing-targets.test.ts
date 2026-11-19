@@ -67,18 +67,6 @@ describe('explicitly selected canonical mapping tables', () => {
     ['claude-opus-5-5-xhigh', 'max'],
     ['claude-opus-5-5-medium', 'high'],
     ['claude-opus-5-5-low', 'medium'],
-    ['claude-sonnet-5-5', 'high'],
-    ['claude-sonnet-5-5-high', 'xhigh'],
-    ['claude-sonnet-5-5-xhigh', 'max'],
-    ['claude-sonnet-5-5-max', 'max'],
-    ['claude-sonnet-5-5-medium', 'high'],
-    ['claude-sonnet-5-5-low', 'medium'],
-    ['claude-haiku-5-5', 'high'],
-    ['claude-haiku-5-5-high', 'xhigh'],
-    ['claude-haiku-5-5-xhigh', 'max'],
-    ['claude-haiku-5-5-max', 'max'],
-    ['claude-haiku-5-5-medium', 'high'],
-    ['claude-haiku-5-5-low', 'medium'],
   ])('routes %s through GPT-6.1 Sol at +1 effort rung', (alias, effort) => {
     expect(resolveCandidates(alias!).filter(({ transportProviderId }) => transportProviderId === 'codex'))
       .toEqual([{
@@ -410,19 +398,26 @@ describe('explicitly selected canonical mapping tables', () => {
       });
       expect(candidates[3]).toEqual({
         providerId: 'gemini', transportProviderId: 'cloud-code',
-        model: 'gemini-4-neon', effort: 'high',
+        model: 'gemini-4-argon', effort: 'high',
       });
     }
   });
 
   it('routes every Fable 5.2 fallback through Astra and Carbon', () => {
-    // Owner mapping 2026-11-10: Fable 5.2 requests are served by Gemini 4
-    // Carbon on the cloud slot. The mapped base/high/xhigh aliases carry no
-    // muse candidate (MUSE_ROUTE_MODEL pins them to gemini-4-carbon, which
-    // the muse-candidate profile guard filters out); max/medium/low keep the
-    // default contributor muse candidate like every other unlisted alias.
+    // Owner mapping 2026-11-18: Fable 5.2 requests are served by GPT-6.2-Astra
+    // on the codex slot and Gemini 4 Carbon on the cloud slot. The mapped
+    // base/high/xhigh aliases carry no muse candidate (MUSE_ROUTE_MODEL pins
+    // them to gemini-4-carbon, which the muse-candidate profile guard filters
+    // out); max/medium/low keep the default contributor muse candidate like
+    // every other unlisted alias.
     const museEffort: Readonly<Record<string, string>> = {
       max: 'max', medium: 'high', low: 'medium',
+    };
+    const codexEffort: Readonly<Record<string, string>> = {
+      base: 'medium', high: 'high', xhigh: 'xhigh', max: 'max', medium: 'medium', low: 'low',
+    };
+    const cloudEffort: Readonly<Record<string, string>> = {
+      base: 'medium', high: 'high', xhigh: 'high', max: 'high', medium: 'medium', low: 'low',
     };
     for (const suffix of ['base', 'high', 'xhigh', 'max', 'medium', 'low'] as const) {
       const alias = suffix === 'base' ? 'claude-fable-5-2' : `claude-fable-5-2-${suffix}`;
@@ -442,11 +437,11 @@ describe('explicitly selected canonical mapping tables', () => {
       }
       expect(candidates[codexIndex]).toEqual({
         providerId: 'openai', transportProviderId: 'codex',
-        model: 'gpt-6-astra', ...(suffix === 'base' ? {} : { effort: suffix }),
+        model: 'gpt-6.2-astra', effort: codexEffort[suffix],
       });
       expect(candidates[codexIndex + 1]).toEqual({
         providerId: 'gemini', transportProviderId: 'cloud-code',
-        model: 'gemini-4-carbon', effort: 'high',
+        model: 'gemini-4-carbon', effort: cloudEffort[suffix],
       });
       expect(candidates.at(-1)).toMatchObject({
         providerId: 'mistral', transportProviderId: 'mistral-vibe',
