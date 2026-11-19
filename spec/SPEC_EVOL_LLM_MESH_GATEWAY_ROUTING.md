@@ -341,10 +341,11 @@ target (no catalog profile exists for any of these families). Every launch alias
 carries Muse, Codex and Cloud Code candidates, so any single enrolled
 transport serves any requested id; `no-route` is returned only when no
 candidate transport holds a usable account. The Codex slot serves
-GPT-6.1 Sol on Opus 5.5 (max on GPT-6.2-Astra), GPT-6.2-Astra on Fable 5.2,
-GPT-6.1 Terra on Sonnet 5.5, GPT-6 Luna on Haiku 5.5, and GPT-6 Astra on
-Fable 5.1, all at 1:1 effort with explicit codexEffort on every row
-(owner mapping 2026-11-18: base rows use medium, then 1:1 up to the top).
+GPT-6.1 Sol at +1 effort rung on Opus 5.5 (max on GPT-6.2-Astra max);
+GPT-6.2-Astra on Fable 5.2, GPT-6.1 Terra on Sonnet 5.5, and GPT-6 Luna on
+Haiku 5.5 (owner mapping 2026-11-18: base rows use medium, then 1:1 up to
+max, with explicit codexEffort on every row); and GPT-6 Astra with inherited
+effort on Fable 5.1 (unchanged).
 The Cloud Code slot serves Gemini 4 Neon on Opus 5.5, Gemini 4 Carbon on
 Fable 5.2, Gemini 4 Hydrogen on Sonnet 5.5 and Haiku 5.5, and Gemini 4 Argon
 on Fable 5.1, with explicit cloudEffort on every row (Neon and Hydrogen use
