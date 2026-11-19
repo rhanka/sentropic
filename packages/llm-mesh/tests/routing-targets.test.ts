@@ -770,7 +770,7 @@ describe('explicitly selected canonical mapping tables', () => {
     };
     const cloud = {
       providerId: 'gemini', transportProviderId: 'cloud-code',
-      model: 'gemini-4-neon', effort: 'high',
+      model: 'gemini-4-neon', effort: 'medium',
     };
     const glm = {
       providerId: 'mistral', transportProviderId: 'mistral-vibe',
@@ -795,11 +795,11 @@ describe('explicitly selected canonical mapping tables', () => {
       },
       {
         providerId: 'openai', transportProviderId: 'codex',
-        model: 'gpt-6-astra', effort: 'max',
+        model: 'gpt-6.2-astra', effort: 'max',
       },
       {
         providerId: 'gemini', transportProviderId: 'cloud-code',
-        model: 'gemini-4-neon', effort: 'high',
+        model: 'gemini-4-neon', effort: 'xhigh',
       },
       {
         providerId: 'mistral', transportProviderId: 'mistral-vibe',
@@ -808,27 +808,33 @@ describe('explicitly selected canonical mapping tables', () => {
     ]);
   });
 
-  it('routes the sonnet-5-5 family through Sol 6.1 at +1 effort without a faithful target', () => {
-    const plusOne: Readonly<Record<string, string>> = {
+  it('routes the sonnet-5-5 family through Terra 6.1 at 1:1 effort without a faithful target', () => {
+    // Owner mapping 2026-11-18: base rows use medium, then 1:1 up to the
+    // model's top effort.
+    const museEffort: Readonly<Record<string, string>> = {
       base: 'high', high: 'xhigh', xhigh: 'max', max: 'max', medium: 'high', low: 'medium',
+    };
+    const codexEffort: Readonly<Record<string, string>> = {
+      base: 'medium', high: 'high', xhigh: 'xhigh', max: 'max', medium: 'medium', low: 'low',
     };
     // Muse slot (owner request 2026-10-15): Wonder Full on max, Wonder on xhigh,
     // Spark kept on base/high/medium/low. Cloud slot (owner mapping
-    // 2026-11-18): Hydrogen at the row-aligned effort on every row.
+    // 2026-11-18): Hydrogen at the row effort (base/medium -> medium,
+    // high -> high, xhigh/max -> xhigh, low -> low).
     const museModel: Readonly<Record<string, string>> = {
       base: 'muse-spark-1.3-contributor', high: 'muse-spark-1.3-contributor',
       xhigh: 'muse-wonder-1.0', max: 'muse-wonder-full-1.0',
       medium: 'muse-spark-1.3-contributor', low: 'muse-spark-1.3-contributor',
     };
     const cloud: Readonly<Record<string, { model: string; effort: string }>> = {
-      base: { model: 'gemini-4-hydrogen', effort: 'high' },
+      base: { model: 'gemini-4-hydrogen', effort: 'medium' },
       high: { model: 'gemini-4-hydrogen', effort: 'high' },
       xhigh: { model: 'gemini-4-hydrogen', effort: 'xhigh' },
       max: { model: 'gemini-4-hydrogen', effort: 'xhigh' },
       medium: { model: 'gemini-4-hydrogen', effort: 'medium' },
       low: { model: 'gemini-4-hydrogen', effort: 'low' },
     };
-    for (const [suffix, effort] of Object.entries(plusOne)) {
+    for (const [suffix, effort] of Object.entries(museEffort)) {
       const alias = suffix === 'base' ? 'claude-sonnet-5-5' : `claude-sonnet-5-5-${suffix}`;
       const glmEffort = suffix === 'high' || suffix === 'xhigh' || suffix === 'max' ? 'max' : 'high';
       expect(resolveCandidates(alias)).toEqual([
@@ -838,7 +844,7 @@ describe('explicitly selected canonical mapping tables', () => {
         },
         {
           providerId: 'openai', transportProviderId: 'codex',
-          model: 'gpt-6.1-sol', effort,
+          model: 'gpt-6.1-terra', effort: codexEffort[suffix],
         },
         {
           providerId: 'gemini', transportProviderId: 'cloud-code',
@@ -856,13 +862,16 @@ describe('explicitly selected canonical mapping tables', () => {
     });
   });
 
-  it('routes the haiku-5-5 family like sonnet-5-5 with Hydrogen on the cloud slot', () => {
-    // Owner mapping 2026-11-18: the new Haiku 5.5 family mirrors Sonnet 5.5
-    // (Wonder Full on max, Wonder on xhigh, Spark elsewhere; Sol 6.1 at +1
-    // rung on the codex slot; Hydrogen at the row-aligned effort on the
+  it('routes the haiku-5-5 family through Luna 6 at 1:1 effort with Hydrogen on the cloud slot', () => {
+    // Owner mapping 2026-11-18: base rows use medium, then 1:1 up to the
+    // model's top effort (Wonder Full on max, Wonder on xhigh, Spark
+    // elsewhere; Luna 6 on the codex slot; Hydrogen at the row effort on the
     // cloud slot) with no faithful Anthropic target.
-    const plusOne: Readonly<Record<string, string>> = {
+    const museEffort: Readonly<Record<string, string>> = {
       base: 'high', high: 'xhigh', xhigh: 'max', max: 'max', medium: 'high', low: 'medium',
+    };
+    const codexEffort: Readonly<Record<string, string>> = {
+      base: 'medium', high: 'high', xhigh: 'xhigh', max: 'max', medium: 'medium', low: 'low',
     };
     const museModel: Readonly<Record<string, string>> = {
       base: 'muse-spark-1.3-contributor', high: 'muse-spark-1.3-contributor',
@@ -870,14 +879,14 @@ describe('explicitly selected canonical mapping tables', () => {
       medium: 'muse-spark-1.3-contributor', low: 'muse-spark-1.3-contributor',
     };
     const cloud: Readonly<Record<string, { model: string; effort: string }>> = {
-      base: { model: 'gemini-4-hydrogen', effort: 'high' },
+      base: { model: 'gemini-4-hydrogen', effort: 'medium' },
       high: { model: 'gemini-4-hydrogen', effort: 'high' },
       xhigh: { model: 'gemini-4-hydrogen', effort: 'xhigh' },
       max: { model: 'gemini-4-hydrogen', effort: 'xhigh' },
       medium: { model: 'gemini-4-hydrogen', effort: 'medium' },
       low: { model: 'gemini-4-hydrogen', effort: 'low' },
     };
-    for (const [suffix, effort] of Object.entries(plusOne)) {
+    for (const [suffix, effort] of Object.entries(museEffort)) {
       const alias = suffix === 'base' ? 'claude-haiku-5-5' : `claude-haiku-5-5-${suffix}`;
       const glmEffort = suffix === 'high' || suffix === 'xhigh' || suffix === 'max' ? 'max' : 'high';
       expect(resolveCandidates(alias)).toEqual([
@@ -887,7 +896,7 @@ describe('explicitly selected canonical mapping tables', () => {
         },
         {
           providerId: 'openai', transportProviderId: 'codex',
-          model: 'gpt-6.1-sol', effort,
+          model: 'gpt-6-luna', effort: codexEffort[suffix],
         },
         {
           providerId: 'gemini', transportProviderId: 'cloud-code',
@@ -909,33 +918,32 @@ describe('explicitly selected canonical mapping tables', () => {
     const spark = 'muse-spark-1.3-contributor';
     const wonder = 'muse-wonder-1.0';
     const wonderFull = 'muse-wonder-full-1.0';
-    const neon = { model: 'gemini-4-neon', effort: 'high' };
     // [alias, muse model, muse effort, cloud model, cloud effort]
     const rows: ReadonlyArray<readonly [string, string, string, string, string]> = [
-      ['claude-opus-5-5', wonder, 'high', neon.model, neon.effort],
-      ['claude-opus-5-5-high', wonder, 'xhigh', neon.model, neon.effort],
-      ['claude-opus-5-5-xhigh', wonderFull, 'max', neon.model, neon.effort],
-      ['claude-opus-5-5-max', wonderFull, 'max', neon.model, neon.effort],
-      ['claude-opus-5-5-medium', wonder, 'high', neon.model, neon.effort],
-      ['claude-opus-5-5-low', spark, 'medium', 'gemini-3.8-flash', 'high'],
-      ['claude-sonnet-5-5', spark, 'high', 'gemini-4-hydrogen', 'high'],
+      ['claude-opus-5-5', wonder, 'high', 'gemini-4-neon', 'medium'],
+      ['claude-opus-5-5-high', wonder, 'xhigh', 'gemini-4-neon', 'high'],
+      ['claude-opus-5-5-xhigh', wonderFull, 'max', 'gemini-4-neon', 'xhigh'],
+      ['claude-opus-5-5-max', wonderFull, 'max', 'gemini-4-neon', 'xhigh'],
+      ['claude-opus-5-5-medium', wonder, 'high', 'gemini-4-neon', 'medium'],
+      ['claude-opus-5-5-low', spark, 'medium', 'gemini-4-neon', 'low'],
+      ['claude-sonnet-5-5', spark, 'high', 'gemini-4-hydrogen', 'medium'],
       ['claude-sonnet-5-5-high', spark, 'xhigh', 'gemini-4-hydrogen', 'high'],
       ['claude-sonnet-5-5-xhigh', wonder, 'max', 'gemini-4-hydrogen', 'xhigh'],
       ['claude-sonnet-5-5-max', wonderFull, 'max', 'gemini-4-hydrogen', 'xhigh'],
       ['claude-sonnet-5-5-medium', spark, 'high', 'gemini-4-hydrogen', 'medium'],
       ['claude-sonnet-5-5-low', spark, 'medium', 'gemini-4-hydrogen', 'low'],
-      ['claude-haiku-5-5', spark, 'high', 'gemini-4-hydrogen', 'high'],
+      ['claude-haiku-5-5', spark, 'high', 'gemini-4-hydrogen', 'medium'],
       ['claude-haiku-5-5-high', spark, 'xhigh', 'gemini-4-hydrogen', 'high'],
       ['claude-haiku-5-5-xhigh', wonder, 'max', 'gemini-4-hydrogen', 'xhigh'],
       ['claude-haiku-5-5-max', wonderFull, 'max', 'gemini-4-hydrogen', 'xhigh'],
       ['claude-haiku-5-5-medium', spark, 'high', 'gemini-4-hydrogen', 'medium'],
       ['claude-haiku-5-5-low', spark, 'medium', 'gemini-4-hydrogen', 'low'],
-      ['claude-fable-5-1', wonder, 'max', neon.model, neon.effort],
-      ['claude-fable-5-1-high', wonder, 'max', neon.model, neon.effort],
-      ['claude-fable-5-1-xhigh', wonder, 'max', neon.model, neon.effort],
-      ['claude-fable-5-1-max', wonder, 'max', neon.model, neon.effort],
-      ['claude-fable-5-1-medium', wonder, 'high', neon.model, neon.effort],
-      ['claude-fable-5-1-low', wonder, 'medium', neon.model, neon.effort],
+      ['claude-fable-5-1', wonder, 'max', 'gemini-4-argon', 'high'],
+      ['claude-fable-5-1-high', wonder, 'max', 'gemini-4-argon', 'high'],
+      ['claude-fable-5-1-xhigh', wonder, 'max', 'gemini-4-argon', 'high'],
+      ['claude-fable-5-1-max', wonder, 'max', 'gemini-4-argon', 'high'],
+      ['claude-fable-5-1-medium', wonder, 'high', 'gemini-4-argon', 'high'],
+      ['claude-fable-5-1-low', wonder, 'medium', 'gemini-4-argon', 'high'],
     ];
     for (const [alias, museModel, museEffort, cloudModel, cloudEffort] of rows) {
       const byTransport = new Map(
