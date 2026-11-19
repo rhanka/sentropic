@@ -1474,8 +1474,10 @@ addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'mistral-large
 addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'mistral-medium-3.5', 'Mistral Medium 3.5');
 addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'zai-glm-5-3', 'GLM 5.3 (Mistral)');
 addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-astra', 'GPT-6 Astra');
+addTransportEquivalentFixture('openai', 'gpt-6-astra', 'gpt-6.2-astra', 'GPT-6.2-Astra');
 addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-sol', 'GPT-6 Sol');
 addTransportEquivalentFixture('openai', 'gpt-6-sol', 'gpt-6.1-sol', 'GPT-6.1 Sol');
+addTransportEquivalentFixture('openai', 'gpt-5.6-terra', 'gpt-6.1-terra', 'GPT-6.1 Terra');
 addTransportEquivalentFixture('openai', 'gpt-5.6-luna', 'gpt-6-luna', 'GPT-6 Luna');
 addTransportEquivalentFixture('gemini', 'gemini-3.7-flash', 'gemini-3.8-flash', 'Gemini 3.8 Flash');
 addTransportEquivalentFixture('gemini', 'gemini-3.8-flash', 'gemini-4-argon', 'Gemini 4 Argon');
