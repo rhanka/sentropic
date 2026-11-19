@@ -313,23 +313,8 @@ export const GLM_ROUTE_EFFORT: Readonly<Record<string, string>> = {
 
 export const GLM_FALLBACK_MODEL = 'zai-glm-5-3';
 
-// Codex slot policy (BR-C55): GPT-6 Astra serves only claude-opus-5-5-max
-// and the claude-fable-5-1 and claude-fable-5-2 families; every other row
-// serves GPT-6.1 Sol at +1 effort rung. Fable 5.1 and 5.2 keep Astra with
-// inherited effort. The new claude-haiku-5-5 family follows the default
-// policy (GPT-6.1 Sol at +1 effort rung); the owner may change this mapping.
-// Cloud slot policy (owner mapping 2026-11-18, replacing the 2026-10-15 Argon
-// mapping; Artificial Analysis Intelligence Index read 2026-10-15, see the
-// MUSE_ROUTE_MODEL note): Gemini 4 Neon at high effort serves the Opus 5.5
-// (base/medium/high/xhigh/max) and Fable 5.1 rows; Gemini 4 Carbon at high
-// effort serves the Fable 5.2 rows (owner mapping 2026-11-10, unchanged);
-// Gemini 4 Hydrogen serves every Sonnet 5.5 and Haiku 5.5 row at the
-// row-aligned effort (base/high -> high, xhigh/max -> xhigh, medium ->
-// medium, low -> low), which the generic Cloud Code wire scheme resolves to
-// the announced low/medium/high suffixed wire ids (xhigh maps to the high
-// thinking level); Argon stays in the catalog as an available model but
-// leaves the alias mapping; Opus 5.5 low keeps Gemini 3.8 Flash high; every
-// other row keeps 3.8 Flash high.
+// Codex slot policy (owner mapping 2026-11-18): base rows use medium, then 1:1 up to the model's top effort.
+// Cloud slot policy (owner mapping 2026-11-18): base rows use medium, then 1:1 up to the model's top effort; Neon and Hydrogen use xhigh for xhigh and max; Carbon uses high for high, xhigh and max. Argon stays in the catalog as an available model but serves none of the rows below.
 export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
   { requestedId: 'claude-opus-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', codexEffort: 'high', cloudEffort: 'high' },
   { requestedId: 'claude-opus-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
@@ -353,36 +338,36 @@ export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
   { requestedId: 'claude-fable-5-max', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-neon', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-neon', effort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-neon', effort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-neon', effort: 'max', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-medium', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-neon', effort: 'medium', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-low', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-neon', effort: 'low', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-2', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-carbon', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-2-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-carbon', effort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-2-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-carbon', effort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-2-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-carbon', effort: 'max', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-2-medium', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-carbon', effort: 'medium', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-2-low', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-carbon', effort: 'low', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-medium', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'medium', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-low', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'low', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-2', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-carbon', codexEffort: 'medium', cloudEffort: 'medium' },
+  { requestedId: 'claude-fable-5-2-high', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-carbon', effort: 'high', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-2-xhigh', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-carbon', effort: 'xhigh', codexEffort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-2-max', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-carbon', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-2-medium', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-carbon', effort: 'medium', codexEffort: 'medium', cloudEffort: 'medium' },
+  { requestedId: 'claude-fable-5-2-low', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-carbon', effort: 'low', codexEffort: 'low', cloudEffort: 'low' },
+  { requestedId: 'claude-opus-5-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', codexEffort: 'high', cloudEffort: 'medium' },
   { requestedId: 'claude-opus-5-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-5-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-neon', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-5-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-hydrogen', codexEffort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-5-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-hydrogen', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-sonnet-5-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-hydrogen', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'xhigh' },
-  { requestedId: 'claude-sonnet-5-5-max', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-hydrogen', effort: 'max', codexEffort: 'max', cloudEffort: 'xhigh' },
-  { requestedId: 'claude-sonnet-5-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-hydrogen', effort: 'medium', codexEffort: 'high', cloudEffort: 'medium' },
-  { requestedId: 'claude-sonnet-5-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-hydrogen', effort: 'low', codexEffort: 'medium', cloudEffort: 'low' },
-  { requestedId: 'claude-haiku-5-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-hydrogen', codexEffort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-haiku-5-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-hydrogen', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-haiku-5-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-hydrogen', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'xhigh' },
-  { requestedId: 'claude-haiku-5-5-max', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-hydrogen', effort: 'max', codexEffort: 'max', cloudEffort: 'xhigh' },
-  { requestedId: 'claude-haiku-5-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-hydrogen', effort: 'medium', codexEffort: 'high', cloudEffort: 'medium' },
-  { requestedId: 'claude-haiku-5-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-hydrogen', effort: 'low', codexEffort: 'medium', cloudEffort: 'low' },
+  { requestedId: 'claude-opus-5-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'xhigh' },
+  { requestedId: 'claude-opus-5-5-max', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-neon', effort: 'max', codexEffort: 'max', cloudEffort: 'xhigh' },
+  { requestedId: 'claude-opus-5-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', effort: 'medium', codexEffort: 'high', cloudEffort: 'medium' },
+  { requestedId: 'claude-opus-5-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', effort: 'low', codexEffort: 'medium', cloudEffort: 'low' },
+  { requestedId: 'claude-sonnet-5-5', codexModel: 'gpt-6.1-terra', cloudModel: 'gemini-4-hydrogen', codexEffort: 'medium', cloudEffort: 'medium' },
+  { requestedId: 'claude-sonnet-5-5-high', codexModel: 'gpt-6.1-terra', cloudModel: 'gemini-4-hydrogen', effort: 'high', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-5-xhigh', codexModel: 'gpt-6.1-terra', cloudModel: 'gemini-4-hydrogen', effort: 'xhigh', codexEffort: 'xhigh', cloudEffort: 'xhigh' },
+  { requestedId: 'claude-sonnet-5-5-max', codexModel: 'gpt-6.1-terra', cloudModel: 'gemini-4-hydrogen', effort: 'max', codexEffort: 'max', cloudEffort: 'xhigh' },
+  { requestedId: 'claude-sonnet-5-5-medium', codexModel: 'gpt-6.1-terra', cloudModel: 'gemini-4-hydrogen', effort: 'medium', codexEffort: 'medium', cloudEffort: 'medium' },
+  { requestedId: 'claude-sonnet-5-5-low', codexModel: 'gpt-6.1-terra', cloudModel: 'gemini-4-hydrogen', effort: 'low', codexEffort: 'low', cloudEffort: 'low' },
+  { requestedId: 'claude-haiku-5-5', codexModel: 'gpt-6-luna', cloudModel: 'gemini-4-hydrogen', codexEffort: 'medium', cloudEffort: 'medium' },
+  { requestedId: 'claude-haiku-5-5-high', codexModel: 'gpt-6-luna', cloudModel: 'gemini-4-hydrogen', effort: 'high', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-haiku-5-5-xhigh', codexModel: 'gpt-6-luna', cloudModel: 'gemini-4-hydrogen', effort: 'xhigh', codexEffort: 'xhigh', cloudEffort: 'xhigh' },
+  { requestedId: 'claude-haiku-5-5-max', codexModel: 'gpt-6-luna', cloudModel: 'gemini-4-hydrogen', effort: 'max', codexEffort: 'max', cloudEffort: 'xhigh' },
+  { requestedId: 'claude-haiku-5-5-medium', codexModel: 'gpt-6-luna', cloudModel: 'gemini-4-hydrogen', effort: 'medium', codexEffort: 'medium', cloudEffort: 'medium' },
+  { requestedId: 'claude-haiku-5-5-low', codexModel: 'gpt-6-luna', cloudModel: 'gemini-4-hydrogen', effort: 'low', codexEffort: 'low', cloudEffort: 'low' },
 ];
 
 const ANTHROPIC_FAITHFUL_TRANSPORT_PROVIDERS: readonly string[] = ['claude-code'];
