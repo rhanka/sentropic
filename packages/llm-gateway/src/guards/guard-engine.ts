@@ -61,6 +61,10 @@ const DETECTORS: readonly DetectorSpec[] = [
     validate: (m) => { const d = m.replace(/\D/g, ''); return d.length === 9 && luhnValid(d); } },
 ];
 
+const PROTECTED_IN_FLIGHT_KEYS: ReadonlySet<string> = new Set([
+  'system', 'instructions', 'model', 'metadata', 'tools', 'tool_use_id', 'call_id',
+]);
+
 export interface GuardEngineOptions {
   readonly defaultAction?: GuardActionPolicy;
   /** Owner-pending DM3 seam; defaults to `'audit_mask_copy'` (intact in flight). */
@@ -124,8 +128,12 @@ export class GuardEngine implements GuardPort {
       }
       if (Array.isArray(value)) return value.map((item) => walk(item, forInFlight));
       if (value && typeof value === 'object') {
+        const rec = value as Record<string, unknown>;
+        if (forInFlight && (rec.role === 'system' || rec.role === 'developer')) return value;
         const out: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = walk(v, forInFlight);
+        for (const [k, v] of Object.entries(rec)) {
+          out[k] = forInFlight && PROTECTED_IN_FLIGHT_KEYS.has(k) ? v : walk(v, forInFlight);
+        }
         return out;
       }
       return value;

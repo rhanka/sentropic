@@ -97,6 +97,7 @@ export interface PreparedRouteFlow {
   readonly stageRewrites?: readonly StageRewriteTrace[];
   readonly guardVerdict?: GuardVerdict;
   readonly requestCapture?: MaskedCapturePayload;
+  readonly effectiveBody?: unknown;
 }
 export class RequestAuditError extends Error {}
 export const markDurableAttempt = async (deps: RouteFlowDeps, cost: CostContext,
@@ -213,8 +214,9 @@ export const prepareRouteFlow = async (
     request.receiptId = receipt.receiptId;
     cost = { ...cost, gatewayReceiptId: receipt.receiptId };
   }
-  const effectiveRequest = effectiveModel === request.model ? request
+  const effectiveRequest = effectiveModel === request.model && effectiveBody === request.body ? request
     : { ...request, model: effectiveModel, body: effectiveBody };
+  const bodyOverride = effectiveBody !== request.body ? { effectiveBody } : {};
   if (deps.budget) {
     // The reserved output ceiling is the one sent to every attempt (both wires, both flows).
     const bounded = boundRouteOutputCeiling(canonical, deps.budget);
@@ -225,6 +227,7 @@ export const prepareRouteFlow = async (
       ...(stageRewrites ? { stageRewrites } : {}),
       ...(guardVerdict ? { guardVerdict } : {}),
       ...(requestCapture ? { requestCapture } : {}),
+      ...bodyOverride,
     };
   }
   try {
@@ -249,6 +252,7 @@ export const prepareRouteFlow = async (
       ...(stageRewrites ? { stageRewrites } : {}),
       ...(guardVerdict ? { guardVerdict } : {}),
       ...(requestCapture ? { requestCapture } : {}),
+      ...bodyOverride,
     };
   } catch (error) {
     if (isRecognizedPlanningRefusal(error)) {
