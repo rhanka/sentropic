@@ -65,7 +65,8 @@ export type GatewayFailureKind =
   | 'request-too-large'
   | 'request-body-capacity'
   | 'cross-user-disabled'
-  | 'guard-blocked';
+  | 'guard-blocked'
+  | 'protected-identification-mutated';
 
 export interface NativeValidationPublicDetail {
   readonly type: string;
@@ -322,6 +323,13 @@ export const mapGatewayError = (
       return anthropic
         ? anthropicError(400, 'invalid_request_error', 'request blocked by gateway guard policy', headers)
         : openAiError(400, 'invalid_request_error', 'request blocked by gateway guard policy', 'guard_blocked', headers);
+    }
+
+    case 'protected-identification-mutated': {
+      const headers = { 'x-should-retry': 'false' };
+      return anthropic
+        ? anthropicError(400, 'invalid_request_error', 'protected identification invariant violated', headers)
+        : openAiError(400, 'invalid_request_error', 'protected identification invariant violated', 'prohibited_identification_mutation', headers);
     }
 
     case 'native-required':
