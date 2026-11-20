@@ -81,7 +81,7 @@ const verifyPackageMigration = (text: string, expectedHash: string): boolean => 
   const hash = (value: string): string => createHash('sha256').update(value).digest('hex');
   if (receipt.baselineSha256 !== expectedHash || receipt.migratedSha256 !== hash(text)) return false;
   const baseline = text
-    .replace('"version": "0.3.1"', '"version": "0.3.0"')
+    .replace('"version": "0.3.2"', '"version": "0.3.0"')
     .replace('"zod": "^4.6.6"', '"zod": "^3.25.76"');
   return hash(baseline) === expectedHash;
 };
