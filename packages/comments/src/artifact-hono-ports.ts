@@ -99,10 +99,10 @@ export const resolveHttpProvenance = (
   bodyActorKind: ArtifactCommentActorKind | undefined,
   rawProvenance: { toolCallId?: string; runId?: string } | undefined,
 ): { ok: true; provenance?: CommentProvenance } | { ok: false; response: Response } => {
-  const rawHeader = c.req.header('x-sentropic-actor-kind')?.trim().toLowerCase();
+  const rawHeader = c.req.header('x-sentropic-actor-kind');
   let headerActorKind: ArtifactCommentActorKind | undefined;
-  if (rawHeader) {
-    const parsed = actorKindSchema.safeParse(rawHeader);
+  if (rawHeader !== undefined) {
+    const parsed = actorKindSchema.safeParse(rawHeader.trim().toLowerCase());
     if (!parsed.success) {
       return { ok: false, response: c.json({ code: 'invalid_request', error: 'Invalid actor_kind header' }, 400) };
     }

@@ -149,6 +149,11 @@ describe('artifact-comments Hono router (C2b + S4-route)', () => {
     }
     expect((await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'A', actor_kind: 'agent' }))).status).toBe(400);
     expect((await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'N' }, { 'x-sentropic-actor-kind': 'nhi' }))).status).toBe(400);
+    for (const badHeader of ['', '   ', 'bot']) {
+      const badRes = await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'H' }, { 'x-sentropic-actor-kind': badHeader }));
+      expect(badRes.status).toBe(400);
+      expect(await badRes.json()).toMatchObject({ code: 'invalid_request' });
+    }
     setPrincipal({ workspaceId: 'ws-1', userId: 'user-1', clientId: 'h2a-cli' });
     expect((await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Spoof', actor_kind: 'human' }))).status).toBe(400);
     expect(addSpy).not.toHaveBeenCalled();
