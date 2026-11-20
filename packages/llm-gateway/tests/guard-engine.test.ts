@@ -150,7 +150,7 @@ describe('L1.3a GuardEngine (decoded JSON PII + technical secrets) & redactForLo
     expect(scrubbed.safeField).toBe('keep-me');
   });
 
-  it('never mutates system, instructions, or system/developer roles in flight under default config or mask_in_flight', () => {
+  it('refuses mask_in_flight inside protected set P while masking non-protected leaves and preserving linkage IDs', () => {
     const payload = {
       model: 'claude-sonnet-5',
       system: [{ type: 'text', text: `System identity ${synthetic.email}` }],
@@ -164,22 +164,53 @@ describe('L1.3a GuardEngine (decoded JSON PII + technical secrets) & redactForLo
       ],
     };
     const defaultRes = new GuardEngine().inspectRequest(payload);
+    expect(defaultRes.verdict).toBe('masked');
     expect(defaultRes.inFlightPayload).toBe(payload);
     expect(JSON.stringify(defaultRes.inFlightPayload)).toBe(JSON.stringify(payload));
 
     const inFlightEngine = new GuardEngine({ detectorActions: { 'pii.email': 'mask_in_flight' } });
-    const maskedRes = inFlightEngine.inspectRequest(payload);
-    const inFlight = maskedRes.inFlightPayload as typeof payload;
-    expect(inFlight.system).toEqual(payload.system);
-    expect(inFlight.instructions).toBe(payload.instructions);
-    expect(inFlight.metadata).toEqual(payload.metadata);
-    expect(inFlight.tools).toEqual(payload.tools);
-    expect(inFlight.messages[0]).toEqual(payload.messages[0]);
-    expect(inFlight.messages[1]).toEqual(payload.messages[1]);
+    const blockedRes = inFlightEngine.inspectRequest(payload);
+    expect(blockedRes.verdict).toBe('blocked');
+    expect(blockedRes.protectedViolation).toBe(true);
+    expect(blockedRes.inFlightPayload).toBe(payload);
+    expect(JSON.stringify(blockedRes.maskedCapture.payload)).not.toContain(synthetic.email);
+
+    const nonProtectedPayload = {
+      model: 'claude-sonnet-5',
+      system: [{ type: 'text', text: 'Clean system identity' }],
+      messages: [
+        { role: 'system', content: 'Clean sys' },
+        { role: 'developer', content: 'Clean dev' },
+        { role: 'user', content: [{ type: 'tool_result', tool_use_id: `id-${synthetic.email}`, call_id: `call-${synthetic.email}`, content: `User msg ${synthetic.email}` }] },
+      ],
+    };
+    const maskedRes = inFlightEngine.inspectRequest(nonProtectedPayload);
+    expect(maskedRes.verdict).toBe('masked');
+    const inFlight = maskedRes.inFlightPayload as typeof nonProtectedPayload;
+    expect(inFlight.system).toEqual(nonProtectedPayload.system);
+    expect(inFlight.messages[0]).toEqual(nonProtectedPayload.messages[0]);
+    expect(inFlight.messages[1]).toEqual(nonProtectedPayload.messages[1]);
     const userBlock = (inFlight.messages[2]!.content as { tool_use_id: string; call_id: string; content: string }[])[0]!;
     expect(userBlock.tool_use_id).toBe(`id-${synthetic.email}`);
     expect(userBlock.call_id).toBe(`call-${synthetic.email}`);
     expect(userBlock.content).toBe('User msg [REDACTED:EMAIL]');
-    expect(JSON.stringify(maskedRes.maskedCapture.payload)).not.toContain(synthetic.email);
+  });
+
+  it('refuses mask_in_flight inside openai-responses additional_tools input items without mutating in flight', () => {
+    const engine = new GuardEngine({ detectorActions: { 'pii.email': 'mask_in_flight' } });
+    for (const item of [
+      { type: 'additional_tools', role: 'developer', tools: [{ type: 'custom', name: 'exec', description: `contact ${synthetic.email}` }] },
+      { type: 'additional_tools', tools: [{ type: 'function', name: 'fn', description: `contact ${synthetic.email}` }] },
+    ]) {
+      const payload = {
+        model: 'gpt-6.1-sol',
+        input: [item, { type: 'message', role: 'user', content: 'hi' }],
+      };
+      const res = engine.inspectRequest(payload);
+      expect(res.verdict).toBe('blocked');
+      expect(res.protectedViolation).toBe(true);
+      expect(res.inFlightPayload).toBe(payload);
+      expect(JSON.stringify(res.maskedCapture.payload)).not.toContain(synthetic.email);
+    }
   });
 });
