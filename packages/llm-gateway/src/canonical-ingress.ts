@@ -275,6 +275,31 @@ const normalizeReasoning = (raw: JsonRecord, wire: GatewayWire): GenerateRequest
   };
 };
 
+const extractCacheControl = (raw: JsonRecord): Record<string, unknown> | undefined => {
+  const system: { index: number; cache_control: unknown }[] = [];
+  records(raw.system).forEach((block, index) => {
+    if (block.cache_control !== undefined) system.push({ index, cache_control: block.cache_control });
+  });
+  const tools: { index: number; cache_control: unknown }[] = [];
+  records(raw.tools).forEach((tool, index) => {
+    if (tool.cache_control !== undefined) tools.push({ index, cache_control: tool.cache_control });
+  });
+  const messages: { messageIndex: number; blockIndex: number; cache_control: unknown }[] = [];
+  records(raw.messages).forEach((message, messageIndex) => {
+    records(message.content).forEach((block, blockIndex) => {
+      if (block.cache_control !== undefined) {
+        messages.push({ messageIndex, blockIndex, cache_control: block.cache_control });
+      }
+    });
+  });
+  const out: Record<string, unknown> = {};
+  if (raw.cache_control !== undefined) out.topLevel = raw.cache_control;
+  if (system.length > 0) out.system = system;
+  if (tools.length > 0) out.tools = tools;
+  if (messages.length > 0) out.messages = messages;
+  return Object.keys(out).length > 0 ? out : undefined;
+};
+
 export const normalizeGatewayIngress = (
   wire: GatewayWire,
   body: unknown,
@@ -337,6 +362,8 @@ export const normalizeGatewayIngress = (
   }
   if (reasoning !== undefined) required.add('reasoning');
   if (raw.stream === true) required.add('streaming');
+  const cacheControl = extractCacheControl(raw);
+  const promptCacheKey = typeof raw.prompt_cache_key === 'string' ? raw.prompt_cache_key : undefined;
   const request: GenerateRequest = {
     model: raw.model as GenerateRequest['model'], messages,
     ...(tools.length > 0 ? { tools } : {}),
@@ -351,7 +378,12 @@ export const normalizeGatewayIngress = (
       : {}),
     ...(typeof raw.temperature === 'number' ? { temperature: raw.temperature } : {}),
     ...(typeof raw.top_p === 'number' ? { topP: raw.top_p } : {}),
-    providerOptions: { ingressWire: wire, ingressBody: body },
+    providerOptions: {
+      ingressWire: wire,
+      ingressBody: body,
+      ...(cacheControl ? { cacheControl } : {}),
+      ...(promptCacheKey ? { promptCacheKey } : {}),
+    },
   };
   return {
     request, requiredCapabilities: [...required],

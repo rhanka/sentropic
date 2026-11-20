@@ -17,6 +17,7 @@ import type { GatewayBudgetOptions, RouteBudgetOverrun } from './ports/budget.js
 import {
   admitRoute, assertBudgetRouteDeps, boundRouteOutputCeiling, chargeAdmittedAttempts, type AdmittedRoute,
 } from './admission.js';
+import type { StageRewriteEngine, StageRewriteTrace } from './rewrite/stage-rewrite.js';
 
 export interface RouteAttemptSettlement {
   readonly reportedUsage?: boolean;
@@ -52,7 +53,10 @@ export interface RouteMeteringSink {
 
 export interface RouteFlowDeps {
   readonly requestAudit?: {
-    admit(input: { cost: CostContext; requestId: string; model: string }): Promise<{ receiptId: string }>;
+    admit(input: {
+      cost: CostContext; requestId: string; model: string;
+      originModel?: string; stageRewrites?: readonly StageRewriteTrace[];
+    }): Promise<{ receiptId: string }>;
     refuse?(receiptId: string): Promise<void>;
     beginAttempt?(input: { cost: CostContext; attemptRef: string; diagnostic: RoutePlan['diagnostics'][number] }): Promise<void>;
   };
@@ -69,6 +73,8 @@ export interface RouteFlowDeps {
   readonly budget?: GatewayBudgetOptions;
   /** Trusted construction-time switch; absent hosts rely on capability gates. */
   readonly nativeMessagesEnabled?: boolean;
+  /** Optional catalog-validated single-step stage rewrite engine (D4 B, L1.2). */
+  readonly stageRewrite?: StageRewriteEngine;
 }
 
 export interface PreparedRouteFlow {
@@ -79,6 +85,8 @@ export interface PreparedRouteFlow {
   readonly nativeFeatures: NativeFeatureSelection;
   /** Present only when budget admission admitted the request. */
   readonly admission?: AdmittedRoute;
+  readonly originModel?: string;
+  readonly stageRewrites?: readonly StageRewriteTrace[];
 }
 export class RequestAuditError extends Error {}
 export const markDurableAttempt = async (deps: RouteFlowDeps, cost: CostContext,
@@ -138,27 +146,62 @@ export const prepareRouteFlow = async (
   if (!auth.ok || !auth.cost) {
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
-  const canonical = normalizeGatewayIngress(request.wire, request.body, request.responsesLimits);
-  const nativeFeatures = classifyNativeFeatures(request.wire, request.headers, request.body, canonical, {
-    budget: deps.budget, nativeMessagesEnabled: deps.nativeMessagesEnabled,
-  });
+  let canonical = normalizeGatewayIngress(request.wire, request.body, request.responsesLimits);
   let cost = auth.cost;
   const subject = routingSubjectForCost(cost);
+  // Pre-rewrite contract validation runs on the caller's original (originModel, originEffort).
+  let precheckedRouteInput: ReturnType<NonNullable<RouteFlowDeps['routeInput']>> | undefined;
+  let effectiveModel = request.model;
+  let effectiveBody = request.body;
+  let originModel: string | undefined;
+  let stageRewrites: readonly StageRewriteTrace[] | undefined;
+  if (deps.stageRewrite) {
+    precheckedRouteInput = deps.routeInput?.({ cost, request, canonical });
+    const rewritten = deps.stageRewrite.rewrite({
+      wire: request.wire, body: request.body, model: request.model,
+      effort: canonical.request.reasoning?.effort, stageRewriteCount: 0,
+    });
+    if (rewritten.rewritten && rewritten.trace) {
+      originModel = rewritten.originModel;
+      stageRewrites = [rewritten.trace];
+      effectiveModel = rewritten.model;
+      effectiveBody = rewritten.body;
+      canonical = normalizeGatewayIngress(request.wire, effectiveBody, request.responsesLimits);
+      if (precheckedRouteInput?.launchRoutingContract
+        && !precheckedRouteInput.launchRoutingContract.exactModels.includes(effectiveModel)) {
+        const c = precheckedRouteInput.launchRoutingContract;
+        precheckedRouteInput = {
+          ...precheckedRouteInput,
+          launchRoutingContract: { ...c, exactModels: [...c.exactModels, effectiveModel] },
+        };
+      }
+    }
+  }
+  const nativeFeatures = classifyNativeFeatures(request.wire, request.headers, effectiveBody, canonical, {
+    budget: deps.budget, nativeMessagesEnabled: deps.nativeMessagesEnabled,
+  });
   if (deps.requestAudit) {
-    const receipt = await deps.requestAudit.admit({ cost: auth.cost, requestId: request.authContext.requestId, model: request.model });
+    const receipt = await deps.requestAudit.admit({
+      cost: auth.cost, requestId: request.authContext.requestId, model: effectiveModel,
+      ...(originModel ? { originModel } : {}),
+      ...(stageRewrites ? { stageRewrites } : {}),
+    });
     request.receiptId = receipt.receiptId;
     cost = { ...cost, gatewayReceiptId: receipt.receiptId };
   }
+  const effectiveRequest = effectiveModel === request.model ? request
+    : { ...request, model: effectiveModel, body: effectiveBody };
   if (deps.budget) {
     // The reserved output ceiling is the one sent to every attempt (both wires, both flows).
     const bounded = boundRouteOutputCeiling(canonical, deps.budget);
-    return prepareAdmittedRouteFlow(deps, request, cost, subject, bounded, nativeFeatures);
+    const admitted = await prepareAdmittedRouteFlow(deps, effectiveRequest, cost, subject, bounded, nativeFeatures, precheckedRouteInput);
+    return { ...admitted, ...(originModel ? { originModel } : {}), ...(stageRewrites ? { stageRewrites } : {}) };
   }
   try {
-    const routeInput = deps.routeInput?.({ cost, request, canonical });
+    const routeInput = precheckedRouteInput ?? deps.routeInput?.({ cost, request: effectiveRequest, canonical });
     const plan = await deps.routePlanner.plan(subject, {
       ...routeInput,
-      requestedModel: request.model,
+      requestedModel: effectiveModel,
       requiredCapabilities: canonical.requiredCapabilities,
       // Spec §16.3: forward codec-derived execution features — no gateway
       // table. Present for Messages/Chat only when tool controls require
@@ -170,7 +213,11 @@ export const prepareRouteFlow = async (
       affinityKey: routeInput?.affinityKey ?? cost.correlationId,
       ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : { nativeMessages: undefined }),
     });
-    return { cost, subject, canonical, plan, nativeFeatures };
+    return {
+      cost, subject, canonical, plan, nativeFeatures,
+      ...(originModel ? { originModel } : {}),
+      ...(stageRewrites ? { stageRewrites } : {}),
+    };
   } catch (error) {
     if (isRecognizedPlanningRefusal(error)) {
       try {
@@ -204,9 +251,10 @@ const prepareAdmittedRouteFlow = async (
   subject: VerifiedRoutingSubject,
   canonical: CanonicalIngressResult,
   nativeFeatures: NativeFeatureSelection,
+  precheckedRouteInput?: ReturnType<NonNullable<RouteFlowDeps['routeInput']>>,
 ): Promise<PreparedRouteFlow> => {
   assertBudgetRouteDeps(deps.routePlanner, true, deps.budget);
-  const routeInput = deps.routeInput?.({ cost, request, canonical });
+  const routeInput = precheckedRouteInput ?? deps.routeInput?.({ cost, request, canonical });
   const admission = await admitRoute({
     budget: deps.budget!, routePlanner: deps.routePlanner,
     requestId: request.authContext.requestId, cost, subject, wire: request.wire,
