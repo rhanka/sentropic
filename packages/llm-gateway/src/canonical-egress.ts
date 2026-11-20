@@ -8,9 +8,17 @@ export interface CanonicalGatewayResponse {
   readonly headers?: ProviderResponseHeaders;
 }
 
-const usageFor = (wire: GatewayWire, usage?: TokenUsage): Record<string, number> | undefined => {
+export interface EncodeGatewayResponseOptions {
+  readonly includeCacheUsage?: boolean;
+}
+
+const usageFor = (
+  wire: GatewayWire,
+  usage?: TokenUsage,
+  includeCacheUsage = false,
+): Record<string, number> | undefined => {
   if (!usage) return undefined;
-  const raw = usage.providerRawUsage && typeof usage.providerRawUsage === 'object'
+  const raw = includeCacheUsage && usage.providerRawUsage && typeof usage.providerRawUsage === 'object'
     ? usage.providerRawUsage as Record<string, unknown> : undefined;
   if (wire === 'anthropic-messages') {
     return {
@@ -51,7 +59,9 @@ export const encodeGatewayResponse = (
   wire: GatewayWire,
   response: GenerateResponse,
   responsesLimits?: ResponsesLimits,
+  options?: EncodeGatewayResponseOptions,
 ): CanonicalGatewayResponse => {
+  const includeCacheUsage = options?.includeCacheUsage === true;
   const headers = safeHeaders(response.providerMetadata);
   if (wire === 'openai-responses') {
     return {
@@ -81,7 +91,7 @@ export const encodeGatewayResponse = (
       body: {
         id: response.id, type: 'message', role: 'assistant', model: response.modelId,
         content, stop_reason: anthropicStopReason(response.finishReason), stop_sequence: null,
-        ...(usageFor(wire, response.usage) ? { usage: usageFor(wire, response.usage) } : {}),
+        ...(usageFor(wire, response.usage, includeCacheUsage) ? { usage: usageFor(wire, response.usage, includeCacheUsage) } : {}),
       },
       ...(headers ? { headers } : {}),
     };
