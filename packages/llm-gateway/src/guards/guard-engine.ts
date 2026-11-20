@@ -1,7 +1,11 @@
 import type {
-  GuardActionPolicy, GuardDetectorCategory, GuardFinding, GuardPort, GuardScanResult,
-  GuardTextScanResult, GuardVerdict, MaskedCapturePayload,
+  CustomSecretPattern, GuardActionPolicy, GuardDetectorCategory, GuardFinding, GuardPort,
+  GuardScanResult, GuardTextScanResult, GuardVerdict, MaskedCapturePayload,
+  SecretScanOptions, SecretScannerPort,
 } from '../ports/guards.js';
+import {
+  PureSecretScanner, formatSecretRedactionTag, normalizeSecretMatches,
+} from './secret-scanner.js';
 
 interface DetectorSpec {
   readonly id: string;
@@ -82,27 +86,44 @@ export interface GuardEngineOptions {
   /** Owner-pending DM3 seam; defaults to `'audit_mask_copy'` (intact in flight). */
   readonly hopEgressHighConfidenceAction?: GuardActionPolicy;
   readonly detectorActions?: Readonly<Record<string, GuardActionPolicy>>;
+  /** Injectable secret range scanner (defaults to PureSecretScanner with KUBECONFIG_PATTERNS). */
+  readonly secretScanner?: SecretScannerPort;
+  /** Structured custom secret patterns forwarded to the secret scanner. */
+  readonly customPatterns?: readonly CustomSecretPattern[];
+  /** Include built-in KUBECONFIG_PATTERNS when scanning (default true). */
+  readonly includeDefaultPatterns?: boolean;
 }
 
 export class GuardEngine implements GuardPort {
   private readonly defaultAction: GuardActionPolicy;
   private readonly detectorActions: Readonly<Record<string, GuardActionPolicy>>;
+  private readonly secretScanner: SecretScannerPort;
+  private readonly scanOptions?: SecretScanOptions;
   readonly hopEgressHighConfidenceAction: GuardActionPolicy;
 
   constructor(options: GuardEngineOptions = {}) {
     this.defaultAction = options.defaultAction ?? 'audit_mask_copy';
     this.hopEgressHighConfidenceAction = options.hopEgressHighConfidenceAction ?? 'audit_mask_copy';
     this.detectorActions = options.detectorActions ?? {};
+    this.secretScanner = options.secretScanner ?? new PureSecretScanner();
+    if (options.customPatterns !== undefined || options.includeDefaultPatterns !== undefined) {
+      this.scanOptions = {
+        ...(options.customPatterns !== undefined ? { customPatterns: options.customPatterns } : {}),
+        ...(options.includeDefaultPatterns !== undefined ? { includeDefaultPatterns: options.includeDefaultPatterns } : {}),
+      };
+    }
   }
 
   private actionFor(id: string): GuardActionPolicy {
     return this.detectorActions[id] ?? this.defaultAction;
   }
 
-  scanText(text: string): GuardTextScanResult {
-    const counts = new Map<string, { category: GuardDetectorCategory; count: number; action: GuardActionPolicy }>();
-    let masked = text;
-    let blocked = false;
+  private applyBuiltInDetectors(
+    segment: string,
+    counts: Map<string, { category: GuardDetectorCategory; count: number; action: GuardActionPolicy }>,
+    onBlocked: () => void,
+  ): string {
+    let masked = segment;
     for (const detector of DETECTORS) {
       const action = this.actionFor(detector.id);
       detector.pattern.lastIndex = 0;
@@ -110,9 +131,38 @@ export class GuardEngine implements GuardPort {
         if (detector.validate && !detector.validate(match)) return match;
         const prev = counts.get(detector.id);
         counts.set(detector.id, { category: detector.category, count: (prev?.count ?? 0) + 1, action });
-        if (action === 'block') blocked = true;
+        if (action === 'block') onBlocked();
         return detector.replacement;
       });
+    }
+    return masked;
+  }
+
+  scanText(text: string): GuardTextScanResult {
+    const counts = new Map<string, { category: GuardDetectorCategory; count: number; action: GuardActionPolicy }>();
+    let blocked = false;
+    const markBlocked = () => { blocked = true; };
+    const scannerMatches = text ? normalizeSecretMatches(text, this.secretScanner.scan(text, this.scanOptions)) : [];
+    let masked: string;
+    if (scannerMatches.length === 0) {
+      masked = this.applyBuiltInDetectors(text, counts, markBlocked);
+    } else {
+      const parts: string[] = [];
+      let cursor = 0;
+      for (const match of scannerMatches) {
+        if (match.start > cursor) {
+          parts.push(this.applyBuiltInDetectors(text.slice(cursor, match.start), counts, markBlocked));
+        }
+        const secret = text.slice(match.start, match.end);
+        const action = this.actionFor(match.ruleId);
+        const prev = counts.get(match.ruleId);
+        counts.set(match.ruleId, { category: 'tech_secret', count: (prev?.count ?? 0) + 1, action });
+        if (action === 'block') blocked = true;
+        parts.push(formatSecretRedactionTag(match.ruleId, secret));
+        cursor = match.end;
+      }
+      if (cursor < text.length) parts.push(this.applyBuiltInDetectors(text.slice(cursor), counts, markBlocked));
+      masked = parts.join('');
     }
     const findings: GuardFinding[] = [...counts.entries()].map(([detectorId, info]) => ({
       detectorId, category: info.category, count: info.count, action: info.action,
