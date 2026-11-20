@@ -46,10 +46,14 @@ export function artifactAuthority(row: { role: string; approved: boolean } | und
   credential: { readonly readable: boolean; readonly writable: boolean }) {
   return {
     readable: !!row?.approved && credential.readable === true && ['viewer', 'commenter', 'editor', 'admin'].includes(row.role),
+    commentable: !!row?.approved && credential.readable === true && credential.writable === true
+      && ['commenter', 'editor', 'admin'].includes(row.role),
     writable: !!row?.approved && credential.readable === true && credential.writable === true
       && ['editor', 'admin'].includes(row.role),
   };
 }
+
+export type ArtifactAuthority = ReturnType<typeof artifactAuthority>;
 
 export function createArtifactAuthorization(options: {
   identity: ArtifactHostIdentity; workspaceId: string; storageScopeId: string;
