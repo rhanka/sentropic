@@ -8,7 +8,7 @@ import type { RouteMeteringSink } from '../route-flow-core.js';
 import type { RouteAffinityStore, RoutePlanner } from '@sentropic/llm-mesh';
 import type { CaptureRetention } from '../ports/capture-vault.js';
 import type { GuardPort } from '../ports/guards.js';
-import type { StageRewriteEngine } from '../rewrite/stage-rewrite.js';
+import type { StageRewritePort } from '../rewrite/stage-rewrite.js';
 
 export interface MeshBinding {
   readonly ownerScopeRef: string;
@@ -37,7 +37,7 @@ export interface StartGatewayHostOptions {
   readonly captureRetention?: CaptureRetention;
   readonly captureQuotaBytes?: number;
   readonly stageId?: string;
-  readonly stageRewrite?: StageRewriteEngine;
+  readonly stageRewrite?: StageRewritePort;
   readonly guard?: GuardPort;
 }
 export interface HostReadiness {

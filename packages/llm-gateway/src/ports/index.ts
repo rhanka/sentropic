@@ -6,3 +6,11 @@ export * from './cost-context.js';
 export * from './dispatch.js';
 export * from './guards.js';
 export * from './pool.js';
+export type {
+  StageRewriteInput,
+  StageRewriteOptions,
+  StageRewritePort,
+  StageRewriteResult,
+  StageRewriteRule,
+  StageRewriteTrace,
+} from '../rewrite/stage-rewrite.js';

@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { InMemoryRoutePlanner, type GenerateRequest, type GenerateResponse, type PreparedRouteAttempt, type StreamEvent } from '@sentropic/llm-mesh';
 import { StageRewriteEngine } from '../src/rewrite/stage-rewrite.js';
+import type { StageRewritePort } from '../src/ports/index.js';
+import { createGatewayRouter } from '../src/router/index.js';
 import { normalizeGatewayIngress } from '../src/canonical-ingress.js';
 import { encodeGatewayResponse } from '../src/canonical-egress.js';
 import { prepareRouteFlow } from '../src/route-flow-core.js';
@@ -183,9 +185,9 @@ describe('L1.2 StageRewriteEngine & cache-marker preservation (Claude + Muse)', 
     expect((prepared.effectiveBody as { reasoning?: { effort?: string } })?.reasoning?.effort).toBe('high');
     expect(JSON.stringify(prepared.effectiveBody)).toContain('[REDACTED:EMAIL]');
     const nativeReq = buildNativeMessagesRequest(
-      { ...prepared, nativeFeatures: { kind: 'eligible', forwarded: {}, maxOutputTokens: 128 } },
+      { ...prepared, nativeFeatures: { kind: 'optional', forwarded: {}, maxOutputTokens: 128 } },
       req,
-      { capability: { modelId: 'claude-sonnet-5', apiVersions: ['2023-06-01'], execute: async () => ({ kind: 'json', status: 200, headers: {}, body: {} }) }, anthropicVersion: '2023-06-01' },
+      { capability: { contractVersion: 1, protocol: 'anthropic-messages', modelId: 'claude-sonnet-5', apiVersions: ['2023-06-01'], requiredBetas: [], execute: async () => ({ kind: 'json', status: 200, headers: {}, body: {} }) }, anthropicVersion: '2023-06-01' },
       new AbortController().signal,
     );
     expect((nativeReq.body as { reasoning?: { effort?: string } }).reasoning?.effort).toBe('high');
@@ -235,6 +237,54 @@ describe('L1.2 StageRewriteEngine & cache-marker preservation (Claude + Muse)', 
       expect(receipt.originModel).toBe(hostModel);
       expect(receipt.stageRewrites?.[0]?.ruleId).toBe('h-r1');
       expect(receipt.guardVerdict).toBe('masked');
+    } finally { await host.stop(); await rm(stateDir, { recursive: true, force: true }); }
+  });
+
+  it('accepts a lightweight StageRewritePort test double on router/host and inherits mesh.gateway.stageRewrite', async () => {
+    const seen: string[] = [];
+    const stubPort: StageRewritePort = {
+      rewrite(input) {
+        seen.push(input.model);
+        return {
+          rewritten: true, originModel: input.model, model: input.model, body: input.body, stageRewriteCount: 1,
+          trace: { stageId: 'stub', ruleId: 'stub-1', fromModel: input.model, toModel: input.model },
+        };
+      },
+    };
+    const app = createGatewayRouter({
+      config: { ...stubGatewayConfig, callerAuth },
+      routePlanner: museAndClaudePlanner([]),
+      routeMetering: { settleRoute() {} },
+      stageRewrite: stubPort,
+    });
+    const r = await app.request('/v1/messages', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-5', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    expect(r.status).toBe(200);
+    expect(seen).toEqual(['claude-sonnet-5']);
+
+    // startGatewayHost inherits mesh.gateway.stageRewrite when options.stageRewrite is omitted
+    const stateDir = await mkdtemp(join(tmpdir(), 'gw-p31-port-'));
+    const fixture = durableHostFixture();
+    const host = await startGatewayHost({
+      stateDir,
+      mesh: { ...fixture.mesh, gateway: { ...fixture.mesh.gateway, stageRewrite: stubPort } },
+      listen: { host: '127.0.0.1', port: 0 },
+    });
+    try {
+      const control = createGatewayControlClient({ controlSocket: host.controlSocket });
+      const issued = await control.acquireSession({
+        ownerScopeRef: 'owner-a', workspaceRef: 'w', clientSessionRef: 'p31-1', routingContract: hostContract,
+      });
+      const res = await fetch(`${host.endpoint}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${issued.key}` },
+        body: JSON.stringify({ model: hostModel, messages: [{ role: 'user', content: 'hi' }] }),
+      });
+      expect(res.status).toBe(200);
+      const rec = await control.readReceipt({ ownerScopeRef: 'owner-a', receiptId: res.headers.get('x-sentropic-receipt')! });
+      expect(rec.stageRewrites?.[0]?.ruleId).toBe('stub-1');
     } finally { await host.stop(); await rm(stateDir, { recursive: true, force: true }); }
   });
 });
