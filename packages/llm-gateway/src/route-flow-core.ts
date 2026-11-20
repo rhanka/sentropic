@@ -20,6 +20,16 @@ import {
 import type { StageRewritePort, StageRewriteTrace } from './rewrite/stage-rewrite.js';
 import type { GuardPort, GuardVerdict, MaskedCapturePayload } from './ports/guards.js';
 import type { GuardedTurnCaptureRecord } from './guards/sse-guard-tee.js';
+import type { ReceiptIntegrity } from './ports/gateway-state.js';
+import {
+  captureCanonicalProtectedProjection, captureProtectedIdentification,
+  type CanonicalProtectedSnapshot, type ProtectedIdentificationSnapshot,
+} from './guards/protected-identification.js';
+
+export interface RequestAuditRefuseDetail {
+  readonly integrity?: ReceiptIntegrity;
+  readonly reason?: string;
+}
 
 export interface RouteAttemptSettlement {
   readonly reportedUsage?: boolean;
@@ -59,7 +69,7 @@ export interface RouteFlowDeps {
       cost: CostContext; requestId: string; model: string;
       originModel?: string; stageRewrites?: readonly StageRewriteTrace[]; guardVerdict?: GuardVerdict;
     }): Promise<{ receiptId: string }>;
-    refuse?(receiptId: string): Promise<void>;
+    refuse?(receiptId: string, detail?: RequestAuditRefuseDetail): Promise<void>;
     beginAttempt?(input: { cost: CostContext; attemptRef: string; diagnostic: RoutePlan['diagnostics'][number] }): Promise<void>;
   };
   readonly dispatch?: RouteAttemptDispatchPort;
@@ -98,6 +108,8 @@ export interface PreparedRouteFlow {
   readonly guardVerdict?: GuardVerdict;
   readonly requestCapture?: MaskedCapturePayload;
   readonly effectiveBody?: unknown;
+  readonly protectedIngress: ProtectedIdentificationSnapshot;
+  readonly canonicalProtectedIngress: CanonicalProtectedSnapshot;
 }
 export class RequestAuditError extends Error {}
 export const markDurableAttempt = async (deps: RouteFlowDeps, cost: CostContext,
@@ -157,7 +169,9 @@ export const prepareRouteFlow = async (
   if (!auth.ok || !auth.cost) {
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
+  const protectedIngress = captureProtectedIdentification(request.wire, request.body, request.headers);
   let canonical = normalizeGatewayIngress(request.wire, request.body, request.responsesLimits);
+  const canonicalProtectedIngress = captureCanonicalProtectedProjection(request.wire, canonical.request);
   let cost = auth.cost;
   const subject = routingSubjectForCost(cost);
   // Pre-rewrite contract validation runs on the caller's original (originModel, originEffort).
@@ -194,6 +208,26 @@ export const prepareRouteFlow = async (
     const scan = deps.guard.inspectRequest(effectiveBody);
     guardVerdict = scan.verdict;
     if (scan.verdict === 'blocked') {
+      if (deps.requestAudit) {
+        try {
+          if (!request.receiptId) {
+            const receipt = await deps.requestAudit.admit({
+              cost: auth.cost, requestId: request.authContext.requestId, model: effectiveModel,
+              ...(originModel ? { originModel } : {}),
+              ...(stageRewrites ? { stageRewrites } : {}),
+              guardVerdict,
+            });
+            request.receiptId = receipt.receiptId;
+          }
+          if (!request.receiptRefused) {
+            request.receiptRefused = true;
+            await deps.requestAudit.refuse?.(request.receiptId, {
+              ...(scan.protectedViolation ? { integrity: 'protected_identification_violation' as const } : {}),
+              reason: scan.protectedViolation ? 'guard-mask-in-flight-protected-set' : 'guard-blocked',
+            });
+          }
+        } catch { /* Refusal audit sink errors never mask the 400 refusal. */ }
+      }
       throw new GatewayError('guard-blocked', 'request blocked by gateway guard policy');
     }
     if (scan.inFlightPayload !== effectiveBody) {
@@ -221,7 +255,9 @@ export const prepareRouteFlow = async (
   if (deps.budget) {
     // The reserved output ceiling is the one sent to every attempt (both wires, both flows).
     const bounded = boundRouteOutputCeiling(canonical, deps.budget);
-    const admitted = await prepareAdmittedRouteFlow(deps, effectiveRequest, cost, subject, bounded, nativeFeatures, precheckedRouteInput);
+    const admitted = await prepareAdmittedRouteFlow(
+      deps, effectiveRequest, cost, subject, bounded, nativeFeatures, protectedIngress, canonicalProtectedIngress, precheckedRouteInput,
+    );
     return {
       ...admitted,
       ...(originModel ? { originModel } : {}),
@@ -248,7 +284,7 @@ export const prepareRouteFlow = async (
       ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : { nativeMessages: undefined }),
     });
     return {
-      cost, subject, canonical, plan, nativeFeatures,
+      cost, subject, canonical, plan, nativeFeatures, protectedIngress, canonicalProtectedIngress,
       ...(originModel ? { originModel } : {}),
       ...(stageRewrites ? { stageRewrites } : {}),
       ...(guardVerdict ? { guardVerdict } : {}),
@@ -288,6 +324,8 @@ const prepareAdmittedRouteFlow = async (
   subject: VerifiedRoutingSubject,
   canonical: CanonicalIngressResult,
   nativeFeatures: NativeFeatureSelection,
+  protectedIngress: ProtectedIdentificationSnapshot,
+  canonicalProtectedIngress: CanonicalProtectedSnapshot,
   precheckedRouteInput?: ReturnType<NonNullable<RouteFlowDeps['routeInput']>>,
 ): Promise<PreparedRouteFlow> => {
   assertBudgetRouteDeps(deps.routePlanner, true, deps.budget);
@@ -318,7 +356,7 @@ const prepareAdmittedRouteFlow = async (
       quote: admission.quote,
       ...(nativeFeatures.kind === 'required' ? { nativeMessages: true } : { nativeMessages: undefined }),
     });
-    return { cost, subject, canonical, plan, admission, nativeFeatures };
+    return { cost, subject, canonical, plan, admission, nativeFeatures, protectedIngress, canonicalProtectedIngress };
   } catch (error) {
     // The admitted request's one zero-usage settlement, with hold release
     // (release-before-metering inside settleRouteRequest). A ledger failure
@@ -386,6 +424,32 @@ export const refuseNativeAttempt = async (
   try { await attempt?.releaseCancelled(); } catch { /* The refusal wins. */ }
   try { await settle(); } catch { /* Rejected settlement never replaces the refusal. */ }
   return new GatewayError('native-required', 'native capability unavailable for required request');
+};
+
+/**
+ * Egress Protected Identification invariant violation (L1.5, r8-F1): release attempt
+ * without health penalty, record durable refusal audit receipt, settle failed
+ * (releasing budget hold because dispatched.size === 0), and rethrow the 400 error.
+ */
+export const refuseProtectedIdentification = async (
+  deps: RouteFlowDeps,
+  attempt: PreparedRouteAttempt | undefined,
+  request: GatewayFlowRequest,
+  error: GatewayError,
+  settle: () => Promise<void>,
+): Promise<GatewayError> => {
+  try { await attempt?.releaseCancelled(); } catch { /* The refusal wins. */ }
+  if (request.receiptId && !request.receiptRefused) {
+    request.receiptRefused = true;
+    try {
+      await deps.requestAudit?.refuse?.(request.receiptId, {
+        integrity: 'protected_identification_violation',
+        reason: error.message,
+      });
+    } catch { /* Retain pending evidence for recovery. */ }
+  }
+  try { await settle(); } catch { /* Rejected settlement never replaces the refusal. */ }
+  return error;
 };
 
 export const classifyRouteError = (
