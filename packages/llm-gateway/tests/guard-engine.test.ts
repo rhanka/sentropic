@@ -195,4 +195,22 @@ describe('L1.3a GuardEngine (decoded JSON PII + technical secrets) & redactForLo
     expect(userBlock.call_id).toBe(`call-${synthetic.email}`);
     expect(userBlock.content).toBe('User msg [REDACTED:EMAIL]');
   });
+
+  it('refuses mask_in_flight inside openai-responses additional_tools input items without mutating in flight', () => {
+    const engine = new GuardEngine({ detectorActions: { 'pii.email': 'mask_in_flight' } });
+    for (const item of [
+      { type: 'additional_tools', role: 'developer', tools: [{ type: 'custom', name: 'exec', description: `contact ${synthetic.email}` }] },
+      { type: 'additional_tools', tools: [{ type: 'function', name: 'fn', description: `contact ${synthetic.email}` }] },
+    ]) {
+      const payload = {
+        model: 'gpt-6.1-sol',
+        input: [item, { type: 'message', role: 'user', content: 'hi' }],
+      };
+      const res = engine.inspectRequest(payload);
+      expect(res.verdict).toBe('blocked');
+      expect(res.protectedViolation).toBe(true);
+      expect(res.inFlightPayload).toBe(payload);
+      expect(JSON.stringify(res.maskedCapture.payload)).not.toContain(synthetic.email);
+    }
+  });
 });
