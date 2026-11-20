@@ -204,6 +204,27 @@ export const runRouteJsonFlow = async (
     // Operational and financial callbacks are outside provider retry handling.
     try { await attempt.complete(attemptUsage(usage)); }
     finally { await settle('success'); }
+    if (deps.guard) {
+      const responseScan = deps.guard.inspectRequest(encoded.body);
+      if (responseScan.verdict === 'blocked') {
+        throw new GatewayError('guard-blocked', 'response blocked by gateway guard policy');
+      }
+      if (deps.captureEnabled === true && deps.onCapture && prepared.requestCapture) {
+        try {
+          await deps.onCapture({
+            requestId: request.authContext.requestId,
+            ownerScopeRef: prepared.subject.ownerScopeRef,
+            wire: request.wire,
+            model: diagnostic.actualModelId,
+            requestCapture: prepared.requestCapture,
+            responseCapture: responseScan.maskedCapture,
+            truncated: false,
+            blocked: false,
+            createdAtMs: Date.now(),
+          });
+        } catch { /* Capture failures never break live routing. */ }
+      }
+    }
     return { ...encoded, servedTarget: servedTargetFor(diagnostic),
       ...(nativeObserver ? { relay: 'native', nativeServedModelId } : {}) };
   }

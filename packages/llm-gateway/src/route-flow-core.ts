@@ -18,6 +18,8 @@ import {
   admitRoute, assertBudgetRouteDeps, boundRouteOutputCeiling, chargeAdmittedAttempts, type AdmittedRoute,
 } from './admission.js';
 import type { StageRewriteEngine, StageRewriteTrace } from './rewrite/stage-rewrite.js';
+import type { GuardPort, GuardVerdict, MaskedCapturePayload } from './ports/guards.js';
+import type { GuardedTurnCaptureRecord } from './guards/sse-guard-tee.js';
 
 export interface RouteAttemptSettlement {
   readonly reportedUsage?: boolean;
@@ -75,6 +77,12 @@ export interface RouteFlowDeps {
   readonly nativeMessagesEnabled?: boolean;
   /** Optional catalog-validated single-step stage rewrite engine (D4 B, L1.2). */
   readonly stageRewrite?: StageRewriteEngine;
+  /** Optional decoded-JSON PII + technical-secret guard (D6a/D6d, L1.3b). */
+  readonly guard?: GuardPort;
+  /** Body capture persistence flag — strictly OFF (`false`) by default. */
+  readonly captureEnabled?: boolean;
+  /** Masked turn capture sink — invoked only when `captureEnabled === true`. */
+  readonly onCapture?: (record: GuardedTurnCaptureRecord) => Promise<void> | void;
 }
 
 export interface PreparedRouteFlow {
@@ -87,6 +95,8 @@ export interface PreparedRouteFlow {
   readonly admission?: AdmittedRoute;
   readonly originModel?: string;
   readonly stageRewrites?: readonly StageRewriteTrace[];
+  readonly guardVerdict?: GuardVerdict;
+  readonly requestCapture?: MaskedCapturePayload;
 }
 export class RequestAuditError extends Error {}
 export const markDurableAttempt = async (deps: RouteFlowDeps, cost: CostContext,
@@ -177,6 +187,20 @@ export const prepareRouteFlow = async (
       }
     }
   }
+  let guardVerdict: GuardVerdict | undefined;
+  let requestCapture: MaskedCapturePayload | undefined;
+  if (deps.guard) {
+    const scan = deps.guard.inspectRequest(effectiveBody);
+    guardVerdict = scan.verdict;
+    if (scan.verdict === 'blocked') {
+      throw new GatewayError('guard-blocked', 'request blocked by gateway guard policy');
+    }
+    if (scan.inFlightPayload !== effectiveBody) {
+      effectiveBody = scan.inFlightPayload;
+      canonical = normalizeGatewayIngress(request.wire, effectiveBody, request.responsesLimits);
+    }
+    if (deps.captureEnabled === true) requestCapture = scan.maskedCapture;
+  }
   const nativeFeatures = classifyNativeFeatures(request.wire, request.headers, effectiveBody, canonical, {
     budget: deps.budget, nativeMessagesEnabled: deps.nativeMessagesEnabled,
   });
@@ -195,7 +219,13 @@ export const prepareRouteFlow = async (
     // The reserved output ceiling is the one sent to every attempt (both wires, both flows).
     const bounded = boundRouteOutputCeiling(canonical, deps.budget);
     const admitted = await prepareAdmittedRouteFlow(deps, effectiveRequest, cost, subject, bounded, nativeFeatures, precheckedRouteInput);
-    return { ...admitted, ...(originModel ? { originModel } : {}), ...(stageRewrites ? { stageRewrites } : {}) };
+    return {
+      ...admitted,
+      ...(originModel ? { originModel } : {}),
+      ...(stageRewrites ? { stageRewrites } : {}),
+      ...(guardVerdict ? { guardVerdict } : {}),
+      ...(requestCapture ? { requestCapture } : {}),
+    };
   }
   try {
     const routeInput = precheckedRouteInput ?? deps.routeInput?.({ cost, request: effectiveRequest, canonical });
@@ -217,6 +247,8 @@ export const prepareRouteFlow = async (
       cost, subject, canonical, plan, nativeFeatures,
       ...(originModel ? { originModel } : {}),
       ...(stageRewrites ? { stageRewrites } : {}),
+      ...(guardVerdict ? { guardVerdict } : {}),
+      ...(requestCapture ? { requestCapture } : {}),
     };
   } catch (error) {
     if (isRecognizedPlanningRefusal(error)) {
