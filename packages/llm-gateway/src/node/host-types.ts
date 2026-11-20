@@ -23,6 +23,12 @@ export interface StartGatewayHostOptions {
   readonly controlSocket?: string;
   readonly mesh: MeshBinding;
   readonly listen: { host: string; port: number };
+  /** Default OFF (`false`). When true, enables HMAC-proofed loopback HTTP `POST /v1/session`. */
+  readonly enableLoopbackHttpSessionMint?: boolean;
+  /** Ephemeral 256-bit launch secret required when `enableLoopbackHttpSessionMint` is true. */
+  readonly bootstrapSecret?: string;
+  readonly bootstrapNow?: () => number;
+  readonly bootstrapMaxNonces?: number;
 }
 export interface HostReadiness {
   readonly ready: boolean;
