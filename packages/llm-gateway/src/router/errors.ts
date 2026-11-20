@@ -64,7 +64,8 @@ export type GatewayFailureKind =
   | 'no-route'
   | 'request-too-large'
   | 'request-body-capacity'
-  | 'cross-user-disabled';
+  | 'cross-user-disabled'
+  | 'guard-blocked';
 
 export interface NativeValidationPublicDetail {
   readonly type: string;
@@ -315,6 +316,13 @@ export const mapGatewayError = (
       return anthropic
         ? anthropicError(400, 'invalid_request_error', 'request not permitted')
         : openAiError(400, 'invalid_request_error', 'request not permitted', 'unsupported');
+
+    case 'guard-blocked': {
+      const headers = { 'x-should-retry': 'false' };
+      return anthropic
+        ? anthropicError(400, 'invalid_request_error', 'request blocked by gateway guard policy', headers)
+        : openAiError(400, 'invalid_request_error', 'request blocked by gateway guard policy', 'guard_blocked', headers);
+    }
 
     case 'native-required':
     case 'native-unavailable': {
