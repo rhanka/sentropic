@@ -10,8 +10,17 @@ export interface CanonicalGatewayResponse {
 
 const usageFor = (wire: GatewayWire, usage?: TokenUsage): Record<string, number> | undefined => {
   if (!usage) return undefined;
+  const raw = usage.providerRawUsage && typeof usage.providerRawUsage === 'object'
+    ? usage.providerRawUsage as Record<string, unknown> : undefined;
   if (wire === 'anthropic-messages') {
-    return { input_tokens: usage.inputTokens ?? 0, output_tokens: usage.outputTokens ?? 0 };
+    return {
+      input_tokens: usage.inputTokens ?? 0,
+      output_tokens: usage.outputTokens ?? 0,
+      ...(typeof raw?.cache_creation_input_tokens === 'number'
+        ? { cache_creation_input_tokens: raw.cache_creation_input_tokens } : {}),
+      ...(typeof raw?.cache_read_input_tokens === 'number'
+        ? { cache_read_input_tokens: raw.cache_read_input_tokens } : {}),
+    };
   }
   return {
     prompt_tokens: usage.inputTokens ?? 0,

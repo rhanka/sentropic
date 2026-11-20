@@ -28,11 +28,25 @@ export interface StoredSession {
   readonly routingContract?: LaunchRoutingContract;
 }
 
+export interface StoredStageRewriteTrace {
+  readonly stageId: string;
+  readonly ruleId: string;
+  readonly fromModel: string;
+  readonly toModel: string;
+  readonly fromEffort?: string;
+  readonly toEffort?: string;
+}
+
 export interface StoredReceipt {
   readonly policyRevision?: string;
   readonly mappingRevision?: string;
   readonly mappingContentSha256?: string;
   readonly physicalAttempts?: readonly StoredRequestAttempt[];
+  readonly originModel?: string;
+  readonly stageRewrites?: readonly StoredStageRewriteTrace[];
+  readonly hopIndex?: number;
+  readonly guardVerdict?: string;
+  readonly integrity?: string;
   readonly schemaVersion: number;
   readonly receiptId: string;
   readonly sessionRef: string;
