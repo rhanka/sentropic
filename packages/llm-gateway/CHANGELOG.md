@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- 0.24.0: Lot 1 workstation relay-chain stage (Claude + Muse, all new features
+  OFF by default): `control.sock`-first session mint with default-OFF loopback
+  HTTP `POST /v1/session` HMAC bootstrap proof, replay cache and rate limit;
+  catalog-validated `StageRewriteEngine` (`<= 1`/stage) with lossless
+  `cache_control` / `prompt_cache_key` preservation; pure decoded-JSON
+  `GuardEngine`, `ExternalGuardPort`, sliding-window `SseGuardTee` and
+  `guard-blocked` (`400`) error mapping; default-OFF encrypted
+  `FileCaptureVault` (`0600`, deflate + AAD-bound AES-256-GCM) and
+  `readTurnCapture` on `control.sock`.
 - 0.23.0: admit `@sentropic/llm-mesh` `^0.36.0` in the mesh dependency range
   (follows the 0.36.0 Carbon/Fable 5.2 release); Fable 5.2 requests are served
   by Gemini 4 Carbon on the Cloud Code slot (owner mapping 2026-11-10), native
