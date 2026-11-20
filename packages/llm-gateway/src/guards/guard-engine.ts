@@ -26,7 +26,7 @@ const luhnValid = (raw: string): boolean => {
 
 const DETECTORS: readonly DetectorSpec[] = [
   { id: 'secret.pem_private_key', category: 'tech_secret', replacement: '[REDACTED:TECH_SECRET]',
-    pattern: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----|-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/g },
+    pattern: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)/g },
   { id: 'secret.auth_header', category: 'tech_secret', replacement: '[REDACTED:TECH_SECRET]',
     pattern: /\b(?:Authorization\s*:\s*(?:Bearer|DPoP)\s+\S+|DPoP\s*:\s*\S+|Cookie\s*:\s*[^\r\n;]+)/gi },
   { id: 'secret.sentropic_session', category: 'tech_secret', replacement: '[REDACTED:TECH_SECRET]',

@@ -59,6 +59,64 @@ describe('L1.3b SseGuardTee (16 KiB overlap + 2 MiB cap) & router flow wiring', 
     expect(Buffer.byteLength(String(bigFin.maskedCapture.payload), 'utf8')).toBeLessThanOrEqual(64);
   });
 
+  it('masks secrets split across real JSON SSE data events, masks truncated PEM at cap, preserves UTF-8 boundaries, and avoids finding overcounting', async () => {
+    const captured: { responseCapture: { payload: unknown } }[] = [];
+    const app = createGatewayRouter({
+      config: { ...stubGatewayConfig, callerAuth },
+      routePlanner: streamPlanner([
+        { type: 'content_delta', data: { delta: `prefix ${SPLIT_AWS_A}` } },
+        { type: 'content_delta', data: { delta: `${SPLIT_AWS_B} suffix` } },
+        { type: 'done', data: { finishReason: 'stop' } },
+      ]),
+      routeMetering: { settleRoute() {} },
+      guard: new GuardEngine(),
+      captureEnabled: true,
+      onCapture: (rec) => { captured.push(rec); },
+    });
+    const res = await app.request('/v1/messages', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-5', stream: true, messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    expect(res.status).toBe(200);
+    await res.text();
+    expect(captured).toHaveLength(1);
+    const stored = String(captured[0]!.responseCapture.payload);
+    expect(stored).not.toContain(SPLIT_AWS_A);
+    expect(stored).not.toContain(SPLIT_AWS_B);
+    expect(stored).not.toContain(FULL_AWS);
+    expect(stored).toContain('[REDACTED:TECH_SECRET]');
+
+    // Truncated PEM private key at capture cap must never leak base64 body in clear
+    const pemHeader = ['-----BEGIN ', 'PRIVATE KEY-----\n'].join('');
+    const pemBody = 'MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC';
+    const pemTee = new SseGuardTee({ guard: new GuardEngine(), maxCaptureBytes: 56 });
+    pemTee.pushChunk(`event: content_block_delta\ndata: ${JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: `${pemHeader}${pemBody}` } })}\n\n`);
+    pemTee.pushChunk(`event: content_block_delta\ndata: ${JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: `${'A'.repeat(120)}\n-----END PRIVATE KEY-----` } })}\n\n`);
+    const pemFin = pemTee.finalize();
+    expect(pemFin.truncated).toBe(true);
+    expect(String(pemFin.maskedCapture.payload)).not.toContain('MIIEvgIBADAN');
+    expect(String(pemFin.maskedCapture.payload)).toContain('[REDACTED:TECH_SECRET]');
+    expect(Buffer.byteLength(String(pemFin.maskedCapture.payload), 'utf8')).toBeLessThanOrEqual(56);
+
+    // Multibyte UTF-8 cut at maxCaptureBytes emits no replacement char and stays <= maxCaptureBytes
+    const utfTee = new SseGuardTee({ guard: new GuardEngine(), maxCaptureBytes: 5 });
+    utfTee.pushChunk('AB€€€');
+    const utfFin = utfTee.finalize();
+    expect(utfFin.truncated).toBe(true);
+    expect(String(utfFin.maskedCapture.payload)).not.toContain('\uFFFD');
+    expect(Buffer.byteLength(String(utfFin.maskedCapture.payload), 'utf8')).toBeLessThanOrEqual(5);
+
+    // P2-4: single email followed by 80 small SSE deltas reports count === 1 (not 161)
+    const countTee = new SseGuardTee({ guard: new GuardEngine() });
+    countTee.pushChunk(`event: content_block_delta\ndata: ${JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'reach alice@example.org ' } })}\n\n`);
+    for (let i = 0; i < 80; i += 1) {
+      countTee.pushChunk(`event: content_block_delta\ndata: ${JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: `tok${i} ` } })}\n\n`);
+    }
+    const countFin = countTee.finalize();
+    const emailFinding = countFin.findings.find((f) => f.detectorId === 'pii.email');
+    expect(emailFinding?.count).toBe(1);
+  });
+
   it('refuses blocked ingress pre-dispatch (400, x-should-retry: false, zero seat called) and keeps capture OFF by default', async () => {
     const prepareSpy = vi.fn();
     const captureSpy = vi.fn();
