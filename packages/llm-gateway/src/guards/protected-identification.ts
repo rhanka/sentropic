@@ -2,8 +2,8 @@ import type { GenerateRequest } from '@sentropic/llm-mesh';
 import type { GatewayWire } from '../ports/dispatch.js';
 import { GatewayError } from '../router/errors.js';
 import {
-  bytesEqual, canonicalBytes, captureProtectedIdentityHeaders, extractBodyProtectedBytes,
-  extractSequence, fieldEntry, isRecord, jcsStringify,
+  bytesEqual, canonicalBytes, captureProtectedIdentityHeaders, digestHex, extractBodyProtectedBytes,
+  extractSequence, fieldEntry, isRecord,
   type ProtectedIdentityHeadersSnapshot,
 } from './protected-identification-core.js';
 
@@ -33,19 +33,26 @@ export interface CanonicalProtectedSnapshot {
 export const captureCanonicalProtectedProjection = (
   wire: GatewayWire,
   request: GenerateRequest,
+  knownBody?: { readonly ref: unknown; readonly bytes: Uint8Array },
 ): CanonicalProtectedSnapshot => {
   const po = isRecord(request.providerOptions) ? request.providerOptions : undefined;
   const cc = po && isRecord(po.cacheControl) ? po.cacheControl : undefined;
   const resp = po && isRecord(po.responses) ? po.responses : undefined;
-  const ingressBodyProtected = po && Object.hasOwn(po, 'ingressBody') && po.ingressBody !== undefined
-    ? jcsStringify(Array.from(extractBodyProtectedBytes(wire, po.ingressBody))) : null;
+  const hasIngressBody = Boolean(po && Object.hasOwn(po, 'ingressBody') && po.ingressBody !== undefined);
+  const ingressBodyDigest = hasIngressBody
+    ? digestHex(
+      knownBody && po!.ingressBody === knownBody.ref
+        ? knownBody.bytes
+        : extractBodyProtectedBytes(wire, po!.ingressBody),
+    )
+    : null;
   return {
     wire,
     bytes: canonicalBytes({
       wire,
       messages: extractSequence(request.messages, false),
       tools: request.tools !== undefined ? { present: true, value: request.tools } : { present: false },
-      ingressBodyProtected,
+      ingressBodyDigest,
       prefixCacheControl: {
         topLevel: cc ? fieldEntry(cc, 'topLevel') : { present: false },
         system: cc ? fieldEntry(cc, 'system') : { present: false },
@@ -99,7 +106,9 @@ export const verifyProtectedIdentificationAtEgress = (
     if (!input.canonicalIngress || !input.canonicalRequest) {
       throw new GatewayError('protected-identification-mutated', 'missing canonical protected identification projection');
     }
-    const egressCanonical = captureCanonicalProtectedProjection(input.ingress.wire, input.canonicalRequest);
+    const egressCanonical = captureCanonicalProtectedProjection(
+      input.ingress.wire, input.canonicalRequest, { ref: input.body, bytes: egressBodyBytes },
+    );
     if (!bytesEqual(input.canonicalIngress.bytes, egressCanonical.bytes)) {
       throw new GatewayError('protected-identification-mutated', 'canonical protected identification mutated before egress');
     }

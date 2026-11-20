@@ -171,7 +171,9 @@ export const prepareRouteFlow = async (
   }
   const protectedIngress = captureProtectedIdentification(request.wire, request.body, request.headers);
   let canonical = normalizeGatewayIngress(request.wire, request.body, request.responsesLimits);
-  const canonicalProtectedIngress = captureCanonicalProtectedProjection(request.wire, canonical.request);
+  const canonicalProtectedIngress = captureCanonicalProtectedProjection(
+    request.wire, canonical.request, { ref: request.body, bytes: protectedIngress.bodyBytes },
+  );
   let cost = auth.cost;
   const subject = routingSubjectForCost(cost);
   // Pre-rewrite contract validation runs on the caller's original (originModel, originEffort).

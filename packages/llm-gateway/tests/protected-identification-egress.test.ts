@@ -181,4 +181,31 @@ describe('L1.5 Protected Identification Invariant — unit capture, 3-wire P fie
       }
     }
   });
+
+  it('keeps large bodies (<= 32 MiB) bounded in memory using streaming 32-byte JCS SHA-256 digests', () => {
+    const size = 20 * 1024 * 1024;
+    const largeSystem = `${'a'.repeat(65_535)}😀${'b'.repeat(size - 65_537)}`;
+    // Flatten the test fixture string before measuring capture/verify memory delta.
+    expect(largeSystem.charCodeAt(0)).toBe(97);
+    const largeBody = { model: MODEL, system: largeSystem, messages: [{ role: 'user', content: 'hi' }] };
+    const canonical = normalizeGatewayIngress('anthropic-messages', largeBody);
+    const beforeHeap = process.memoryUsage().heapUsed;
+    const ingress = captureProtectedIdentification('anthropic-messages', largeBody, {});
+    expect(ingress.bodyBytes.byteLength).toBe(32);
+    const canonicalIngress = captureCanonicalProtectedProjection('anthropic-messages', canonical.request, {
+      ref: largeBody, bytes: ingress.bodyBytes,
+    });
+    expect(canonicalIngress.bytes.byteLength).toBe(32);
+    verifyProtectedIdentificationAtEgress({
+      ingress, canonicalIngress, egressKind: 'provider-canonical',
+      body: largeBody, headers: {}, canonicalRequest: canonical.request,
+    });
+    const afterHeap = process.memoryUsage().heapUsed;
+    expect(afterHeap - beforeHeap).toBeLessThan(16 * 1024 * 1024);
+
+    const mutatedBody = { ...largeBody, system: `${largeSystem.slice(0, -1)}c` };
+    expect(() => verifyProtectedIdentificationAtEgress({
+      ingress, egressKind: 'provider-canonical', body: mutatedBody, headers: {},
+    })).toThrow(GatewayError);
+  });
 });

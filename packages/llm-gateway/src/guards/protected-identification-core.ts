@@ -1,3 +1,4 @@
+import { createHash, type Hash } from 'node:crypto';
 import type { GatewayWire } from '../ports/dispatch.js';
 
 /** Separate read-only exclusion list — never shares or mutates nativeHeaderExclusions. */
@@ -8,7 +9,7 @@ const EXCLUDED_IDENTITY_HEADERS: ReadonlySet<string> = new Set([
   'anthropic-key', 'cookie', 'cookie2', 'set-cookie', 'set-cookie2', 'user-agent',
 ]);
 
-const encoder = new TextEncoder();
+const HASH_CHUNK_CHARS = 65_536;
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -27,22 +28,82 @@ const isHopIdentityHeader = (name: string): boolean =>
   isProviderIdentityHeader(name)
   || (!EXCLUDED_IDENTITY_HEADERS.has(name) && !name.startsWith('x-sentropic-') && name.startsWith('x-claude-code-'));
 
-export const jcsStringify = (value: unknown): string => {
-  if (value === null || typeof value === 'boolean') return String(value);
-  if (typeof value === 'number') return Number.isFinite(value) ? JSON.stringify(Object.is(value, -0) ? 0 : value) : 'null';
-  if (typeof value === 'string') return JSON.stringify(value);
+const needsJsonEscape = (value: string): boolean => {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code < 0x20 || code === 0x22 || code === 0x5c || (code >= 0xd800 && code <= 0xdfff)) return true;
+  }
+  return false;
+};
+
+const updateJcsString = (hash: Hash, value: string): void => {
+  if (value.length <= HASH_CHUNK_CHARS) {
+    hash.update(JSON.stringify(value));
+    return;
+  }
+  hash.update('"');
+  let offset = 0;
+  while (offset < value.length) {
+    let end = Math.min(offset + HASH_CHUNK_CHARS, value.length);
+    if (end < value.length) {
+      const prev = value.charCodeAt(end - 1);
+      const next = value.charCodeAt(end);
+      if (prev >= 0xd800 && prev <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) end += 1;
+    }
+    const chunk = value.slice(offset, end);
+    hash.update(needsJsonEscape(chunk) ? JSON.stringify(chunk).slice(1, -1) : chunk);
+    offset = end;
+  }
+  hash.update('"');
+};
+
+const updateJcs = (hash: Hash, value: unknown): void => {
+  if (value === null || typeof value === 'boolean') {
+    hash.update(String(value));
+    return;
+  }
+  if (typeof value === 'number') {
+    hash.update(Number.isFinite(value) ? JSON.stringify(Object.is(value, -0) ? 0 : value) : 'null');
+    return;
+  }
+  if (typeof value === 'string') {
+    updateJcsString(hash, value);
+    return;
+  }
   if (Array.isArray(value)) {
-    return `[${value.map((item) => (item === undefined ? 'null' : jcsStringify(item))).join(',')}]`;
+    hash.update('[');
+    for (let i = 0; i < value.length; i += 1) {
+      if (i > 0) hash.update(',');
+      updateJcs(hash, value[i] === undefined ? null : value[i]);
+    }
+    hash.update(']');
+    return;
   }
   if (typeof value === 'object') {
     const rec = value as Record<string, unknown>;
     const keys = Object.keys(rec).filter((k) => rec[k] !== undefined).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${jcsStringify(rec[k])}`).join(',')}}`;
+    hash.update('{');
+    for (let i = 0; i < keys.length; i += 1) {
+      if (i > 0) hash.update(',');
+      const k = keys[i]!;
+      updateJcsString(hash, k);
+      hash.update(':');
+      updateJcs(hash, rec[k]);
+    }
+    hash.update('}');
+    return;
   }
-  return 'null';
+  hash.update('null');
 };
 
-export const canonicalBytes = (value: unknown): Uint8Array => encoder.encode(jcsStringify(value));
+export const canonicalBytes = (value: unknown): Uint8Array => {
+  const hash = createHash('sha256');
+  updateJcs(hash, value);
+  return new Uint8Array(hash.digest());
+};
+
+export const digestHex = (bytes: Uint8Array): string =>
+  Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('hex');
 
 export const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean => {
   if (a.byteLength !== b.byteLength) return false;
