@@ -170,21 +170,40 @@ describe('artifact-comments Hono router (C2b + S4-route)', () => {
     const { app, store } = buildApp();
     const atCap = 'a'.repeat(ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH);
     const overCap = 'a'.repeat(ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH + 1);
-    const { comment: root } = await (await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Cap', section_key: atCap }))).json() as { comment: Comment };
-    expect((await app.request(`/api/v1/artifacts/art-1/comments?section_key=${atCap}`)).status).toBe(200);
+    const hugeOverCap = 'a'.repeat(ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH * 2 + 1);
+    const emojiAtCap = '😀'.repeat(ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH);
+    const emojiOverCap = '😀'.repeat(ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH + 1);
+    const encodedAtCap = encodeURIComponent(`a1:${'x'.repeat(ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH - 3)}`);
+    const encodedOverCap = encodeURIComponent(`a1:${'x'.repeat(ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH - 2)}`);
 
-    const [addSpy, listSpy, sumSpy] = [vi.spyOn(store, 'add'), vi.spyOn(store, 'listByTarget'), vi.spyOn(store, 'listThreadSummaries')];
-    for (const res of [
-      await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Over', section_key: overCap })),
-      await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Over', thread_id: root.threadId, section_key: overCap })),
-      await app.request(`/api/v1/artifacts/art-1/comments?section_key=${overCap}`),
-      await app.request(`/api/v1/artifacts/art-1/comments/summaries?section_key=${overCap}`),
-    ]) {
-      expect(res.status).toBe(400);
-      expect(await res.json()).toMatchObject({ code: SECTION_KEY_TOO_LONG_CODE, maxLength: 2048 });
+    const fromSpy = vi.spyOn(Array, 'from');
+    try {
+      const capRes = await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Cap', section_key: atCap }));
+      expect(capRes.status).toBe(201);
+      const { comment: root } = await capRes.json() as { comment: Comment };
+      expect((await app.request(`/api/v1/artifacts/art-1/comments?section_key=${atCap}`)).status).toBe(200);
+      expect((await app.request(`/api/v1/artifacts/art-1/comments?section_key=${encodedAtCap}`)).status).toBe(200);
+      expect((await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Emoji', section_key: emojiAtCap }))).status).toBe(201);
+
+      const [addSpy, listSpy, sumSpy] = [vi.spyOn(store, 'add'), vi.spyOn(store, 'listByTarget'), vi.spyOn(store, 'listThreadSummaries')];
+      for (const res of [
+        await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Over', section_key: overCap })),
+        await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Huge', section_key: hugeOverCap })),
+        await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'EmojiOver', section_key: emojiOverCap })),
+        await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Over', thread_id: root.threadId, section_key: overCap })),
+        await app.request(`/api/v1/artifacts/art-1/comments?section_key=${overCap}`),
+        await app.request(`/api/v1/artifacts/art-1/comments?section_key=${encodedOverCap}`),
+        await app.request(`/api/v1/artifacts/art-1/comments/summaries?section_key=${overCap}`),
+      ]) {
+        expect(res.status).toBe(400);
+        expect(await res.json()).toMatchObject({ code: SECTION_KEY_TOO_LONG_CODE, maxLength: 2048 });
+      }
+      expect(fromSpy.mock.calls.some(([arg]) => arg === atCap || arg === hugeOverCap || arg === emojiOverCap)).toBe(false);
+      expect(addSpy).not.toHaveBeenCalled();
+      expect(listSpy).not.toHaveBeenCalled();
+      expect(sumSpy).not.toHaveBeenCalled();
+    } finally {
+      fromSpy.mockRestore();
     }
-    expect(addSpy).not.toHaveBeenCalled();
-    expect(listSpy).not.toHaveBeenCalled();
-    expect(sumSpy).not.toHaveBeenCalled();
   });
 });

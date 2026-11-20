@@ -83,8 +83,13 @@ export const serializeArtifactSummary = (row: CommentThreadSummary): CommentThre
   target: normalizeArtifactTarget(row.target),
 });
 
+const isOverSectionKeyCap = (value: string): boolean =>
+  value.length > ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH
+  && (value.length > ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH * 2
+    || Array.from(value).length > ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH);
+
 export const checkSectionKeyCap = (c: Context, value: string | undefined): Response | null =>
-  value !== undefined && Array.from(value).length > ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH
+  value !== undefined && isOverSectionKeyCap(value)
     ? c.json({
       code: SECTION_KEY_TOO_LONG_CODE,
       error: `section_key exceeds maximum length of ${ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH} characters`,
