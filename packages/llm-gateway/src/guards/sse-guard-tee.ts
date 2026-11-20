@@ -183,7 +183,11 @@ export class SseGuardTee {
 
 export const teeGuardedStream = (
   source: AsyncGenerator<GatewayDispatchStreamEvent | GatewayNativeStreamBytes, void, unknown>,
-  options: { readonly guard: GuardPort; readonly onComplete?: (result: SseGuardTeeResult) => Promise<void> | void },
+  options: {
+    readonly guard: GuardPort;
+    readonly onBlocked?: () => Promise<void> | void;
+    readonly onComplete?: (result: SseGuardTeeResult) => Promise<void> | void;
+  },
 ): AsyncGenerator<GatewayDispatchStreamEvent | GatewayNativeStreamBytes, void, unknown> => {
   const tee = new SseGuardTee({ guard: options.guard });
   const decoder = new TextDecoder('utf-8');
@@ -193,7 +197,7 @@ export const teeGuardedStream = (
     try {
       for await (const frame of source) {
         const text = 'raw' in frame ? frame.raw : decoder.decode(frame.bytes, { stream: true });
-        if (tee.pushChunk(text).blocked) { await source.return(undefined); return; }
+        if (tee.pushChunk(text).blocked) { await options.onBlocked?.(); await source.return(undefined); return; }
         yield frame;
       }
     } finally { await finish(); }

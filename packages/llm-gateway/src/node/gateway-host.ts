@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { Server } from 'node:http';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { GatewaySessionService } from '../session-service.js';
-import { GatewayStateError, runGatewayStateTransaction } from '../ports/gateway-state.js';
+import { GatewayStateError } from '../ports/gateway-state.js';
 import { createGatewayRouter } from '../router/index.js';
 import { ControlServer } from './control-server.js';
 import { startControlSocket } from './control-socket.js';
@@ -93,19 +93,13 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
         onCapture: async (rec) => { await captureVault.writeTurnCapture({ ...rec, stageId }); },
       } : {}),
       readiness: { isReady: async () => (await readiness()).ready },
-      requestAudit: { admit: async ({ cost, requestId, model, originModel, stageRewrites }) => {
-        const receipt = await service.recordAttempt({ ownerScopeRef, sessionRef: cost.gatewaySessionRef!, requestId, model: originModel ?? model });
-        if (originModel || stageRewrites) {
-          await runGatewayStateTransaction(store, async () => {
-            const loaded = await store.load();
-            const current = loaded.receipts[receipt.receiptId];
-            if (!current) return;
-            await store.compareAndSet(loaded.revision, {
-              ...loaded, revision: loaded.revision + 1,
-              receipts: { ...loaded.receipts, [receipt.receiptId]: { ...current, model, ...(originModel ? { originModel } : {}), ...(stageRewrites ? { stageRewrites } : {}) } },
-            });
-          });
-        }
+      requestAudit: { admit: async ({ cost, requestId, model, originModel, stageRewrites, guardVerdict }) => {
+        const receipt = await service.recordAttempt({
+          ownerScopeRef, sessionRef: cost.gatewaySessionRef!, requestId, model,
+          ...(originModel ? { originModel } : {}),
+          ...(stageRewrites ? { stageRewrites } : {}),
+          ...(guardVerdict ? { guardVerdict } : {}),
+        });
         return { receiptId: receipt.receiptId };
       }, beginAttempt: async ({ cost, attemptRef, diagnostic }) => {
         await service.appendAttempt({ ownerScopeRef, receiptId: cost.gatewayReceiptId!, attempt: {

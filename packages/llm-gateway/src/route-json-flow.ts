@@ -197,18 +197,17 @@ export const runRouteJsonFlow = async (
     const usage = observedUsage ?? estimate(response?.text);
     // A successful JSON operation cannot retry; its host upload/SDK references are now gone.
     request.bodyLease?.detach();
+    const responseScan = deps.guard ? deps.guard.inspectRequest(encoded.body) : undefined;
+    const responseBlocked = responseScan?.verdict === 'blocked';
     attempts.push({ candidateRef, providerId: diagnostic.actualProviderId,
       modelId: diagnostic.actualModelId, transportProviderId: diagnostic.actualTransportProviderId,
-      outcome: 'success', usage, reportedUsage: typeof response?.usage?.inputTokens === 'number' && typeof response?.usage?.outputTokens === 'number',
+      outcome: responseBlocked ? 'invalid-request' : 'success', usage,
+      reportedUsage: typeof response?.usage?.inputTokens === 'number' && typeof response?.usage?.outputTokens === 'number',
       ...((nativeServedModelId ?? observedServedModel) ? { observedServedModel: nativeServedModelId ?? observedServedModel } : {}) });
     // Operational and financial callbacks are outside provider retry handling.
     try { await attempt.complete(attemptUsage(usage)); }
-    finally { await settle('success'); }
-    if (deps.guard) {
-      const responseScan = deps.guard.inspectRequest(encoded.body);
-      if (responseScan.verdict === 'blocked') {
-        throw new GatewayError('guard-blocked', 'response blocked by gateway guard policy');
-      }
+    finally { await settle(responseBlocked ? 'failed' : 'success'); }
+    if (responseScan) {
       if (deps.captureEnabled === true && deps.onCapture && prepared.requestCapture) {
         try {
           await deps.onCapture({
@@ -219,10 +218,13 @@ export const runRouteJsonFlow = async (
             requestCapture: prepared.requestCapture,
             responseCapture: responseScan.maskedCapture,
             truncated: false,
-            blocked: false,
+            blocked: responseBlocked,
             createdAtMs: Date.now(),
           });
         } catch { /* Capture failures never break live routing. */ }
+      }
+      if (responseBlocked) {
+        throw new GatewayError('guard-blocked', 'response blocked by gateway guard policy');
       }
     }
     return { ...encoded, servedTarget: servedTargetFor(diagnostic),
