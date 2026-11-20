@@ -4,13 +4,12 @@ import type { CommentTarget } from './types.js';
 
 /**
  * Comment lifecycle event types, aligned 1:1 with the live wire actions
- * (`created | updated | closed | reopened | deleted | reassigned`); only the
- * state idiom differs (`closed` -> `resolved`, per Decision D3).
+ * (`created | updated | closed | reopened | deleted | reassigned`).
  */
 export type CommentEventType =
   | 'created'
   | 'updated'
-  | 'resolved'
+  | 'closed'
   | 'reopened'
   | 'deleted'
   | 'reassigned';

@@ -33,7 +33,8 @@ describe('domain guards', () => {
       createdAt: '2026-06-02T10:00:00.000Z',
     };
     expect(isComment(comment)).toBe(true);
-    expect(isComment({ ...comment, state: 'closed' })).toBe(false);
+    expect(isComment({ ...comment, state: 'closed' })).toBe(true);
+    expect(isComment({ ...comment, state: 'resolved' })).toBe(false);
     expect(isComment({ ...comment, target: { kind: 'usecase', id: 'x' } })).toBe(
       false,
     );
@@ -68,7 +69,8 @@ describe('domain guards', () => {
       threadId: 'thr_1',
     };
     expect(isCommentEvent(event)).toBe(true);
-    expect(isCommentEvent({ ...event, type: 'closed' })).toBe(false);
+    expect(isCommentEvent({ ...event, type: 'closed' })).toBe(true);
+    expect(isCommentEvent({ ...event, type: 'resolved' })).toBe(false);
 
     const summary: CommentThreadSummary = {
       threadId: 'thr_1',
