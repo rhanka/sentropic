@@ -108,9 +108,14 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
           selectedProviderId: diagnostic.actualProviderId, selectedModel: diagnostic.actualModelId,
           selectedTransport: diagnostic.actualTransportProviderId, outcome: 'pending', usage: null,
           observedServedModel: null, modelEvidence: 'selection-only' } });
-      }, refuse: async (receiptId) => {
+      }, refuse: async (receiptId, detail) => {
         const current = await service.readReceipt({ ownerScopeRef, receiptId });
-        if (current.settlement === 'pending') await service.settleReceipt({ ownerScopeRef, receiptId, outcome: 'error' });
+        if (current.settlement === 'pending') {
+          await service.settleReceipt({
+            ownerScopeRef, receiptId, outcome: 'error',
+            ...(detail?.integrity ? { integrity: detail.integrity } : {}),
+          });
+        }
       } },
       routeMetering: { settleRoute: async (context) => {
         await mesh.gateway.routeMetering.settleRoute(context);
