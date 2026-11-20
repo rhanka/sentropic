@@ -61,8 +61,10 @@ export const extractSequence = (items: readonly unknown[], responsesMode: boolea
     const item = items[i];
     if (!isRecord(item)) continue;
     const role = normalizedRole(item.role);
-    const kindOk = !responsesMode || item.type === undefined || item.type === 'message';
-    if (kindOk && isProtectedRole(role)) protectedItems.push({ index: i, item });
+    const isProtected = responsesMode
+      ? item.type === 'additional_tools' || ((item.type === undefined || item.type === 'message') && isProtectedRole(role))
+      : isProtectedRole(role);
+    if (isProtected) protectedItems.push({ index: i, item });
   }
   const lastProtectedIndex = protectedItems.length > 0 ? protectedItems[protectedItems.length - 1]!.index : -1;
   const prefixSlots = lastProtectedIndex >= 0

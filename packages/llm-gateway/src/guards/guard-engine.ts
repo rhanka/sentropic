@@ -71,6 +71,7 @@ const NON_MASKABLE_LINKAGE_KEYS: ReadonlySet<string> = new Set([
 const isProtectedItem = (item: unknown, isResponsesInput: boolean): boolean => {
   if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
   const rec = item as Record<string, unknown>;
+  if (isResponsesInput && rec.type === 'additional_tools') return true;
   const role = typeof rec.role === 'string' ? rec.role.trim().toLowerCase() : undefined;
   const kindOk = !isResponsesInput || rec.type === undefined || rec.type === 'message';
   return kindOk && (role === 'system' || role === 'developer');
