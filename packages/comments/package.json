@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/comments",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Collaborative annotation (comments/threads) over messages, canvas, artifacts, fields and records: CommentStore port + in-memory adapter + transport-agnostic wire events + thread summaries.",
   "type": "module",
   "license": "MIT",
@@ -19,6 +19,10 @@
     "./hono": {
       "types": "./dist/hono.d.ts",
       "import": "./dist/hono.js"
+    },
+    "./artifact-hono": {
+      "types": "./dist/artifact-hono.d.ts",
+      "import": "./dist/artifact-hono.js"
     }
   },
   "files": [
