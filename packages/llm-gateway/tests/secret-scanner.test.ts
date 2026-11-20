@@ -244,4 +244,28 @@ describe('L1.3c vendored pure-TS agent-stats secret scanner core', () => {
     const portGuard = new GuardEngine({ secretScanner: overlapPort, detectorActions: { 'ext:second': 'block' } });
     expect(portGuard.inspectRequest({ messages: [{ role: 'user', content: '0123456789abcdefghij' }] }).verdict).toBe('blocked');
   });
+
+  it('masks only mask_in_flight spans in flight when a leaf also contains audit_mask_copy matches', () => {
+    const guard = new GuardEngine({ customPatterns: [ORG_PATTERN], detectorActions: { 'custom:org-token': 'mask_in_flight' } });
+    const kubeTok = `placeholder_identifier_value_${rep(12)}`;
+    const mixed = guard.inspectRequest({
+      messages: [{ role: 'user', content: `tok ${FAKE_ORG_TOKEN} mail alice@example.org token: ${kubeTok}` }],
+    });
+    expect(mixed.verdict).toBe('masked');
+    const inFlight = (mixed.inFlightPayload as { messages: { content: string }[] }).messages[0]!.content;
+    expect(inFlight).toBe(`tok <<SECRET:custom_org-token:${sha16(FAKE_ORG_TOKEN)}>> mail alice@example.org token: ${kubeTok}`);
+    const captured = (mixed.maskedCapture.payload as { messages: { content: string }[] }).messages[0]!.content;
+    expect(captured).not.toContain(FAKE_ORG_TOKEN);
+    expect(captured).not.toContain('alice@example.org');
+    expect(captured).not.toContain(kubeTok);
+
+    const overlapMixed = guard.inspectRequest({
+      messages: [{ role: 'user', content: `token: pfx_${FAKE_ORG_TOKEN} mail alice@example.org` }],
+    });
+    expect((overlapMixed.inFlightPayload as { messages: { content: string }[] }).messages[0]!.content)
+      .toBe(`token: pfx_<<SECRET:custom_org-token:${sha16(FAKE_ORG_TOKEN)}>> mail alice@example.org`);
+    const overlapCap = (overlapMixed.maskedCapture.payload as { messages: { content: string }[] }).messages[0]!.content;
+    expect(overlapCap).not.toContain(FAKE_ORG_TOKEN);
+    expect(overlapCap).not.toContain('alice@example.org');
+  });
 });

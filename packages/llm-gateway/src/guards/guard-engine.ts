@@ -131,7 +131,7 @@ export class GuardEngine implements GuardPort {
     return this.detectorActions[id] ?? this.defaultAction;
   }
 
-  scanText(text: string): GuardTextScanResult {
+  private scanTextMode(text: string, inFlightOnly: boolean): GuardTextScanResult {
     if (!text) return { maskedText: text, findings: [], blocked: false };
     const counts = new Map<string, { category: GuardDetectorCategory; count: number; action: GuardActionPolicy }>();
     let blocked = false;
@@ -151,7 +151,9 @@ export class GuardEngine implements GuardPort {
       }))
       .filter((m) => Number.isInteger(m.start) && Number.isInteger(m.end) && m.end > m.start);
     for (const m of rawScanner) recordFinding(m.ruleId, 'tech_secret');
-    const scannerMatches = dedupeRanges(rawScanner);
+    const scannerMatches = dedupeRanges(
+      inFlightOnly ? rawScanner.filter((m) => this.actionFor(m.ruleId) === 'mask_in_flight') : rawScanner,
+    );
 
     const builtInSpans: { start: number; end: number; id: string; replacement: string; action: GuardActionPolicy }[] = [];
     for (const detector of DETECTORS) {
@@ -168,6 +170,7 @@ export class GuardEngine implements GuardPort {
       }
     }
 
+    const activeBuiltIns = inFlightOnly ? builtInSpans.filter((b) => b.action === 'mask_in_flight') : builtInSpans;
     type Edit = { start: number; end: number; text: string; isScanner: boolean };
     const edits: Edit[] = scannerMatches.map((s) => ({
       start: s.start,
@@ -175,7 +178,7 @@ export class GuardEngine implements GuardPort {
       text: formatSecretRedactionTag(s.ruleId, text.slice(s.start, s.end)),
       isScanner: true,
     }));
-    for (const b of builtInSpans) {
+    for (const b of activeBuiltIns) {
       const overlapping = edits.filter((e) => b.start < e.end && b.end > e.start);
       if (overlapping.length === 0) {
         edits.push({ start: b.start, end: b.end, text: b.replacement, isScanner: false });
@@ -207,6 +210,10 @@ export class GuardEngine implements GuardPort {
     return { maskedText: masked, findings, blocked };
   }
 
+  scanText(text: string): GuardTextScanResult {
+    return this.scanTextMode(text, false);
+  }
+
   inspectRequest(payload: unknown): GuardScanResult {
     const totals = new Map<string, { category: GuardDetectorCategory; count: number; action: GuardActionPolicy }>();
     let blocked = false;
@@ -214,20 +221,18 @@ export class GuardEngine implements GuardPort {
     let maskInFlight = false;
     const walk = (value: unknown, forInFlight: boolean, inProtected: boolean, depth: number): unknown => {
       if (typeof value === 'string') {
-        const res = this.scanText(value);
-        if (!forInFlight) {
-          for (const f of res.findings) {
-            const prev = totals.get(f.detectorId);
-            totals.set(f.detectorId, { category: f.category, count: (prev?.count ?? 0) + f.count, action: f.action });
-            if (f.action === 'block') blocked = true;
-            if (f.action === 'mask_in_flight') {
-              if (inProtected) { blocked = true; protectedViolation = true; }
-              else maskInFlight = true;
-            }
+        if (forInFlight) return !inProtected ? this.scanTextMode(value, true).maskedText : value;
+        const res = this.scanTextMode(value, false);
+        for (const f of res.findings) {
+          const prev = totals.get(f.detectorId);
+          totals.set(f.detectorId, { category: f.category, count: (prev?.count ?? 0) + f.count, action: f.action });
+          if (f.action === 'block') blocked = true;
+          if (f.action === 'mask_in_flight') {
+            if (inProtected) { blocked = true; protectedViolation = true; }
+            else maskInFlight = true;
           }
-          return res.maskedText;
         }
-        return !inProtected && res.findings.some((f) => f.action === 'mask_in_flight') ? res.maskedText : value;
+        return res.maskedText;
       }
       if (Array.isArray(value)) return value.map((item) => walk(item, forInFlight, inProtected, depth + 1));
       if (value && typeof value === 'object') {
