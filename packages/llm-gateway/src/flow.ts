@@ -238,6 +238,21 @@ const prepare = async (
     if (scan.inFlightPayload !== effectiveBody) effectiveBody = scan.inFlightPayload;
     if (deps.captureEnabled === true) requestCapture = scan.maskedCapture;
   }
+  try {
+    verifyProtectedIdentificationAtEgress({
+      ingress: protectedIngress,
+      egressKind: 'legacy-flow',
+      body: effectiveBody,
+      headers: request.headers,
+    });
+  } catch (error) {
+    if (error instanceof GatewayError && error.kind === 'protected-identification-mutated') {
+      await emitLegacyRefusalAudit(deps, request, cost, {
+        integrity: 'protected_identification_violation', reason: error.message,
+      });
+    }
+    throw error;
+  }
 
   // 2. resolve provider/model from the body `model`.
   const target = deps.resolveTarget(request.model);
@@ -359,6 +374,36 @@ const settle = async (
   });
 };
 
+/** Release an un-dispatched seat lease on pre-send refusal without estimated usage billing. */
+const releasePreSendRefusal = async (
+  deps: GatewayFlowDeps,
+  request: GatewayFlowRequest,
+  ctx: {
+    cost: CostContext;
+    target: ResolvedTarget;
+    selection: PoolSelection;
+    account: RedactedSelectionView;
+  },
+): Promise<void> => {
+  if (ctx.selection.acquisition.release) {
+    await ctx.selection.acquisition.release();
+  } else {
+    await ctx.selection.acquisition.recordOutcome({
+      status: 'failed',
+      requestId: ctx.cost.correlationId,
+    });
+  }
+  await deps.metering.settle({
+    cost: ctx.cost,
+    wire: request.wire,
+    providerId: ctx.target.providerId,
+    model: ctx.target.model,
+    outcome: 'failed',
+    usage: DEFAULT_USAGE,
+    account: ctx.account,
+  });
+};
+
 /** Result of a non-stream gateway call (router sends `body` with `status` + allowlisted headers). */
 export interface GatewayJsonResult {
   readonly status: number;
@@ -405,7 +450,7 @@ export const runJsonFlow = async (
         await emitLegacyRefusalAudit(deps, request, prepared.cost, {
           integrity: 'protected_identification_violation', reason: error.message,
         });
-        try { await settle(deps, request, prepared, 'failed', undefined); } catch { /* The refusal wins. */ }
+        try { await releasePreSendRefusal(deps, request, prepared); } catch { /* The refusal wins. */ }
         throw error;
       }
       throw error;
@@ -551,7 +596,7 @@ export const runStreamFlow = async (
         await emitLegacyRefusalAudit(deps, request, prepared.cost, {
           integrity: 'protected_identification_violation', reason: error.message,
         });
-        try { await settle(deps, request, prepared, 'failed', undefined); } catch { /* The refusal wins. */ }
+        try { await releasePreSendRefusal(deps, request, prepared); } catch { /* The refusal wins. */ }
         throw error;
       }
       throw error;
