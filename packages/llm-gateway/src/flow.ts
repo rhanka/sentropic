@@ -352,10 +352,12 @@ export const runJsonFlow = async (
     const retryAfterMs = isRateLimited
       ? parseRetryAfterMs(response.headers)
       : undefined;
+    const respScan = !isRateLimited && deps.guard ? deps.guard.inspectRequest(response.body) : undefined;
+    const respBlocked = respScan?.verdict === 'blocked';
 
     await settle(
       deps, request, prepared,
-      ok ? 'success' : isRateLimited ? 'rate_limited' : 'failed',
+      respBlocked ? 'failed' : ok ? 'success' : isRateLimited ? 'rate_limited' : 'failed',
       extractUsage(request.wire, response.body),
       retryAfterMs,
     );
@@ -371,19 +373,18 @@ export const runJsonFlow = async (
     }
 
     // Faithful passthrough: provider-native JSON, status code + headers verbatim (#4).
-    if (deps.guard) {
-      const respScan = deps.guard.inspectRequest(response.body);
-      if (respScan.verdict === 'blocked') throw new GatewayError('guard-blocked', 'response blocked by gateway guard policy');
+    if (respScan) {
       if (deps.captureEnabled === true && deps.onCapture && prepared.requestCapture) {
         try {
           await deps.onCapture({
             requestId: request.authContext.requestId,
             ownerScopeRef: prepared.cost.ownerScopeRef ?? `${prepared.cost.tenantId}:${prepared.cost.principalId}`,
             wire: request.wire, model: prepared.target.model, requestCapture: prepared.requestCapture,
-            responseCapture: respScan.maskedCapture, truncated: false, blocked: false, createdAtMs: Date.now(),
+            responseCapture: respScan.maskedCapture, truncated: false, blocked: respBlocked, createdAtMs: Date.now(),
           });
         } catch { /* Capture failures never break live routing. */ }
       }
+      if (respBlocked) throw new GatewayError('guard-blocked', 'response blocked by gateway guard policy');
     }
     return {
       status: response.status,

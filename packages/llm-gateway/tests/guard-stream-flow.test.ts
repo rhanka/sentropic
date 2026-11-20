@@ -145,7 +145,8 @@ describe('L1.3b SseGuardTee (16 KiB overlap + 2 MiB cap) & router flow wiring', 
     expect(captureSpy).not.toHaveBeenCalled();
   });
 
-  it('cuts SSE mid-stream on block posture without emitting synthetic message_stop or [DONE]', async () => {
+  it('cuts SSE mid-stream on block posture without emitting synthetic message_stop or [DONE] and settles failed', async () => {
+    const outcomes: string[] = [];
     const guard = new GuardEngine({ detectorActions: { 'secret.aws_access_key': 'block' } });
     const app = createGatewayRouter({
       config: { ...stubGatewayConfig, callerAuth },
@@ -155,7 +156,7 @@ describe('L1.3b SseGuardTee (16 KiB overlap + 2 MiB cap) & router flow wiring', 
         { type: 'content_delta', data: { delta: 'after-block' } },
         { type: 'done', data: { finishReason: 'stop' } },
       ]),
-      routeMetering: { settleRoute() {} },
+      routeMetering: { settleRoute(ctx) { outcomes.push(ctx.outcome); } },
       guard,
     });
     const res = await app.request('/v1/messages', {
@@ -167,5 +168,36 @@ describe('L1.3b SseGuardTee (16 KiB overlap + 2 MiB cap) & router flow wiring', 
     expect(body).not.toContain('after-block');
     expect(body).not.toContain('message_stop');
     expect(body).not.toContain('[DONE]');
+    expect(outcomes).toEqual(['failed']);
+
+    // JSON response blocked by guard settles as 'failed' (never 'success')
+    const jsonOutcomes: string[] = [];
+    const jsonPlanner = new InMemoryRoutePlanner({
+      directory: {
+        listEligible: async () => [{
+          accountRef: 'acct-1', diagnosticAccountRef: 'diag-1', targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+          supportedModelIds: ['claude-sonnet-5'], enrollmentCompletedAt: '2026-10-01T00:00:00Z', readiness: 'ready', revision: '1',
+        }],
+        prepareAttempt: async () => ({
+          attemptRef: 'att-j1',
+          generate: async () => ({ id: 'r1', providerId: 'anthropic', modelId: 'claude-sonnet-5', message: { role: 'assistant', content: FULL_AWS }, text: FULL_AWS, toolCalls: [], finishReason: 'stop' }),
+          stream: async () => (async function* () {})(),
+          markCommitted: async () => undefined, complete: async () => undefined,
+          releaseCancelled: async () => undefined, recordOutcome: async () => undefined,
+        }) as unknown as PreparedRouteAttempt,
+      },
+    });
+    const jsonApp = createGatewayRouter({
+      config: { ...stubGatewayConfig, callerAuth },
+      routePlanner: jsonPlanner,
+      routeMetering: { settleRoute(ctx) { jsonOutcomes.push(ctx.outcome); } },
+      guard,
+    });
+    const jsonRes = await jsonApp.request('/v1/messages', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-5', messages: [{ role: 'user', content: 'ok' }] }),
+    });
+    expect(jsonRes.status).toBe(400);
+    expect(jsonOutcomes).toEqual(['failed']);
   });
 });
