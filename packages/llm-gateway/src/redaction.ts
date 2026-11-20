@@ -25,6 +25,14 @@ const SECRET_KEYS = new Set([
   'Authorization',
   'x-api-key',
   'apiKey',
+  'dpop',
+  'DPoP',
+  'x-sentropic-bootstrap-proof',
+  'X-Sentropic-Bootstrap-Proof',
+  'x-sentropic-hop-envelope',
+  'cookie',
+  'set-cookie',
+  'workstationAffinitySalt',
 ]);
 
 /** Fixed mask for a redacted secret. Non-reversible, leaks no length. */
