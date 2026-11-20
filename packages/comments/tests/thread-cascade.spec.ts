@@ -26,13 +26,13 @@ async function seedThread(store: InMemoryCommentStore) {
 }
 
 describe('thread-level cascade', () => {
-  it('setState resolves and reopens every row of the thread', async () => {
+  it('setState closes and reopens every row of the thread', async () => {
     const store = new InMemoryCommentStore();
     const { root } = await seedThread(store);
 
-    const resolved = await store.setState(tenant, root.threadId, 'resolved');
-    expect(resolved.every((row) => row.state === 'resolved')).toBe(true);
-    expect(resolved.every((row) => row.updatedAt !== undefined)).toBe(true);
+    const closed = await store.setState(tenant, root.threadId, 'closed');
+    expect(closed.every((row) => row.state === 'closed')).toBe(true);
+    expect(closed.every((row) => row.updatedAt !== undefined)).toBe(true);
 
     const reopened = await store.setState(tenant, root.threadId, 'open');
     expect(reopened.every((row) => row.state === 'open')).toBe(true);
@@ -68,7 +68,7 @@ describe('thread-level cascade', () => {
   it('cascade on an unknown thread throws ThreadNotFoundError', async () => {
     const store = new InMemoryCommentStore();
     await expect(
-      store.setState(tenant, 'thr_missing', 'resolved'),
+      store.setState(tenant, 'thr_missing', 'closed'),
     ).rejects.toBeInstanceOf(ThreadNotFoundError);
     await expect(
       store.assign(tenant, 'thr_missing', 'usr_x'),
