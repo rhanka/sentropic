@@ -8,6 +8,8 @@ import { startGatewayHost } from '../src/node/gateway-host.js';
 import { createGatewayControlClient } from '../src/node/control-client.js';
 import type { MeshBinding } from '../src/node/host-types.js';
 import { runJsonFlow, runStreamFlow, type LegacyRefusalReceiptRecord } from '../src/flow.js';
+import { GuardEngine } from '../src/guards/guard-engine.js';
+import type { GuardedTurnCaptureRecord } from '../src/guards/sse-guard-tee.js';
 import { stubGatewayConfig } from '../src/stubs.js';
 import type { GuardPort } from '../src/ports/guards.js';
 import { nativeHarness } from './fixtures/native-flow.js';
@@ -217,5 +219,49 @@ describe('L1.5 Protected Identification Invariant — legacy flow.ts, count_toke
         outcome: 'failed', usage: { inputTokens: 0, outputTokens: 0, estimated: true },
       }));
     }
+  });
+
+  it('does not falsely block legacy JSON responses under mask_in_flight while still blocking explicit block rules', async () => {
+    const email = 'alice.tester@example.org';
+    const awsSecret = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
+    const captures: GuardedTurnCaptureRecord[] = [];
+    const hOk = buildHarness({
+      transport: new FixtureTransport({
+        jsonResponse: { status: 200, body: { ...anthropicMessageResponse, metadata: { owner: email } } },
+      }),
+    });
+    const appOk = createGatewayRouter({
+      config: hOk.config,
+      resolveTarget: () => ({ providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-sonnet-4-6' }),
+      metering: hOk.metering,
+      guard: new GuardEngine({ detectorActions: { 'pii.email': 'mask_in_flight' } }),
+      captureEnabled: true,
+      onCapture: (rec) => { captures.push(rec); },
+    });
+    const resOk = await appOk.request('/v1/messages', {
+      method: 'POST', headers: authHeaders('user-a'),
+      body: JSON.stringify({ ...anthropicRequest(false), system: 'clean' }),
+    });
+    expect(resOk.status).toBe(200);
+    expect(captures).toHaveLength(1);
+    expect(captures[0]!.blocked).toBe(false);
+    expect(JSON.stringify(captures[0]!.responseCapture.payload)).not.toContain(email);
+
+    const hBlock = buildHarness({
+      transport: new FixtureTransport({
+        jsonResponse: { status: 200, body: { ...anthropicMessageResponse, metadata: { owner: email }, content: [{ type: 'text', text: awsSecret }] } },
+      }),
+    });
+    const appBlock = createGatewayRouter({
+      config: hBlock.config,
+      resolveTarget: () => ({ providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-sonnet-4-6' }),
+      metering: hBlock.metering,
+      guard: new GuardEngine({ detectorActions: { 'pii.email': 'mask_in_flight', 'secret.aws_access_key': 'block' } }),
+    });
+    const resBlock = await appBlock.request('/v1/messages', {
+      method: 'POST', headers: authHeaders('user-a'),
+      body: JSON.stringify({ ...anthropicRequest(false), system: 'clean' }),
+    });
+    expect(resBlock.status).toBe(400);
   });
 });

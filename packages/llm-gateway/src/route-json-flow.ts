@@ -223,7 +223,8 @@ export const runRouteJsonFlow = async (
     // A successful JSON operation cannot retry; its host upload/SDK references are now gone.
     request.bodyLease?.detach();
     const responseScan = deps.guard ? deps.guard.inspectRequest(encoded.body) : undefined;
-    const responseBlocked = responseScan?.verdict === 'blocked';
+    const responseBlocked = responseScan?.verdict === 'blocked'
+      && (!responseScan.protectedViolation || responseScan.findings.some((f) => f.action === 'block'));
     attempts.push({ candidateRef, providerId: diagnostic.actualProviderId,
       modelId: diagnostic.actualModelId, transportProviderId: diagnostic.actualTransportProviderId,
       outcome: responseBlocked ? 'invalid-request' : 'success', usage,
