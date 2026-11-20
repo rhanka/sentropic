@@ -13,8 +13,13 @@ Implement Lot 1 (sub-lots L1.1 through L1.4) of `spec/SPEC_EVOL_LLM_GW_RELAY_CHA
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `packages/llm-gateway/src/guards/**`
-  - `packages/llm-gateway/src/ports/**`
-  - `packages/llm-gateway/src/redaction.ts`
+  - `packages/llm-gateway/src/router/**`
+  - `packages/llm-gateway/src/route-flow-core.ts`
+  - `packages/llm-gateway/src/route-json-flow.ts`
+  - `packages/llm-gateway/src/route-stream-flow.ts`
+  - `packages/llm-gateway/src/route-native.ts`
+  - `packages/llm-gateway/src/route-native-stream.ts`
+  - `packages/llm-gateway/src/flow.ts`
   - `packages/llm-gateway/tests/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -60,10 +65,10 @@ Implement Lot 1 (sub-lots L1.1 through L1.4) of `spec/SPEC_EVOL_LLM_GW_RELAY_CHA
   - [x] Green: `packages/llm-gateway/src/ports/guards.ts`, `src/guards/guard-engine.ts`, `src/redaction.ts`
   - [x] Gate: `guard-engine.test.ts`, `typecheck-llm-gateway`, `lint-llm-gateway`, `scope-check`
 
-- [ ] **Lot 1.3b — Streaming SSE overlap scanner & router flow wiring**
-  - [ ] Red: `packages/llm-gateway/tests/guard-stream-flow.test.ts`
-  - [ ] Green: `packages/llm-gateway/src/guards/sse-guard-tee.ts`, flow/router wiring
-  - [ ] Gate: `guard-stream-flow.test.ts`, `typecheck-llm-gateway`, `lint-llm-gateway`, `scope-check`
+- [x] **Lot 1.3b — Streaming SSE overlap scanner & router flow wiring**
+  - [x] Red: `packages/llm-gateway/tests/guard-stream-flow.test.ts`
+  - [x] Green: `packages/llm-gateway/src/guards/sse-guard-tee.ts`, flow/router wiring
+  - [x] Gate: `guard-stream-flow.test.ts`, `typecheck-llm-gateway`, `lint-llm-gateway`, `scope-check`
 
 - [ ] **Lot 1.4 — Workstation FileCaptureVault (default-OFF) & version bump**
   - [ ] Red: `packages/llm-gateway/tests/file-capture-vault.test.ts`

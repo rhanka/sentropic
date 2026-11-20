@@ -56,6 +56,9 @@ import {
   type NativeCountTokensPort,
 } from '../native-count-tokens.js';
 import type { NativeCountTokensRateLimiter } from '../native-count-rate.js';
+import type { StageRewriteEngine } from '../rewrite/stage-rewrite.js';
+import type { GuardPort } from '../ports/guards.js';
+import type { GuardedTurnCaptureRecord } from '../guards/sse-guard-tee.js';
 
 export interface ReadinessProbe {
   /** True when DB + secret-store + pool are all ready (spec §8 fail-closed). */
@@ -116,6 +119,14 @@ export interface CreateGatewayRouterOptions {
    * resolved Responses maxBodyBytes always bounds the Responses paths.
    */
   readonly requestBody?: RequestBodyLimitOptions;
+  /** Optional stage rewrite engine (D4 B, L1.2). */
+  readonly stageRewrite?: StageRewriteEngine;
+  /** Optional PII + technical-secret guard engine (D6a/D6d, L1.3b). */
+  readonly guard?: GuardPort;
+  /** Body capture persistence flag — defaults strictly OFF (`false`). */
+  readonly captureEnabled?: boolean;
+  /** Masked capture callback — invoked only when `captureEnabled === true`. */
+  readonly onCapture?: (record: GuardedTurnCaptureRecord) => Promise<void> | void;
 }
 
 const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
@@ -263,6 +274,9 @@ export const createGatewayRouter = (
           resolveTarget,
           metering,
           ...(options.estimateUsage ? { estimateUsage: options.estimateUsage } : {}),
+          ...(options.guard ? { guard: options.guard } : {}),
+          captureEnabled: options.captureEnabled === true,
+          ...(options.onCapture ? { onCapture: options.onCapture } : {}),
         }
       : undefined;
   const routeFlowDeps: RouteFlowDeps | undefined = options.routePlanner && options.routeMetering
@@ -273,6 +287,10 @@ export const createGatewayRouter = (
         ...(options.requestAudit ? { requestAudit: options.requestAudit } : {}),
         ...(options.budget ? { budget: options.budget } : {}),
         nativeMessagesEnabled: options.nativeMessagesEnabled,
+        ...(options.stageRewrite ? { stageRewrite: options.stageRewrite } : {}),
+        ...(options.guard ? { guard: options.guard } : {}),
+        captureEnabled: options.captureEnabled === true,
+        ...(options.onCapture ? { onCapture: options.onCapture } : {}),
       }
     : undefined;
 
