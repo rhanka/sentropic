@@ -12,12 +12,9 @@ Implement Lot 1 (sub-lots L1.1 through L1.4) of `spec/SPEC_EVOL_LLM_GW_RELAY_CHA
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/llm-gateway/src/rewrite/**`
+  - `packages/llm-gateway/src/guards/**`
   - `packages/llm-gateway/src/ports/**`
-  - `packages/llm-gateway/src/node/**`
-  - `packages/llm-gateway/src/canonical-ingress.ts`
-  - `packages/llm-gateway/src/canonical-egress.ts`
-  - `packages/llm-gateway/src/route-flow-core.ts`
+  - `packages/llm-gateway/src/redaction.ts`
   - `packages/llm-gateway/tests/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -58,10 +55,10 @@ Implement Lot 1 (sub-lots L1.1 through L1.4) of `spec/SPEC_EVOL_LLM_GW_RELAY_CHA
   - [x] Green: `packages/llm-gateway/src/rewrite/stage-rewrite.ts`, `canonical-ingress.ts`, `canonical-egress.ts`, `route-flow-core.ts`, `node/gateway-host.ts`, `ports/gateway-state.ts`
   - [x] Gate: `stage-rewrite.test.ts`, `muse.test.ts`, `typecheck-llm-gateway`, `lint-llm-gateway`, `check-llm-model-equivalences`, `scope-check`
 
-- [ ] **Lot 1.3a — Pure GuardEngine & typed GuardPort contract**
-  - [ ] Red: `packages/llm-gateway/tests/guard-engine.test.ts`
-  - [ ] Green: `packages/llm-gateway/src/ports/guards.ts`, `src/guards/guard-engine.ts`, `src/redaction.ts`
-  - [ ] Gate: `guard-engine.test.ts`, `typecheck-llm-gateway`, `lint-llm-gateway`, `scope-check`
+- [x] **Lot 1.3a — Pure GuardEngine & typed GuardPort contract**
+  - [x] Red: `packages/llm-gateway/tests/guard-engine.test.ts`
+  - [x] Green: `packages/llm-gateway/src/ports/guards.ts`, `src/guards/guard-engine.ts`, `src/redaction.ts`
+  - [x] Gate: `guard-engine.test.ts`, `typecheck-llm-gateway`, `lint-llm-gateway`, `scope-check`
 
 - [ ] **Lot 1.3b — Streaming SSE overlap scanner & router flow wiring**
   - [ ] Red: `packages/llm-gateway/tests/guard-stream-flow.test.ts`
