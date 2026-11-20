@@ -15,16 +15,25 @@
 
 import type { AuthDescriptor, SecretAuthMaterial } from '@sentropic/llm-mesh';
 
-/** Secret-bearing keys whose value must NEVER be logged (replaced, not hashed). */
-const SECRET_KEYS = new Set([
-  'accessToken',
-  'refreshToken',
-  'idToken',
+/** Secret-bearing keys (lowercased) whose value must NEVER be logged (replaced, not hashed). */
+const SECRET_KEYS_LOWER = new Set([
+  'accesstoken',
+  'refreshtoken',
+  'idtoken',
   'token',
   'authorization',
-  'Authorization',
+  'proxy-authorization',
   'x-api-key',
-  'apiKey',
+  'apikey',
+  'dpop',
+  'x-sentropic-bootstrap-proof',
+  'x-sentropic-hop-envelope',
+  'cookie',
+  'set-cookie',
+  'workstationaffinitysalt',
+  'bootstrapsecret',
+  'controltoken',
+  'keymaterial',
 ]);
 
 /** Fixed mask for a redacted secret. Non-reversible, leaks no length. */
@@ -84,8 +93,8 @@ export const redactForLog = (value: unknown, depth = 0): unknown => {
   }
   const out: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-    if (SECRET_KEYS.has(key) && typeof val === 'string') {
-      out[key] = REDACTED;
+    if (SECRET_KEYS_LOWER.has(key.toLowerCase()) && val !== null && val !== undefined) {
+      out[key] = Array.isArray(val) ? val.map(() => REDACTED) : REDACTED;
     } else {
       out[key] = redactForLog(val, depth + 1);
     }
