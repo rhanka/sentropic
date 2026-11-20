@@ -930,7 +930,7 @@
     "rootSources": [
       {
         "path": "packages/comments/src/types.ts",
-        "sha256": "1fa667108233ef122f4158f329328d7c13118cdbdde6f6d646460dadbf6a83ec",
+        "sha256": "e4c96c9c1ff25a53d28f0756aa9f55f56db05607219794ce7c1b244e5cb19b1e",
         "publicTypes": [
           "Comment",
           "CommentAuthor",
@@ -951,7 +951,7 @@
       },
       {
         "path": "packages/comments/src/events.ts",
-        "sha256": "7f900f37a0b7d4e1b4349688c63f317a8040cee9946994b24330c3eafe83d134",
+        "sha256": "e33de25ad139a290b81863055f7e369ff0c67498b2e0faaeda27653a67eb9a1e",
         "publicTypes": [
           "CommentEvent",
           "CommentEventEnvelope",
@@ -966,7 +966,7 @@
       },
       {
         "path": "packages/comments/src/guards.ts",
-        "sha256": "e0ff9bceb6955d1d769cfd53af0d0d59c1f03f3db297b0970d6853652066e7d6",
+        "sha256": "ea21924c5f868e970a7f268aaa7941714c62963aa458b213911b0e3ce0e48277",
         "publicTypes": [],
         "publicValues": [
           "isComment",
@@ -981,7 +981,7 @@
       },
       {
         "path": "packages/comments/src/store.ts",
-        "sha256": "23b8d464f0971c7446cd9f206dd04889e583b26b6ae2a2efcf5e61df006cd1cf",
+        "sha256": "da8e98cea78eeee5b4090ea8c23c97d60923fc800b73eacf037ae2b2d7a5166e",
         "publicTypes": [
           "CommentStore"
         ],
@@ -992,7 +992,7 @@
       },
       {
         "path": "packages/comments/src/in-memory.ts",
-        "sha256": "7361a8b383f129320a4acbb5225b96902aee7f1f4e212d6099a481fc8d133432",
+        "sha256": "bac8613cfcbbd5e35add7f3e02f66a16f3517fd569f9c632071b9ac32458ad2c",
         "publicTypes": [
           "InMemoryCommentStoreOptions"
         ],
@@ -1003,7 +1003,7 @@
     ],
     "hono": {
       "path": "packages/comments/src/hono.ts",
-      "sha256": "bb285c82c9bcb311b019ca6697003086609654d0b7df5340eb9dae1da70e8193",
+      "sha256": "1c3748469b71d68cc9bc44ae9aed3aeebe24305aa4af60ec34425925d23de147",
       "entrypoint": "@sentropic/comments/hono",
       "ports": {
         "path": "packages/comments/src/hono-ports.ts",

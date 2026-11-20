@@ -62,11 +62,11 @@ export interface CommentStore {
     query: TargetQuery,
   ): Promise<CommentThreadSummary[]>;
 
-  /** Cascade open/resolved across all rows of the thread. */
+  /** Cascade open/closed across all rows of the thread. */
   setState(
     tenant: TenantContext,
     threadId: string,
-    state: 'open' | 'resolved',
+    state: 'open' | 'closed',
   ): Promise<Comment[]>;
 
   /** Cascade assignment across all rows of the thread (`null` to unassign). */

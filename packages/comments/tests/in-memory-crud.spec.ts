@@ -105,7 +105,7 @@ describe('in-memory CRUD', () => {
     });
     expect(bySection.map((row) => row.id)).toEqual([a.id]);
 
-    await store.setState(tenant, a.threadId, 'resolved');
+    await store.setState(tenant, a.threadId, 'closed');
     const openOnly = await store.listByTarget(tenant, {
       kind: 'record',
       id: 'r1',

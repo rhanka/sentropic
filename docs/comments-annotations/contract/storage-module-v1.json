@@ -9,10 +9,10 @@
     "path": "docs/comments-annotations/contract/contract-v1.json",
     "contractVersion": "contract-v1",
     "hashVersion": "revision-hash-v1",
-    "sha256": "e027fdbb4a806df39809326697bf9b60ad5cb977eb1988af3be293da07161ba0",
+    "sha256": "0394ffeeb3a1aa135c3f5f66704f3a5c3408b47640d24ab222e8ef4625c4a77a",
     "freezeCommit": "7b8e5daf022cc58819dfdfae43cd89a703a82f96",
     "freezeReceipt": "docs/comments-annotations/contract/freeze-receipt.md",
-    "freezeReceiptSha256": "095e1d50f4c64ddc7254ca7e86f10582e4d1c2f153ec5173c79cb62818dc92cb"
+    "freezeReceiptSha256": "8af3ead627dea347f1a5aee7e1d0d7fd0d3f795aea60059c5ffc384f2a42f744"
   },
   "frozenM1Preservation": {
     "rule": "Frozen M1 interfaces, 24 store methods, 11 canonical record kinds, driver-agnostic transaction handle, and router factory signature remain authoritative and unchanged. No contract-v2 or breaking changes to M1 representation.",
