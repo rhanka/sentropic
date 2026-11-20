@@ -275,7 +275,20 @@ const normalizeReasoning = (raw: JsonRecord, wire: GatewayWire): GenerateRequest
   };
 };
 
-const extractCacheControl = (raw: JsonRecord): Record<string, unknown> | undefined => {
+/** Cache-control markers extracted using `providerOptions.ingressBody` indices. */
+export interface IngressCacheControlMap {
+  readonly topLevel?: unknown;
+  readonly system?: readonly { readonly index: number; readonly cache_control: unknown }[];
+  readonly tools?: readonly { readonly index: number; readonly cache_control: unknown }[];
+  readonly messages?: readonly {
+    readonly messageIndex: number;
+    readonly blockIndex: number;
+    readonly subBlockIndex?: number;
+    readonly cache_control: unknown;
+  }[];
+}
+
+const extractCacheControl = (raw: JsonRecord): IngressCacheControlMap | undefined => {
   const system: { index: number; cache_control: unknown }[] = [];
   records(raw.system).forEach((block, index) => {
     if (block.cache_control !== undefined) system.push({ index, cache_control: block.cache_control });
@@ -284,15 +297,25 @@ const extractCacheControl = (raw: JsonRecord): Record<string, unknown> | undefin
   records(raw.tools).forEach((tool, index) => {
     if (tool.cache_control !== undefined) tools.push({ index, cache_control: tool.cache_control });
   });
-  const messages: { messageIndex: number; blockIndex: number; cache_control: unknown }[] = [];
+  const messages: { messageIndex: number; blockIndex: number; subBlockIndex?: number; cache_control: unknown }[] = [];
   records(raw.messages).forEach((message, messageIndex) => {
     records(message.content).forEach((block, blockIndex) => {
       if (block.cache_control !== undefined) {
         messages.push({ messageIndex, blockIndex, cache_control: block.cache_control });
       }
+      records(block.content).forEach((sub, subBlockIndex) => {
+        if (sub.cache_control !== undefined) {
+          messages.push({ messageIndex, blockIndex, subBlockIndex, cache_control: sub.cache_control });
+        }
+      });
     });
   });
-  const out: Record<string, unknown> = {};
+  const out: {
+    topLevel?: unknown;
+    system?: typeof system;
+    tools?: typeof tools;
+    messages?: typeof messages;
+  } = {};
   if (raw.cache_control !== undefined) out.topLevel = raw.cache_control;
   if (system.length > 0) out.system = system;
   if (tools.length > 0) out.tools = tools;

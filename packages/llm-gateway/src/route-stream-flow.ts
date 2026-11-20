@@ -65,6 +65,7 @@ const trackedExecution = (input: {
   prepared: PreparedRouteFlow; request: GatewayFlowRequest; target: ResolvedTarget;
   candidateRef: string; attempts: RouteAttemptSettlement[]; responseId: string;
   initialObservedModel?: string;
+  includeCacheUsage?: boolean;
   settle: (outcome: 'success' | 'failed' | 'cancelled') => Promise<void>;
 }) => {
   const { attempt, iterator, prepared, request, target } = input;
@@ -158,7 +159,7 @@ const trackedExecution = (input: {
   })();
   const encoded = encodeGatewayStream(request.wire, target.model, input.responseId, tracked,
     request.wire === 'anthropic-messages'
-      ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request) } : undefined,
+      ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request), ...(input.includeCacheUsage ? { includeCacheUsage: true } : {}) } : undefined,
     request.wire === 'openai-responses' && request.responsesLimits
       ? { limits: request.responsesLimits } : undefined);
   const expose = (buffered: readonly GatewayDispatchStreamEvent[]) => {
@@ -321,7 +322,8 @@ export const runRouteStreamFlow = async (
       if (first.value.type === 'done') responseId = first.value.data.responseId ?? responseId;
       execution = trackedExecution({ attempt: preparedAttempt, iterator, first: first.value,
         prepared, request, target: servedTargetFor(diagnostic), candidateRef, attempts, responseId,
-        ...(observedServedModel ? { initialObservedModel: observedServedModel } : {}), settle });
+        ...(observedServedModel ? { initialObservedModel: observedServedModel } : {}),
+        ...(deps.stageRewrite ? { includeCacheUsage: true } : {}), settle });
       const buffered: GatewayDispatchStreamEvent[] = [];
       do {
         const frame = await execution.encoded.next();
