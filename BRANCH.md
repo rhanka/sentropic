@@ -60,10 +60,10 @@ Add a dedicated artifact-comments Hono router over `CommentStore` in `@sentropic
   - [x] Verify ports `9196`, `5396`, `1296` are free and `ENV=test-c2b` is passed last.
   - [x] Declare `Allowed Paths`, `Forbidden Paths`, and `BRC2B-EX1`.
 
-- [ ] **Lot 1 — Red-first tests and dedicated artifact-comments Hono router**
-  - [ ] Write `packages/comments/tests/artifact-hono.spec.ts` and verify RED via `make test-comments ENV=test-c2b`.
-  - [ ] Implement `packages/comments/src/artifact-hono.ts` (~145 LOC) over `CommentStore` with injected authz/tenant/event ports.
-  - [ ] Verify GREEN via `make build-comments ENV=test-c2b`, `make typecheck-comments ENV=test-c2b`, `make test-comments ENV=test-c2b`.
+- [x] **Lot 1 — Red-first tests and dedicated artifact-comments Hono router**
+  - [x] Write `packages/comments/tests/artifact-hono.spec.ts` and verify RED via `make test-comments ENV=test-c2b`.
+  - [x] Implement `packages/comments/src/artifact-hono.ts` (~145 LOC) over `CommentStore` with injected authz/tenant/event ports.
+  - [x] Verify GREEN via `make build-comments ENV=test-c2b`, `make typecheck-comments ENV=test-c2b`, `make test-comments ENV=test-c2b`.
 
 - [ ] **Lot 2 — Subpath export, version bump (`0.3.3`), CHANGELOG, C0 receipt & consumer fixtures**
   - [ ] Export `./artifact-hono` and bump `@sentropic/comments` to `0.3.3` in `packages/comments/package.json`; add `packages/comments/CHANGELOG.md`.
