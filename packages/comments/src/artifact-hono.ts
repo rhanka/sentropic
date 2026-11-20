@@ -101,8 +101,6 @@ export const createArtifactCommentsRouter = (options: CreateArtifactCommentsRout
     return { auth, tenant, row };
   };
 
-  void [createSchema, editSchema, assignSchema, resolveHttpProvenance, CommentNotFoundError, ThreadNotFoundError, nonHumanClients, emitEvent, loadAuthorizedRow];
-
   router.get('/artifacts/:artifactId/comments', async (c) => {
     const artifactId = c.req.param('artifactId');
     const auth = await authorize(c, options, artifactId, 'read');
@@ -139,6 +137,137 @@ export const createArtifactCommentsRouter = (options: CreateArtifactCommentsRout
     return rows.length === 0
       ? c.json({ code: 'thread_not_found', error: 'Thread not found' }, 404)
       : c.json({ items: rows.map(serializeArtifactComment) });
+  });
+
+  router.post('/artifacts/:artifactId/comments', async (c) => {
+    const artifactId = c.req.param('artifactId');
+    const auth = await authorize(c, options, artifactId, 'comment');
+    if (auth instanceof Response) return auth;
+    const raw = await c.req.json().catch(() => undefined);
+    const capErr = typeof (raw as { section_key?: unknown } | undefined)?.section_key === 'string'
+      ? checkSectionKeyCap(c, (raw as { section_key: string }).section_key) : null;
+    if (capErr) return capErr;
+    const parsed = createSchema.safeParse(raw);
+    if (!parsed.success) return c.json({ code: 'invalid_request', error: 'Invalid request body' }, 400);
+    const body = parsed.data;
+    const prov = resolveHttpProvenance(c, auth.principal, nonHumanClients, body.actor_kind, body.provenance);
+    if (!prov.ok) return prov.response;
+    if (typeof body.assigned_to === 'string'
+      && !(await options.tenant.memberExists({ userId: body.assigned_to, workspaceId: auth.principal.workspaceId }))) {
+      return c.json({ code: 'assignee_not_in_workspace', error: 'Assigned user not in workspace' }, 400);
+    }
+    const tenant = await options.tenant.resolve(auth.principal);
+    let inheritedSectionKey: string | undefined;
+    let inheritedAssignee: string | undefined;
+    if (body.thread_id) {
+      const threadRows = await loadThread(tenant, artifactId, body.thread_id);
+      if (threadRows.length === 0) return c.json({ code: 'thread_not_found', error: 'Thread not found' }, 404);
+      inheritedSectionKey = threadRows.find((r) => r.target.sectionKey !== undefined)?.target.sectionKey;
+      inheritedAssignee = threadRows.find((r) => r.assignedTo !== undefined)?.assignedTo;
+    }
+    const sectionKey = body.section_key ?? inheritedSectionKey;
+    const assignedTo = body.assigned_to === undefined ? inheritedAssignee : (body.assigned_to ?? undefined);
+    let created: Comment;
+    try {
+      created = await options.store.add(tenant, {
+        tenant,
+        target: { kind: 'artifact', id: artifactId, ...(sectionKey !== undefined ? { sectionKey } : {}) },
+        author: { id: auth.principal.userId },
+        body: body.content,
+        ...(body.thread_id ? { threadId: body.thread_id } : {}),
+        ...(assignedTo !== undefined ? { assignedTo } : {}),
+        ...(prov.provenance ? { provenance: prov.provenance } : {}),
+      });
+    } catch (error) {
+      if (error instanceof ThreadNotFoundError) return c.json({ code: 'thread_not_found', error: 'Thread not found' }, 404);
+      throw error;
+    }
+    if (body.thread_id && body.assigned_to !== undefined) {
+      await options.store.assign(tenant, created.threadId, body.assigned_to);
+      created = { ...created, assignedTo: body.assigned_to ?? undefined };
+    }
+    await emitEvent(auth.principal.workspaceId, artifactId, 'created', 'comment_id', created.threadId, created.id);
+    return c.json({ comment: serializeArtifactComment(created) }, 201);
+  });
+
+  const handleState = (state: 'open' | 'closed') => async (c: Context) => {
+    const artifactId = c.req.param('artifactId') ?? '';
+    const threadId = c.req.param('threadId') ?? '';
+    const auth = await authorize(c, options, artifactId, 'comment');
+    if (auth instanceof Response) return auth;
+    const tenant = await options.tenant.resolve(auth.principal);
+    if ((await loadThread(tenant, artifactId, threadId)).length === 0) {
+      return c.json({ code: 'thread_not_found', error: 'Thread not found' }, 404);
+    }
+    try {
+      const updated = await options.store.setState(tenant, threadId, state);
+      await emitEvent(auth.principal.workspaceId, artifactId, state === 'closed' ? 'closed' : 'reopened', 'thread_id', threadId, updated[0]?.id);
+      return c.json({ items: updated.map(serializeArtifactComment) });
+    } catch (error) {
+      if (error instanceof ThreadNotFoundError) return c.json({ code: 'thread_not_found', error: 'Thread not found' }, 404);
+      throw error;
+    }
+  };
+
+  router.post('/artifacts/:artifactId/comments/threads/:threadId/close', handleState('closed'));
+  router.post('/artifacts/:artifactId/comments/threads/:threadId/reopen', handleState('open'));
+
+  router.patch('/artifacts/:artifactId/comments/threads/:threadId/assignee', async (c) => {
+    const artifactId = c.req.param('artifactId');
+    const threadId = c.req.param('threadId');
+    const auth = await authorize(c, options, artifactId, 'comment');
+    if (auth instanceof Response) return auth;
+    const parsed = assignSchema.safeParse(await c.req.json().catch(() => undefined));
+    if (!parsed.success) return c.json({ code: 'invalid_request', error: 'Invalid request body' }, 400);
+    const { assigned_to } = parsed.data;
+    if (assigned_to !== null
+      && !(await options.tenant.memberExists({ userId: assigned_to, workspaceId: auth.principal.workspaceId }))) {
+      return c.json({ code: 'assignee_not_in_workspace', error: 'Assigned user not in workspace' }, 400);
+    }
+    const tenant = await options.tenant.resolve(auth.principal);
+    if ((await loadThread(tenant, artifactId, threadId)).length === 0) {
+      return c.json({ code: 'thread_not_found', error: 'Thread not found' }, 404);
+    }
+    try {
+      const updated = await options.store.assign(tenant, threadId, assigned_to);
+      await emitEvent(auth.principal.workspaceId, artifactId, 'reassigned', 'thread_id', threadId, updated[0]?.id);
+      return c.json({ items: updated.map(serializeArtifactComment) });
+    } catch (error) {
+      if (error instanceof ThreadNotFoundError) return c.json({ code: 'thread_not_found', error: 'Thread not found' }, 404);
+      throw error;
+    }
+  });
+
+  router.patch('/artifacts/:artifactId/comments/:id', async (c) => {
+    const artifactId = c.req.param('artifactId');
+    const id = c.req.param('id');
+    const loaded = await loadAuthorizedRow(c, artifactId, id);
+    if (loaded instanceof Response) return loaded;
+    const parsed = editSchema.safeParse(await c.req.json().catch(() => undefined));
+    if (!parsed.success) return c.json({ code: 'invalid_request', error: 'Invalid request body' }, 400);
+    try {
+      const updated = await options.store.edit(loaded.tenant, id, { body: parsed.data.content });
+      await emitEvent(loaded.auth.principal.workspaceId, artifactId, 'updated', 'comment_id', updated.threadId, updated.id);
+      return c.json({ comment: serializeArtifactComment(updated) });
+    } catch (error) {
+      if (error instanceof CommentNotFoundError) return c.json({ code: 'comment_not_found', error: 'Not found' }, 404);
+      throw error;
+    }
+  });
+
+  router.delete('/artifacts/:artifactId/comments/:id', async (c) => {
+    const artifactId = c.req.param('artifactId');
+    const id = c.req.param('id');
+    const loaded = await loadAuthorizedRow(c, artifactId, id);
+    if (loaded instanceof Response) return loaded;
+    try {
+      await options.store.delete(loaded.tenant, id);
+    } catch (error) {
+      if (error instanceof CommentNotFoundError) return c.json({ code: 'comment_not_found', error: 'Not found' }, 404);
+      throw error;
+    }
+    await emitEvent(loaded.auth.principal.workspaceId, artifactId, 'deleted', 'comment_id', loaded.row.threadId, loaded.row.id);
+    return c.json({ deleted: true, id });
   });
 
   return router;
