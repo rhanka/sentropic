@@ -10,7 +10,7 @@ export const createNodeGatewayServer = (
   fetch: (request: Request) => Response | Promise<Response>,
   origin: () => string,
   onActive?: (delta: number) => void,
-  onLoopbackRequest?: (request: Request) => Promise<Response | undefined>,
+  onLoopbackRequest?: (request: Request, peerKey?: string) => Promise<Response | undefined>,
 ): Server => createServer(async (req, res) => {
   onActive?.(1);
   const abort = new AbortController();
@@ -31,7 +31,7 @@ export const createNodeGatewayServer = (
         ? { body: Readable.toWeb(req as unknown as Parameters<typeof Readable.toWeb>[0]) as ReadableStream<Uint8Array>, duplex: 'half' } : {}),
     });
     const intercepted = onLoopbackRequest && isLoopbackAddress(req.socket.remoteAddress)
-      ? await onLoopbackRequest(request) : undefined;
+      ? await onLoopbackRequest(request, req.socket.remoteAddress) : undefined;
     const response = intercepted ?? await fetch(request);
     if (abort.signal.aborted) { await response.body?.cancel(); return; }
     const outgoing: Record<string, string> = {};
