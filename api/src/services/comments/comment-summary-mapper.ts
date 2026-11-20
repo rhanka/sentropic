@@ -18,7 +18,7 @@ import type { CommentContextType, CommentThreadSummary } from '../context-commen
  *   - updatedAt = latest row's `updatedAt` (`:1266`, falls back to prior).
  *
  * The package `CommentThreadSummary` (`types.ts:109-129`) uses `assignee` +
- * `status:'open'|'resolved'` and OMITS `createdBy/createdAt/updatedAt`, so this
+ * `status:'open'|'closed'` and OMITS `createdBy/createdAt/updatedAt`, so this
  * mapper does NOT consume the package summary — it groups the full `Comment`
  * rows directly (the host already needs them for the `users` label join). NO
  * package edit (SPEC DEC-1).
@@ -44,7 +44,7 @@ export function buildThreadSummariesFromComments(rows: Comment[]): CommentThread
     const contextType = (row.target.recordType ?? row.target.kind) as CommentContextType;
     const contextId = row.target.id;
     const sectionKey = row.target.sectionKey ?? null;
-    const status = row.state === 'resolved' ? 'closed' : 'open';
+    const status = row.state;
     const assignedTo = row.assignedTo ?? null;
 
     const current = byThread.get(key);
