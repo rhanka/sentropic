@@ -15,6 +15,7 @@ import { dispatchNativeMessages } from './route-attempt-dispatch.js';
 import { NativeMessagesUpstreamError } from '@sentropic/llm-mesh';
 import { NativeUsageObserver, nativeDefaultTtlEligible } from './native-usage.js';
 import { nativeStreamExecution, nativeStreamTermination } from './route-native-stream.js';
+import { teeGuardedStream } from './guards/sse-guard-tee.js';
 const defaultDispatch = new RouteAttemptDispatch();
 
 const errorUsage = (error: unknown): SettleUsage | undefined => {
@@ -64,6 +65,7 @@ const trackedExecution = (input: {
   prepared: PreparedRouteFlow; request: GatewayFlowRequest; target: ResolvedTarget;
   candidateRef: string; attempts: RouteAttemptSettlement[]; responseId: string;
   initialObservedModel?: string;
+  includeCacheUsage?: boolean;
   settle: (outcome: 'success' | 'failed' | 'cancelled') => Promise<void>;
 }) => {
   const { attempt, iterator, prepared, request, target } = input;
@@ -157,7 +159,7 @@ const trackedExecution = (input: {
   })();
   const encoded = encodeGatewayStream(request.wire, target.model, input.responseId, tracked,
     request.wire === 'anthropic-messages'
-      ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request) } : undefined,
+      ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request), ...(input.includeCacheUsage ? { includeCacheUsage: true } : {}) } : undefined,
     request.wire === 'openai-responses' && request.responsesLimits
       ? { limits: request.responsesLimits } : undefined);
   const expose = (buffered: readonly GatewayDispatchStreamEvent[]) => {
@@ -192,7 +194,10 @@ const trackedExecution = (input: {
     priming = false;
     if (input.first.type === 'done') await finish(doneClassification(input.first.data.finishReason));
   };
-  return { encoded, expose, commit, get refusal() { return refusal; },
+  const failGuard = async () => {
+    await finish({ reason: 'invalid-request', retryable: false, healthScope: 'route' });
+  };
+  return { encoded, expose, commit, failGuard, get refusal() { return refusal; },
     get terminal() { return terminal; }, get firstObserved() { return firstObserved; } };
 };
 
@@ -258,8 +263,23 @@ export const runRouteStreamFlow = async (
         await preparedAttempt.markCommitted();
         signal?.throwIfAborted();
         request.bodyLease?.detach();
+        const nativeStream = nativeExecution.expose();
+        const guardedNative = deps.guard ? teeGuardedStream(nativeStream, {
+          guard: deps.guard,
+          onBlocked: () => nativeExecution!.finish({ reason: 'invalid-request', retryable: false, healthScope: 'route' }, 'upstream_error', true),
+          onComplete: deps.captureEnabled === true && deps.onCapture && prepared.requestCapture
+            ? async (res) => {
+              try {
+                await deps.onCapture!({
+                  requestId: request.authContext.requestId, ownerScopeRef: prepared.subject.ownerScopeRef,
+                  wire: request.wire, model: diagnostic.actualModelId, requestCapture: prepared.requestCapture!,
+                  responseCapture: res.maskedCapture, truncated: res.truncated, blocked: res.blocked, createdAtMs: Date.now(),
+                });
+              } catch { /* Capture failures never break live routing. */ }
+            } : undefined,
+        }) : nativeStream;
         return { relay: 'native', servedTarget: servedTargetFor(diagnostic), headers: result.headers,
-          stream: nativeExecution.expose() };
+          stream: guardedNative };
       }
       const source = await (deps.dispatch ?? defaultDispatch).stream({ attempt: preparedAttempt, request: {
         ...prepared.canonical.request,
@@ -302,7 +322,8 @@ export const runRouteStreamFlow = async (
       if (first.value.type === 'done') responseId = first.value.data.responseId ?? responseId;
       execution = trackedExecution({ attempt: preparedAttempt, iterator, first: first.value,
         prepared, request, target: servedTargetFor(diagnostic), candidateRef, attempts, responseId,
-        ...(observedServedModel ? { initialObservedModel: observedServedModel } : {}), settle });
+        ...(observedServedModel ? { initialObservedModel: observedServedModel } : {}),
+        ...(deps.stageRewrite ? { includeCacheUsage: true } : {}), settle });
       const buffered: GatewayDispatchStreamEvent[] = [];
       do {
         const frame = await execution.encoded.next();
@@ -316,7 +337,22 @@ export const runRouteStreamFlow = async (
       await preparedAttempt.markCommitted();
       signal?.throwIfAborted();
       await execution.commit();
-      return { servedTarget: servedTargetFor(diagnostic), headers, stream: execution.expose(buffered) };
+      const exposedStream = execution.expose(buffered);
+      const guardedStream = deps.guard ? teeGuardedStream(exposedStream, {
+        guard: deps.guard,
+        onBlocked: () => execution!.failGuard(),
+        onComplete: deps.captureEnabled === true && deps.onCapture && prepared.requestCapture
+          ? async (res) => {
+            try {
+              await deps.onCapture!({
+                requestId: request.authContext.requestId, ownerScopeRef: prepared.subject.ownerScopeRef,
+                wire: request.wire, model: diagnostic.actualModelId, requestCapture: prepared.requestCapture!,
+                responseCapture: res.maskedCapture, truncated: res.truncated, blocked: res.blocked, createdAtMs: Date.now(),
+              });
+            } catch { /* Capture failures never break live routing. */ }
+          } : undefined,
+      }) : exposedStream;
+      return { servedTarget: servedTargetFor(diagnostic), headers, stream: guardedStream };
     } catch (error) {
       if (nativeExecution) {
         const classification = classifyRouteError(error, signal?.aborted);

@@ -8,10 +8,27 @@ export interface CanonicalGatewayResponse {
   readonly headers?: ProviderResponseHeaders;
 }
 
-const usageFor = (wire: GatewayWire, usage?: TokenUsage): Record<string, number> | undefined => {
+export interface EncodeGatewayResponseOptions {
+  readonly includeCacheUsage?: boolean;
+}
+
+const usageFor = (
+  wire: GatewayWire,
+  usage?: TokenUsage,
+  includeCacheUsage = false,
+): Record<string, number> | undefined => {
   if (!usage) return undefined;
+  const raw = includeCacheUsage && usage.providerRawUsage && typeof usage.providerRawUsage === 'object'
+    ? usage.providerRawUsage as Record<string, unknown> : undefined;
   if (wire === 'anthropic-messages') {
-    return { input_tokens: usage.inputTokens ?? 0, output_tokens: usage.outputTokens ?? 0 };
+    return {
+      input_tokens: usage.inputTokens ?? 0,
+      output_tokens: usage.outputTokens ?? 0,
+      ...(typeof raw?.cache_creation_input_tokens === 'number'
+        ? { cache_creation_input_tokens: raw.cache_creation_input_tokens } : {}),
+      ...(typeof raw?.cache_read_input_tokens === 'number'
+        ? { cache_read_input_tokens: raw.cache_read_input_tokens } : {}),
+    };
   }
   return {
     prompt_tokens: usage.inputTokens ?? 0,
@@ -42,7 +59,9 @@ export const encodeGatewayResponse = (
   wire: GatewayWire,
   response: GenerateResponse,
   responsesLimits?: ResponsesLimits,
+  options?: EncodeGatewayResponseOptions,
 ): CanonicalGatewayResponse => {
+  const includeCacheUsage = options?.includeCacheUsage === true;
   const headers = safeHeaders(response.providerMetadata);
   if (wire === 'openai-responses') {
     return {
@@ -72,7 +91,7 @@ export const encodeGatewayResponse = (
       body: {
         id: response.id, type: 'message', role: 'assistant', model: response.modelId,
         content, stop_reason: anthropicStopReason(response.finishReason), stop_sequence: null,
-        ...(usageFor(wire, response.usage) ? { usage: usageFor(wire, response.usage) } : {}),
+        ...(usageFor(wire, response.usage, includeCacheUsage) ? { usage: usageFor(wire, response.usage, includeCacheUsage) } : {}),
       },
       ...(headers ? { headers } : {}),
     };

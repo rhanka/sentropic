@@ -435,6 +435,9 @@ export class GatewaySessionService {
     sessionRef: string;
     requestId: string;
     model: string;
+    originModel?: string;
+    stageRewrites?: StoredReceipt['stageRewrites'];
+    guardVerdict?: string;
   }): Promise<StoredReceipt> {
     return runGatewayStateTransaction(this.store, () => this.recordCommitted(input));
   }
@@ -447,7 +450,7 @@ export class GatewaySessionService {
     }
     if (session.revokedAt) throw new GatewaySessionError('session revoked', 'REVOKED');
     if (!live(session, Date.now())) throw new GatewaySessionError('session expired', 'EXPIRED');
-    if (!session.models.includes(input.model)) throw new GatewaySessionError('model is outside the session grant', 'MODEL-NOT-GRANTED');
+    if (!session.models.includes(input.originModel ?? input.model)) throw new GatewaySessionError('model is outside the session grant', 'MODEL-NOT-GRANTED');
     const receipt: StoredReceipt = {
       schemaVersion: SCHEMA_VERSION,
       receiptId: randomBytes(16).toString('hex'),
@@ -455,6 +458,9 @@ export class GatewaySessionService {
       ownerScopeRef: session.ownerScopeRef,
       requestId: input.requestId,
       model: input.model,
+      ...(input.originModel ? { originModel: input.originModel } : {}),
+      ...(input.stageRewrites ? { stageRewrites: input.stageRewrites } : {}),
+      ...(input.guardVerdict ? { guardVerdict: input.guardVerdict } : {}),
       attempts: 0,
       physicalAttempts: [],
       policyRevision: session.policyRevision,
