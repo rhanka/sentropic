@@ -19,18 +19,35 @@ const sha256Short = (secret: string): string =>
 export const formatSecretRedactionTag = (ruleId: string, secret: string): string =>
   `<<SECRET:${ruleId.replace(/[^a-zA-Z0-9_-]/g, '_')}:${sha256Short(secret)}>>`;
 
-/** Scan text against structured custom regex patterns; enforces global (`g`) flag. */
+const COMPILED_REGEX_CACHE = new Map<string, RegExp | null>();
+const MAX_REGEX_CACHE = 256;
+
+const compileCustomRegex = (pattern: string, rawFlags?: string): RegExp | null => {
+  const flags = new Set((rawFlags ?? '').split(''));
+  flags.delete('y');
+  flags.add('g');
+  const normalized = [...flags].sort().join('');
+  const key = `${pattern}\0${normalized}`;
+  if (COMPILED_REGEX_CACHE.has(key)) return COMPILED_REGEX_CACHE.get(key) ?? null;
+  let compiled: RegExp | null;
+  try { compiled = new RegExp(pattern, normalized); } catch { compiled = null; }
+  if (COMPILED_REGEX_CACHE.size >= MAX_REGEX_CACHE) {
+    const oldest = COMPILED_REGEX_CACHE.keys().next().value;
+    if (oldest !== undefined) COMPILED_REGEX_CACHE.delete(oldest);
+  }
+  COMPILED_REGEX_CACHE.set(key, compiled);
+  return compiled;
+};
+
+/** Scan text against structured custom regex patterns; enforces global (`g`) flag and strips sticky (`y`). */
 export const scanCustom = (text: string, patterns: readonly CustomSecretPattern[]): SecretMatch[] => {
   if (!text || patterns.length === 0) return [];
   const matches: SecretMatch[] = [];
   for (const p of patterns) {
     if (!p || typeof p.id !== 'string' || !p.id || typeof p.pattern !== 'string' || !p.pattern) continue;
-    let re: RegExp;
-    try {
-      const flags = new Set((p.flags ?? '').split(''));
-      flags.add('g');
-      re = new RegExp(p.pattern, [...flags].join(''));
-    } catch { continue; }
+    const re = compileCustomRegex(p.pattern, p.flags);
+    if (!re) continue;
+    re.lastIndex = 0;
     for (const m of text.matchAll(re)) {
       if (m.index === undefined || m[0].length === 0) continue;
       matches.push({ start: m.index, end: m.index + m[0].length, ruleId: `custom:${p.id}`, message: `custom pattern ${p.id}` });
