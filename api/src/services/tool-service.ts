@@ -1296,7 +1296,7 @@ export class ToolService {
         kind: target.kind,
         id: target.id,
         ...(opts.sectionKey ? { sectionKey: opts.sectionKey } : {}),
-        ...(opts.status ? { status: opts.status === 'closed' ? 'resolved' : 'open' } : {}),
+        ...(opts.status ? { status: opts.status } : {}),
       });
       // Re-apply the live `(contextType, contextId)` pair filter host-side: the
       // port matches on `context_id` only, so a same-id record of a different
@@ -1426,7 +1426,7 @@ export class ToolService {
           if (!isAdmin && !isCreator) {
             throw new Error('Only the thread creator or admin can resolve this thread');
           }
-          await commentStore.setState(tenant, threadId, 'resolved'); // THREAD cascade, emit-free
+          await commentStore.setState(tenant, threadId, 'closed'); // THREAD cascade, emit-free
           await commentEventSink.emit({
             workspaceId,
             contextType: row.contextType,

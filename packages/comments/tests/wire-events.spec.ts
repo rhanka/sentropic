@@ -30,7 +30,7 @@ describe('wire events', () => {
 
     const root = await store.add(tenant, baseInput());
     await store.edit(tenant, root.id, { body: 'edited' });
-    await store.setState(tenant, root.threadId, 'resolved');
+    await store.setState(tenant, root.threadId, 'closed');
     await store.setState(tenant, root.threadId, 'open');
     await store.assign(tenant, root.threadId, 'usr_owner');
     await store.delete(tenant, root.id);
@@ -39,7 +39,7 @@ describe('wire events', () => {
     const expected: CommentEventType[] = [
       'created',
       'updated',
-      'resolved',
+      'closed',
       'reopened',
       'reassigned',
       'deleted',
