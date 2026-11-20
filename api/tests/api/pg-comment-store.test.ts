@@ -180,15 +180,15 @@ describe('PgCommentStore adapter parity (BR-42d Lot 2)', () => {
 
   // --- Thread cascade (setState / assign) ---
 
-  it('setState cascades resolved (-> closed) across all rows of the thread', async () => {
+  it('setState cascades closed across all rows of the thread', async () => {
     const root = await store.add(tenant, newComment({ body: 'Root' }));
     await store.add(tenant, newComment({ body: 'Reply', threadId: root.threadId }));
 
-    const result = await store.setState(tenant, root.threadId, 'resolved');
+    const result = await store.setState(tenant, root.threadId, 'closed');
     expect(result).toHaveLength(2);
-    expect(result.every((c) => c.state === 'resolved')).toBe(true);
+    expect(result.every((c) => c.state === 'closed')).toBe(true);
 
-    // Live column mapped to 'closed'.
+    // Live column holds 'closed' directly (no state translation).
     const rows = await db
       .select({ status: comments.status })
       .from(comments)
@@ -200,7 +200,7 @@ describe('PgCommentStore adapter parity (BR-42d Lot 2)', () => {
   });
 
   it('setState on an empty thread throws ThreadNotFoundError', async () => {
-    await expect(store.setState(tenant, 'ghost-thread', 'resolved')).rejects.toBeInstanceOf(
+    await expect(store.setState(tenant, 'ghost-thread', 'closed')).rejects.toBeInstanceOf(
       ThreadNotFoundError,
     );
   });
@@ -278,7 +278,7 @@ describe('PgCommentStore adapter parity (BR-42d Lot 2)', () => {
   it('listByTarget filters by target and status, ordered createdAt ASC then id ASC', async () => {
     const openRoot = await store.add(tenant, newComment({ body: 'open' }));
     const closedRoot = await store.add(tenant, newComment({ body: 'closed' }));
-    await store.setState(tenant, closedRoot.threadId, 'resolved');
+    await store.setState(tenant, closedRoot.threadId, 'closed');
 
     const all = await store.listByTarget(tenant, { kind: 'record', id: target.id });
     expect(all.map((c) => c.id)).toContain(openRoot.id);
@@ -288,9 +288,9 @@ describe('PgCommentStore adapter parity (BR-42d Lot 2)', () => {
     expect(openOnly.map((c) => c.id)).toContain(openRoot.id);
     expect(openOnly.map((c) => c.id)).not.toContain(closedRoot.id);
 
-    const resolvedOnly = await store.listByTarget(tenant, { kind: 'record', id: target.id, status: 'resolved' });
-    expect(resolvedOnly.map((c) => c.id)).toContain(closedRoot.id);
-    expect(resolvedOnly.map((c) => c.id)).not.toContain(openRoot.id);
+    const closedOnly = await store.listByTarget(tenant, { kind: 'record', id: target.id, status: 'closed' });
+    expect(closedOnly.map((c) => c.id)).toContain(closedRoot.id);
+    expect(closedOnly.map((c) => c.id)).not.toContain(openRoot.id);
   });
 
   it('listByTarget id tiebreaker is deterministic when createdAt collides', async () => {
@@ -336,9 +336,9 @@ describe('PgCommentStore adapter parity (BR-42d Lot 2)', () => {
     const last = await store.add(tenant, newComment({ body: 'Last msg', threadId: root.threadId }));
     await store.assign(tenant, root.threadId, other.id);
 
-    // A second, separate, resolved thread.
+    // A second, separate, closed thread.
     const closedRoot = await store.add(tenant, newComment({ body: 'Closed root' }));
-    await store.setState(tenant, closedRoot.threadId, 'resolved');
+    await store.setState(tenant, closedRoot.threadId, 'closed');
 
     const summaries = await store.listThreadSummaries(tenant, { kind: 'record', id: target.id });
     const open = summaries.find((s) => s.threadId === root.threadId)!;
@@ -352,17 +352,17 @@ describe('PgCommentStore adapter parity (BR-42d Lot 2)', () => {
     expect(open.lastMessageAt).toBe(last.createdAt);
 
     const closed = summaries.find((s) => s.threadId === closedRoot.threadId)!;
-    expect(closed.status).toBe('resolved'); // any closed row -> resolved
+    expect(closed.status).toBe('closed'); // any closed row -> closed
   });
 
   it('listThreadSummaries respects a status filter', async () => {
     const openRoot = await store.add(tenant, newComment());
     const closedRoot = await store.add(tenant, newComment());
-    await store.setState(tenant, closedRoot.threadId, 'resolved');
+    await store.setState(tenant, closedRoot.threadId, 'closed');
 
-    const resolved = await store.listThreadSummaries(tenant, { kind: 'record', id: target.id, status: 'resolved' });
-    expect(resolved.map((s) => s.threadId)).toContain(closedRoot.threadId);
-    expect(resolved.map((s) => s.threadId)).not.toContain(openRoot.threadId);
+    const closed = await store.listThreadSummaries(tenant, { kind: 'record', id: target.id, status: 'closed' });
+    expect(closed.map((s) => s.threadId)).toContain(closedRoot.threadId);
+    expect(closed.map((s) => s.threadId)).not.toContain(openRoot.threadId);
   });
 
   // --- Tenant / workspace scoping ---
@@ -432,7 +432,7 @@ describe('PgCommentStore adapter parity (BR-42d Lot 2)', () => {
       newComment({ body: 'Closed note', threadId: root.threadId }),
       'closed',
     );
-    expect(note.state).toBe('resolved'); // live 'closed' -> package 'resolved'
+    expect(note.state).toBe('closed');
 
     const [noteRow] = await db.select().from(comments).where(eq(comments.id, note.id));
     expect(noteRow.status).toBe('closed');
