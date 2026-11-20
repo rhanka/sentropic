@@ -128,4 +128,94 @@ describe('L1.5 Protected Identification Invariant — legacy flow.ts, count_toke
       expect(stored.integrity).toBe('protected_identification_violation');
     } finally { await host.stop(); await rm(stateDir, { recursive: true, force: true }); }
   });
+
+  it('wires legacy onRefusalReceipt on createGatewayRouter, checks P before seat lease, and avoids estimated billing on pre-send refusal', async () => {
+    const transport = new FixtureTransport({ jsonResponse: { status: 200, body: anthropicMessageResponse }, streamFrames: anthropicFrames() });
+    const emptyHarness = buildHarness({ transport, accounts: [] });
+    const selectSpy = vi.spyOn(emptyHarness.config.pool, 'select');
+    const estimateSpy = vi.fn(() => ({ inputTokens: 999, outputTokens: 50, estimated: true }));
+    const settleSpy = vi.fn();
+    const receipts: LegacyRefusalReceiptRecord[] = [];
+    const app = createGatewayRouter({
+      config: emptyHarness.config,
+      resolveTarget: () => ({ providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-sonnet-4-6' }),
+      metering: { settle: settleSpy },
+      estimateUsage: estimateSpy,
+      guard: rogueGuardMutating((r) => ({ ...r, system: 'mutated-http-legacy' })),
+      onRefusalReceipt: (rec: LegacyRefusalReceiptRecord) => { receipts.push(rec); },
+    });
+
+    for (const stream of [false, true]) {
+      const res = await app.request('/v1/messages', {
+        method: 'POST', headers: authHeaders('user-a'),
+        body: JSON.stringify({ ...anthropicRequest(stream), system: 'orig-http-legacy' }),
+      });
+      expect(res.status).toBe(400);
+      expect(res.headers.get('x-should-retry')).toBe('false');
+    }
+    const connRes = await createGatewayRouter({
+      config: emptyHarness.config,
+      resolveTarget: () => ({ providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-sonnet-4-6' }),
+      metering: { settle: settleSpy },
+      estimateUsage: estimateSpy,
+      onRefusalReceipt: (rec: LegacyRefusalReceiptRecord) => { receipts.push(rec); },
+    }).request('/v1/messages', {
+      method: 'POST',
+      headers: { ...authHeaders('user-a'), 'anthropic-beta': 'prompt-caching-2024-07-31', connection: 'anthropic-beta' },
+      body: JSON.stringify({ ...anthropicRequest(false), system: 'orig-conn' }),
+    });
+    expect(connRes.status).toBe(400);
+    expect(receipts).toHaveLength(3);
+    expect(receipts.every((r) => r.integrity === 'protected_identification_violation')).toBe(true);
+    expect(selectSpy).not.toHaveBeenCalled();
+    expect(estimateSpy).not.toHaveBeenCalled();
+    expect(settleSpy).not.toHaveBeenCalled();
+
+    // Post-prepare mutation before send releases the seat without outcome penalty or estimated billing
+    for (const stream of [false, true]) {
+      const h = buildHarness({ transport });
+      const releaseSpy = vi.fn(async () => undefined);
+      const recordOutcomeSpy = vi.fn(async () => undefined);
+      const origSelect = h.config.pool.select.bind(h.config.pool);
+      const reqHeaders: Record<string, string> = { ...authHeaders('user-a'), 'x-app': 'claude-code' };
+      const postConfig = {
+        ...h.config,
+        pool: {
+          ...h.config.pool,
+          select: async (selReq: Parameters<typeof origSelect>[0]) => {
+            const sel = await origSelect(selReq);
+            return { ...sel, acquisition: { ...sel.acquisition, release: releaseSpy, recordOutcome: recordOutcomeSpy } };
+          },
+          snapshotModels: h.config.pool.snapshotModels.bind(h.config.pool),
+        },
+        authResolver: {
+          resolve: async (sel: Parameters<typeof h.config.authResolver.resolve>[0]) => {
+            reqHeaders['x-app'] = 'tampered-after-prepare';
+            return h.config.authResolver.resolve(sel);
+          },
+        },
+      };
+      const postSettle = vi.fn();
+      const postEstimate = vi.fn(() => ({ inputTokens: 777, outputTokens: 88, estimated: true }));
+      const flowDeps = {
+        config: postConfig,
+        resolveTarget: () => ({ providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-sonnet-4-6' }),
+        metering: { settle: postSettle },
+        estimateUsage: postEstimate,
+      };
+      const req = {
+        wire: 'anthropic-messages' as const, headers: reqHeaders,
+        authContext: { method: 'POST', url: 'https://gw.test/v1/messages', requestId: `req-post-${stream}` },
+        model: 'claude-sonnet-4-6', stream, body: { ...anthropicRequest(stream), system: 'orig' },
+      };
+      await expect(stream ? runStreamFlow(flowDeps, req) : runJsonFlow(flowDeps, req))
+        .rejects.toMatchObject({ kind: 'protected-identification-mutated' });
+      expect(releaseSpy).toHaveBeenCalledTimes(1);
+      expect(recordOutcomeSpy).not.toHaveBeenCalled();
+      expect(postEstimate).not.toHaveBeenCalled();
+      expect(postSettle).toHaveBeenCalledWith(expect.objectContaining({
+        outcome: 'failed', usage: { inputTokens: 0, outputTokens: 0, estimated: true },
+      }));
+    }
+  });
 });
