@@ -9,6 +9,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 
 import { GatewaySessionService } from '../session-service.js';
+import type { CaptureVaultPort } from '../ports/capture-vault.js';
 
 export class ControlAuthError extends Error {
   readonly code = 'CONTROL-UNAUTHENTICATED';
@@ -38,7 +39,7 @@ export class ControlServer {
   private readonly controlDigest: Buffer;
   private readonly ownerScopeRef: string;
 
-  constructor(private readonly options: { service: GatewaySessionService; controlToken: string; ownerScopeRef: string; beforeAcquire?: (input: Record<string, unknown>) => Promise<void> }) {
+  constructor(private readonly options: { service: GatewaySessionService; controlToken: string; ownerScopeRef: string; beforeAcquire?: (input: Record<string, unknown>) => Promise<void>; captureVault?: CaptureVaultPort }) {
     if (!options.controlToken || options.controlToken.length < 16) {
       throw new ControlAuthError();
     }
@@ -72,6 +73,12 @@ export class ControlServer {
         return this.service.listSessions(input as never);
       case 'readReceipt':
         return this.service.readReceipt(input as never);
+      case 'readTurnCapture':
+        if (!this.options.captureVault) throw new ControlOpError(op);
+        return this.options.captureVault.readTurnCapture({
+          ownerScopeRef: this.ownerScopeRef,
+          captureId: String(supplied.captureId ?? ''),
+        });
       default:
         throw new ControlOpError(op);
     }

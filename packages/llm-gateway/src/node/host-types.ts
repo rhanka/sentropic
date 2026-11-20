@@ -6,6 +6,9 @@ import type { CreateGatewayRouterOptions } from '../router/index.js';
 import type { KeyringReader } from './gateway-state-store.js';
 import type { RouteMeteringSink } from '../route-flow-core.js';
 import type { RouteAffinityStore, RoutePlanner } from '@sentropic/llm-mesh';
+import type { CaptureRetention } from '../ports/capture-vault.js';
+import type { GuardPort } from '../ports/guards.js';
+import type { StageRewritePort } from '../rewrite/stage-rewrite.js';
 
 export interface MeshBinding {
   readonly ownerScopeRef: string;
@@ -23,6 +26,19 @@ export interface StartGatewayHostOptions {
   readonly controlSocket?: string;
   readonly mesh: MeshBinding;
   readonly listen: { host: string; port: number };
+  /** Default OFF (`false`). When true, enables HMAC-proofed loopback HTTP `POST /v1/session`. */
+  readonly enableLoopbackHttpSessionMint?: boolean;
+  /** Ephemeral 256-bit launch secret required when `enableLoopbackHttpSessionMint` is true. */
+  readonly bootstrapSecret?: string;
+  readonly bootstrapNow?: () => number;
+  readonly bootstrapMaxNonces?: number;
+  /** Default OFF (`false`). Enables encrypted local turn capture vault on Stage 1. */
+  readonly captureEnabled?: boolean;
+  readonly captureRetention?: CaptureRetention;
+  readonly captureQuotaBytes?: number;
+  readonly stageId?: string;
+  readonly stageRewrite?: StageRewritePort;
+  readonly guard?: GuardPort;
 }
 export interface HostReadiness {
   readonly ready: boolean;

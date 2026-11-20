@@ -6,9 +6,18 @@ import { frameAnthropicEvent, frameOpenAiChunk, OPENAI_DONE } from './wire.js';
 
 const anthropicOutputUsage = (
   usage: Extract<StreamEvent, { type: 'done' }>['data']['usage'],
-) => ({
-  output_tokens: usage?.outputTokens ?? 0,
-});
+  includeCacheUsage = false,
+) => {
+  const raw = includeCacheUsage && usage?.providerRawUsage && typeof usage.providerRawUsage === 'object'
+    ? usage.providerRawUsage as Record<string, unknown> : undefined;
+  return {
+    output_tokens: usage?.outputTokens ?? 0,
+    ...(typeof raw?.cache_creation_input_tokens === 'number'
+      ? { cache_creation_input_tokens: raw.cache_creation_input_tokens } : {}),
+    ...(typeof raw?.cache_read_input_tokens === 'number'
+      ? { cache_read_input_tokens: raw.cache_read_input_tokens } : {}),
+  };
+};
 
 const openAiUsage = (usage: Extract<StreamEvent, { type: 'done' }>['data']['usage']) => ({
   prompt_tokens: usage?.inputTokens ?? 0,
@@ -88,6 +97,7 @@ export const estimateAnthropicInputTokens = (request: GenerateRequest): number =
 
 export interface GatewayStreamUsageHints {
   readonly anthropicInputTokens?: number;
+  readonly includeCacheUsage?: boolean;
 }
 
 export const encodeGatewayStream = (
@@ -109,6 +119,7 @@ export const encodeGatewayStream = (
     ? encodeAnthropicStream(
       requestedModel, responseId, events,
       Math.max(0, Math.floor(usageHints?.anthropicInputTokens ?? 0)),
+      usageHints?.includeCacheUsage === true,
     )
     : encodeOpenAiStream(requestedModel, responseId, events);
 };
@@ -118,6 +129,7 @@ const encodeAnthropicStream = async function* (
   responseId: string,
   events: AsyncIterable<StreamEvent>,
   inputTokens: number,
+  includeCacheUsage = false,
 ): AsyncGenerator<GatewayDispatchStreamEvent> {
   const opened: number[] = [];
   const textIndexes = new Map<number, number>();
@@ -211,7 +223,7 @@ const encodeAnthropicStream = async function* (
       yield raw(frameAnthropicEvent('message_delta', {
         type: 'message_delta',
         delta: { stop_reason: anthropicStopReason(event.data.finishReason), stop_sequence: null },
-        usage: anthropicOutputUsage(event.data.usage),
+        usage: anthropicOutputUsage(event.data.usage, includeCacheUsage),
       }));
       yield raw(frameAnthropicEvent('message_stop', { type: 'message_stop' }));
     }
