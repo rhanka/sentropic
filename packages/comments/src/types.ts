@@ -50,8 +50,8 @@ export type CommentAuthor = {
   displayLabel?: string;
 };
 
-/** Package state vocabulary; maps the live `open | closed` 1:1. */
-export type CommentState = 'open' | 'resolved';
+/** Package state vocabulary; aligned 1:1 with the live `open | closed` values. */
+export type CommentState = 'open' | 'closed';
 
 /** Provenance linking a comment to an AI tool call / run (message/canvas origin). */
 export type CommentProvenance = {

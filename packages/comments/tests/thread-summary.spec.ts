@@ -63,17 +63,17 @@ describe('listThreadSummaries', () => {
     );
   });
 
-  it('marks the thread resolved when any row is resolved', async () => {
+  it('marks the thread closed when any row is closed', async () => {
     const store = makeStore();
     const root = await store.add(tenant, baseInput({ body: 'root' }));
     await store.add(tenant, baseInput({ threadId: root.threadId, body: 'reply' }));
-    await store.setState(tenant, root.threadId, 'resolved');
+    await store.setState(tenant, root.threadId, 'closed');
 
     const [summary] = await store.listThreadSummaries(tenant, {
       kind: 'record',
       id: 'r1',
     });
-    expect(summary.status).toBe('resolved');
+    expect(summary.status).toBe('closed');
   });
 
   it('takes the first non-null assignee across the thread rows', async () => {
@@ -103,14 +103,14 @@ describe('listThreadSummaries', () => {
       tenant,
       baseInput({ body: 'closed thread' }),
     );
-    await store.setState(tenant, closed.threadId, 'resolved');
+    await store.setState(tenant, closed.threadId, 'closed');
 
-    const resolvedOnly = await store.listThreadSummaries(tenant, {
+    const closedOnly = await store.listThreadSummaries(tenant, {
       kind: 'record',
       id: 'r1',
-      status: 'resolved',
+      status: 'closed',
     });
-    expect(resolvedOnly.map((s) => s.threadId)).toEqual([closed.threadId]);
+    expect(closedOnly.map((s) => s.threadId)).toEqual([closed.threadId]);
 
     const openOnly = await store.listThreadSummaries(tenant, {
       kind: 'record',
