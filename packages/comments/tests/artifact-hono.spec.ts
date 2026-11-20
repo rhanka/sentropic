@@ -9,7 +9,7 @@ import {
   type ArtifactCommentsHttpPrincipal,
   type CreateArtifactCommentsRouterOptions,
 } from '../src/artifact-hono.js';
-import { InMemoryCommentStore, type Comment } from '../src/index.js';
+import { InMemoryCommentStore, type Comment, type CommentThreadSummary } from '../src/index.js';
 
 const tenant = { tenantId: 'tenant-1', workspaceId: 'ws-1', userId: 'user-1' };
 const basePrincipal: ArtifactCommentsHttpPrincipal = { workspaceId: 'ws-1', userId: 'user-1' };
@@ -132,18 +132,56 @@ describe('artifact-comments Hono router (C2b + S4-route)', () => {
     expect(comment.assignedTo).toBeUndefined();
     expect(events[0]).toMatchObject({ action: 'created', contextType: 'artifact', contextId: 'art-1', threadId: comment.threadId });
 
+    const blankRes = await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: '   ' }));
+    expect(blankRes.status).toBe(400);
+    expect(await blankRes.json()).toMatchObject({ code: 'invalid_request' });
+    const outsiderRes = await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'X', assigned_to: 'outsider' }));
+    expect(outsiderRes.status).toBe(400);
+    expect(await outsiderRes.json()).toMatchObject({ code: 'assignee_not_in_workspace' });
+
     vi.spyOn(store, 'listByTarget').mockResolvedValueOnce([nonArt, pgArt, comment]);
     const { items } = await (await app.request('/api/v1/artifacts/art-1/comments')).json() as { items: Comment[] };
     expect(items.map((c) => c.id)).toEqual([pgArt.id, comment.id]);
     expect(items.every((c) => c.target.kind === 'artifact' && c.target.recordType === undefined)).toBe(true);
 
+    const now = new Date().toISOString();
+    const pgInitSummary: CommentThreadSummary = {
+      threadId: nonArt.threadId, contextType: 'initiative', target: nonArt.target,
+      rootMessage: 'Init', rootMessageAt: now, lastMessage: 'Init', lastMessageAt: now, messageCount: 1, status: 'open',
+    };
+    const pgArtSummary: CommentThreadSummary = {
+      threadId: pgArt.threadId, contextType: 'record', target: pgArt.target, sectionKey: 'a1:pg',
+      rootMessage: 'PG', rootMessageAt: now, lastMessage: 'PG', lastMessageAt: now, messageCount: 1, status: 'open',
+    };
+    vi.spyOn(store, 'listThreadSummaries').mockResolvedValueOnce([pgInitSummary, pgArtSummary]);
+    const filteredSummaries = await (await app.request('/api/v1/artifacts/art-1/comments/summaries?status=open')).json() as { items: CommentThreadSummary[] };
+    expect(filteredSummaries.items).toEqual([expect.objectContaining({
+      threadId: pgArt.threadId,
+      contextType: 'artifact',
+      target: { kind: 'artifact', id: 'art-1', sectionKey: 'a1:pg' },
+    })]);
+    expect(filteredSummaries.items[0]?.target.recordType).toBeUndefined();
+
     const summaries = await (await app.request('/api/v1/artifacts/art-1/comments/summaries?status=open')).json() as { items: Array<{ threadId: string }> };
     expect(summaries.items).toEqual([expect.objectContaining({ threadId: comment.threadId, status: 'open' })]);
+
+    for (const path of ['/api/v1/artifacts/art-1/comments?status=resolved', '/api/v1/artifacts/art-1/comments/summaries?status=resolved']) {
+      const badQuery = await app.request(path);
+      expect(badQuery.status).toBe(400);
+      expect(await badQuery.json()).toMatchObject({ code: 'invalid_query' });
+    }
   });
 
   it('should inherit section_key from first surviving row on reply and scope thread listing by artifact', async () => {
     const { app, setPrincipal } = buildApp();
     const { comment: root } = await (await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Root', section_key: 'a1:keep' }))).json() as { comment: Comment };
+
+    const crossReply = await app.request('/api/v1/artifacts/art-2/comments', req('POST', { content: 'Cross', thread_id: root.threadId }));
+    expect(crossReply.status).toBe(404);
+    expect(await crossReply.json()).toMatchObject({ code: 'thread_not_found' });
+    const missingReply = await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Missing', thread_id: 'th-missing' }));
+    expect(missingReply.status).toBe(404);
+    expect(await missingReply.json()).toMatchObject({ code: 'thread_not_found' });
 
     setPrincipal({ workspaceId: 'ws-1', userId: 'user-2' });
     const r1 = await (await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'R1', thread_id: root.threadId }))).json() as { comment: Comment };
@@ -163,16 +201,38 @@ describe('artifact-comments Hono router (C2b + S4-route)', () => {
   });
 
   it('should key close/reopen/assign by threadId for any comment participant and preserve null unassign', async () => {
-    const { app, setPrincipal } = buildApp();
+    const { app, events, setPrincipal } = buildApp();
     const { comment: root } = await (await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Discuss' }))).json() as { comment: Comment };
 
     setPrincipal({ workspaceId: 'ws-1', userId: 'user-2' });
     expect((await app.request(`/api/v1/artifacts/art-1/comments/threads/${root.id}/close`, req('POST'))).status).toBe(404);
-    expect((await app.request(`/api/v1/artifacts/art-1/comments/threads/${root.threadId}/close`, req('POST'))).status).toBe(200);
-    expect((await app.request(`/api/v1/artifacts/art-1/comments/threads/${root.threadId}/reopen`, req('POST'))).status).toBe(200);
+    expect((await app.request(`/api/v1/artifacts/art-2/comments/threads/${root.threadId}/close`, req('POST'))).status).toBe(404);
+    const closed = await app.request(`/api/v1/artifacts/art-1/comments/threads/${root.threadId}/close`, req('POST'));
+    expect(closed.status).toBe(200);
+    expect((await closed.json() as { items: Comment[] }).items.map((c) => c.state)).toEqual(['closed']);
+    expect(events.at(-1)).toMatchObject({ action: 'closed', key: 'thread_id', threadId: root.threadId });
+
+    const reopened = await app.request(`/api/v1/artifacts/art-1/comments/threads/${root.threadId}/reopen`, req('POST'));
+    expect(reopened.status).toBe(200);
+    expect((await reopened.json() as { items: Comment[] }).items.map((c) => c.state)).toEqual(['open']);
+    expect(events.at(-1)).toMatchObject({ action: 'reopened', key: 'thread_id', threadId: root.threadId });
+
+    for (const [path, method, body] of [
+      [`/api/v1/artifacts/art-1/comments/threads/${root.id}/reopen`, 'POST', undefined],
+      [`/api/v1/artifacts/art-1/comments/threads/${root.id}/assignee`, 'PATCH', { assigned_to: null }],
+      [`/api/v1/artifacts/art-2/comments/threads/${root.threadId}/assignee`, 'PATCH', { assigned_to: null }],
+    ] as const) {
+      const nfRes = await app.request(path, req(method, body));
+      expect(nfRes.status).toBe(404);
+      expect(await nfRes.json()).toMatchObject({ code: 'thread_not_found' });
+    }
+    const badAssign = await app.request(`/api/v1/artifacts/art-1/comments/threads/${root.threadId}/assignee`, req('PATCH', {}));
+    expect(badAssign.status).toBe(400);
+    expect(await badAssign.json()).toMatchObject({ code: 'invalid_request' });
 
     const assign = await app.request(`/api/v1/artifacts/art-1/comments/threads/${root.threadId}/assignee`, req('PATCH', { assigned_to: 'user-2' }));
     expect((await assign.json() as { items: Comment[] }).items[0]?.assignedTo).toBe('user-2');
+    expect(events.at(-1)).toMatchObject({ action: 'reassigned', key: 'thread_id', threadId: root.threadId });
     const unassign = await app.request(`/api/v1/artifacts/art-1/comments/threads/${root.threadId}/assignee`, req('PATCH', { assigned_to: null }));
     expect((await unassign.json() as { items: Comment[] }).items[0]?.assignedTo).toBeUndefined();
     expect((await app.request(`/api/v1/artifacts/art-1/comments/threads/${root.threadId}/assignee`, req('PATCH', { assigned_to: 'outsider' }))).status).toBe(400);
@@ -185,9 +245,20 @@ describe('artifact-comments Hono router (C2b + S4-route)', () => {
     setPrincipal({ workspaceId: 'ws-1', userId: 'user-2' });
     expect((await app.request(`/api/v1/artifacts/art-1/comments/${root.id}`, req('PATCH', { content: 'No' }))).status).toBe(403);
     expect((await app.request(`/api/v1/artifacts/art-1/comments/${root.id}`, req('DELETE'))).status).toBe(403);
+    for (const crossRes of [
+      await app.request(`/api/v1/artifacts/art-2/comments/${root.id}`, req('PATCH', { content: 'Probe' })),
+      await app.request(`/api/v1/artifacts/art-2/comments/${root.id}`, req('DELETE')),
+    ]) {
+      expect(crossRes.status).toBe(404);
+      expect(await crossRes.json()).toMatchObject({ code: 'comment_not_found' });
+    }
 
     setPrincipal(basePrincipal);
     expect((await app.request(`/api/v1/artifacts/art-2/comments/${root.id}`, req('PATCH', { content: 'Wrong' }))).status).toBe(404);
+    expect((await app.request(`/api/v1/artifacts/art-2/comments/${root.id}`, req('DELETE'))).status).toBe(404);
+    const blankEdit = await app.request(`/api/v1/artifacts/art-1/comments/${root.id}`, req('PATCH', { content: '   ' }));
+    expect(blankEdit.status).toBe(400);
+    expect(await blankEdit.json()).toMatchObject({ code: 'invalid_request' });
     const edited = await app.request(`/api/v1/artifacts/art-1/comments/${root.id}`, req('PATCH', { content: 'Edited' }));
     expect((await edited.json() as { comment: Comment }).comment.body).toBe('Edited');
 
