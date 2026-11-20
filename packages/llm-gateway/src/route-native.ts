@@ -60,7 +60,7 @@ export const buildNativeMessagesRequest = (
   const features = prepared.nativeFeatures;
   if (features.kind === 'none') throw new NativeAttemptRefusal();
   return {
-    body: buildNativeMessagesBody(request.body, { model: native.capability.modelId,
+    body: buildNativeMessagesBody(prepared.effectiveBody ?? request.body, { model: native.capability.modelId,
       stream: request.stream, maxOutputTokens: prepared.canonical.request.maxOutputTokens ?? features.maxOutputTokens }),
     stream: request.stream, signal, requestId: request.authContext.requestId,
     headers: { anthropicVersion: native.anthropicVersion, forwarded: features.forwarded },

@@ -41,6 +41,8 @@ import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
 import type { CheckedGatewayBody } from './request-body-retention.js';
 import { ProviderRateLimitError } from './internal/provider-rate-limit-error.js';
 import { redactSelection, type RedactedSelectionView } from './redaction.js';
+import type { GuardPort, MaskedCapturePayload } from './ports/guards.js';
+import { teeGuardedStream, type GuardedTurnCaptureRecord } from './guards/sse-guard-tee.js';
 
 /**
  * Normalized usage the settle hook records. `estimated` is true when the
@@ -100,6 +102,9 @@ export interface GatewayFlowDeps {
   readonly metering: MeteringSink;
   /** Estimate usage when the provider reports none (spec §5 never-zero). */
   readonly estimateUsage?: (wire: GatewayWire, body: unknown) => SettleUsage;
+  readonly guard?: GuardPort;
+  readonly captureEnabled?: boolean;
+  readonly onCapture?: (record: GuardedTurnCaptureRecord) => Promise<void> | void;
 }
 
 /** Inputs the router hands the flow per request. */
@@ -141,6 +146,7 @@ const prepare = async (
   selection: PoolSelection;
   material: Awaited<ReturnType<GatewayConfig['authResolver']['resolve']>>;
   account: RedactedSelectionView;
+  requestCapture?: MaskedCapturePayload;
 }> => {
   const { config } = deps;
 
@@ -162,6 +168,12 @@ const prepare = async (
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
   const cost = auth.cost;
+  let requestCapture: MaskedCapturePayload | undefined;
+  if (deps.guard) {
+    const scan = deps.guard.inspectRequest(request.body);
+    if (scan.verdict === 'blocked') throw new GatewayError('guard-blocked', 'request blocked by gateway guard policy');
+    if (deps.captureEnabled === true) requestCapture = scan.maskedCapture;
+  }
 
   // 2. resolve provider/model from the body `model`.
   const target = deps.resolveTarget(request.model);
@@ -210,7 +222,7 @@ const prepare = async (
   }
 
   const account = redactSelection(material.descriptor, material.material);
-  return { cost, target, selection, material, account };
+  return { cost, target, selection, material, account, requestCapture };
 };
 
 /**
@@ -340,10 +352,12 @@ export const runJsonFlow = async (
     const retryAfterMs = isRateLimited
       ? parseRetryAfterMs(response.headers)
       : undefined;
+    const respScan = !isRateLimited && deps.guard ? deps.guard.inspectRequest(response.body) : undefined;
+    const respBlocked = respScan?.verdict === 'blocked';
 
     await settle(
       deps, request, prepared,
-      ok ? 'success' : isRateLimited ? 'rate_limited' : 'failed',
+      respBlocked ? 'failed' : ok ? 'success' : isRateLimited ? 'rate_limited' : 'failed',
       extractUsage(request.wire, response.body),
       retryAfterMs,
     );
@@ -359,6 +373,19 @@ export const runJsonFlow = async (
     }
 
     // Faithful passthrough: provider-native JSON, status code + headers verbatim (#4).
+    if (respScan) {
+      if (deps.captureEnabled === true && deps.onCapture && prepared.requestCapture) {
+        try {
+          await deps.onCapture({
+            requestId: request.authContext.requestId,
+            ownerScopeRef: prepared.cost.ownerScopeRef ?? `${prepared.cost.tenantId}:${prepared.cost.principalId}`,
+            wire: request.wire, model: prepared.target.model, requestCapture: prepared.requestCapture,
+            responseCapture: respScan.maskedCapture, truncated: false, blocked: respBlocked, createdAtMs: Date.now(),
+          });
+        } catch { /* Capture failures never break live routing. */ }
+      }
+      if (respBlocked) throw new GatewayError('guard-blocked', 'response blocked by gateway guard policy');
+    }
     return {
       status: response.status,
       body: response.body,
@@ -526,10 +553,24 @@ export const runStreamFlow = async (
   const originalReturn = stream.return.bind(stream);
   stream.return = async value => { await finish(true); return originalReturn(value); };
 
+  const guarded = deps.guard ? teeGuardedStream(stream, {
+    guard: deps.guard,
+    onComplete: deps.captureEnabled === true && deps.onCapture && prepared.requestCapture
+      ? async (res) => {
+        try {
+          await deps.onCapture!({
+            requestId: request.authContext.requestId,
+            ownerScopeRef: prepared.cost.ownerScopeRef ?? `${prepared.cost.tenantId}:${prepared.cost.principalId}`,
+            wire: request.wire, model: prepared.target.model, requestCapture: prepared.requestCapture!,
+            responseCapture: res.maskedCapture, truncated: res.truncated, blocked: res.blocked, createdAtMs: Date.now(),
+          });
+        } catch { /* Capture failures never break live routing. */ }
+      } : undefined,
+  }) : stream;
   return {
     ...(dispatchStream?.headers ? { headers: dispatchStream.headers } : {}),
     servedTarget: prepared.target,
-    stream,
+    stream: guarded,
   };
 };
 
