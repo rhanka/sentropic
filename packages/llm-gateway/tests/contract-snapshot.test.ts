@@ -152,6 +152,10 @@ const FROZEN_ERROR_MAP: Record<
     anthropic: { status: 400, type: 'invalid_request_error', message: 'request blocked by gateway guard policy' },
     openai: { status: 400, type: 'invalid_request_error', message: 'request blocked by gateway guard policy', code: 'guard_blocked' },
   },
+  'protected-identification-mutated': {
+    anthropic: { status: 400, type: 'invalid_request_error', message: 'protected identification invariant violated' },
+    openai: { status: 400, type: 'invalid_request_error', message: 'protected identification invariant violated', code: 'prohibited_identification_mutation' },
+  },
 };
 
 /** Model-scoped failure kinds: the golden mapper calls supply the fixture model. */

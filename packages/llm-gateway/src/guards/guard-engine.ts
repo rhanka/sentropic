@@ -61,9 +61,20 @@ const DETECTORS: readonly DetectorSpec[] = [
     validate: (m) => { const d = m.replace(/\D/g, ''); return d.length === 9 && luhnValid(d); } },
 ];
 
-const PROTECTED_IN_FLIGHT_KEYS: ReadonlySet<string> = new Set([
-  'system', 'instructions', 'model', 'metadata', 'tools', 'tool_use_id', 'call_id',
+const PROTECTED_ROOT_KEYS: ReadonlySet<string> = new Set([
+  'system', 'instructions', 'metadata', 'client_metadata', 'safety_identifier',
+  'user', 'prompt_cache_key', 'tools', 'additional_tools', 'safeguards', 'cache_control',
 ]);
+const NON_MASKABLE_LINKAGE_KEYS: ReadonlySet<string> = new Set([
+  'model', 'role', 'type', 'tool_use_id', 'tool_call_id', 'call_id',
+]);
+const isProtectedItem = (item: unknown, isResponsesInput: boolean): boolean => {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+  const rec = item as Record<string, unknown>;
+  const role = typeof rec.role === 'string' ? rec.role.trim().toLowerCase() : undefined;
+  const kindOk = !isResponsesInput || rec.type === undefined || rec.type === 'message';
+  return kindOk && (role === 'system' || role === 'developer');
+};
 
 export interface GuardEngineOptions {
   readonly defaultAction?: GuardActionPolicy;
@@ -111,8 +122,9 @@ export class GuardEngine implements GuardPort {
   inspectRequest(payload: unknown): GuardScanResult {
     const totals = new Map<string, { category: GuardDetectorCategory; count: number; action: GuardActionPolicy }>();
     let blocked = false;
+    let protectedViolation = false;
     let maskInFlight = false;
-    const walk = (value: unknown, forInFlight: boolean): unknown => {
+    const walk = (value: unknown, forInFlight: boolean, inProtected: boolean, depth: number): unknown => {
       if (typeof value === 'string') {
         const res = this.scanText(value);
         if (!forInFlight) {
@@ -120,35 +132,47 @@ export class GuardEngine implements GuardPort {
             const prev = totals.get(f.detectorId);
             totals.set(f.detectorId, { category: f.category, count: (prev?.count ?? 0) + f.count, action: f.action });
             if (f.action === 'block') blocked = true;
-            if (f.action === 'mask_in_flight') maskInFlight = true;
+            if (f.action === 'mask_in_flight') {
+              if (inProtected) { blocked = true; protectedViolation = true; }
+              else maskInFlight = true;
+            }
           }
           return res.maskedText;
         }
-        return res.findings.some((f) => f.action === 'mask_in_flight') ? res.maskedText : value;
+        return !inProtected && res.findings.some((f) => f.action === 'mask_in_flight') ? res.maskedText : value;
       }
-      if (Array.isArray(value)) return value.map((item) => walk(item, forInFlight));
+      if (Array.isArray(value)) return value.map((item) => walk(item, forInFlight, inProtected, depth + 1));
       if (value && typeof value === 'object') {
         const rec = value as Record<string, unknown>;
-        if (forInFlight && (rec.role === 'system' || rec.role === 'developer')) return value;
         const out: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(rec)) {
-          out[k] = forInFlight && PROTECTED_IN_FLIGHT_KEYS.has(k) ? v : walk(v, forInFlight);
+          if (depth === 0 && (k === 'messages' || k === 'input') && Array.isArray(v)) {
+            out[k] = v.map((item) => {
+              const itemProtected = inProtected || isProtectedItem(item, k === 'input');
+              return forInFlight && itemProtected ? item : walk(item, forInFlight, itemProtected, depth + 2);
+            });
+            continue;
+          }
+          const keyProtected = inProtected || (depth === 0 && PROTECTED_ROOT_KEYS.has(k));
+          const skipInFlight = forInFlight && (keyProtected || NON_MASKABLE_LINKAGE_KEYS.has(k));
+          out[k] = skipInFlight ? v : walk(v, forInFlight, keyProtected, depth + 1);
         }
         return out;
       }
       return value;
     };
-    const maskedPayload = walk(payload, false);
+    const maskedPayload = walk(payload, false, false, 0);
     const findings: GuardFinding[] = [...totals.entries()].map(([detectorId, info]) => ({
       detectorId, category: info.category, count: info.count, action: info.action,
     }));
-    const inFlightPayload = maskInFlight ? walk(payload, true) : payload;
+    const inFlightPayload = !blocked && maskInFlight ? walk(payload, true, false, 0) : payload;
     const verdict: GuardVerdict = blocked ? 'blocked' : findings.length > 0 ? 'masked' : 'pass';
     return {
       verdict,
       findings,
       inFlightPayload,
       maskedCapture: { __maskedCapturePayload: true, payload: maskedPayload, findings },
+      ...(protectedViolation ? { protectedViolation: true } : {}),
     };
   }
 
