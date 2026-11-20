@@ -168,4 +168,36 @@ describe('L1.3c vendored pure-TS agent-stats secret scanner core', () => {
     expect(withEmailRes.maskedText.endsWith(' [REDACTED:EMAIL]')).toBe(true);
     expect(withEmailMs).toBeLessThan(50);
   });
+
+  it('preserves #1053 built-in detector delimiters when scanner matches occur inside .env, Cookie, X-Api-Key, URI, or PEM blocks', () => {
+    const engine = new GuardEngine({ customPatterns: [ORG_PATTERN] });
+    const fakeAws = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
+    const ls0tChunk = `LS0t${rep(44)}`;
+    const pemWithLs0t = [
+      '-----BEGIN PRIVATE KEY-----',
+      `MIIEvgIBADAN${ls0tChunk}`,
+      'SECOND_LINE_PKCS8_SECRET_MATERIAL_99',
+      '-----END PRIVATE KEY-----',
+    ].join('\n');
+    const text = [
+      `DATABASE_PASSWORD="pfx_env_${FAKE_ORG_TOKEN}_sfx_env"`,
+      `APP_SECRET="pfx_pem_${ls0tChunk}_sfx_pem"`,
+      `DB_PASSWD="pfx_aws_${fakeAws}_sfx_aws"`,
+      `Cookie: tok=${FAKE_ORG_TOKEN}; sid=synth_cookie_2; csrf=synth_csrf_3`,
+      `X-Api-Key: pfx_hdr_${FAKE_ORG_TOKEN}_tail_hdr`,
+      `postgres://svc:pfx_uri_${FAKE_ORG_TOKEN}_tail_uri@db.local/app`,
+      pemWithLs0t,
+    ].join('\n');
+    const res = engine.inspectRequest({ messages: [{ role: 'user', content: text }] });
+    const masked = String((res.maskedCapture.payload as { messages: { content: string }[] }).messages[0]!.content);
+    for (const leaked of [
+      'pfx_env_', '_sfx_env', 'pfx_pem_', '_sfx_pem', 'pfx_aws_', '_sfx_aws',
+      'synth_cookie_2', 'synth_csrf_3', 'pfx_hdr_', '_tail_hdr', 'pfx_uri_', '_tail_uri',
+      'SECOND_LINE_PKCS8_SECRET_MATERIAL_99', FAKE_ORG_TOKEN, ls0tChunk, fakeAws,
+    ]) {
+      expect(masked).not.toContain(leaked);
+    }
+    const exactQuoted = engine.scanText(`MY_TOKEN="${FAKE_ORG_TOKEN}"`).maskedText;
+    expect(exactQuoted).toBe(`MY_TOKEN="<<SECRET:custom_org-token:${sha16(FAKE_ORG_TOKEN)}>>"`);
+  });
 });
