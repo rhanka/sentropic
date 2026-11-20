@@ -107,7 +107,7 @@ describe('L1.1 control.sock-first session mint & default-OFF loopback bootstrap 
   });
 
   it('bounds streaming body read before buffering (413) and isolates authenticated rate bucket from unauthenticated floods', async () => {
-    let clock = 1_700_000_000_000;
+    const clock = 1_700_000_000_000;
     const memStore: GatewayStateStore = {
       load: async (): Promise<StoredState> => ({ schemaVersion: 1, revision: 0, sessions: {}, receipts: {} }),
       compareAndSet: async (_e, n) => ({ revision: n.revision }),

@@ -68,6 +68,7 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
       ...(options.bootstrapMaxNonces !== undefined ? { maxNonces: options.bootstrapMaxNonces } : {}),
     })
     : undefined;
+  const stageRewrite = options.stageRewrite ?? mesh.gateway.stageRewrite;
   let closeControl: (() => Promise<void>) | undefined;
   let endpoint = '';
   try {
@@ -86,7 +87,7 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
       },
       config: { ...mesh.gateway.config, callerAuth: createSessionAuth({ service, ownerScopeRef,
         ready: async () => (await readiness()).ready, resolveOwner: (caller, context) => mesh.resolveOwner(caller, context) }) },
-      ...(options.stageRewrite ? { stageRewrite: options.stageRewrite } : {}),
+      ...(stageRewrite ? { stageRewrite } : {}),
       ...(options.guard ? { guard: options.guard } : {}),
       captureEnabled: options.captureEnabled === true,
       ...(options.captureEnabled === true ? {

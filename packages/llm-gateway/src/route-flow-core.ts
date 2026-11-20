@@ -17,7 +17,7 @@ import type { GatewayBudgetOptions, RouteBudgetOverrun } from './ports/budget.js
 import {
   admitRoute, assertBudgetRouteDeps, boundRouteOutputCeiling, chargeAdmittedAttempts, type AdmittedRoute,
 } from './admission.js';
-import type { StageRewriteEngine, StageRewriteTrace } from './rewrite/stage-rewrite.js';
+import type { StageRewritePort, StageRewriteTrace } from './rewrite/stage-rewrite.js';
 import type { GuardPort, GuardVerdict, MaskedCapturePayload } from './ports/guards.js';
 import type { GuardedTurnCaptureRecord } from './guards/sse-guard-tee.js';
 
@@ -75,8 +75,8 @@ export interface RouteFlowDeps {
   readonly budget?: GatewayBudgetOptions;
   /** Trusted construction-time switch; absent hosts rely on capability gates. */
   readonly nativeMessagesEnabled?: boolean;
-  /** Optional catalog-validated single-step stage rewrite engine (D4 B, L1.2). */
-  readonly stageRewrite?: StageRewriteEngine;
+  /** Optional catalog-validated single-step stage rewrite port (D4 B, L1.2). */
+  readonly stageRewrite?: StageRewritePort;
   /** Optional decoded-JSON PII + technical-secret guard (D6a/D6d, L1.3b). */
   readonly guard?: GuardPort;
   /** Body capture persistence flag — strictly OFF (`false`) by default. */
