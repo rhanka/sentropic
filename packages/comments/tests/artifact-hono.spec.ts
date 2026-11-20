@@ -121,4 +121,65 @@ describe('artifact-comments Hono router (C2b + S4-route)', () => {
     expect((await unassign.json() as { items: Comment[] }).items[0]?.assignedTo).toBeUndefined();
     expect((await app.request(`/api/v1/artifacts/art-1/comments/threads/${root.threadId}/assignee`, req('PATCH', { assigned_to: 'outsider' }))).status).toBe(400);
   });
+
+  it('should restrict edit and delete to author or admin and reject cross-artifact ids', async () => {
+    const { app, setPrincipal } = buildApp();
+    const { comment: root } = await (await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Mine' }))).json() as { comment: Comment };
+
+    setPrincipal({ workspaceId: 'ws-1', userId: 'user-2' });
+    expect((await app.request(`/api/v1/artifacts/art-1/comments/${root.id}`, req('PATCH', { content: 'No' }))).status).toBe(403);
+    expect((await app.request(`/api/v1/artifacts/art-1/comments/${root.id}`, req('DELETE'))).status).toBe(403);
+
+    setPrincipal(basePrincipal);
+    expect((await app.request(`/api/v1/artifacts/art-2/comments/${root.id}`, req('PATCH', { content: 'Wrong' }))).status).toBe(404);
+    const edited = await app.request(`/api/v1/artifacts/art-1/comments/${root.id}`, req('PATCH', { content: 'Edited' }));
+    expect((await edited.json() as { comment: Comment }).comment.body).toBe('Edited');
+
+    setPrincipal({ workspaceId: 'ws-1', userId: 'admin-1' });
+    expect((await app.request(`/api/v1/artifacts/art-1/comments/${root.id}`, req('DELETE'))).status).toBe(200);
+  });
+
+  it('should enforce HTTP provenance.toolCallId rule on create and reply', async () => {
+    const { app, store, setPrincipal } = buildApp();
+    const addSpy = vi.spyOn(store, 'add');
+    for (const provenance of [{}, { runId: 'r1' }, { toolCallId: '' }, { toolCallId: '   ' }]) {
+      const res = await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Bad', provenance }));
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ code: PROVENANCE_TOOL_CALL_ID_REQUIRED_CODE });
+    }
+    expect((await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'A', actor_kind: 'agent' }))).status).toBe(400);
+    expect((await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'N' }, { 'x-sentropic-actor-kind': 'nhi' }))).status).toBe(400);
+    setPrincipal({ workspaceId: 'ws-1', userId: 'user-1', clientId: 'h2a-cli' });
+    expect((await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Spoof', actor_kind: 'human' }))).status).toBe(400);
+    expect(addSpy).not.toHaveBeenCalled();
+
+    const ok = await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Agent', provenance: { toolCallId: ' agent:s1:1 ', runId: 'run-1' } }));
+    expect(ok.status).toBe(201);
+    const { comment: root } = await ok.json() as { comment: Comment };
+    expect(root.provenance).toEqual({ toolCallId: 'agent:s1:1', runId: 'run-1' });
+    expect((await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'No prov', thread_id: root.threadId }))).status).toBe(400);
+    expect((await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Ok', thread_id: root.threadId, provenance: { toolCallId: 'agent:s1:2' } }))).status).toBe(201);
+  });
+
+  it('should enforce the 2048-character section_key cap with stable 400 code on list, summaries, create, and reply', async () => {
+    const { app, store } = buildApp();
+    const atCap = 'a'.repeat(ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH);
+    const overCap = 'a'.repeat(ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH + 1);
+    const { comment: root } = await (await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Cap', section_key: atCap }))).json() as { comment: Comment };
+    expect((await app.request(`/api/v1/artifacts/art-1/comments?section_key=${atCap}`)).status).toBe(200);
+
+    const [addSpy, listSpy, sumSpy] = [vi.spyOn(store, 'add'), vi.spyOn(store, 'listByTarget'), vi.spyOn(store, 'listThreadSummaries')];
+    for (const res of [
+      await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Over', section_key: overCap })),
+      await app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Over', thread_id: root.threadId, section_key: overCap })),
+      await app.request(`/api/v1/artifacts/art-1/comments?section_key=${overCap}`),
+      await app.request(`/api/v1/artifacts/art-1/comments/summaries?section_key=${overCap}`),
+    ]) {
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ code: SECTION_KEY_TOO_LONG_CODE, maxLength: 2048 });
+    }
+    expect(addSpy).not.toHaveBeenCalled();
+    expect(listSpy).not.toHaveBeenCalled();
+    expect(sumSpy).not.toHaveBeenCalled();
+  });
 });
