@@ -179,7 +179,7 @@ export class PgCommentStore implements CommentStore {
       conditions.push(eq(comments.sectionKey, query.sectionKey));
     }
     if (query.status !== undefined) {
-      conditions.push(eq(comments.status, query.status === 'resolved' ? 'closed' : 'open'));
+      conditions.push(eq(comments.status, query.status));
     }
     const rows = await this.db
       .select()
@@ -226,7 +226,7 @@ export class PgCommentStore implements CommentStore {
       .orderBy(asc(comments.createdAt), asc(comments.id));
 
     // Group-by threadId EXACTLY as tool-service.ts:1244-1269: root=earliest,
-    // last=latest, count, status closed-if-any (-> 'resolved'), first non-null
+    // last=latest, count, status closed-if-any, first non-null
     // assignee. Rows already ordered createdAt ASC, id ASC.
     const byThread = new Map<string, CommentRow[]>();
     for (const row of rows) {
@@ -243,7 +243,7 @@ export class PgCommentStore implements CommentStore {
       const root = threadRows[0];
       const last = threadRows[threadRows.length - 1];
       const status: CommentState = threadRows.some((r) => r.status === 'closed')
-        ? 'resolved'
+        ? 'closed'
         : 'open';
       const assignee = threadRows.find(
         (r) => r.assignedTo !== null && r.assignedTo !== undefined,
@@ -286,7 +286,7 @@ export class PgCommentStore implements CommentStore {
     // THREAD CASCADE (mirrors comments.ts:278-281,307-310).
     await this.db
       .update(comments)
-      .set({ status: state === 'resolved' ? 'closed' : 'open', updatedAt: new Date() })
+      .set({ status: state, updatedAt: new Date() })
       .where(
         and(
           eq(comments.workspaceId, workspaceId),
@@ -419,7 +419,7 @@ export class PgCommentStore implements CommentStore {
       target,
       threadId: row.threadId,
       author: { id: row.createdBy },
-      state: row.status === 'closed' ? 'resolved' : 'open',
+      state: row.status === 'closed' ? 'closed' : 'open',
       body: row.content,
       createdAt: toIso(row.createdAt),
     };

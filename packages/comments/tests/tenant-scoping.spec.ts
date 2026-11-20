@@ -64,7 +64,7 @@ describe('tenant scoping (cross-tenant isolation)', () => {
       CommentNotFoundError,
     );
     await expect(
-      store.setState(tenantB, created.threadId, 'resolved'),
+      store.setState(tenantB, created.threadId, 'closed'),
     ).rejects.toBeInstanceOf(ThreadNotFoundError);
     await expect(
       store.assign(tenantB, created.threadId, 'usr_x'),

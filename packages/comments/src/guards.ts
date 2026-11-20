@@ -16,12 +16,12 @@ const COMMENT_TARGET_KINDS: ReadonlySet<CommentTargetKind> = new Set([
   'record',
 ]);
 
-const COMMENT_STATES: ReadonlySet<CommentState> = new Set(['open', 'resolved']);
+const COMMENT_STATES: ReadonlySet<CommentState> = new Set(['open', 'closed']);
 
 const COMMENT_EVENT_TYPES: ReadonlySet<CommentEventType> = new Set([
   'created',
   'updated',
-  'resolved',
+  'closed',
   'reopened',
   'deleted',
   'reassigned',
