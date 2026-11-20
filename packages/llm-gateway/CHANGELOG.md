@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- 0.25.0: Sub-lot L1.5 default-ON global Protected Identification (`P`) egress
+  invariant across native, canonical, and legacy flows (ingress capture,
+  absolute `0..i_last` index pinning, read-only identity header snapshot with
+  uniform `Connection:` rejection, `GuardEngine` `mask_in_flight` refusal inside
+  `P`, pre-`markDurableAttempt`/`markRouteDispatched` verification with budget
+  hold release and durable `protected_identification_violation` refusal receipt).
 - 0.24.0: Lot 1 workstation relay-chain stage (Claude + Muse, all new features
   OFF by default): `control.sock`-first session mint with default-OFF loopback
   HTTP `POST /v1/session` HMAC bootstrap proof, replay cache and rate limit;

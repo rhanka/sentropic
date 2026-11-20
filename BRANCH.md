@@ -71,7 +71,7 @@ Enforce the default-ON global Protected Identification Set (`P`) ingress-to-egre
   - [x] Wire ingress capture, egress check, and refusal audit sink in `flow.ts`.
   - [x] Complete 3-wire x multi-source negative tests, compliant byte-identity tests, `count_tokens` passthrough, and `startGatewayHost` receipt tests.
 
-- [ ] **Lot 2 — Version bump (`BR-GWRC-EX3`) & Final validation**
-  - [ ] Verify published npm version and bump `@sentropic/llm-gateway` to `0.25.0` with CHANGELOG entry and regenerated fixtures (`make lock-root`, `make pack-candidate-siblings`, `refresh-lazy-package-lock`).
+- [x] **Lot 2 — Version bump (`BR-GWRC-EX3`) & Final validation**
+  - [x] Verify published npm version and bump `@sentropic/llm-gateway` to `0.25.0` with CHANGELOG entry and regenerated fixtures (`make lock-root`, `make pack-candidate-siblings`, `refresh-lazy-package-lock`).
   - [ ] Run full `make test-llm-gateway`, `make typecheck-llm-gateway`, `make lint-llm-gateway`, `make pack-llm-gateway`, `make test-cluster-mesh`, `make typecheck-cluster-mesh`, `make test-api-unit SCOPE=gateway-package-version`, and `make scope-check`.
   - [ ] Drop `BRANCH.md` before final push, open PR, wait for CI green, and clean up `ENV=test-gw-l15` (`make down-volumes`, `make down`, `make clean`).
