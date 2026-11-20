@@ -15,7 +15,7 @@ const tenant = { tenantId: 'tenant-1', workspaceId: 'ws-1', userId: 'user-1' };
 const basePrincipal: ArtifactCommentsHttpPrincipal = { workspaceId: 'ws-1', userId: 'user-1' };
 
 const buildApp = (overrides: Partial<CreateArtifactCommentsRouterOptions> = {}) => {
-  const store = new InMemoryCommentStore();
+  const store = overrides.store ?? new InMemoryCommentStore();
   const events: unknown[] = [];
   let active: ArtifactCommentsHttpPrincipal | undefined = basePrincipal;
   const app = new Hono().route('/api/v1', createArtifactCommentsRouter({
@@ -43,25 +43,81 @@ const req = (method: string, body?: unknown, headers?: Record<string, string>): 
 });
 
 describe('artifact-comments Hono router (C2b + S4-route)', () => {
-  it('should fail closed on missing/throwing authn and preserve 404/403 authz refusals', async () => {
-    const { app, store, setPrincipal } = buildApp();
-    const listSpy = vi.spyOn(store, 'listByTarget');
-    setPrincipal(undefined);
-    expect((await app.request('/api/v1/artifacts/art-1/comments')).status).toBe(401);
+  it('should guard all 9 routes before tenant/store access with read vs comment actions and fail closed', async () => {
+    const routes: Array<{ method: string; path: string; body?: unknown; expectedAction: 'read' | 'comment' }> = [
+      { method: 'GET', path: '/api/v1/artifacts/art-1/comments', expectedAction: 'read' },
+      { method: 'GET', path: '/api/v1/artifacts/art-1/comments/summaries', expectedAction: 'read' },
+      { method: 'GET', path: '/api/v1/artifacts/art-1/comments/threads/th-1', expectedAction: 'read' },
+      { method: 'POST', path: '/api/v1/artifacts/art-1/comments', body: { content: 'Hi' }, expectedAction: 'comment' },
+      { method: 'POST', path: '/api/v1/artifacts/art-1/comments/threads/th-1/close', expectedAction: 'comment' },
+      { method: 'POST', path: '/api/v1/artifacts/art-1/comments/threads/th-1/reopen', expectedAction: 'comment' },
+      { method: 'PATCH', path: '/api/v1/artifacts/art-1/comments/threads/th-1/assignee', body: { assigned_to: null }, expectedAction: 'comment' },
+      { method: 'PATCH', path: '/api/v1/artifacts/art-1/comments/c-1', body: { content: 'Ed' }, expectedAction: 'comment' },
+      { method: 'DELETE', path: '/api/v1/artifacts/art-1/comments/c-1', expectedAction: 'comment' },
+    ];
+    for (const r of routes) {
+      const tenantResolve = vi.fn(async () => tenant);
+      const memberExists = vi.fn(async () => true);
+      const store = new InMemoryCommentStore();
+      const storeSpies = [
+        vi.spyOn(store, 'listByTarget'), vi.spyOn(store, 'listThreadSummaries'), vi.spyOn(store, 'listThread'),
+        vi.spyOn(store, 'add'), vi.spyOn(store, 'setState'), vi.spyOn(store, 'assign'),
+        vi.spyOn(store, 'get'), vi.spyOn(store, 'edit'), vi.spyOn(store, 'delete'),
+      ];
+      for (const authz of [
+        { resolvePrincipal: async () => undefined, authorizeArtifact: async () => ({ ok: true as const }) },
+        { resolvePrincipal: async () => { throw new Error('authn boom'); }, authorizeArtifact: async () => ({ ok: true as const }) },
+      ]) {
+        const { app } = buildApp({ store, tenant: { resolve: tenantResolve, memberExists }, authz });
+        expect((await app.request(r.path, req(r.method, r.body))).status).toBe(401);
+      }
 
-    const nf = buildApp({ authz: { resolvePrincipal: async () => basePrincipal, authorizeArtifact: async () => ({ ok: false, status: 404, code: 'artifact_not_found' }) } });
-    const nfRes = await nf.app.request('/api/v1/artifacts/art-1/comments');
-    expect(nfRes.status).toBe(404);
-    expect(await nfRes.json()).toMatchObject({ code: 'artifact_not_found' });
+      const nf = buildApp({
+        store,
+        tenant: { resolve: tenantResolve, memberExists },
+        authz: { resolvePrincipal: async () => basePrincipal, authorizeArtifact: async () => ({ ok: false, status: 404, code: 'artifact_not_found' }) },
+      });
+      const nfRes = await nf.app.request(r.path, req(r.method, r.body));
+      expect(nfRes.status).toBe(404);
+      expect(await nfRes.json()).toMatchObject({ code: 'artifact_not_found' });
 
-    const fb = buildApp({ authz: { resolvePrincipal: async () => basePrincipal, authorizeArtifact: async () => ({ ok: false, status: 403, code: 'comment_forbidden' }) } });
-    const fbRes = await fb.app.request('/api/v1/artifacts/art-1/comments', req('POST', { content: 'Hi' }));
-    expect(fbRes.status).toBe(403);
-    expect(await fbRes.json()).toMatchObject({ code: 'comment_forbidden' });
+      const boom = buildApp({
+        store,
+        tenant: { resolve: tenantResolve, memberExists },
+        authz: { resolvePrincipal: async () => basePrincipal, authorizeArtifact: async () => { throw new Error('authz boom'); } },
+      });
+      const boomRes = await boom.app.request(r.path, req(r.method, r.body));
+      expect(boomRes.status).toBe(403);
+      expect(await boomRes.json()).toMatchObject({ code: 'comment_forbidden' });
+      expect(tenantResolve).not.toHaveBeenCalled();
+      expect(memberExists).not.toHaveBeenCalled();
+      for (const spy of storeSpies) expect(spy).not.toHaveBeenCalled();
 
-    const boom = buildApp({ authz: { resolvePrincipal: async () => basePrincipal, authorizeArtifact: async () => { throw new Error('err'); } } });
-    expect((await boom.app.request('/api/v1/artifacts/art-1/comments')).status).toBe(403);
-    expect(listSpy).not.toHaveBeenCalled();
+      const seenActions: Array<'read' | 'comment'> = [];
+      const viewer = buildApp({
+        store,
+        tenant: { resolve: tenantResolve, memberExists },
+        authz: {
+          resolvePrincipal: async () => basePrincipal,
+          authorizeArtifact: async ({ artifactId, action }) => {
+            expect(artifactId).toBe('art-1');
+            seenActions.push(action);
+            return action === 'read' ? { ok: true } : { ok: false, status: 403, code: 'comment_forbidden' };
+          },
+        },
+      });
+      const viewerRes = await viewer.app.request(r.path, req(r.method, r.body));
+      expect(seenActions).toEqual([r.expectedAction]);
+      if (r.expectedAction === 'comment') {
+        expect(viewerRes.status).toBe(403);
+        expect(await viewerRes.json()).toMatchObject({ code: 'comment_forbidden' });
+        expect(tenantResolve).not.toHaveBeenCalled();
+        expect(memberExists).not.toHaveBeenCalled();
+        for (const spy of storeSpies) expect(spy).not.toHaveBeenCalled();
+      } else {
+        expect([200, 404]).toContain(viewerRes.status);
+      }
+    }
   });
 
   it('should create unassigned root threads, filter artifact context only, and expose summaries', async () => {
