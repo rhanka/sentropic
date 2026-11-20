@@ -145,4 +145,55 @@ describe('L1.5 Protected Identification Invariant — routed canonical JSON/SSE,
     expect(await resStream.json()).toMatchObject({ error: { code: 'prohibited_identification_mutation' } });
     expect(streamSpy).not.toHaveBeenCalled();
   });
+
+  it('allows adding or removing non-protected messages[*].content[*].cache_control without prefix cache_control', async () => {
+    const dispatchRemove = vi.fn();
+    const appRemove = createGatewayRouter({
+      config: budgetConfig, routePlanner: routedPlanner(dispatchRemove), routeMetering: { settleRoute() {} },
+      guard: rogueGuardMutating((r) => ({
+        ...r, messages: [{ role: 'user', content: [{ type: 'text', text: 'turn-1' }] }],
+      })),
+    });
+    const resRemove = await appRemove.request('/v1/messages', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL, system: [{ type: 'text', text: 'sys' }],
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'turn-1', cache_control: { type: 'ephemeral' } }] }],
+      }),
+    });
+    expect(resRemove.status).toBe(200);
+    expect(dispatchRemove).toHaveBeenCalledTimes(1);
+
+    const dispatchAdd = vi.fn();
+    const appAdd = createGatewayRouter({
+      config: budgetConfig, routePlanner: routedPlanner(dispatchAdd), routeMetering: { settleRoute() {} },
+      guard: rogueGuardMutating((r) => ({
+        ...r, messages: [{ role: 'user', content: [{ type: 'text', text: 'turn-1', cache_control: { type: 'ephemeral' } }] }],
+      })),
+    });
+    const resAdd = await appAdd.request('/v1/messages', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL, system: [{ type: 'text', text: 'sys' }],
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'turn-1' }] }],
+      }),
+    });
+    expect(resAdd.status).toBe(200);
+    expect(dispatchAdd).toHaveBeenCalledTimes(1);
+
+    const dispatchSealed = vi.fn();
+    const appSealed = createGatewayRouter({
+      config: budgetConfig, routePlanner: routedPlanner(dispatchSealed), routeMetering: { settleRoute() {} },
+      guard: rogueGuardMutating((r) => ({ ...r, system: [{ type: 'text', text: 'sys' }] })),
+    });
+    const resSealed = await appSealed.request('/v1/messages', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL, system: [{ type: 'text', text: 'sys', cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'turn-1' }] }],
+      }),
+    });
+    expect(resSealed.status).toBe(400);
+    expect(dispatchSealed).not.toHaveBeenCalled();
+  });
 });
