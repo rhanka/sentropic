@@ -7,6 +7,8 @@ import type { GuardPort } from '../src/ports/guards.js';
 import type { StageRewritePort } from '../src/rewrite/stage-rewrite.js';
 import type { RouteFlowDeps } from '../src/route-flow-core.js';
 import { budgetConfig, fixtureQuote, jsonAttempt, quotingPlanner, recordingBudget, textResponse } from './fixtures/budget.js';
+import { nativeHarness } from './fixtures/native-flow.js';
+import type { GuardedTurnCaptureRecord } from '../src/guards/sse-guard-tee.js';
 
 const AWS_SECRET = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
 const MODEL = 'claude-sonnet-5';
@@ -195,5 +197,47 @@ describe('L1.5 Protected Identification Invariant — routed canonical JSON/SSE,
     });
     expect(resSealed.status).toBe(400);
     expect(dispatchSealed).not.toHaveBeenCalled();
+  });
+
+  it('does not falsely block upstream JSON responses under mask_in_flight while still blocking explicit block rules', async () => {
+    const email = 'alice.tester@example.org';
+    const captures: GuardedTurnCaptureRecord[] = [];
+    const hOk = nativeHarness({
+      execute: async () => ({
+        kind: 'json', status: 200, headers: {},
+        body: { id: 'msg_1', type: 'message', role: 'assistant', model: MODEL, content: [{ type: 'text', text: 'ok' }], metadata: { owner: email }, usage: { input_tokens: 5, output_tokens: 2 } },
+      }),
+    });
+    const appOk = createGatewayRouter({
+      config: hOk.deps.config, routePlanner: hOk.deps.routePlanner, routeMetering: hOk.deps.metering,
+      budget: hOk.deps.budget, nativeMessagesEnabled: true,
+      guard: new GuardEngine({ detectorActions: { 'pii.email': 'mask_in_flight' } }),
+      captureEnabled: true, onCapture: (rec) => { captures.push(rec); },
+    });
+    const resOk = await appOk.request('/v1/messages', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'anthropic-beta': 'prompt-caching-2024-07-31' },
+      body: JSON.stringify({ ...hOk.request.body, system: 'clean', stream: false }),
+    });
+    expect(resOk.status).toBe(200);
+    expect(captures).toHaveLength(1);
+    expect(captures[0]!.blocked).toBe(false);
+    expect(JSON.stringify(captures[0]!.responseCapture.payload)).not.toContain(email);
+
+    const hBlock = nativeHarness({
+      execute: async () => ({
+        kind: 'json', status: 200, headers: {},
+        body: { id: 'msg_2', type: 'message', role: 'assistant', model: MODEL, content: [{ type: 'text', text: AWS_SECRET }], metadata: { owner: email }, usage: { input_tokens: 5, output_tokens: 2 } },
+      }),
+    });
+    const appBlock = createGatewayRouter({
+      config: hBlock.deps.config, routePlanner: hBlock.deps.routePlanner, routeMetering: hBlock.deps.metering,
+      budget: hBlock.deps.budget, nativeMessagesEnabled: true,
+      guard: new GuardEngine({ detectorActions: { 'pii.email': 'mask_in_flight', 'secret.aws_access_key': 'block' } }),
+    });
+    const resBlock = await appBlock.request('/v1/messages', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'anthropic-beta': 'prompt-caching-2024-07-31' },
+      body: JSON.stringify({ ...hBlock.request.body, system: 'clean', stream: false }),
+    });
+    expect(resBlock.status).toBe(400);
   });
 });

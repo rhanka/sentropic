@@ -479,7 +479,8 @@ export const runJsonFlow = async (
       ? parseRetryAfterMs(response.headers)
       : undefined;
     const respScan = !isRateLimited && deps.guard ? deps.guard.inspectRequest(response.body) : undefined;
-    const respBlocked = respScan?.verdict === 'blocked';
+    const respBlocked = respScan?.verdict === 'blocked'
+      && (!respScan.protectedViolation || respScan.findings.some((f) => f.action === 'block'));
 
     await settle(
       deps, request, prepared,
