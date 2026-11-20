@@ -61,7 +61,7 @@ Implement Sub-Lot L1.3c of `spec/SPEC_EVOL_LLM_GW_RELAY_CHAIN.md` (r8): pure-Typ
   - [x] Implement `KUBECONFIG_PATTERNS`, `scanCustom`, disjoint `dedupeRanges`, `formatSecretRedactionTag`, `redactSecretMatches`, `scanSecrets`, `PureSecretScanner` in `packages/llm-gateway/src/guards/secret-scanner.ts` and export from `src/index.ts`.
   - [x] Wire `SecretScannerPort` and structured `customPatterns` into `packages/llm-gateway/src/guards/guard-engine.ts`.
   - [x] Verify Green: scoped tests, full `llm-gateway` test suite, typecheck, lint, scope-check.
-- [ ] **Lot 2 — Package version bump (`0.25.0` -> `0.26.0`) & CI**
-  - [ ] Bump `@sentropic/llm-gateway` to `0.26.0`, add `CHANGELOG.md` entry, regenerate consumer fixtures via make targets (`BR-GWRC-EX3`).
-  - [ ] Verify pack, cluster-mesh, api-unit gateway-package-version, scope-check.
+- [x] **Lot 2 — Package version bump (`0.25.0` -> `0.26.0`) & CI**
+  - [x] Bump `@sentropic/llm-gateway` to `0.26.0`, add `CHANGELOG.md` entry, regenerate consumer fixtures via make targets (`BR-GWRC-EX3`).
+  - [x] Verify pack, cluster-mesh, api-unit gateway-package-version, scope-check.
   - [ ] Drop `BRANCH.md`, clean test stack (`make down-volumes`, `make down`, `make clean`), push and open PR, wait for CI green.
