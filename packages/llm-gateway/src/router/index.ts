@@ -127,6 +127,8 @@ export interface CreateGatewayRouterOptions {
   readonly captureEnabled?: boolean;
   /** Masked capture callback — invoked only when `captureEnabled === true`. */
   readonly onCapture?: (record: GuardedTurnCaptureRecord) => Promise<void> | void;
+  /** Refusal receipt callback for legacy passthrough flows (L1.5). */
+  readonly onRefusalReceipt?: GatewayFlowDeps['onRefusalReceipt'];
 }
 
 const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
@@ -274,9 +276,11 @@ export const createGatewayRouter = (
           resolveTarget,
           metering,
           ...(options.estimateUsage ? { estimateUsage: options.estimateUsage } : {}),
+          ...(options.requestAudit ? { requestAudit: options.requestAudit } : {}),
           ...(options.guard ? { guard: options.guard } : {}),
           captureEnabled: options.captureEnabled === true,
           ...(options.onCapture ? { onCapture: options.onCapture } : {}),
+          ...(options.onRefusalReceipt ? { onRefusalReceipt: options.onRefusalReceipt } : {}),
         }
       : undefined;
   const routeFlowDeps: RouteFlowDeps | undefined = options.routePlanner && options.routeMetering
@@ -350,14 +354,18 @@ export const createGatewayRouter = (
     }
     const flowRequest = {
       receiptId: undefined as string | undefined,
+      receiptRefused: false,
       wire, headers, body, bodyLease, model, stream, authContext,
       signal: c.req.raw.signal,
       ...(wire === 'openai-responses' ? { responsesLimits } : {}),
     };
     const includeReceipt = () => { if (flowRequest.receiptId) c.header('X-Sentropic-Receipt', flowRequest.receiptId); };
-    const refuseReceipt = async () => {
-      if (flowRequest.receiptId) {
-        try { await options.requestAudit?.refuse?.(flowRequest.receiptId); } catch { /* Retain pending evidence for recovery. */ }
+    const refuseReceipt = async (error?: unknown) => {
+      if (flowRequest.receiptId && !flowRequest.receiptRefused) {
+        flowRequest.receiptRefused = true;
+        const detail = error instanceof GatewayError && error.kind === 'protected-identification-mutated'
+          ? { integrity: 'protected_identification_violation' as const, reason: error.message } : undefined;
+        try { await options.requestAudit?.refuse?.(flowRequest.receiptId, detail); } catch { /* Retain pending evidence for recovery. */ }
       }
       includeReceipt();
     };
@@ -382,7 +390,7 @@ export const createGatewayRouter = (
         }
         return c.json(result.body as object, result.status as 200);
       } catch (error) {
-        await refuseReceipt();
+        await refuseReceipt(error);
         return sendError(c, toProviderShapedError(wire, error, model), id, servedTargetForError(error));
       }
     }
@@ -402,7 +410,7 @@ export const createGatewayRouter = (
         ? await runRouteStreamFlow(routeFlowDeps, flowRequest)
         : await runStreamFlow(flowDeps!, flowRequest);
     } catch (error) {
-      await refuseReceipt();
+      await refuseReceipt(error);
       c.req.raw.signal.removeEventListener('abort', abort);
       return sendError(c, toProviderShapedError(wire, error, model), id, servedTargetForError(error));
     }
