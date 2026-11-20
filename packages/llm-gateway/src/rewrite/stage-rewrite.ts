@@ -91,8 +91,10 @@ export class StageRewriteEngine {
       : { model: rule.targetModel };
     raw.model = rule.targetModel;
     if (rule.targetEffort !== undefined) {
-      if (input.wire === 'openai-chat-completions' && raw.reasoning_effort !== undefined) {
-        raw.reasoning_effort = rule.targetEffort;
+      if (input.wire === 'openai-chat-completions') {
+        const hasObj = Boolean(raw.reasoning && typeof raw.reasoning === 'object' && !Array.isArray(raw.reasoning));
+        if (raw.reasoning_effort !== undefined || !hasObj) raw.reasoning_effort = rule.targetEffort;
+        if (hasObj) raw.reasoning = { ...(raw.reasoning as Record<string, unknown>), effort: rule.targetEffort };
       } else {
         const existing = raw.reasoning && typeof raw.reasoning === 'object' && !Array.isArray(raw.reasoning)
           ? (raw.reasoning as Record<string, unknown>) : {};

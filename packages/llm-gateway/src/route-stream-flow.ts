@@ -193,7 +193,10 @@ const trackedExecution = (input: {
     priming = false;
     if (input.first.type === 'done') await finish(doneClassification(input.first.data.finishReason));
   };
-  return { encoded, expose, commit, get refusal() { return refusal; },
+  const failGuard = async () => {
+    await finish({ reason: 'invalid-request', retryable: false, healthScope: 'route' });
+  };
+  return { encoded, expose, commit, failGuard, get refusal() { return refusal; },
     get terminal() { return terminal; }, get firstObserved() { return firstObserved; } };
 };
 
@@ -262,6 +265,7 @@ export const runRouteStreamFlow = async (
         const nativeStream = nativeExecution.expose();
         const guardedNative = deps.guard ? teeGuardedStream(nativeStream, {
           guard: deps.guard,
+          onBlocked: () => nativeExecution!.finish({ reason: 'invalid-request', retryable: false, healthScope: 'route' }, 'upstream_error', true),
           onComplete: deps.captureEnabled === true && deps.onCapture && prepared.requestCapture
             ? async (res) => {
               try {
@@ -334,6 +338,7 @@ export const runRouteStreamFlow = async (
       const exposedStream = execution.expose(buffered);
       const guardedStream = deps.guard ? teeGuardedStream(exposedStream, {
         guard: deps.guard,
+        onBlocked: () => execution!.failGuard(),
         onComplete: deps.captureEnabled === true && deps.onCapture && prepared.requestCapture
           ? async (res) => {
             try {

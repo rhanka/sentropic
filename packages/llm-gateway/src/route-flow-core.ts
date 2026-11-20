@@ -57,7 +57,7 @@ export interface RouteFlowDeps {
   readonly requestAudit?: {
     admit(input: {
       cost: CostContext; requestId: string; model: string;
-      originModel?: string; stageRewrites?: readonly StageRewriteTrace[];
+      originModel?: string; stageRewrites?: readonly StageRewriteTrace[]; guardVerdict?: GuardVerdict;
     }): Promise<{ receiptId: string }>;
     refuse?(receiptId: string): Promise<void>;
     beginAttempt?(input: { cost: CostContext; attemptRef: string; diagnostic: RoutePlan['diagnostics'][number] }): Promise<void>;
@@ -210,6 +210,7 @@ export const prepareRouteFlow = async (
       cost: auth.cost, requestId: request.authContext.requestId, model: effectiveModel,
       ...(originModel ? { originModel } : {}),
       ...(stageRewrites ? { stageRewrites } : {}),
+      ...(guardVerdict ? { guardVerdict } : {}),
     });
     request.receiptId = receipt.receiptId;
     cost = { ...cost, gatewayReceiptId: receipt.receiptId };
