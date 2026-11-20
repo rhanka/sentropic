@@ -4,6 +4,8 @@ import { StageRewriteEngine } from '../src/rewrite/stage-rewrite.js';
 import { normalizeGatewayIngress } from '../src/canonical-ingress.js';
 import { encodeGatewayResponse } from '../src/canonical-egress.js';
 import { prepareRouteFlow } from '../src/route-flow-core.js';
+import { buildNativeMessagesRequest } from '../src/route-native.js';
+import { GuardEngine } from '../src/guards/guard-engine.js';
 import { runRouteStreamFlow } from '../src/route-stream-flow.js';
 import { toProviderShapedError } from '../src/router/errors.js';
 import { stubGatewayConfig } from '../src/stubs.js';
@@ -133,5 +135,46 @@ describe('L1.2 StageRewriteEngine & cache-marker preservation (Claude + Muse)', 
       });
     } catch (err) { caught = err; }
     expect(toProviderShapedError('openai-chat-completions', caught).status).toBe(400);
+  });
+
+  it('propagates effectiveBody when effectiveModel === request.model and into buildNativeMessagesRequest', async () => {
+    const captured: GenerateRequest[] = [];
+    const sameModelEngine = new StageRewriteEngine({
+      stageId: 'wkst:1',
+      rules: [{ ruleId: 'effort-only', matchModel: 'claude-sonnet-5', matchEffort: 'low', targetModel: 'claude-sonnet-5', targetEffort: 'high' }],
+    });
+    const body = {
+      model: 'claude-sonnet-5',
+      max_tokens: 128,
+      reasoning: { effort: 'low' },
+      messages: [{ role: 'user', content: 'email alice@example.org' }],
+    };
+    const seenRouteBodies: unknown[] = [];
+    const req = {
+      wire: 'anthropic-messages' as const,
+      headers: {},
+      authContext: { method: 'POST', url: 'http://127.0.0.1/v1/messages', requestId: 'req-eff' },
+      model: 'claude-sonnet-5',
+      stream: false,
+      body,
+    };
+    const prepared = await prepareRouteFlow({
+      config: { ...stubGatewayConfig, callerAuth },
+      routePlanner: museAndClaudePlanner(captured),
+      metering: { settleRoute() {} },
+      stageRewrite: sameModelEngine,
+      guard: new GuardEngine({ detectorActions: { 'pii.email': 'mask_in_flight' } }),
+      routeInput: (i) => { seenRouteBodies.push(i.request.body); return { workspaceId: 'w1', affinityKey: 'aff-1' }; },
+    }, req);
+    expect((prepared.effectiveBody as { reasoning?: { effort?: string } })?.reasoning?.effort).toBe('high');
+    expect(JSON.stringify(prepared.effectiveBody)).toContain('[REDACTED:EMAIL]');
+    const nativeReq = buildNativeMessagesRequest(
+      { ...prepared, nativeFeatures: { kind: 'eligible', forwarded: {}, maxOutputTokens: 128 } },
+      req,
+      { capability: { modelId: 'claude-sonnet-5', apiVersions: ['2023-06-01'], execute: async () => ({ kind: 'json', status: 200, headers: {}, body: {} }) }, anthropicVersion: '2023-06-01' },
+      new AbortController().signal,
+    );
+    expect((nativeReq.body as { reasoning?: { effort?: string } }).reasoning?.effort).toBe('high');
+    expect(JSON.stringify(nativeReq.body)).toContain('[REDACTED:EMAIL]');
   });
 });

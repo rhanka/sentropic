@@ -149,4 +149,37 @@ describe('L1.3a GuardEngine (decoded JSON PII + technical secrets) & redactForLo
     }
     expect(scrubbed.safeField).toBe('keep-me');
   });
+
+  it('never mutates system, instructions, or system/developer roles in flight under default config or mask_in_flight', () => {
+    const payload = {
+      model: 'claude-sonnet-5',
+      system: [{ type: 'text', text: `System identity ${synthetic.email}` }],
+      instructions: `Responses instructions ${synthetic.email}`,
+      metadata: { user_id: synthetic.email },
+      tools: [{ name: 't', description: `tool ${synthetic.email}` }],
+      messages: [
+        { role: 'system', content: `Sys msg ${synthetic.email}` },
+        { role: 'developer', content: `Dev msg ${synthetic.email}` },
+        { role: 'user', content: [{ type: 'tool_result', tool_use_id: `id-${synthetic.email}`, call_id: `call-${synthetic.email}`, content: `User msg ${synthetic.email}` }] },
+      ],
+    };
+    const defaultRes = new GuardEngine().inspectRequest(payload);
+    expect(defaultRes.inFlightPayload).toBe(payload);
+    expect(JSON.stringify(defaultRes.inFlightPayload)).toBe(JSON.stringify(payload));
+
+    const inFlightEngine = new GuardEngine({ detectorActions: { 'pii.email': 'mask_in_flight' } });
+    const maskedRes = inFlightEngine.inspectRequest(payload);
+    const inFlight = maskedRes.inFlightPayload as typeof payload;
+    expect(inFlight.system).toEqual(payload.system);
+    expect(inFlight.instructions).toBe(payload.instructions);
+    expect(inFlight.metadata).toEqual(payload.metadata);
+    expect(inFlight.tools).toEqual(payload.tools);
+    expect(inFlight.messages[0]).toEqual(payload.messages[0]);
+    expect(inFlight.messages[1]).toEqual(payload.messages[1]);
+    const userBlock = (inFlight.messages[2]!.content as { tool_use_id: string; call_id: string; content: string }[])[0]!;
+    expect(userBlock.tool_use_id).toBe(`id-${synthetic.email}`);
+    expect(userBlock.call_id).toBe(`call-${synthetic.email}`);
+    expect(userBlock.content).toBe('User msg [REDACTED:EMAIL]');
+    expect(JSON.stringify(maskedRes.maskedCapture.payload)).not.toContain(synthetic.email);
+  });
 });
