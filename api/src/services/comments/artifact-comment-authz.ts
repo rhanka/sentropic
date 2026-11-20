@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { createPostgresArtifactStore } from '@sentropic/artifacts/adapters/postgres';
+import { isArtifactId } from '@sentropic/artifacts/contracts';
 import { evaluateAccess, type ArtifactAcl, type SharingPolicyContext } from '@sentropic/artifacts/server/access';
 import type { ArtifactState } from '@sentropic/artifacts/server/lifecycle';
 import {
@@ -31,8 +32,8 @@ export interface ArtifactCommentAuthorized {
 export type ArtifactCommentAuthzResult = ArtifactCommentAuthorized | ArtifactCommentRefusal;
 
 export interface ArtifactCommentAuthzPorts {
+  resolveAuthority(identity: ArtifactHostIdentity, workspaceId: string): Promise<ArtifactAuthority>;
   resolveStorageScopeId(tenantId: string, workspaceId: string): Promise<string | undefined>;
-  resolveAuthority(identity: ArtifactHostIdentity, workspaceId: string, storageScopeId: string): Promise<ArtifactAuthority>;
   getArtifactAcl(artifactId: string): Promise<ArtifactAcl | undefined>;
   getArtifactState(artifactId: string): Promise<ArtifactState>;
   sharingPolicy?(storageScopeId: string): Promise<SharingPolicyContext> | SharingPolicyContext;
@@ -40,6 +41,23 @@ export interface ArtifactCommentAuthzPorts {
 
 const NOT_FOUND: ArtifactCommentRefusal = Object.freeze({ ok: false, status: 404, code: 'artifact_not_found' });
 const FORBIDDEN: ArtifactCommentRefusal = Object.freeze({ ok: false, status: 403, code: 'comment_forbidden' });
+const CLOSED_POLICY: SharingPolicyContext = Object.freeze({ allowPublicSharing: false });
+
+async function resolveSharingPolicy(
+  sharingPolicy: ArtifactCommentAuthzPorts['sharingPolicy'],
+  storageScopeId: string,
+): Promise<SharingPolicyContext> {
+  if (typeof sharingPolicy !== 'function') return CLOSED_POLICY;
+  try {
+    const resolved = await sharingPolicy(storageScopeId);
+    if (resolved !== null && typeof resolved === 'object' && typeof resolved.allowPublicSharing === 'boolean') {
+      return { allowPublicSharing: resolved.allowPublicSharing };
+    }
+    return CLOSED_POLICY;
+  } catch {
+    return CLOSED_POLICY;
+  }
+}
 
 function isArtifactVisible(
   acl: ArtifactAcl,
@@ -57,18 +75,26 @@ function isArtifactVisible(
 export function createArtifactCommentAuthz(ports: ArtifactCommentAuthzPorts) {
   return async (request: ArtifactCommentTargetRequest): Promise<ArtifactCommentAuthzResult> => {
     const { identity, workspaceId, artifactId, action = 'comment' } = request;
-    if (!identity.subject || !identity.tenantId || !identity.clientId || !identity.credentialId
-      || !workspaceId || !artifactId) {
+    if (
+      !identity
+      || typeof identity.subject !== 'string' || !identity.subject || identity.subject.includes('|')
+      || typeof identity.tenantId !== 'string' || !identity.tenantId
+      || typeof identity.clientId !== 'string' || !identity.clientId
+      || typeof identity.credentialId !== 'string' || !identity.credentialId
+      || typeof workspaceId !== 'string' || !workspaceId
+      || !isArtifactId(artifactId)
+    ) {
       return NOT_FOUND;
     }
+    if (action !== 'read' && action !== 'comment') return FORBIDDEN;
+    const authority = await ports.resolveAuthority(identity, workspaceId);
+    if (!authority.readable) return NOT_FOUND;
     const storageScopeId = await ports.resolveStorageScopeId(identity.tenantId, workspaceId);
     if (!storageScopeId) return NOT_FOUND;
-    const authority = await ports.resolveAuthority(identity, workspaceId, storageScopeId);
-    if (!authority.readable) return NOT_FOUND;
     const acl = await ports.getArtifactAcl(artifactId);
     if (!acl || acl.storageScopeId !== storageScopeId) return NOT_FOUND;
     const state = await ports.getArtifactState(artifactId);
-    const policy = (await ports.sharingPolicy?.(storageScopeId)) ?? {};
+    const policy = await resolveSharingPolicy(ports.sharingPolicy, storageScopeId);
     if (!isArtifactVisible(acl, state, identity.subject, authority.readable, policy)) return NOT_FOUND;
     if (action === 'comment' && !authority.commentable) return FORBIDDEN;
     return { ok: true, artifactId, workspaceId, storageScopeId, authority };
@@ -83,6 +109,10 @@ export function createPostgresArtifactCommentAuthz(options: {
 }) {
   const store = createPostgresArtifactStore(options.pool);
   return createArtifactCommentAuthz({
+    resolveAuthority: (identity, workspaceId) =>
+      createArtifactAuthorization({
+        identity, workspaceId, storageScopeId: '', pool: options.pool, currentIdentity: options.currentIdentity,
+      }).current(),
     async resolveStorageScopeId(tenantId, workspaceId) {
       const { rows } = await options.pool.query<{ value: string }>(
         `SELECT kv.value FROM control.artifact_host_kv kv
@@ -92,10 +122,6 @@ export function createPostgresArtifactCommentAuthz(options: {
       );
       return rows[0]?.value;
     },
-    resolveAuthority: (identity, workspaceId, storageScopeId) =>
-      createArtifactAuthorization({
-        identity, workspaceId, storageScopeId, pool: options.pool, currentIdentity: options.currentIdentity,
-      }).current(),
     getArtifactAcl: (artifactId) => store.getArtifactAcl(artifactId),
     getArtifactState: (artifactId) => store.getArtifactState(artifactId),
     sharingPolicy: options.sharingPolicy,
