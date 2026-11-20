@@ -46,9 +46,11 @@ export const captureCanonicalProtectedProjection = (
       messages: extractSequence(request.messages, false),
       tools: request.tools !== undefined ? { present: true, value: request.tools } : { present: false },
       ingressBodyProtected,
-      prefixCacheControl: cc
-        ? { topLevel: fieldEntry(cc, 'topLevel'), system: fieldEntry(cc, 'system'), tools: fieldEntry(cc, 'tools') }
-        : null,
+      prefixCacheControl: {
+        topLevel: cc ? fieldEntry(cc, 'topLevel') : { present: false },
+        system: cc ? fieldEntry(cc, 'system') : { present: false },
+        tools: cc ? fieldEntry(cc, 'tools') : { present: false },
+      },
       promptCacheKey: po ? fieldEntry(po, 'promptCacheKey') : { present: false },
       responses: resp
         ? {
