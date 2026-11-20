@@ -200,4 +200,48 @@ describe('L1.3c vendored pure-TS agent-stats secret scanner core', () => {
     const exactQuoted = engine.scanText(`MY_TOKEN="${FAKE_ORG_TOKEN}"`).maskedText;
     expect(exactQuoted).toBe(`MY_TOKEN="<<SECRET:custom_org-token:${sha16(FAKE_ORG_TOKEN)}>>"`);
   });
+
+  it('evaluates block and mask_in_flight policies before range dedupe when kubeconfig-token or an earlier scanner match overlaps', async () => {
+    const fakeAws = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
+    const awsBlock = new GuardEngine({ detectorActions: { 'secret.aws_access_key': 'block' } });
+    expect(awsBlock.inspectRequest({ messages: [{ role: 'user', content: `token: ${fakeAws}` }] }).verdict).toBe('blocked');
+    const awsInFlight = new GuardEngine({ detectorActions: { 'secret.aws_access_key': 'mask_in_flight' } });
+    const awsInP = awsInFlight.inspectRequest({ system: `token: ${fakeAws}`, messages: [{ role: 'user', content: 'hi' }] });
+    expect(awsInP.verdict).toBe('blocked');
+    expect(awsInP.protectedViolation).toBe(true);
+
+    const orgGuard = new GuardEngine({ customPatterns: [ORG_PATTERN], detectorActions: { 'custom:org-token': 'mask_in_flight' } });
+    const dispatchSpy = vi.fn();
+    const app = createGatewayRouter({
+      config: budgetConfig,
+      routePlanner: plannerFor(dispatchSpy, 'claude-sonnet-5', 'anthropic'),
+      routeMetering: { settleRoute() {} },
+      guard: orgGuard,
+    });
+    for (const sys of [`token: ${FAKE_ORG_TOKEN}`, `token: pfx_${FAKE_ORG_TOKEN}`]) {
+      const res = await app.request('/v1/messages', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-sonnet-5', system: sys, messages: [{ role: 'user', content: 'hi' }] }),
+      });
+      expect(res.status).toBe(400);
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    }
+
+    const nonP = orgGuard.inspectRequest({ messages: [{ role: 'user', content: `token: ${FAKE_ORG_TOKEN}` }] });
+    expect(nonP.verdict).toBe('masked');
+    expect((nonP.inFlightPayload as { messages: { content: string }[] }).messages[0]!.content)
+      .toBe(`token: <<SECRET:custom_org-token:${sha16(FAKE_ORG_TOKEN)}>>`);
+
+    const orgBlock = new GuardEngine({ customPatterns: [ORG_PATTERN], detectorActions: { 'custom:org-token': 'block' } });
+    expect(orgBlock.inspectRequest({ messages: [{ role: 'user', content: `token: pfx_${FAKE_ORG_TOKEN}` }] }).verdict).toBe('blocked');
+
+    const overlapPort: SecretScannerPort = {
+      scan: () => [
+        { start: 2, end: 12, ruleId: 'ext:first', message: 'first' },
+        { start: 8, end: 18, ruleId: 'ext:second', message: 'second' },
+      ],
+    };
+    const portGuard = new GuardEngine({ secretScanner: overlapPort, detectorActions: { 'ext:second': 'block' } });
+    expect(portGuard.inspectRequest({ messages: [{ role: 'user', content: '0123456789abcdefghij' }] }).verdict).toBe('blocked');
+  });
 });

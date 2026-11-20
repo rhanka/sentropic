@@ -100,10 +100,14 @@ export const redactSecretMatches = (text: string, matches: readonly SecretMatch[
   return out;
 };
 
+const resolveSecretPatterns = (options: SecretScanOptions = {}): readonly CustomSecretPattern[] => {
+  const defaults = options.includeDefaultPatterns === false ? [] : KUBECONFIG_PATTERNS;
+  return options.customPatterns?.length ? [...options.customPatterns, ...defaults] : defaults;
+};
+
 export const scanSecrets = (text: string, options: SecretScanOptions = {}): SecretMatch[] => {
   if (!text) return [];
-  const defaults = options.includeDefaultPatterns === false ? [] : KUBECONFIG_PATTERNS;
-  const patterns = options.customPatterns?.length ? [...defaults, ...options.customPatterns] : defaults;
+  const patterns = resolveSecretPatterns(options);
   return patterns.length > 0 ? dedupeRanges(scanCustom(text, patterns)) : [];
 };
 
@@ -114,14 +118,25 @@ export class PureSecretScanner implements SecretScannerPort {
     this.defaultOptions = options;
   }
 
-  scan(text: string, options?: SecretScanOptions): readonly SecretMatch[] {
+  private mergeOptions(options?: SecretScanOptions): SecretScanOptions {
     const includeDefaultPatterns = options?.includeDefaultPatterns ?? this.defaultOptions.includeDefaultPatterns;
     const customPatterns = [...(this.defaultOptions.customPatterns ?? []), ...(options?.customPatterns ?? [])];
     const filePath = options?.filePath ?? this.defaultOptions.filePath;
-    return scanSecrets(text, {
+    return {
       ...(filePath !== undefined ? { filePath } : {}),
       ...(includeDefaultPatterns !== undefined ? { includeDefaultPatterns } : {}),
       ...(customPatterns.length > 0 ? { customPatterns } : {}),
-    });
+    };
+  }
+
+  scanRaw(text: string, options?: SecretScanOptions): readonly SecretMatch[] {
+    if (!text) return [];
+    const patterns = resolveSecretPatterns(this.mergeOptions(options));
+    return patterns.length > 0 ? scanCustom(text, patterns) : [];
+  }
+
+  scan(text: string, options?: SecretScanOptions): readonly SecretMatch[] {
+    const raw = this.scanRaw(text, options);
+    return raw.length > 0 ? dedupeRanges(raw) : [];
   }
 }

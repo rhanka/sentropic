@@ -70,6 +70,8 @@ export interface SecretScanOptions {
 /** Pure synchronous secret range scanner port (zero external dependencies). */
 export interface SecretScannerPort {
   scan(text: string, options?: SecretScanOptions): readonly SecretMatch[];
+  /** Optional pre-dedupe scan returning overlapping matches so policy evaluation sees every matching rule. */
+  scanRaw?(text: string, options?: SecretScanOptions): readonly SecretMatch[];
 }
 
 export interface ExternalGuardRequest {
