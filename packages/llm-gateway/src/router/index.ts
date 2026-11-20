@@ -56,7 +56,7 @@ import {
   type NativeCountTokensPort,
 } from '../native-count-tokens.js';
 import type { NativeCountTokensRateLimiter } from '../native-count-rate.js';
-import type { StageRewriteEngine } from '../rewrite/stage-rewrite.js';
+import type { StageRewritePort } from '../rewrite/stage-rewrite.js';
 import type { GuardPort } from '../ports/guards.js';
 import type { GuardedTurnCaptureRecord } from '../guards/sse-guard-tee.js';
 
@@ -119,8 +119,8 @@ export interface CreateGatewayRouterOptions {
    * resolved Responses maxBodyBytes always bounds the Responses paths.
    */
   readonly requestBody?: RequestBodyLimitOptions;
-  /** Optional stage rewrite engine (D4 B, L1.2). */
-  readonly stageRewrite?: StageRewriteEngine;
+  /** Optional stage rewrite port (D4 B, L1.2). */
+  readonly stageRewrite?: StageRewritePort;
   /** Optional PII + technical-secret guard engine (D6a/D6d, L1.3b). */
   readonly guard?: GuardPort;
   /** Body capture persistence flag — defaults strictly OFF (`false`). */

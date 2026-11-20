@@ -123,7 +123,7 @@ describe('L1.4 FileCaptureVault (default-OFF, deflate+AES-256-GCM+AAD, 30d purge
       async getSecret(key: string) {
         if (key === 'gateway/capture-dek/v1') return DEK_V1;
         if (key === 'gateway/capture-dek') return DEK_V1;
-        return undefined;
+        return null;
       },
     };
     try {

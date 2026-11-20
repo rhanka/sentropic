@@ -44,7 +44,11 @@ export interface StageRewriteResult {
   readonly trace?: StageRewriteTrace;
 }
 
-export class StageRewriteEngine {
+export interface StageRewritePort {
+  rewrite(input: StageRewriteInput): StageRewriteResult;
+}
+
+export class StageRewriteEngine implements StageRewritePort {
   private readonly stageId: string;
   private readonly rules: readonly StageRewriteRule[];
 
