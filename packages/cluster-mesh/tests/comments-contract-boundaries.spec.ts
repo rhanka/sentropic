@@ -81,8 +81,12 @@ const verifyPackageMigration = (text: string, expectedHash: string): boolean => 
   const hash = (value: string): string => createHash('sha256').update(value).digest('hex');
   if (receipt.baselineSha256 !== expectedHash || receipt.migratedSha256 !== hash(text)) return false;
   const baseline = text
-    .replace('"version": "0.3.2"', '"version": "0.3.0"')
-    .replace('"zod": "^4.6.6"', '"zod": "^3.25.76"');
+    .replace('"version": "0.3.3"', '"version": "0.3.0"')
+    .replace('"zod": "^4.6.6"', '"zod": "^3.25.76"')
+    .replace(
+      ',\n    "./artifact-hono": {\n      "types": "./dist/artifact-hono.d.ts",\n      "import": "./dist/artifact-hono.js"\n    }',
+      '',
+    );
   return hash(baseline) === expectedHash;
 };
 

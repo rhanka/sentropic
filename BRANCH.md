@@ -66,8 +66,8 @@ Add a dedicated artifact-comments Hono router over `CommentStore` in `@sentropic
   - [x] Verify GREEN via `make build-comments ENV=test-c2b`, `make typecheck-comments ENV=test-c2b`, `make test-comments ENV=test-c2b`.
 
 - [ ] **Lot 2 — Subpath export, version bump (`0.3.3`), CHANGELOG, C0 receipt & consumer fixtures**
-  - [ ] Export `./artifact-hono` and bump `@sentropic/comments` to `0.3.3` in `packages/comments/package.json`; add `packages/comments/CHANGELOG.md`.
-  - [ ] Update `docs/comments-annotations/contract/package-zod4-migration.json` and `packages/cluster-mesh/tests/comments-contract-boundaries.spec.ts` under `BRC2B-EX1`.
+  - [x] Export `./artifact-hono` and bump `@sentropic/comments` to `0.3.3` in `packages/comments/package.json`; add `packages/comments/CHANGELOG.md`.
+  - [x] Update `docs/comments-annotations/contract/package-zod4-migration.json` and `packages/cluster-mesh/tests/comments-contract-boundaries.spec.ts` under `BRC2B-EX1`.
   - [ ] Regenerate lockfiles (`package-lock.json`, `api/package-lock.json`) and `packages/cluster-mesh/tests/packaging/fixtures/selected/package{,-lock}.json`.
   - [ ] Verify `make pack-comments ENV=test-c2b`, `make test-cluster-mesh SCOPE=tests/comments-contract-boundaries.spec.ts ENV=test-c2b`, and `test-lazy-package`.
 
