@@ -288,7 +288,7 @@ describe('pure route quote', () => {
         outputCeilingEnforced: false,
       },
       {
-        providerId: 'gemini', modelId: 'gemini-4-argon',
+        providerId: 'gemini', modelId: 'gemini-4-neon',
         transportProviderId: 'cloud-code', reason: 'alias',
         allowance: { inputTokens: 1_000, outputTokens: 65_536 },
         outputCeilingEnforced: true,
@@ -336,7 +336,7 @@ describe('pure route quote', () => {
       .toEqual([
         'muse/muse-wonder-1.0',
         'openai/gpt-6.1-sol',
-        'gemini/gemini-4-argon',
+        'gemini/gemini-4-neon',
         'mistral/zai-glm-5-3',
         'openai/gpt-6-luna',
       ]);
@@ -380,7 +380,7 @@ describe('pure route quote', () => {
     expect(modelProfiles
       .filter((profile) => profile.capabilities.maxOutputTokens !== undefined)
       .map((profile) => `${profile.providerId}/${profile.modelId}=${profile.capabilities.maxOutputTokens}`))
-      .toEqual(['gemini/gemini-3.7-flash=65536', 'gemini/gemini-3.8-flash=65536', 'gemini/gemini-4-argon=65536', 'gemini/gemini-4-carbon=65536', 'mistral/zai-glm-5-3=131072']);
+      .toEqual(['gemini/gemini-3.7-flash=65536', 'gemini/gemini-3.8-flash=65536', 'gemini/gemini-4-argon=65536', 'gemini/gemini-4-hydrogen=65536', 'gemini/gemini-4-neon=65536', 'gemini/gemini-4-carbon=65536', 'mistral/zai-glm-5-3=131072']);
     const capped = quoteRoute(quoteInput('gemini-3.8-flash'));
     expect(capped.candidates[0]!.allowance.outputTokens).toBe(65_536);
     const below = quoteRoute(quoteInput('gemini-3.8-flash', {
@@ -742,4 +742,6 @@ const EXPECTED_UNENFORCED = [
   'openai/gpt-6-luna@codex',
   'openai/gpt-6-sol@codex',
   'openai/gpt-6.1-sol@codex',
+  'openai/gpt-6.1-terra@codex',
+  'openai/gpt-6.2-astra@codex',
 ];
