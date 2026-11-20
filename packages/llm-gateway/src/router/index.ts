@@ -127,6 +127,8 @@ export interface CreateGatewayRouterOptions {
   readonly captureEnabled?: boolean;
   /** Masked capture callback — invoked only when `captureEnabled === true`. */
   readonly onCapture?: (record: GuardedTurnCaptureRecord) => Promise<void> | void;
+  /** Refusal receipt callback for legacy passthrough flows (L1.5). */
+  readonly onRefusalReceipt?: GatewayFlowDeps['onRefusalReceipt'];
 }
 
 const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
@@ -278,6 +280,7 @@ export const createGatewayRouter = (
           ...(options.guard ? { guard: options.guard } : {}),
           captureEnabled: options.captureEnabled === true,
           ...(options.onCapture ? { onCapture: options.onCapture } : {}),
+          ...(options.onRefusalReceipt ? { onRefusalReceipt: options.onRefusalReceipt } : {}),
         }
       : undefined;
   const routeFlowDeps: RouteFlowDeps | undefined = options.routePlanner && options.routeMetering
