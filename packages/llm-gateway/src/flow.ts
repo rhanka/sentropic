@@ -43,6 +43,21 @@ import { ProviderRateLimitError } from './internal/provider-rate-limit-error.js'
 import { redactSelection, type RedactedSelectionView } from './redaction.js';
 import type { GuardPort, MaskedCapturePayload } from './ports/guards.js';
 import { teeGuardedStream, type GuardedTurnCaptureRecord } from './guards/sse-guard-tee.js';
+import type { ReceiptIntegrity } from './ports/gateway-state.js';
+import type { RouteFlowDeps } from './route-flow-core.js';
+import {
+  captureProtectedIdentification, verifyProtectedIdentificationAtEgress,
+  type ProtectedIdentificationSnapshot,
+} from './guards/protected-identification.js';
+
+export interface LegacyRefusalReceiptRecord {
+  readonly requestId: string;
+  readonly wire: GatewayWire;
+  readonly model: string;
+  readonly integrity?: ReceiptIntegrity;
+  readonly reason: string;
+  readonly createdAt: string;
+}
 
 /**
  * Normalized usage the settle hook records. `estimated` is true when the
@@ -105,12 +120,16 @@ export interface GatewayFlowDeps {
   readonly guard?: GuardPort;
   readonly captureEnabled?: boolean;
   readonly onCapture?: (record: GuardedTurnCaptureRecord) => Promise<void> | void;
+  readonly requestAudit?: RouteFlowDeps['requestAudit'];
+  readonly onRefusalReceipt?: (receipt: LegacyRefusalReceiptRecord) => Promise<void> | void;
 }
 
 /** Inputs the router hands the flow per request. */
 export interface GatewayFlowRequest {
   /** Set only after durable admission by the gateway audit port. */
   receiptId?: string;
+  /** Internal guard so a refusal receipt is recorded at most once per request. */
+  receiptRefused?: boolean;
   /** Router-owned reference/lease lifecycle; trusted pre-parsers share this owner. */
   readonly bodyLease?: CheckedGatewayBody;
   readonly authContext: CallerAuthRequestContext;
@@ -136,6 +155,40 @@ const DEFAULT_USAGE: SettleUsage = { inputTokens: 0, outputTokens: 0, estimated:
 const isAcquireError = (error: unknown): boolean =>
   error instanceof Error && error.name === 'AccountTransportAcquireError';
 
+const emitLegacyRefusalAudit = async (
+  deps: GatewayFlowDeps,
+  request: GatewayFlowRequest,
+  cost: CostContext,
+  detail: { readonly integrity?: ReceiptIntegrity; readonly reason: string },
+): Promise<void> => {
+  if (deps.requestAudit) {
+    try {
+      if (!request.receiptId) {
+        const admitted = await deps.requestAudit.admit({
+          cost, requestId: request.authContext.requestId, model: request.model,
+        });
+        request.receiptId = admitted.receiptId;
+      }
+      if (!request.receiptRefused) {
+        request.receiptRefused = true;
+        await deps.requestAudit.refuse?.(request.receiptId, detail);
+      }
+    } catch { /* Refusal audit sink errors never mask the 400 refusal. */ }
+  }
+  if (deps.onRefusalReceipt) {
+    try {
+      await deps.onRefusalReceipt({
+        requestId: request.authContext.requestId,
+        wire: request.wire,
+        model: request.model,
+        ...(detail.integrity ? { integrity: detail.integrity } : {}),
+        reason: detail.reason,
+        createdAt: new Date().toISOString(),
+      });
+    } catch { /* Refusal receipt callback errors never mask the 400 refusal. */ }
+  }
+};
+
 /** Steps 1-5: authenticate, resolve target, select + lease, resolve secret. */
 const prepare = async (
   deps: GatewayFlowDeps,
@@ -147,6 +200,8 @@ const prepare = async (
   material: Awaited<ReturnType<GatewayConfig['authResolver']['resolve']>>;
   account: RedactedSelectionView;
   requestCapture?: MaskedCapturePayload;
+  protectedIngress: ProtectedIdentificationSnapshot;
+  effectiveBody: unknown;
 }> => {
   const { config } = deps;
 
@@ -168,11 +223,35 @@ const prepare = async (
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
   const cost = auth.cost;
+  const protectedIngress = captureProtectedIdentification(request.wire, request.body, request.headers);
+  let effectiveBody = request.body;
   let requestCapture: MaskedCapturePayload | undefined;
   if (deps.guard) {
-    const scan = deps.guard.inspectRequest(request.body);
-    if (scan.verdict === 'blocked') throw new GatewayError('guard-blocked', 'request blocked by gateway guard policy');
+    const scan = deps.guard.inspectRequest(effectiveBody);
+    if (scan.verdict === 'blocked') {
+      await emitLegacyRefusalAudit(deps, request, cost, {
+        ...(scan.protectedViolation ? { integrity: 'protected_identification_violation' as const } : {}),
+        reason: scan.protectedViolation ? 'guard-mask-in-flight-protected-set' : 'guard-blocked',
+      });
+      throw new GatewayError('guard-blocked', 'request blocked by gateway guard policy');
+    }
+    if (scan.inFlightPayload !== effectiveBody) effectiveBody = scan.inFlightPayload;
     if (deps.captureEnabled === true) requestCapture = scan.maskedCapture;
+  }
+  try {
+    verifyProtectedIdentificationAtEgress({
+      ingress: protectedIngress,
+      egressKind: 'legacy-flow',
+      body: effectiveBody,
+      headers: request.headers,
+    });
+  } catch (error) {
+    if (error instanceof GatewayError && error.kind === 'protected-identification-mutated') {
+      await emitLegacyRefusalAudit(deps, request, cost, {
+        integrity: 'protected_identification_violation', reason: error.message,
+      });
+    }
+    throw error;
   }
 
   // 2. resolve provider/model from the body `model`.
@@ -222,7 +301,7 @@ const prepare = async (
   }
 
   const account = redactSelection(material.descriptor, material.material);
-  return { cost, target, selection, material, account, requestCapture };
+  return { cost, target, selection, material, account, requestCapture, protectedIngress, effectiveBody };
 };
 
 /**
@@ -295,6 +374,36 @@ const settle = async (
   });
 };
 
+/** Release an un-dispatched seat lease on pre-send refusal without estimated usage billing. */
+const releasePreSendRefusal = async (
+  deps: GatewayFlowDeps,
+  request: GatewayFlowRequest,
+  ctx: {
+    cost: CostContext;
+    target: ResolvedTarget;
+    selection: PoolSelection;
+    account: RedactedSelectionView;
+  },
+): Promise<void> => {
+  if (ctx.selection.acquisition.release) {
+    await ctx.selection.acquisition.release();
+  } else {
+    await ctx.selection.acquisition.recordOutcome({
+      status: 'failed',
+      requestId: ctx.cost.correlationId,
+    });
+  }
+  await deps.metering.settle({
+    cost: ctx.cost,
+    wire: request.wire,
+    providerId: ctx.target.providerId,
+    model: ctx.target.model,
+    outcome: 'failed',
+    usage: DEFAULT_USAGE,
+    account: ctx.account,
+  });
+};
+
 /** Result of a non-stream gateway call (router sends `body` with `status` + allowlisted headers). */
 export interface GatewayJsonResult {
   readonly status: number;
@@ -324,11 +433,28 @@ export const runJsonFlow = async (
       providerId: prepared.target.providerId,
       model: prepared.target.model,
       material: prepared.material.material,
-      body: request.body,
+      body: prepared.effectiveBody,
       stream: false,
       ...(prepared.target.effort ? { effort: prepared.target.effort } : {}),
       ...(request.signal ? { signal: request.signal } : {}),
     };
+    try {
+      verifyProtectedIdentificationAtEgress({
+        ingress: prepared.protectedIngress,
+        egressKind: 'legacy-flow',
+        body: dispatchRequest.body,
+        headers: request.headers,
+      });
+    } catch (error) {
+      if (error instanceof GatewayError && error.kind === 'protected-identification-mutated') {
+        await emitLegacyRefusalAudit(deps, request, prepared.cost, {
+          integrity: 'protected_identification_violation', reason: error.message,
+        });
+        try { await releasePreSendRefusal(deps, request, prepared); } catch { /* The refusal wins. */ }
+        throw error;
+      }
+      throw error;
+    }
 
     let response: GatewayDispatchResponse;
     try {
@@ -353,7 +479,8 @@ export const runJsonFlow = async (
       ? parseRetryAfterMs(response.headers)
       : undefined;
     const respScan = !isRateLimited && deps.guard ? deps.guard.inspectRequest(response.body) : undefined;
-    const respBlocked = respScan?.verdict === 'blocked';
+    const respBlocked = respScan?.verdict === 'blocked'
+      && (!respScan.protectedViolation || respScan.findings.some((f) => f.action === 'block'));
 
     await settle(
       deps, request, prepared,
@@ -453,11 +580,28 @@ export const runStreamFlow = async (
       providerId: prepared.target.providerId,
       model: prepared.target.model,
       material: prepared.material.material,
-      body: request.body,
+      body: prepared.effectiveBody,
       stream: true,
       ...(prepared.target.effort ? { effort: prepared.target.effort } : {}),
       ...(request.signal ? { signal: request.signal } : {}),
     };
+    try {
+      verifyProtectedIdentificationAtEgress({
+        ingress: prepared.protectedIngress,
+        egressKind: 'legacy-flow',
+        body: dispatchRequest.body,
+        headers: request.headers,
+      });
+    } catch (error) {
+      if (error instanceof GatewayError && error.kind === 'protected-identification-mutated') {
+        await emitLegacyRefusalAudit(deps, request, prepared.cost, {
+          integrity: 'protected_identification_violation', reason: error.message,
+        });
+        try { await releasePreSendRefusal(deps, request, prepared); } catch { /* The refusal wins. */ }
+        throw error;
+      }
+      throw error;
+    }
 
     try {
       dispatchStream = deps.config.dispatch.dispatchStream(dispatchRequest);
