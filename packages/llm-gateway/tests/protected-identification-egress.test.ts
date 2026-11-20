@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  captureCanonicalProtectedProjection,
   captureProtectedIdentification,
   verifyProtectedIdentificationAtEgress,
 } from '../src/guards/protected-identification.js';
+import { normalizeGatewayIngress } from '../src/canonical-ingress.js';
 import { GatewayError } from '../src/router/errors.js';
 
 const MODEL = 'claude-sonnet-5';
@@ -137,6 +139,46 @@ describe('L1.5 Protected Identification Invariant — unit capture, 3-wire P fie
         ingress, egressKind, body, headers,
         ...(egressKind === 'provider-native' ? { nativeForwardedHeaders: { 'anthropic-beta': 'prompt-caching-2024-07-31' } } : {}),
       })).toThrow(GatewayError);
+    }
+  });
+
+  it('protects openai-responses input[*] additional_tools items against mutation, removal, reorder, and injection', () => {
+    const respBody = {
+      model: 'gpt-6.1-sol',
+      input: [
+        {
+          type: 'additional_tools',
+          role: 'developer',
+          tools: [{ type: 'function', name: 'exec_cmd', description: 'Run command', parameters: { type: 'object' } }],
+        },
+        { type: 'message', role: 'user', content: 'hi' },
+      ],
+    };
+    const ingress = captureProtectedIdentification('openai-responses', respBody, {});
+    const canonical = normalizeGatewayIngress('openai-responses', respBody);
+    const canonicalIngress = captureCanonicalProtectedProjection('openai-responses', canonical.request);
+
+    expect(() => verifyProtectedIdentificationAtEgress({
+      ingress, canonicalIngress, egressKind: 'provider-canonical', body: respBody, headers: {},
+      canonicalRequest: canonical.request,
+    })).not.toThrow();
+    expect(() => verifyProtectedIdentificationAtEgress({
+      ingress, canonicalIngress, egressKind: 'provider-canonical', body: respBody, headers: {},
+      canonicalRequest: { ...canonical.request, tools: [] },
+    })).toThrow(GatewayError);
+
+    const mutations = [
+      { ...respBody, input: [{ ...respBody.input[0], tools: [{ type: 'function', name: 'exec_cmd', description: 'Mutated', parameters: { type: 'object' } }] }, respBody.input[1]] },
+      { ...respBody, input: [respBody.input[1]] },
+      { ...respBody, input: [{ type: 'message', role: 'user', content: 'pre' }, ...respBody.input] },
+      { ...respBody, input: [...respBody.input, { type: 'additional_tools', role: 'developer', tools: [{ type: 'function', name: 'injected', parameters: { type: 'object' } }] }] },
+    ];
+    for (const mutated of mutations) {
+      for (const egressKind of ['relay-hop', 'legacy-flow', 'provider-canonical'] as const) {
+        expect(() => verifyProtectedIdentificationAtEgress({
+          ingress, egressKind, body: mutated, headers: {},
+        })).toThrow(GatewayError);
+      }
     }
   });
 });
