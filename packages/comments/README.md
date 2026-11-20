@@ -49,7 +49,7 @@ is `createdAt ASC` with an `id ASC` tiebreaker for determinism.
 - `delete(id)` is a **per-row hard delete**; deleting the root leaves surviving
   replies, and the thread identity is the surviving set of rows (root recomputed
   as the earliest surviving row).
-- `setState` (open/resolved) and `assign` **cascade** across every row sharing
+- `setState` (open/closed) and `assign` **cascade** across every row sharing
   the `threadId` (thread-level semantics).
 
 Authorization, assignee workspace-membership validation, and identity resolution
@@ -66,15 +66,15 @@ them to its transport (e.g. Postgres `NOTIFY comment_events` / SSE
 |---|---|---|
 | `created`    | `created`    | comments POST |
 | `updated`    | `updated`    | comments PATCH (content or REST assignment) |
-| `resolved`   | `closed`     | comments close / tool-service close |
+| `closed`     | `closed`     | comments close / tool-service close |
 | `reopened`   | `reopened`   | comments reopen |
 | `deleted`    | `deleted`    | comments DELETE |
 | `reassigned` | `reassigned` | tool-service AI reassign |
 
 The package `assign()` emits `reassigned`. A host wiring `assign()` to the REST
 assignment path MAY instead surface `updated` for backward parity; both are live
-actions. The state vocabulary is `open|resolved` in the package, mapping the live
-`open|closed` 1:1 (`resolved` <-> `closed`).
+actions. The state vocabulary is `open|closed` in the package, matching the live
+`open|closed` values 1:1.
 
 The `EventEnvelope.redactedFields` marker is a pass-through only — the package
 performs NO redaction or masking.

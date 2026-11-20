@@ -107,7 +107,7 @@ export const createCommentsRouter = (options: CreateCommentsRouterOptions): Hono
       kind: target.kind,
       id: target.id,
       ...(section_key ? { sectionKey: section_key } : {}),
-      ...(status ? { status: status === 'closed' ? 'resolved' : 'open' } : {}),
+      ...(status ? { status } : {}),
     });
     const rows = list.filter(
       (comment) => (comment.target.recordType ?? comment.target.kind) === context_type,
@@ -128,7 +128,7 @@ export const createCommentsRouter = (options: CreateCommentsRouterOptions): Hono
       section_key: row.target.sectionKey ?? null,
       created_by: row.author.id,
       assigned_to: row.assignedTo ?? null,
-      status: row.state === 'resolved' ? 'closed' : 'open',
+      status: row.state,
       thread_id: row.threadId,
       content: row.body,
       tool_call_id: row.provenance?.toolCallId ?? null,
@@ -280,7 +280,7 @@ export const createCommentsRouter = (options: CreateCommentsRouterOptions): Hono
     if (row.author.id !== principal.userId && !await isAdmin(principal, options)) {
       return context.json({ message: 'Only the creator or admin can close the comment' }, 403);
     }
-    await options.store.setState(tenant, row.threadId, 'resolved');
+    await options.store.setState(tenant, row.threadId, 'closed');
     await options.events.emit({
       workspaceId: principal.workspaceId,
       contextType: row.target.recordType ?? row.target.kind,
