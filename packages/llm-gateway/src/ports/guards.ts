@@ -37,6 +37,41 @@ export interface GuardPort {
   scanText(text: string): GuardTextScanResult;
 }
 
+export interface SecretMatch {
+  /** UTF-16 code unit offset where the secret starts in the source string. */
+  readonly start: number;
+  /** Exclusive UTF-16 end offset. */
+  readonly end: number;
+  /** Rule id reporting the match (e.g. `custom:kubeconfig-token` or `@secretlint/...`). */
+  readonly ruleId: string;
+  /** Human-readable message (never contains raw secret value). */
+  readonly message: string;
+}
+
+/** Structured user-supplied secret pattern (JavaScript regex). */
+export interface CustomSecretPattern {
+  /** Short identifier, surfaced in the redaction tag as `custom:<id>`. */
+  readonly id: string;
+  /** JavaScript regular-expression source. */
+  readonly pattern: string;
+  /** Regex flags; `g` is always enforced. Default `''`. */
+  readonly flags?: string;
+}
+
+export interface SecretScanOptions {
+  /** Optional logical file path for host adapters (e.g. L1.3d secretlint). */
+  readonly filePath?: string;
+  /** Extra structured regex patterns applied on top of default patterns. */
+  readonly customPatterns?: readonly CustomSecretPattern[];
+  /** Apply built-in KUBECONFIG_PATTERNS when true (default true). */
+  readonly includeDefaultPatterns?: boolean;
+}
+
+/** Pure synchronous secret range scanner port (zero external dependencies). */
+export interface SecretScannerPort {
+  scan(text: string, options?: SecretScanOptions): readonly SecretMatch[];
+}
+
 export interface ExternalGuardRequest {
   readonly version: '1';
   readonly stageId: string;
