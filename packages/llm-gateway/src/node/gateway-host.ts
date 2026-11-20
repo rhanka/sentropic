@@ -7,7 +7,9 @@ import { createGatewayRouter } from '../router/index.js';
 import { ControlServer } from './control-server.js';
 import { startControlSocket } from './control-socket.js';
 import { FileGatewayStateStore } from './gateway-state-store.js';
+import { FileCaptureVault } from './file-capture-vault.js';
 import { createNodeGatewayServer, closeNodeServer, listenNodeServer } from './http-server.js';
+import { createLoopbackSessionMintHandler } from './bootstrap-session-mint.js';
 import { createSessionAuth } from './session-auth.js';
 import { createGatewayRouteAffinityStore } from './route-affinity-store.js';
 import { freezeLaunchRoutingContract, launchTargets } from '@sentropic/llm-mesh';
@@ -48,8 +50,25 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
     if (!(await readiness()).ready) throw new GatewayStateError('gateway host not ready', 'STORE-FAILED');
   };
   const controlToken = randomBytes(32).toString('base64url');
-  const control = new ControlServer({ service, ownerScopeRef,
-    controlToken, beforeAcquire: async (input) => { await requireReady(); freezeLaunchRoutingContract(input.routingContract); } });
+  const beforeAcquire = async (input: Record<string, unknown>) => {
+    await requireReady();
+    freezeLaunchRoutingContract(input.routingContract as Parameters<typeof freezeLaunchRoutingContract>[0]);
+  };
+  const captureVault = new FileCaptureVault({
+    stateDir, keyring: mesh.keyring, captureEnabled: options.captureEnabled === true,
+    ...(options.captureRetention ? { retention: options.captureRetention } : {}),
+    ...(options.captureQuotaBytes !== undefined ? { quotaBytes: options.captureQuotaBytes } : {}),
+  });
+  const stageId = options.stageId ?? 'wkst:local';
+  const control = new ControlServer({ service, ownerScopeRef, controlToken, beforeAcquire, captureVault });
+  const loopbackSessionMint = options.enableLoopbackHttpSessionMint
+    ? createLoopbackSessionMintHandler({
+      service, ownerScopeRef, bootstrapSecret: options.bootstrapSecret ?? '', beforeAcquire,
+      ...(options.bootstrapNow ? { now: options.bootstrapNow } : {}),
+      ...(options.bootstrapMaxNonces !== undefined ? { maxNonces: options.bootstrapMaxNonces } : {}),
+    })
+    : undefined;
+  const stageRewrite = options.stageRewrite ?? mesh.gateway.stageRewrite;
   let closeControl: (() => Promise<void>) | undefined;
   let endpoint = '';
   try {
@@ -68,9 +87,20 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
       },
       config: { ...mesh.gateway.config, callerAuth: createSessionAuth({ service, ownerScopeRef,
         ready: async () => (await readiness()).ready, resolveOwner: (caller, context) => mesh.resolveOwner(caller, context) }) },
+      ...(stageRewrite ? { stageRewrite } : {}),
+      ...(options.guard ? { guard: options.guard } : {}),
+      captureEnabled: options.captureEnabled === true,
+      ...(options.captureEnabled === true ? {
+        onCapture: async (rec) => { await captureVault.writeTurnCapture({ ...rec, stageId }); },
+      } : {}),
       readiness: { isReady: async () => (await readiness()).ready },
-      requestAudit: { admit: async ({ cost, requestId, model }) => {
-        const receipt = await service.recordAttempt({ ownerScopeRef, sessionRef: cost.gatewaySessionRef!, requestId, model });
+      requestAudit: { admit: async ({ cost, requestId, model, originModel, stageRewrites, guardVerdict }) => {
+        const receipt = await service.recordAttempt({
+          ownerScopeRef, sessionRef: cost.gatewaySessionRef!, requestId, model,
+          ...(originModel ? { originModel } : {}),
+          ...(stageRewrites ? { stageRewrites } : {}),
+          ...(guardVerdict ? { guardVerdict } : {}),
+        });
         return { receiptId: receipt.receiptId };
       }, beginAttempt: async ({ cost, attemptRef, diagnostic }) => {
         await service.appendAttempt({ ownerScopeRef, receiptId: cost.gatewayReceiptId!, attempt: {
@@ -91,7 +121,7 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
     });
     server = createNodeGatewayServer((request) => router.fetch(request), () => endpoint, (delta) => {
       active += delta; if (active === 0) { drained?.(); drained = undefined; }
-    });
+    }, loopbackSessionMint);
     closeControl = await startControlSocket(socket, control, controlToken);
     controlReady = true;
     endpoint = await listenNodeServer(server, options.listen);

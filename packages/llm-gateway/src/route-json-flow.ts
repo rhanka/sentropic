@@ -111,7 +111,10 @@ export const runRouteJsonFlow = async (
           throw Object.assign(new Error('upstream model identity mismatch'), { code: 'model_identity_mismatch' });
         }
         signal?.throwIfAborted();
-        encoded = encodeGatewayResponse(request.wire, response, request.responsesLimits);
+        encoded = encodeGatewayResponse(
+          request.wire, response, request.responsesLimits,
+          deps.stageRewrite ? { includeCacheUsage: true } : undefined,
+        );
       }
     } catch (error) {
       if (error instanceof BudgetDispatchMarkError || error instanceof RequestAuditError) {
@@ -197,13 +200,36 @@ export const runRouteJsonFlow = async (
     const usage = observedUsage ?? estimate(response?.text);
     // A successful JSON operation cannot retry; its host upload/SDK references are now gone.
     request.bodyLease?.detach();
+    const responseScan = deps.guard ? deps.guard.inspectRequest(encoded.body) : undefined;
+    const responseBlocked = responseScan?.verdict === 'blocked';
     attempts.push({ candidateRef, providerId: diagnostic.actualProviderId,
       modelId: diagnostic.actualModelId, transportProviderId: diagnostic.actualTransportProviderId,
-      outcome: 'success', usage, reportedUsage: typeof response?.usage?.inputTokens === 'number' && typeof response?.usage?.outputTokens === 'number',
+      outcome: responseBlocked ? 'invalid-request' : 'success', usage,
+      reportedUsage: typeof response?.usage?.inputTokens === 'number' && typeof response?.usage?.outputTokens === 'number',
       ...((nativeServedModelId ?? observedServedModel) ? { observedServedModel: nativeServedModelId ?? observedServedModel } : {}) });
     // Operational and financial callbacks are outside provider retry handling.
     try { await attempt.complete(attemptUsage(usage)); }
-    finally { await settle('success'); }
+    finally { await settle(responseBlocked ? 'failed' : 'success'); }
+    if (responseScan) {
+      if (deps.captureEnabled === true && deps.onCapture && prepared.requestCapture) {
+        try {
+          await deps.onCapture({
+            requestId: request.authContext.requestId,
+            ownerScopeRef: prepared.subject.ownerScopeRef,
+            wire: request.wire,
+            model: diagnostic.actualModelId,
+            requestCapture: prepared.requestCapture,
+            responseCapture: responseScan.maskedCapture,
+            truncated: false,
+            blocked: responseBlocked,
+            createdAtMs: Date.now(),
+          });
+        } catch { /* Capture failures never break live routing. */ }
+      }
+      if (responseBlocked) {
+        throw new GatewayError('guard-blocked', 'response blocked by gateway guard policy');
+      }
+    }
     return { ...encoded, servedTarget: servedTargetFor(diagnostic),
       ...(nativeObserver ? { relay: 'native', nativeServedModelId } : {}) };
   }
