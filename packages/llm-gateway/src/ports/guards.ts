@@ -22,6 +22,7 @@ export interface GuardScanResult {
   readonly findings: readonly GuardFinding[];
   readonly inFlightPayload: unknown;
   readonly maskedCapture: MaskedCapturePayload;
+  readonly protectedViolation?: boolean;
 }
 
 export interface GuardTextScanResult {
