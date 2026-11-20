@@ -111,7 +111,10 @@ export const runRouteJsonFlow = async (
           throw Object.assign(new Error('upstream model identity mismatch'), { code: 'model_identity_mismatch' });
         }
         signal?.throwIfAborted();
-        encoded = encodeGatewayResponse(request.wire, response, request.responsesLimits);
+        encoded = encodeGatewayResponse(
+          request.wire, response, request.responsesLimits,
+          deps.stageRewrite ? { includeCacheUsage: true } : undefined,
+        );
       }
     } catch (error) {
       if (error instanceof BudgetDispatchMarkError || error instanceof RequestAuditError) {

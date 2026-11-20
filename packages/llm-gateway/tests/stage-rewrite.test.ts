@@ -109,8 +109,16 @@ describe('L1.2 StageRewriteEngine & cache-marker preservation (Claude + Muse)', 
     expect(prepared.plan.diagnostics[0]?.actualModelId).toBe('claude-opus-5');
     expect(prepared.canonical.request.providerOptions?.cacheControl).toEqual(ingress.request.providerOptions?.cacheControl);
     expect(receiptLog[0]).toMatchObject({ model: 'claude-opus-5', originModel: 'claude-sonnet-5', stageRewrites: [{ stageId: 'wkst:1', ruleId: 'c-up', fromModel: 'claude-sonnet-5', toModel: 'claude-opus-5', fromEffort: 'medium', toEffort: 'high' }] });
-    const encoded = encodeGatewayResponse('anthropic-messages', { id: 'r', providerId: 'anthropic', modelId: 'claude-opus-5', message: { role: 'assistant', content: 'ok' }, text: 'ok', toolCalls: [], finishReason: 'stop', usage: { inputTokens: 10, outputTokens: 5, providerRawUsage: { cache_read_input_tokens: 8, cache_creation_input_tokens: 2 } } });
+    const encoded = encodeGatewayResponse('anthropic-messages', { id: 'r', providerId: 'anthropic', modelId: 'claude-opus-5', message: { role: 'assistant', content: 'ok' }, text: 'ok', toolCalls: [], finishReason: 'stop', usage: { inputTokens: 10, outputTokens: 5, providerRawUsage: { cache_read_input_tokens: 8, cache_creation_input_tokens: 2 } } }, undefined, { includeCacheUsage: true });
     expect((encoded.body as { usage: Record<string, number> }).usage).toMatchObject({ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 8, cache_creation_input_tokens: 2 });
+    // Default-OFF: omitting stageRewrite leaves model and receipt metadata untouched
+    const noRewrite = await prepareRouteFlow({
+      config: { ...stubGatewayConfig, callerAuth }, routePlanner: museAndClaudePlanner(captured),
+      metering: { settleRoute() {} },
+    }, { wire: 'anthropic-messages', headers: {}, authContext: { method: 'POST', url: 'http://127.0.0.1/v1/messages', requestId: 'req-noop' }, model: 'claude-sonnet-5', stream: false, body });
+    expect(noRewrite.originModel).toBeUndefined();
+    expect(noRewrite.stageRewrites).toBeUndefined();
+    expect(noRewrite.plan.diagnostics[0]?.actualModelId).toBe('claude-sonnet-5');
   });
 
   it('streams multi-turn tool_use on Muse rewrite and returns 400 on unsupported Muse reasoning effort', async () => {
