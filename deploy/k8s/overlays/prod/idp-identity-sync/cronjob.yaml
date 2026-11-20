@@ -40,7 +40,7 @@ spec:
               securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
               resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
             - name: export-replica
-              image: ghcr.io/rhanka/sentropic-api@sha256:4bfa71ce7e231a9ed752e4aaceb23129a3399540af4720e32e76782c3f798c05
+              image: ghcr.io/rhanka/sentropic-api@sha256:a1d64ba6c53309ab67232a64c2fdd0de630b57af9ce02339968a59d2f3bf307d
               workingDir: /work
               command: ["node", "/workspace/api/dist/scripts/identity-replica-export.js"]
               env:
