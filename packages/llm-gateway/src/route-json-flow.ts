@@ -3,9 +3,11 @@ import { estimateAnthropicInputTokens } from './canonical-stream.js';
 import { encodeGatewayResponse, type CanonicalGatewayResponse } from './canonical-egress.js';
 import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import {
-  attemptUsage, classifyRouteError, prepareRouteFlow, refuseNativeAttempt, refuseUnmarkedDispatch, retainRouteBody, routeUsage,
+  attemptUsage, classifyRouteError, prepareRouteFlow, refuseNativeAttempt, refuseProtectedIdentification,
+  refuseUnmarkedDispatch, retainRouteBody, routeUsage,
   markDurableAttempt, RequestAuditError, settleRouteRequest, terminalGatewayError, type RouteAttemptSettlement, type RouteFlowDeps,
 } from './route-flow-core.js';
+import { verifyProtectedIdentificationAtEgress } from './guards/protected-identification.js';
 import { BudgetDispatchMarkError, markRouteDispatched } from './admission.js';
 import { GatewayError, gatewayRequestTooLargeError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
@@ -78,12 +80,32 @@ export const runRouteJsonFlow = async (
       signal?.throwIfAborted();
       const native = prepareNativeMessages(prepared.nativeFeatures, attempt, servedTargetFor(diagnostic));
       if (nativeInvoked && !native) throw new NativeMessagesUpstreamError({ status: 503, code: 'native_protocol_error' });
+      let nativeRequest: NativeMessagesRequest | undefined;
+      const canonicalRequest = !native ? { ...prepared.canonical.request, ...(signal ? { signal } : {}) } : undefined;
+      if (native) {
+        nativeRequest = buildNativeMessagesRequest(prepared, request, native, signal ?? new AbortController().signal);
+        verifyProtectedIdentificationAtEgress({
+          ingress: prepared.protectedIngress,
+          egressKind: 'provider-native',
+          body: nativeRequest.body,
+          headers: request.headers,
+          nativeForwardedHeaders: nativeRequest.headers.forwarded,
+        });
+      } else {
+        verifyProtectedIdentificationAtEgress({
+          ingress: prepared.protectedIngress,
+          canonicalIngress: prepared.canonicalProtectedIngress,
+          egressKind: 'provider-canonical',
+          body: prepared.effectiveBody ?? request.body,
+          headers: request.headers,
+          canonicalRequest,
+        });
+      }
       signal?.throwIfAborted();
       await markDurableAttempt(deps, prepared.cost, attempt.attemptRef, diagnostic);
       await markRouteDispatched(deps.budget, prepared.admission, candidateRef, index);
       invoked = true;
-      if (native) {
-        let nativeRequest: NativeMessagesRequest | undefined = buildNativeMessagesRequest(prepared, request, native, signal ?? new AbortController().signal);
+      if (native && nativeRequest) {
         nativeObserver = new NativeUsageObserver(diagnostic.actualModelId, nativeDefaultTtlEligible(nativeRequest.body));
         lifecycle = nativeLifecycle(nativeObserver, nativeRequest.finalize,
           { requestId: nativeRequest.requestId, attemptRef: attempt.attemptRef });
@@ -100,10 +122,7 @@ export const runRouteJsonFlow = async (
         if (!snapshot.fallbackPresent && !snapshot.iterationsPresent) nativeServedModelId = snapshot.nativeServedModelId;
         encoded = result;
       } else {
-        response = await (deps.dispatch ?? defaultDispatch).generate({ attempt, request: {
-          ...prepared.canonical.request,
-          ...(signal ? { signal } : {}),
-        } });
+        response = await (deps.dispatch ?? defaultDispatch).generate({ attempt, request: canonicalRequest! });
         if (response.usage) observedUsage = routeUsage(response.usage);
         const observed = response.providerMetadata?.observedServedModelId;
         if (typeof observed === 'string') observedServedModel = observed;
@@ -122,6 +141,9 @@ export const runRouteJsonFlow = async (
       }
       if (error instanceof NativeAttemptRefusal) {
         throw await refuseNativeAttempt(attempt, () => settle('failed'));
+      }
+      if (error instanceof GatewayError && error.kind === 'protected-identification-mutated') {
+        throw await refuseProtectedIdentification(deps, attempt, request, error, () => settle('failed'));
       }
       let classification = classifyRouteError(error, signal?.aborted);
       if (!observedServedModel && error && typeof error === 'object') {
