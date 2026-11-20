@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startGatewayHost } from '../src/node/gateway-host.js';
 import { createGatewayControlClient } from '../src/node/control-client.js';
-import { computeBootstrapProof } from '../src/node/bootstrap-session-mint.js';
+import { computeBootstrapProof, createLoopbackSessionMintHandler } from '../src/node/bootstrap-session-mint.js';
+import { GatewaySessionService } from '../src/session-service.js';
+import type { GatewayStateStore, StoredState } from '../src/ports/gateway-state.js';
 import { durableHostFixture, routingContract } from './helpers/durable-host.js';
 
 const SECRET = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4';
@@ -101,6 +103,72 @@ describe('L1.1 control.sock-first session mint & default-OFF loopback bootstrap 
       clock += 1_000;
       const refilled = await fetch(`${host.endpoint}/v1/session`, { method: 'POST', headers: signedHeaders(b10, { ts: clock, nonce: 'b-11' }), body: b10 });
       expect(refilled.status).toBe(200);
+    } finally { await host.stop(); await rm(stateDir, { recursive: true, force: true }); }
+  });
+
+  it('bounds streaming body read before buffering (413) and isolates authenticated rate bucket from unauthenticated floods', async () => {
+    let clock = 1_700_000_000_000;
+    const memStore: GatewayStateStore = {
+      load: async (): Promise<StoredState> => ({ schemaVersion: 1, revision: 0, sessions: {}, receipts: {} }),
+      compareAndSet: async (_e, n) => ({ revision: n.revision }),
+    };
+    const handler = createLoopbackSessionMintHandler({
+      service: new GatewaySessionService(memStore),
+      ownerScopeRef: 'owner-a',
+      bootstrapSecret: SECRET,
+      now: () => clock,
+    });
+    // Streaming body > 65_536 bytes must cancel early without reading full stream
+    let chunksRead = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (chunksRead >= 64) { controller.close(); return; }
+        chunksRead += 1;
+        controller.enqueue(new Uint8Array(4_096).fill(65));
+      },
+    });
+    const oversizedReq = new Request('http://127.0.0.1/v1/session', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-sentropic-bootstrap-proof': '0'.repeat(64),
+        'x-sentropic-bootstrap-timestamp': String(clock),
+        'x-sentropic-bootstrap-nonce': 'oversized-1',
+      },
+      body: stream,
+      duplex: 'half',
+    } as RequestInit);
+    const oversizedRes = await handler(oversizedReq);
+    expect(oversizedRes?.status).toBe(413);
+    expect(chunksRead).toBeLessThan(25);
+
+    // Flood of 25 unauthenticated/forged requests hits per-peer failed-attempt 429 without starving valid HMAC callers
+    const stateDir = await mkdtemp(join(tmpdir(), 'gw-boot-flood-'));
+    const host = await startGatewayHost({
+      stateDir, mesh: durableHostFixture().mesh, listen: { host: '127.0.0.1', port: 0 },
+      enableLoopbackHttpSessionMint: true, bootstrapSecret: SECRET, bootstrapNow: () => clock,
+    });
+    try {
+      const statuses: number[] = [];
+      for (let i = 0; i < 25; i += 1) {
+        const badBody = payload(`bad-${i}`);
+        const bad = await fetch(`${host.endpoint}/v1/session`, {
+          method: 'POST',
+          headers: signedHeaders(badBody, { secret: 'wrong-secret-012345678901234567890123456789', ts: clock, nonce: `bad-${i}` }),
+          body: badBody,
+        });
+        statuses.push(bad.status);
+      }
+      expect(statuses[0]).toBe(401);
+      expect(statuses.at(-1)).toBe(429);
+      // Legitimate authenticated caller still gets its full burst=10 at the same clock tick
+      for (let i = 0; i < 10; i += 1) {
+        const okBody = payload(`ok-${i}`);
+        const ok = await fetch(`${host.endpoint}/v1/session`, {
+          method: 'POST', headers: signedHeaders(okBody, { ts: clock, nonce: `ok-${i}` }), body: okBody,
+        });
+        expect(ok.status).toBe(200);
+      }
     } finally { await host.stop(); await rm(stateDir, { recursive: true, force: true }); }
   });
 });
