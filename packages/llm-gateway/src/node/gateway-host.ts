@@ -8,6 +8,7 @@ import { ControlServer } from './control-server.js';
 import { startControlSocket } from './control-socket.js';
 import { FileGatewayStateStore } from './gateway-state-store.js';
 import { createNodeGatewayServer, closeNodeServer, listenNodeServer } from './http-server.js';
+import { createLoopbackSessionMintHandler } from './bootstrap-session-mint.js';
 import { createSessionAuth } from './session-auth.js';
 import { createGatewayRouteAffinityStore } from './route-affinity-store.js';
 import { freezeLaunchRoutingContract, launchTargets } from '@sentropic/llm-mesh';
@@ -48,8 +49,18 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
     if (!(await readiness()).ready) throw new GatewayStateError('gateway host not ready', 'STORE-FAILED');
   };
   const controlToken = randomBytes(32).toString('base64url');
-  const control = new ControlServer({ service, ownerScopeRef,
-    controlToken, beforeAcquire: async (input) => { await requireReady(); freezeLaunchRoutingContract(input.routingContract); } });
+  const beforeAcquire = async (input: Record<string, unknown>) => {
+    await requireReady();
+    freezeLaunchRoutingContract(input.routingContract as Parameters<typeof freezeLaunchRoutingContract>[0]);
+  };
+  const control = new ControlServer({ service, ownerScopeRef, controlToken, beforeAcquire });
+  const loopbackSessionMint = options.enableLoopbackHttpSessionMint
+    ? createLoopbackSessionMintHandler({
+      service, ownerScopeRef, bootstrapSecret: options.bootstrapSecret ?? '', beforeAcquire,
+      ...(options.bootstrapNow ? { now: options.bootstrapNow } : {}),
+      ...(options.bootstrapMaxNonces !== undefined ? { maxNonces: options.bootstrapMaxNonces } : {}),
+    })
+    : undefined;
   let closeControl: (() => Promise<void>) | undefined;
   let endpoint = '';
   try {
@@ -91,7 +102,7 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
     });
     server = createNodeGatewayServer((request) => router.fetch(request), () => endpoint, (delta) => {
       active += delta; if (active === 0) { drained?.(); drained = undefined; }
-    });
+    }, loopbackSessionMint);
     closeControl = await startControlSocket(socket, control, controlToken);
     controlReady = true;
     endpoint = await listenNodeServer(server, options.listen);
