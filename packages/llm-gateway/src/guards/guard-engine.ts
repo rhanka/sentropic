@@ -52,7 +52,7 @@ const DETECTORS: readonly DetectorSpec[] = [
   { id: 'secret.env_assignment', category: 'tech_secret', replacement: '[REDACTED:TECH_SECRET]',
     pattern: /\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE_KEY)\s*=\s*(?:"[^"\r\n]+"|'[^'\r\n]+'|`[^`\r\n]+`|[^\s"'`]+)/g },
   { id: 'pii.email', category: 'pii', replacement: '[REDACTED:EMAIL]',
-    pattern: /\b[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\b/g },
+    pattern: /(?<![A-Za-z0-9.!#$%&'*+/=?^_`{|}~-])[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\b/g },
   { id: 'pii.card_pan', category: 'pii', replacement: '[REDACTED:CARD_PAN]',
     pattern: /\b(?:\d[ -]?){13,19}\b/g,
     validate: (m) => { const d = m.replace(/\D/g, ''); return d.length >= 13 && d.length <= 19 && luhnValid(d); } },
@@ -125,6 +125,7 @@ export class GuardEngine implements GuardPort {
   ): string {
     let masked = segment;
     for (const detector of DETECTORS) {
+      if (detector.id === 'pii.email' && !masked.includes('@')) continue;
       const action = this.actionFor(detector.id);
       detector.pattern.lastIndex = 0;
       masked = masked.replace(detector.pattern, (match) => {

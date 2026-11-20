@@ -145,4 +145,27 @@ describe('L1.3c vendored pure-TS agent-stats secret scanner core', () => {
       expect(sent).toContain(`<<SECRET:custom_org-token:${sha16(FAKE_ORG_TOKEN)}>>`);
     }
   });
+
+  it('strips sticky y flag in scanCustom and scans large slash-heavy texts without quadratic pii.email backtracking', () => {
+    const stickyHits = scanCustom('prefix ORG_AbCdEfGh middle ORG_XyZaBcDe', [
+      { id: 'sticky-tok', pattern: 'org_[a-z]{8}', flags: 'iy' },
+    ]);
+    expect(stickyHits.map((m) => m.ruleId)).toEqual(['custom:sticky-tok', 'custom:sticky-tok']);
+    expect(stickyHits[0]!.start).toBe(7);
+
+    const engine = new GuardEngine();
+    const bigNoAt = '/a'.repeat(100_000);
+    const t0 = performance.now();
+    const noAtRes = engine.scanText(bigNoAt);
+    const noAtMs = performance.now() - t0;
+    expect(noAtRes.findings).toEqual([]);
+    expect(noAtMs).toBeLessThan(50);
+
+    const bigWithEmail = `${bigNoAt} alice@example.org`;
+    const t1 = performance.now();
+    const withEmailRes = engine.scanText(bigWithEmail);
+    const withEmailMs = performance.now() - t1;
+    expect(withEmailRes.maskedText.endsWith(' [REDACTED:EMAIL]')).toBe(true);
+    expect(withEmailMs).toBeLessThan(50);
+  });
 });
