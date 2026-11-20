@@ -37,6 +37,11 @@ export interface StoredStageRewriteTrace {
   readonly toEffort?: string;
 }
 
+export type ReceiptIntegrity =
+  | 'ok'
+  | 'protected_identification_violation'
+  | 'invalid_terminal_receipt';
+
 export interface StoredReceipt {
   readonly policyRevision?: string;
   readonly mappingRevision?: string;
@@ -46,7 +51,7 @@ export interface StoredReceipt {
   readonly stageRewrites?: readonly StoredStageRewriteTrace[];
   readonly hopIndex?: number;
   readonly guardVerdict?: string;
-  readonly integrity?: string;
+  readonly integrity?: ReceiptIntegrity;
   readonly schemaVersion: number;
   readonly receiptId: string;
   readonly sessionRef: string;
