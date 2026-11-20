@@ -484,6 +484,7 @@ export class GatewaySessionService {
     receiptId: string;
     outcome: string;
     attempts?: readonly RouteAttemptSettlement[];
+    integrity?: StoredReceipt['integrity'];
   }): Promise<StoredReceipt> {
     return runGatewayStateTransaction(this.store, () => this.settleCommitted(input));
   }
@@ -510,6 +511,7 @@ export class GatewaySessionService {
           modelEvidence: result.observedServedModel ? 'provider-reported' as const : 'selection-only' as const } : attempt;
       }),
       settlement: input.outcome,
+      ...(input.integrity ? { integrity: input.integrity } : {}),
       settledAt: new Date(Date.now()).toISOString(),
     };
     const next: StoredState = {
