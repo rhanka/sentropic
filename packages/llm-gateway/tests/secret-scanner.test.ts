@@ -55,12 +55,16 @@ describe('L1.3c vendored pure-TS agent-stats secret scanner core', () => {
       'kubeconfig-certificate-authority-data', 'kubeconfig-token', 'kubeconfig-pem-material',
     ]);
     const kc = buildFakeKubeconfig();
-    const text = `dump:\n${kc.yaml}\npem:${kc.pemOnly}\nblob:${kc.blob}\nwrapped:${kc.blob.replace(/.{76}/g, '$&\n')}`;
+    const wrapped = kc.blob.replace(/.{76}/g, '$&\n');
+    const text = `dump:\n${kc.yaml}\npem:${kc.pemOnly}\nblob:${kc.blob}\nwrapped:${wrapped}`;
     const matches = scanSecrets(text);
     const ids = new Set(matches.map((m) => m.ruleId));
     for (const id of KUBECONFIG_PATTERNS.map((p) => `custom:${p.id}`)) expect(ids.has(id)).toBe(true);
     const masked = redactSecretMatches(text, matches);
-    for (const raw of [kc.keyData, kc.certData, kc.caData, kc.token, kc.pemOnly, kc.blob]) expect(masked).not.toContain(raw);
+    for (const raw of [kc.keyData, kc.certData, kc.caData, kc.token, kc.pemOnly, kc.blob, wrapped]) expect(masked).not.toContain(raw);
+    const wrappedMatches = scanSecrets(wrapped);
+    expect(wrappedMatches.map((m) => m.ruleId)).toContain('custom:kubeconfig-blob');
+    expect(redactSecretMatches(wrapped, wrappedMatches)).toBe(formatSecretRedactionTag('custom:kubeconfig-blob', wrapped));
     expect(masked).toContain('client-key-data:');
     expect(masked).toContain(`<<SECRET:custom_kubeconfig-token:${sha16(kc.token)}>>`);
     expect(scanSecrets('deployed the cluster config cleanly today')).toEqual([]);
@@ -88,6 +92,18 @@ describe('L1.3c vendored pure-TS agent-stats secret scanner core', () => {
     ]);
     expect(chained.map((m) => [m.start, m.end, m.ruleId])).toEqual([[2, 22, 'r1'], [22, 26, 'r4']]);
     for (let i = 0; i + 1 < chained.length; i += 1) expect(chained[i]!.end).toBeLessThanOrEqual(chained[i + 1]!.start);
+    expect(dedupeRanges([
+      { start: 2, end: 18, ruleId: 'outer', message: 'o' },
+      { start: 5, end: 10, ruleId: 'inner', message: 'i' },
+    ])).toEqual([{ start: 2, end: 18, ruleId: 'outer', message: 'o' }]);
+    expect(dedupeRanges([
+      { start: 2, end: 10, ruleId: 'short', message: 's' },
+      { start: 2, end: 18, ruleId: 'long', message: 'l' },
+    ])).toEqual([{ start: 2, end: 18, ruleId: 'long', message: 'l' }]);
+    expect(dedupeRanges([
+      { start: 2, end: 12, ruleId: 'first', message: '1' },
+      { start: 2, end: 12, ruleId: 'second', message: '2' },
+    ])).toEqual([{ start: 2, end: 12, ruleId: 'first', message: '1' }]);
   });
 
   it('supports injectable SecretScannerPort and keeps default audit_mask_copy in-flight payloads byte-identical', () => {
