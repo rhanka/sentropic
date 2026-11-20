@@ -397,6 +397,96 @@ describe('Cloud Code runtime client', () => {
     });
   });
 
+  it('uses an announced neon effort-suffixed wire id', async () => {
+    const fetchFn = createFetch(['gemini-4-neon-low', 'gemini-4-neon-medium', 'gemini-4-neon-high']);
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'gemini-4-neon',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'high' },
+    }, context);
+
+    expect(JSON.parse(String(streamInit(fetchFn).body))).toMatchObject({
+      model: 'gemini-4-neon-high',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } },
+    });
+  });
+
+  it('sends neon xhigh to the announced xhigh wire id', async () => {
+    // Owner mapping 2026-11-18: Neon and Hydrogen use xhigh for xhigh and
+    // max. agy models lists gemini-4-neon-xhigh (Argon and Carbon have no
+    // xhigh), so xhigh must reach the wire instead of clamping to high.
+    const fetchFn = createFetch(['gemini-4-neon-low', 'gemini-4-neon-medium', 'gemini-4-neon-high', 'gemini-4-neon-xhigh']);
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'gemini-4-neon',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'xhigh' },
+    }, context);
+
+    expect(JSON.parse(String(streamInit(fetchFn).body))).toMatchObject({
+      model: 'gemini-4-neon-xhigh',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'XHIGH' } } },
+    });
+  });
+
+  it('sends hydrogen xhigh to the announced xhigh wire id', async () => {
+    // Owner mapping 2026-11-18: Neon and Hydrogen use xhigh for xhigh and
+    // max. agy models lists gemini-4-hydrogen-xhigh (Argon and Carbon have
+    // no xhigh), so xhigh must reach the wire instead of clamping to high.
+    const fetchFn = createFetch(['gemini-4-hydrogen-low', 'gemini-4-hydrogen-medium', 'gemini-4-hydrogen-high', 'gemini-4-hydrogen-xhigh']);
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'gemini-4-hydrogen',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'xhigh' },
+    }, context);
+
+    expect(JSON.parse(String(streamInit(fetchFn).body))).toMatchObject({
+      model: 'gemini-4-hydrogen-xhigh',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'XHIGH' } } },
+    });
+  });
+
+  it('clamps argon xhigh to the announced high wire id', async () => {
+    // Argon has no xhigh wire id (agy models, 2026-11-18): keep the
+    // existing clamping to high for models without xhigh.
+    const fetchFn = createFetch(['gemini-4-argon-low', 'gemini-4-argon-medium', 'gemini-4-argon-high']);
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'gemini-4-argon',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'xhigh' },
+    }, context);
+
+    expect(JSON.parse(String(streamInit(fetchFn).body))).toMatchObject({
+      model: 'gemini-4-argon-high',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } },
+    });
+  });
+
+  it('clamps carbon xhigh to the announced high wire id', async () => {
+    // Carbon has no xhigh wire id (agy models, 2026-11-18): keep the
+    // existing clamping to high for models without xhigh.
+    const fetchFn = createFetch(['gemini-4-carbon-low', 'gemini-4-carbon-medium', 'gemini-4-carbon-high']);
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'gemini-4-carbon',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'xhigh' },
+    }, context);
+
+    expect(JSON.parse(String(streamInit(fetchFn).body))).toMatchObject({
+      model: 'gemini-4-carbon-high',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } },
+    });
+  });
+
   it('uses an announced base wire id with the requested thinking level', async () => {
     const fetchFn = createFetch(['claude-sonnet-4-6']);
     const client = new CloudCodeRuntimeClient(fetchFn);
