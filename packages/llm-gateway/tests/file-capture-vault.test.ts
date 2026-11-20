@@ -116,4 +116,64 @@ describe('L1.4 FileCaptureVault (default-OFF, deflate+AES-256-GCM+AAD, 30d purge
       expect(purged.purgedAtIso).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
+
+  it('rejects truncated GCM tags, non-12-byte IVs, same-owner file swaps, AAD delimiter collisions, and missing rotated DEKs', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'gw-vault-harden-'));
+    const strictKeyring = {
+      async getSecret(key: string) {
+        if (key === 'gateway/capture-dek/v1') return DEK_V1;
+        if (key === 'gateway/capture-dek') return DEK_V1;
+        return undefined;
+      },
+    };
+    try {
+      const guard = new GuardEngine();
+      const vault = new FileCaptureVault({ stateDir: dir, keyring: strictKeyring, captureEnabled: true, keyId: 'v1' });
+      const reqCap = guard.maskForCapture({ messages: [{ role: 'user', content: 'hi' }] });
+      const respCap = guard.maskForCapture({ text: 'ok' });
+      await vault.writeTurnCapture({
+        captureId: 'cap-a', stageId: 'wkst:1', ownerScopeRef: 'owner-a', requestId: 'r-a',
+        wire: 'anthropic-messages', model: 'claude-sonnet-5', requestCapture: reqCap, responseCapture: respCap,
+      });
+      await vault.writeTurnCapture({
+        captureId: 'cap-b', stageId: 'wkst:1', ownerScopeRef: 'owner-a', requestId: 'r-b',
+        wire: 'anthropic-messages', model: 'claude-sonnet-5', requestCapture: reqCap, responseCapture: respCap,
+      });
+      const pathA = join(dir, 'captures', 'cap-a.enc.json');
+      const pathB = join(dir, 'captures', 'cap-b.enc.json');
+      const rawA = await readFile(pathA, 'utf8');
+      const rawB = await readFile(pathB, 'utf8');
+
+      // 1. Same-owner file swap (cap-b moved onto cap-a) must fail AAD check
+      await writeFile(pathA, rawB, { mode: 0o600 });
+      await expect(vault.readTurnCapture({ ownerScopeRef: 'owner-a', captureId: 'cap-a' })).rejects.toMatchObject({ code: 'CORRUPT' });
+
+      // 2. Truncated 4-byte GCM auth tag must be rejected
+      const truncTag = { ...JSON.parse(rawA), tag: Buffer.from(JSON.parse(rawA).tag, 'base64').subarray(0, 4).toString('base64') };
+      await writeFile(pathA, JSON.stringify(truncTag), { mode: 0o600 });
+      await expect(vault.readTurnCapture({ ownerScopeRef: 'owner-a', captureId: 'cap-a' })).rejects.toMatchObject({ code: 'CORRUPT' });
+
+      // 3. Non-12-byte IV must be rejected
+      const badIv = { ...JSON.parse(rawA), iv: Buffer.alloc(16, 1).toString('base64') };
+      await writeFile(pathA, JSON.stringify(badIv), { mode: 0o600 });
+      await expect(vault.readTurnCapture({ ownerScopeRef: 'owner-a', captureId: 'cap-a' })).rejects.toMatchObject({ code: 'CORRUPT' });
+
+      // 4. Pipe delimiter collision between stageId and ownerScopeRef must fail AAD check
+      await vault.writeTurnCapture({
+        captureId: 'cap-delim', stageId: 'wkst|a', ownerScopeRef: 'b', requestId: 'r-d',
+        wire: 'anthropic-messages', model: 'claude-sonnet-5', requestCapture: reqCap, responseCapture: respCap,
+      });
+      const pathD = join(dir, 'captures', 'cap-delim.enc.json');
+      const envD = JSON.parse(await readFile(pathD, 'utf8')) as Record<string, unknown>;
+      await writeFile(pathD, JSON.stringify({ ...envD, stageId: 'wkst', ownerScopeRef: 'a|b' }), { mode: 0o600 });
+      await expect(vault.readTurnCapture({ ownerScopeRef: 'a|b', captureId: 'cap-delim' })).rejects.toMatchObject({ code: 'CORRUPT' });
+
+      // 5. Missing rotated DEK must throw KEY-UNAVAILABLE with no silent fallback
+      const missingKeyVault = new FileCaptureVault({ stateDir: dir, keyring: strictKeyring, captureEnabled: true, keyId: 'v3' });
+      await expect(missingKeyVault.writeTurnCapture({
+        captureId: 'cap-v3', stageId: 'wkst:1', ownerScopeRef: 'owner-a', requestId: 'r-v3',
+        wire: 'anthropic-messages', model: 'claude-sonnet-5', requestCapture: reqCap, responseCapture: respCap,
+      })).rejects.toMatchObject({ code: 'KEY-UNAVAILABLE' });
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
 });
