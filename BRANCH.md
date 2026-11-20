@@ -12,15 +12,14 @@ Implement Lot 1 (sub-lots L1.1 through L1.4) of `spec/SPEC_EVOL_LLM_GW_RELAY_CHA
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/llm-gateway/src/guards/**`
-  - `packages/llm-gateway/src/router/**`
-  - `packages/llm-gateway/src/route-flow-core.ts`
-  - `packages/llm-gateway/src/route-json-flow.ts`
-  - `packages/llm-gateway/src/route-stream-flow.ts`
-  - `packages/llm-gateway/src/route-native.ts`
-  - `packages/llm-gateway/src/route-native-stream.ts`
-  - `packages/llm-gateway/src/flow.ts`
+  - `packages/llm-gateway/package.json`
+  - `packages/llm-gateway/CHANGELOG.md`
+  - `packages/llm-gateway/src/ports/**`
+  - `packages/llm-gateway/src/node/**`
+  - `packages/llm-gateway/src/index.ts`
   - `packages/llm-gateway/tests/**`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/CHANGELOG.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `.github/workflows/**`
@@ -37,7 +36,7 @@ Implement Lot 1 (sub-lots L1.1 through L1.4) of `spec/SPEC_EVOL_LLM_GW_RELAY_CHA
   - `api/drizzle/*.sql`
 
 ## Feedback Loop
-- None.
+- `blocked`: L1.4 version bump (`@sentropic/llm-gateway` `0.23.2 -> 0.24.0` + `@sentropic/cluster-mesh` peer widening `>=0.19.0 <0.24.0 -> >=0.19.0 <0.28.0`, `0.27.0-dev.1 -> 0.27.0-dev.2`) is blocked by spec scope gap (`SPEC_EVOL_LLM_GW_RELAY_CHAIN.md:256,313-315`): `api/tests/unit/gateway-package-version.test.ts:20`, `packages/cluster-mesh/src/modules/catalog.ts:21`, `packages/cluster-mesh/tests/**`, and root `package-lock.json:19519,20249` are in Forbidden Paths or omitted from L1.4 Allowed Paths.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
@@ -71,6 +70,7 @@ Implement Lot 1 (sub-lots L1.1 through L1.4) of `spec/SPEC_EVOL_LLM_GW_RELAY_CHA
   - [x] Gate: `guard-stream-flow.test.ts`, `typecheck-llm-gateway`, `lint-llm-gateway`, `scope-check`
 
 - [ ] **Lot 1.4 — Workstation FileCaptureVault (default-OFF) & version bump**
-  - [ ] Red: `packages/llm-gateway/tests/file-capture-vault.test.ts`
-  - [ ] Green: `packages/llm-gateway/src/ports/capture-vault.ts`, `src/node/file-capture-vault.ts`, `control-server.ts`, `control-client.ts`, exports
-  - [ ] Gate: full `test-llm-gateway`, `typecheck-llm-gateway`, `lint-llm-gateway`, `pack-llm-gateway`, `scope-check`
+  - [x] Red: `packages/llm-gateway/tests/file-capture-vault.test.ts`
+  - [x] Green (vault + exports): `packages/llm-gateway/src/ports/capture-vault.ts`, `src/node/file-capture-vault.ts`, `control-server.ts`, `control-client.ts`, exports
+  - [ ] Version bump (`0.23.2 -> 0.24.0` + `cluster-mesh` peer widening): blocked by spec scope gap (see Feedback Loop)
+  - [x] Gate (vault): `file-capture-vault.test.ts`, `auth-subpaths.test.ts`, `typecheck-llm-gateway`, `lint-llm-gateway`, `pack-llm-gateway`, `scope-check`

@@ -7,6 +7,7 @@ import { createGatewayRouter } from '../router/index.js';
 import { ControlServer } from './control-server.js';
 import { startControlSocket } from './control-socket.js';
 import { FileGatewayStateStore } from './gateway-state-store.js';
+import { FileCaptureVault } from './file-capture-vault.js';
 import { createNodeGatewayServer, closeNodeServer, listenNodeServer } from './http-server.js';
 import { createLoopbackSessionMintHandler } from './bootstrap-session-mint.js';
 import { createSessionAuth } from './session-auth.js';
@@ -53,7 +54,13 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
     await requireReady();
     freezeLaunchRoutingContract(input.routingContract as Parameters<typeof freezeLaunchRoutingContract>[0]);
   };
-  const control = new ControlServer({ service, ownerScopeRef, controlToken, beforeAcquire });
+  const captureVault = new FileCaptureVault({
+    stateDir, keyring: mesh.keyring, captureEnabled: options.captureEnabled === true,
+    ...(options.captureRetention ? { retention: options.captureRetention } : {}),
+    ...(options.captureQuotaBytes !== undefined ? { quotaBytes: options.captureQuotaBytes } : {}),
+  });
+  const stageId = options.stageId ?? 'wkst:local';
+  const control = new ControlServer({ service, ownerScopeRef, controlToken, beforeAcquire, captureVault });
   const loopbackSessionMint = options.enableLoopbackHttpSessionMint
     ? createLoopbackSessionMintHandler({
       service, ownerScopeRef, bootstrapSecret: options.bootstrapSecret ?? '', beforeAcquire,
@@ -79,6 +86,12 @@ export const startGatewayHost = async (options: StartGatewayHostOptions): Promis
       },
       config: { ...mesh.gateway.config, callerAuth: createSessionAuth({ service, ownerScopeRef,
         ready: async () => (await readiness()).ready, resolveOwner: (caller, context) => mesh.resolveOwner(caller, context) }) },
+      ...(options.stageRewrite ? { stageRewrite: options.stageRewrite } : {}),
+      ...(options.guard ? { guard: options.guard } : {}),
+      captureEnabled: options.captureEnabled === true,
+      ...(options.captureEnabled === true ? {
+        onCapture: async (rec) => { await captureVault.writeTurnCapture({ ...rec, stageId }); },
+      } : {}),
       readiness: { isReady: async () => (await readiness()).ready },
       requestAudit: { admit: async ({ cost, requestId, model, originModel, stageRewrites }) => {
         const receipt = await service.recordAttempt({ ownerScopeRef, sessionRef: cost.gatewaySessionRef!, requestId, model: originModel ?? model });

@@ -15,6 +15,7 @@ import type {
   MigrateSessionPolicyInput,
   StoredReceipt,
 } from '../session-service.js';
+import type { TurnCaptureRecord } from '../ports/capture-vault.js';
 
 export interface GatewayControlClient {
   acquireSession(input: AcquireSessionInput): Promise<IssuedSession>;
@@ -33,6 +34,7 @@ export interface GatewayControlClient {
     }[]
   >;
   readReceipt(input: { ownerScopeRef: string; receiptId: string }): Promise<StoredReceipt>;
+  readTurnCapture(input: { ownerScopeRef: string; captureId: string }): Promise<TurnCaptureRecord>;
 }
 
 export const createGatewayControlClient = (options: {
@@ -50,5 +52,6 @@ export const createGatewayControlClient = (options: {
     revokeSession: (input) => call('revokeSession', input),
     listSessions: (input) => call('listSessions', input),
     readReceipt: (input) => call('readReceipt', input),
+    readTurnCapture: (input) => call('readTurnCapture', input),
   };
 };
