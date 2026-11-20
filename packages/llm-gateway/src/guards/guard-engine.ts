@@ -4,7 +4,7 @@ import type {
   SecretScanOptions, SecretScannerPort,
 } from '../ports/guards.js';
 import {
-  PureSecretScanner, formatSecretRedactionTag, normalizeSecretMatches,
+  PureSecretScanner, dedupeRanges, formatSecretRedactionTag,
 } from './secret-scanner.js';
 
 interface DetectorSpec {
@@ -143,8 +143,15 @@ export class GuardEngine implements GuardPort {
       return action;
     };
 
-    const scannerMatches = normalizeSecretMatches(text, this.secretScanner.scan(text, this.scanOptions));
-    for (const m of scannerMatches) recordFinding(m.ruleId, 'tech_secret');
+    const rawScanner = (this.secretScanner.scanRaw?.(text, this.scanOptions) ?? this.secretScanner.scan(text, this.scanOptions))
+      .map((m) => ({
+        ...m,
+        start: Math.max(0, Math.min(m.start, text.length)),
+        end: Math.max(0, Math.min(m.end, text.length)),
+      }))
+      .filter((m) => Number.isInteger(m.start) && Number.isInteger(m.end) && m.end > m.start);
+    for (const m of rawScanner) recordFinding(m.ruleId, 'tech_secret');
+    const scannerMatches = dedupeRanges(rawScanner);
 
     const builtInSpans: { start: number; end: number; id: string; replacement: string; action: GuardActionPolicy }[] = [];
     for (const detector of DETECTORS) {
