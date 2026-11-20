@@ -21,8 +21,11 @@ interface CaptureEnvelope {
 }
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
+const GCM_IV_BYTES = 12;
+const GCM_TAG_BYTES = 16;
+const MAX_INFLATE_BYTES = 64 * 1024 * 1024;
 const aadFor = (e: Pick<CaptureEnvelope, 'stageId' | 'ownerScopeRef' | 'captureId' | 'createdAtMs' | 'expiresAtMs'>): Buffer =>
-  Buffer.from(`v1|${e.stageId}|${e.ownerScopeRef}|${e.captureId}|${e.createdAtMs}|${e.expiresAtMs ?? 'none'}`, 'utf8');
+  Buffer.from(JSON.stringify(['v1', e.stageId, e.ownerScopeRef, e.captureId, e.createdAtMs, e.expiresAtMs ?? null]), 'utf8');
 
 export interface FileCaptureVaultOptions {
   readonly stateDir: string; readonly keyring: KeyringReader;
@@ -51,7 +54,8 @@ export class FileCaptureVault implements CaptureVaultPort {
 
   private async ensureDir(): Promise<void> { await mkdir(this.dir, { recursive: true, mode: 0o700 }); await chmod(this.dir, 0o700); }
   private async dekFor(keyId: string): Promise<Buffer> {
-    const raw = (await this.keyring.getSecret(`${this.dekKeyPrefix}/${keyId}`)) ?? (await this.keyring.getSecret(this.dekKeyPrefix));
+    if (!SAFE_ID.test(keyId)) throw new CaptureVaultError('invalid capture keyId', 'CORRUPT');
+    const raw = await this.keyring.getSecret(`${this.dekKeyPrefix}/${keyId}`);
     if (!raw || !/^[0-9a-f]{64}$/i.test(raw)) throw new CaptureVaultError('capture DEK unavailable', 'KEY-UNAVAILABLE');
     return Buffer.from(raw, 'hex');
   }
@@ -81,8 +85,8 @@ export class FileCaptureVault implements CaptureVaultPort {
       requestCapture: input.requestCapture, responseCapture: input.responseCapture,
       truncated: Boolean(input.truncated), ...(input.integrity ? { integrity: input.integrity } : {}),
     };
-    const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', await this.dekFor(this.keyId), iv);
+    const iv = randomBytes(GCM_IV_BYTES);
+    const cipher = createCipheriv('aes-256-gcm', await this.dekFor(this.keyId), iv, { authTagLength: GCM_TAG_BYTES });
     cipher.setAAD(aadFor({ stageId: input.stageId, ownerScopeRef: input.ownerScopeRef, captureId, createdAtMs, expiresAtMs }));
     const data = Buffer.concat([cipher.update(deflateSync(Buffer.from(JSON.stringify(record), 'utf8'))), cipher.final()]);
     const serialized = JSON.stringify({
@@ -115,12 +119,30 @@ export class FileCaptureVault implements CaptureVaultPort {
       await this.auditRead(input.captureId, input.ownerScopeRef, 'denied');
       throw new CaptureVaultError('cross-owner capture read denied', 'ACCESS-DENIED');
     }
+    if (env.v !== 1 || typeof env.keyId !== 'string' || typeof env.iv !== 'string'
+      || typeof env.tag !== 'string' || typeof env.data !== 'string') {
+      await this.auditRead(input.captureId, input.ownerScopeRef, 'corrupt');
+      throw new CaptureVaultError('corrupt envelope', 'CORRUPT');
+    }
+    const iv = Buffer.from(env.iv, 'base64');
+    const tag = Buffer.from(env.tag, 'base64');
+    if (iv.length !== GCM_IV_BYTES || tag.length !== GCM_TAG_BYTES) {
+      await this.auditRead(input.captureId, input.ownerScopeRef, 'corrupt');
+      throw new CaptureVaultError('invalid capture IV or auth tag length', 'CORRUPT');
+    }
+    const dek = await this.dekFor(env.keyId);
     try {
-      const decipher = createDecipheriv('aes-256-gcm', await this.dekFor(env.keyId), Buffer.from(env.iv, 'base64'));
-      decipher.setAAD(aadFor({ ...env, ownerScopeRef: input.ownerScopeRef }));
-      decipher.setAuthTag(Buffer.from(env.tag, 'base64'));
+      const decipher = createDecipheriv('aes-256-gcm', dek, iv, { authTagLength: GCM_TAG_BYTES });
+      decipher.setAAD(aadFor({
+        stageId: env.stageId, ownerScopeRef: input.ownerScopeRef, captureId: input.captureId,
+        createdAtMs: env.createdAtMs, expiresAtMs: env.expiresAtMs,
+      }));
+      decipher.setAuthTag(tag);
       const deflated = Buffer.concat([decipher.update(Buffer.from(env.data, 'base64')), decipher.final()]);
-      const record = JSON.parse(inflateSync(deflated).toString('utf8')) as TurnCaptureRecord;
+      const record = JSON.parse(inflateSync(deflated, { maxOutputLength: MAX_INFLATE_BYTES }).toString('utf8')) as TurnCaptureRecord;
+      if (record.captureId !== input.captureId || record.ownerScopeRef !== input.ownerScopeRef) {
+        throw new CaptureVaultError('capture identity mismatch', 'CORRUPT');
+      }
       await this.auditRead(input.captureId, input.ownerScopeRef, 'ok');
       return record;
     } catch { await this.auditRead(input.captureId, input.ownerScopeRef, 'corrupt'); throw new CaptureVaultError('capture authentication failed', 'CORRUPT'); }
