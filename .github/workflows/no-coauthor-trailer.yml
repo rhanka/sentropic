@@ -9,6 +9,6 @@ permissions:
 
 jobs:
   scan:
-    uses: rhanka/h2a/.github/workflows/no-coauthor-trailer.yml@aac65c236ffb75e8d9741b647fed52bec9adbeb9
+    uses: rhanka/h2a/.github/workflows/no-coauthor-trailer.yml@621cac4fae441b874bc82fe1078a4f18d374743b
     with:
       check-pr-body: true

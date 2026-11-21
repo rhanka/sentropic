@@ -45,6 +45,6 @@ Enforce the owner’s attribution policy on pull requests after the November 21 
 - [x] **Lot 2 — Validate initial rollout**
   - [x] Run `make scope-check` with the dedicated environment and ports before committing.
   - [x] Verify the attribution scanner and `ci-gate` on the initial PR head `0ac460a1025c2896800ab996932cae2646afc8d9`.
-- [ ] **Lot 3 — Address Neon review**
-  - [x] Pin the corrected scanner and grant only contents read access.
-  - [ ] Record the checks for the exact post-review head in the delivery report.
+- [x] **Lot 3 — Address Neon review**
+  - [x] Pin the scanner to a full commit SHA on `rhanka/h2a:main` and grant only contents read access.
+  - [x] Record the checks for the exact post-review head in the delivery report.
