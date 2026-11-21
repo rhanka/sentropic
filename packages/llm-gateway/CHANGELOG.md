@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- 0.26.0: Sub-lot L1.3c pure-TS vendored `agent-stats` secret scanner core
+  (`SecretScannerPort`, `KUBECONFIG_PATTERNS`, structured `CustomSecretPattern[]`
+  / `scanCustom`, disjoint-interval `dedupeRanges` partial-overlap merge fix,
+  deterministic `<<SECRET:<safeRuleId>:<sha256_16hex>>>` tags, and `GuardEngine`
+  wiring preserving default `audit_mask_copy` byte-identity and `P` non-mutation
+  with zero added dependencies).
 - 0.25.0: Sub-lot L1.5 default-ON global Protected Identification (`P`) egress
   invariant across native, canonical, and legacy flows (ingress capture,
   absolute `0..i_last` index pinning, read-only identity header snapshot with

@@ -1,7 +1,11 @@
 import type {
-  GuardActionPolicy, GuardDetectorCategory, GuardFinding, GuardPort, GuardScanResult,
-  GuardTextScanResult, GuardVerdict, MaskedCapturePayload,
+  CustomSecretPattern, GuardActionPolicy, GuardDetectorCategory, GuardFinding, GuardPort,
+  GuardScanResult, GuardTextScanResult, GuardVerdict, MaskedCapturePayload,
+  SecretScanOptions, SecretScannerPort,
 } from '../ports/guards.js';
+import {
+  PureSecretScanner, dedupeRanges, formatSecretRedactionTag,
+} from './secret-scanner.js';
 
 interface DetectorSpec {
   readonly id: string;
@@ -48,7 +52,7 @@ const DETECTORS: readonly DetectorSpec[] = [
   { id: 'secret.env_assignment', category: 'tech_secret', replacement: '[REDACTED:TECH_SECRET]',
     pattern: /\b[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE_KEY)\s*=\s*(?:"[^"\r\n]+"|'[^'\r\n]+'|`[^`\r\n]+`|[^\s"'`]+)/g },
   { id: 'pii.email', category: 'pii', replacement: '[REDACTED:EMAIL]',
-    pattern: /\b[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\b/g },
+    pattern: /(?<![A-Za-z0-9.!#$%&'*+/=?^_`{|}~-])[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+\b/g },
   { id: 'pii.card_pan', category: 'pii', replacement: '[REDACTED:CARD_PAN]',
     pattern: /\b(?:\d[ -]?){13,19}\b/g,
     validate: (m) => { const d = m.replace(/\D/g, ''); return d.length >= 13 && d.length <= 19 && luhnValid(d); } },
@@ -77,47 +81,137 @@ const isProtectedItem = (item: unknown, isResponsesInput: boolean): boolean => {
   return kindOk && (role === 'system' || role === 'developer');
 };
 
+const isExactEnvValueOverlap = (
+  text: string,
+  builtInStart: number,
+  builtInEnd: number,
+  editStart: number,
+  editEnd: number,
+): boolean => {
+  const prefix = text.slice(builtInStart, editStart);
+  const suffix = text.slice(editEnd, builtInEnd);
+  const m = /^[A-Z0-9_]+\s*=\s*(["'`]?)$/.exec(prefix);
+  return m !== null && suffix === m[1];
+};
+
 export interface GuardEngineOptions {
   readonly defaultAction?: GuardActionPolicy;
   /** Owner-pending DM3 seam; defaults to `'audit_mask_copy'` (intact in flight). */
   readonly hopEgressHighConfidenceAction?: GuardActionPolicy;
   readonly detectorActions?: Readonly<Record<string, GuardActionPolicy>>;
+  /** Injectable secret range scanner (defaults to PureSecretScanner with KUBECONFIG_PATTERNS). */
+  readonly secretScanner?: SecretScannerPort;
+  /** Structured custom secret patterns forwarded to the secret scanner. */
+  readonly customPatterns?: readonly CustomSecretPattern[];
+  /** Include built-in KUBECONFIG_PATTERNS when scanning (default true). */
+  readonly includeDefaultPatterns?: boolean;
 }
 
 export class GuardEngine implements GuardPort {
   private readonly defaultAction: GuardActionPolicy;
   private readonly detectorActions: Readonly<Record<string, GuardActionPolicy>>;
+  private readonly secretScanner: SecretScannerPort;
+  private readonly scanOptions?: SecretScanOptions;
   readonly hopEgressHighConfidenceAction: GuardActionPolicy;
 
   constructor(options: GuardEngineOptions = {}) {
     this.defaultAction = options.defaultAction ?? 'audit_mask_copy';
     this.hopEgressHighConfidenceAction = options.hopEgressHighConfidenceAction ?? 'audit_mask_copy';
     this.detectorActions = options.detectorActions ?? {};
+    this.secretScanner = options.secretScanner ?? new PureSecretScanner();
+    if (options.customPatterns !== undefined || options.includeDefaultPatterns !== undefined) {
+      this.scanOptions = {
+        ...(options.customPatterns !== undefined ? { customPatterns: options.customPatterns } : {}),
+        ...(options.includeDefaultPatterns !== undefined ? { includeDefaultPatterns: options.includeDefaultPatterns } : {}),
+      };
+    }
   }
 
   private actionFor(id: string): GuardActionPolicy {
     return this.detectorActions[id] ?? this.defaultAction;
   }
 
-  scanText(text: string): GuardTextScanResult {
+  private scanTextMode(text: string, inFlightOnly: boolean): GuardTextScanResult {
+    if (!text) return { maskedText: text, findings: [], blocked: false };
     const counts = new Map<string, { category: GuardDetectorCategory; count: number; action: GuardActionPolicy }>();
-    let masked = text;
     let blocked = false;
+    const recordFinding = (id: string, category: GuardDetectorCategory): GuardActionPolicy => {
+      const action = this.actionFor(id);
+      const prev = counts.get(id);
+      counts.set(id, { category, count: (prev?.count ?? 0) + 1, action });
+      if (action === 'block') blocked = true;
+      return action;
+    };
+
+    const rawScanner = (this.secretScanner.scanRaw?.(text, this.scanOptions) ?? this.secretScanner.scan(text, this.scanOptions))
+      .map((m) => ({
+        ...m,
+        start: Math.max(0, Math.min(m.start, text.length)),
+        end: Math.max(0, Math.min(m.end, text.length)),
+      }))
+      .filter((m) => Number.isInteger(m.start) && Number.isInteger(m.end) && m.end > m.start);
+    for (const m of rawScanner) recordFinding(m.ruleId, 'tech_secret');
+    const scannerMatches = dedupeRanges(
+      inFlightOnly ? rawScanner.filter((m) => this.actionFor(m.ruleId) === 'mask_in_flight') : rawScanner,
+    );
+
+    const builtInSpans: { start: number; end: number; id: string; replacement: string; action: GuardActionPolicy }[] = [];
     for (const detector of DETECTORS) {
-      const action = this.actionFor(detector.id);
+      if (detector.id === 'pii.email' && !text.includes('@')) continue;
       detector.pattern.lastIndex = 0;
-      masked = masked.replace(detector.pattern, (match) => {
-        if (detector.validate && !detector.validate(match)) return match;
-        const prev = counts.get(detector.id);
-        counts.set(detector.id, { category: detector.category, count: (prev?.count ?? 0) + 1, action });
-        if (action === 'block') blocked = true;
-        return detector.replacement;
-      });
+      for (const m of text.matchAll(detector.pattern)) {
+        if (m.index === undefined || m[0].length === 0) continue;
+        if (detector.validate && !detector.validate(m[0])) continue;
+        const start = m.index;
+        const end = start + m[0].length;
+        if (builtInSpans.some((b) => b.start <= start && b.end >= end)) continue;
+        const action = recordFinding(detector.id, detector.category);
+        builtInSpans.push({ start, end, id: detector.id, replacement: detector.replacement, action });
+      }
     }
+
+    const activeBuiltIns = inFlightOnly ? builtInSpans.filter((b) => b.action === 'mask_in_flight') : builtInSpans;
+    type Edit = { start: number; end: number; text: string; isScanner: boolean };
+    const edits: Edit[] = scannerMatches.map((s) => ({
+      start: s.start,
+      end: s.end,
+      text: formatSecretRedactionTag(s.ruleId, text.slice(s.start, s.end)),
+      isScanner: true,
+    }));
+    for (const b of activeBuiltIns) {
+      const overlapping = edits.filter((e) => b.start < e.end && b.end > e.start);
+      if (overlapping.length === 0) {
+        edits.push({ start: b.start, end: b.end, text: b.replacement, isScanner: false });
+        continue;
+      }
+      const single = overlapping.length === 1 ? overlapping[0]! : undefined;
+      const coveredBySingle = single !== undefined && (
+        (single.start <= b.start && single.end >= b.end)
+        || (single.isScanner && b.id === 'secret.env_assignment'
+          && isExactEnvValueOverlap(text, b.start, b.end, single.start, single.end))
+      );
+      if (!coveredBySingle) {
+        const minStart = Math.min(b.start, ...overlapping.map((e) => e.start));
+        const maxEnd = Math.max(b.end, ...overlapping.map((e) => e.end));
+        for (let i = edits.length - 1; i >= 0; i -= 1) {
+          if (b.start < edits[i]!.end && b.end > edits[i]!.start) edits.splice(i, 1);
+        }
+        edits.push({ start: minStart, end: maxEnd, text: b.replacement, isScanner: false });
+      }
+    }
+
+    edits.sort((a, b) => b.start - a.start);
+    let masked = text;
+    for (const e of edits) masked = masked.slice(0, e.start) + e.text + masked.slice(e.end);
+
     const findings: GuardFinding[] = [...counts.entries()].map(([detectorId, info]) => ({
       detectorId, category: info.category, count: info.count, action: info.action,
     }));
     return { maskedText: masked, findings, blocked };
+  }
+
+  scanText(text: string): GuardTextScanResult {
+    return this.scanTextMode(text, false);
   }
 
   inspectRequest(payload: unknown): GuardScanResult {
@@ -127,20 +221,18 @@ export class GuardEngine implements GuardPort {
     let maskInFlight = false;
     const walk = (value: unknown, forInFlight: boolean, inProtected: boolean, depth: number): unknown => {
       if (typeof value === 'string') {
-        const res = this.scanText(value);
-        if (!forInFlight) {
-          for (const f of res.findings) {
-            const prev = totals.get(f.detectorId);
-            totals.set(f.detectorId, { category: f.category, count: (prev?.count ?? 0) + f.count, action: f.action });
-            if (f.action === 'block') blocked = true;
-            if (f.action === 'mask_in_flight') {
-              if (inProtected) { blocked = true; protectedViolation = true; }
-              else maskInFlight = true;
-            }
+        if (forInFlight) return !inProtected ? this.scanTextMode(value, true).maskedText : value;
+        const res = this.scanTextMode(value, false);
+        for (const f of res.findings) {
+          const prev = totals.get(f.detectorId);
+          totals.set(f.detectorId, { category: f.category, count: (prev?.count ?? 0) + f.count, action: f.action });
+          if (f.action === 'block') blocked = true;
+          if (f.action === 'mask_in_flight') {
+            if (inProtected) { blocked = true; protectedViolation = true; }
+            else maskInFlight = true;
           }
-          return res.maskedText;
         }
-        return !inProtected && res.findings.some((f) => f.action === 'mask_in_flight') ? res.maskedText : value;
+        return res.maskedText;
       }
       if (Array.isArray(value)) return value.map((item) => walk(item, forInFlight, inProtected, depth + 1));
       if (value && typeof value === 'object') {

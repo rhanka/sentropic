@@ -37,9 +37,14 @@ COPY global.setup.ts ./
 # musl 1.2.6-r3 fixes HIGH CVE-2026-107891 in the pinned base's libc and utilities.
 # Security: pin libxslt 1.1.43-r4 — fixes HIGH CVE-2026-87636 / CVE-2026-9947
 # flagged by Trivy on 1.1.43-r3 (FixedVersion 1.1.43-r4 in Alpine v3.24).
+# Security: pin libfontenc 1.1.10-r0 (CVE-2026-109908) and libxml2 2.13.9-r3 (CVE-2026-86144)
+# — fixes HIGH findings flagged by Trivy on 1.1.9-r0 and 2.13.9-r2 in Alpine v3.24.
+# libcrypto3/libssl3 3.5.9-r1 and chromium/chromium-headless-shell 158.0.8127.36-r0
+# replace removed 3.5.9-r0 / 156.0.8078.79-r0 pins in Alpine v3.24.
 RUN npm ci --legacy-peer-deps --ignore-scripts && \
-    apk add --no-cache musl=1.2.6-r3 musl-utils=1.2.6-r3 libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 chromium=156.0.8078.79-r0 \
-      chromium-headless-shell=156.0.8078.79-r0 ffmpeg=8.1.3-r0 libexpat=2.10.0-r0 zlib=1.4-r0 libxslt=1.1.43-r4 && \
+    apk add --no-cache musl=1.2.6-r3 musl-utils=1.2.6-r3 libcrypto3=3.5.9-r1 libssl3=3.5.9-r1 chromium=158.0.8127.36-r0 \
+      chromium-headless-shell=158.0.8127.36-r0 ffmpeg=8.1.3-r0 libexpat=2.10.0-r0 zlib=1.4-r0 libxslt=1.1.43-r4 \
+      libfontenc=1.1.10-r0 libxml2=2.13.9-r3 && \
     node -e 'const fs=require("node:fs"),path=require("node:path"); const {registry}=require("playwright-core/lib/coreBundle").registry; for(const [name,binary] of [["chromium","/usr/bin/chromium"],["chromium-headless-shell","/usr/bin/chromium-headless-shell"],["ffmpeg","/usr/bin/ffmpeg"]]){const executable=registry.findExecutable(name).executablePath(); fs.mkdirSync(path.dirname(executable),{recursive:true}); fs.symlinkSync(binary,executable); console.log(name,executable,"->",binary);}' && \
     node --input-type=module -e 'import {chromium} from "playwright"; import assert from "node:assert/strict"; import {stat} from "node:fs/promises"; for(const channel of [undefined,"chromium"]){const browser=await chromium.launch({channel}); console.log("Qualified Chromium:",channel??"headless shell",browser.version()); const context=await browser.newContext({recordVideo:{dir:"/tmp/browser-probe"}}); const page=await context.newPage(); await page.setContent("<title>BR78 browser probe</title><main style=\"background:#246;color:white;padding:40px\">BR78 browser probe</main>"); assert.equal(await page.title(),"BR78 browser probe"); await page.waitForFunction(()=>performance.getEntriesByName("first-contentful-paint").length>0,undefined,{timeout:2000}); const png=await page.screenshot({path:"/tmp/browser-probe.png"}); assert.equal(png.subarray(0,8).toString("hex"),"89504e470d0a1a0a"); const video=page.video(); await context.close(); assert.ok((await stat(await video.path())).size>0); await browser.close();}' && \
     rm -rf /root/.npm /tmp/*
