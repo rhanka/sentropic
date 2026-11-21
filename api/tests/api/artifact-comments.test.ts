@@ -2,11 +2,13 @@ import { randomUUID } from 'node:crypto';
 import type { Comment, CommentThreadSummary } from '@sentropic/comments';
 import { ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH, PROVENANCE_TOOL_CALL_ID_REQUIRED_CODE, SECTION_KEY_TOO_LONG_CODE } from '@sentropic/comments/artifact-hono';
 import { eq } from 'drizzle-orm';
+import type { Pool } from 'pg';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { app } from '../../src/app';
 import { db, pool } from '../../src/db/client';
 import { comments } from '../../src/db/schema';
-import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { createProductArtifactCommentsRouterOptions } from '../../src/routes/namespaces/artifact-comments-ports';
+import { putCmWorkspaceMember, setCmMembershipState } from '../../src/services/identity/cm-tenancy';
 import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service';
 import { createId } from '../../src/utils/id';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser, unauthenticatedRequest, type TestUser } from '../utils/auth-helper';
@@ -14,6 +16,45 @@ import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 
 type NotifyPayload = { workspace_id: string; context_type: string; context_id: string; data: { action: string; comment_id?: string; thread_id?: string } };
 const MISSING_UUID = '99999999-9999-4999-8999-999999999999';
+
+function artifactCommentRoutes(artifactId: string) {
+  const base = `/api/v1/artifacts/${artifactId}/comments`;
+  return [
+    ['GET', base],
+    ['GET', `${base}/summaries`],
+    ['GET', `${base}/threads/th-1`],
+    ['POST', base, { content: 'Comment' }],
+    ['POST', `${base}/threads/th-1/close`],
+    ['POST', `${base}/threads/th-1/reopen`],
+    ['PATCH', `${base}/threads/th-1/assignee`, { assigned_to: null }],
+    ['PATCH', `${base}/c-1`, { content: 'Edit' }],
+    ['DELETE', `${base}/c-1`],
+  ] as const;
+}
+
+async function expectRefusal(res: Response, status: number, code: string) {
+  expect(res.status).toBe(status);
+  expect(await res.json()).toMatchObject({ code });
+}
+
+it('should emit comment events through the injected pool', async () => {
+  const query = vi.fn().mockResolvedValue(undefined);
+  const release = vi.fn();
+  const injectedPool = { connect: vi.fn().mockResolvedValue({ query, release }) } as unknown as Pool;
+  const { events } = createProductArtifactCommentsRouterOptions({ pool: injectedPool });
+
+  await events!.emit({
+    workspaceId: 'workspace', contextType: 'artifact', contextId: 'artifact',
+    action: 'created', key: 'comment_id', commentId: 'comment', threadId: 'thread', origin: 'rest',
+  });
+
+  expect(query).toHaveBeenCalledOnce();
+  expect(parseNotify(query.mock.calls[0][0])).toEqual({
+    workspace_id: 'workspace', context_type: 'artifact', context_id: 'artifact',
+    data: { action: 'created', comment_id: 'comment' },
+  });
+  expect(release).toHaveBeenCalledOnce();
+});
 
 function parseNotify(sql: string): NotifyPayload | null {
   const m = sql.match(/^NOTIFY comment_events, '([\s\S]*)'$/);
@@ -23,13 +64,13 @@ function parseNotify(sql: string): NotifyPayload | null {
 
 describe('artifact-comments namespace API (C2c, real PostgreSQL)', () => {
   let owner: TestUser, commenter: TestUser, viewer: TestUser, admin: TestUser, outsider: TestUser;
-  let storageScopeId: string, sharedId: string, privateId: string, otherId: string, deletedId: string;
+  let storageScopeId: string, outsiderScopeId: string, sharedId: string, privateId: string, otherId: string, deletedId: string;
   let captured: NotifyPayload[];
   let connectSpy: ReturnType<typeof vi.spyOn>;
 
-  const reqAs = (u: TestUser, method: string, path: string, body?: unknown, headers?: Record<string, string>) => {
+  const reqAs = (u: TestUser, method: string, path: string, body?: unknown, headers?: Record<string, string>, workspaceId = owner.workspaceId) => {
     const sep = path.includes('?') ? '&' : '?';
-    return authenticatedRequest(app, method, `${path}${sep}workspace_id=${owner.workspaceId}`, u.sessionToken!, body, headers);
+    return authenticatedRequest(app, method, `${path}${sep}workspace_id=${workspaceId}`, u.sessionToken!, body, headers);
   };
 
   beforeEach(async () => {
@@ -62,8 +103,11 @@ describe('artifact-comments namespace API (C2c, real PostgreSQL)', () => {
     await putCmWorkspaceMember(owner.workspaceId!, viewer.id, 'viewer');
     await putCmWorkspaceMember(owner.workspaceId!, admin.id, 'admin');
     storageScopeId = randomUUID();
-    await pool.query(`INSERT INTO control.artifact_host_kv (storage_scope_id, key, value) VALUES ('app-artifact-scopes/v1', $1, $2)`, [JSON.stringify([PLATFORM_TENANT_ID, owner.workspaceId!]), storageScopeId]);
-    await pool.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ($1, $2)`, [storageScopeId, PLATFORM_TENANT_ID]);
+    outsiderScopeId = randomUUID();
+    for (const [user, scopeId] of [[owner, storageScopeId], [outsider, outsiderScopeId]] as const) {
+      await pool.query(`INSERT INTO control.artifact_host_kv (storage_scope_id, key, value) VALUES ('app-artifact-scopes/v1', $1, $2)`, [JSON.stringify([PLATFORM_TENANT_ID, user.workspaceId]), scopeId]);
+      await pool.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ($1, $2)`, [scopeId, PLATFORM_TENANT_ID]);
+    }
     [sharedId, privateId, otherId, deletedId] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
     for (const [id, name, mode, pub, state] of [
       [sharedId, 'shared', 'platform', true, 'active'],
@@ -92,23 +136,15 @@ describe('artifact-comments namespace API (C2c, real PostgreSQL)', () => {
       await cmDeleteWorkspaceMembers(owner.workspaceId);
     }
     if (storageScopeId) {
-      await pool.query(`DELETE FROM control.artifact_host_kv WHERE storage_scope_id = 'app-artifact-scopes/v1' AND value = $1`, [storageScopeId]);
+      await pool.query(`DELETE FROM control.artifact_host_kv WHERE storage_scope_id = 'app-artifact-scopes/v1' AND value IN ($1, $2)`, [storageScopeId, outsiderScopeId]);
+      await pool.query('DELETE FROM artifacts.storage_scopes WHERE id = $1', [outsiderScopeId]);
     }
     await cleanupAuthData();
   });
 
   it('should enforce 401 auth, 404 unknown/non-visible, and 403 viewer comment refusals without gating health', async () => {
     expect((await app.request('/api/v1/health')).status).toBe(200);
-    for (const [method, path, body] of [
-      ['GET', `/api/v1/artifacts/${sharedId}/comments`],
-      ['GET', `/api/v1/artifacts/${sharedId}/comments/summaries`],
-      ['GET', `/api/v1/artifacts/${sharedId}/comments/threads/th-1`],
-      ['POST', `/api/v1/artifacts/${sharedId}/comments`, { content: 'No auth' }],
-      ['POST', `/api/v1/artifacts/${sharedId}/comments/threads/th-1/close`],
-      ['PATCH', `/api/v1/artifacts/${sharedId}/comments/threads/th-1/assignee`, { assigned_to: null }],
-      ['PATCH', `/api/v1/artifacts/${sharedId}/comments/c-1`, { content: 'No auth' }],
-      ['DELETE', `/api/v1/artifacts/${sharedId}/comments/c-1`],
-    ] as const) {
+    for (const [method, path, body] of artifactCommentRoutes(sharedId)) {
       expect((await unauthenticatedRequest(app, method, path, body)).status).toBe(401);
     }
     for (const [u, id] of [[owner, MISSING_UUID], [owner, 'not-a-uuid'], [commenter, privateId], [viewer, privateId], [owner, deletedId]] as const) {
@@ -116,21 +152,39 @@ describe('artifact-comments namespace API (C2c, real PostgreSQL)', () => {
       expect(res.status).toBe(404);
       expect(await res.json()).toMatchObject({ code: 'artifact_not_found' });
     }
-    expect((await reqAs(outsider, 'GET', `/api/v1/artifacts/${sharedId}/comments`)).status).toBe(404);
     expect((await reqAs(viewer, 'GET', `/api/v1/artifacts/${sharedId}/comments`)).status).toBe(200);
     expect((await reqAs(viewer, 'GET', `/api/v1/artifacts/${sharedId}/comments/summaries`)).status).toBe(200);
-    for (const [method, path, body] of [
-      ['POST', `/api/v1/artifacts/${sharedId}/comments`, { content: 'Blocked' }],
-      ['POST', `/api/v1/artifacts/${sharedId}/comments/threads/th-1/close`],
-      ['POST', `/api/v1/artifacts/${sharedId}/comments/threads/th-1/reopen`],
-      ['PATCH', `/api/v1/artifacts/${sharedId}/comments/threads/th-1/assignee`, { assigned_to: null }],
-      ['PATCH', `/api/v1/artifacts/${sharedId}/comments/c-1`, { content: 'Blocked' }],
-      ['DELETE', `/api/v1/artifacts/${sharedId}/comments/c-1`],
-    ] as const) {
-      const res = await reqAs(viewer, method, path, body);
-      expect(res.status).toBe(403);
-      expect(await res.json()).toMatchObject({ code: 'comment_forbidden' });
+    for (const [method, path, body] of artifactCommentRoutes(sharedId)) {
+      if (method !== 'GET') await expectRefusal(await reqAs(viewer, method, path, body), 403, 'comment_forbidden');
     }
+    for (const id of [MISSING_UUID, 'not-a-uuid', privateId, deletedId]) {
+      for (const [method, path, body] of artifactCommentRoutes(id)) {
+        const res = await reqAs(viewer, method, path, body);
+        expect(res.status).toBe(404);
+        expect(await res.json()).toEqual({ code: 'artifact_not_found', error: 'Not found' });
+      }
+    }
+  });
+
+  it('should hide foreign artifacts from an outsider in either workspace', async () => {
+    for (const id of [sharedId, MISSING_UUID]) {
+      for (const [method, path, body] of artifactCommentRoutes(id)) {
+        const foreignWorkspace = await reqAs(outsider, method, path, body);
+        expect(foreignWorkspace.status).toBe(404);
+        expect(await foreignWorkspace.json()).toEqual({ message: 'Not found' });
+        const ownWorkspace = await reqAs(outsider, method, path, body, undefined, outsider.workspaceId);
+        expect(ownWorkspace.status).toBe(404);
+        expect(await ownWorkspace.json()).toEqual({ code: 'artifact_not_found', error: 'Not found' });
+      }
+    }
+  });
+
+  it('should hide artifacts after tenant membership is suspended', async () => {
+    const path = `/api/v1/artifacts/${sharedId}/comments`;
+    expect((await reqAs(commenter, 'GET', path)).status).toBe(200);
+    await setCmMembershipState(commenter.id, PLATFORM_TENANT_ID, { status: 'suspended', decidedBy: owner.id });
+    await expectRefusal(await reqAs(commenter, 'GET', path), 404, 'artifact_not_found');
+    await expectRefusal(await reqAs(commenter, 'POST', path, { content: 'Suspended' }), 404, 'artifact_not_found');
   });
 
   it('should execute all verbs with reply section_key inheritance, null unassign, moderation, and NOTIFY events', async () => {
@@ -154,14 +208,25 @@ describe('artifact-comments namespace API (C2c, real PostgreSQL)', () => {
     const listBody = (await (await reqAs(viewer, 'GET', `/api/v1/artifacts/${sharedId}/comments?status=open&section_key=a1:keep`)).json()) as { items: Comment[] };
     expect(listBody.items.map((c) => c.id)).toEqual([root.id, r1.id]);
     expect(listBody.items.every((c) => c.target.kind === 'artifact' && c.target.recordType === undefined)).toBe(true);
+    await expectRefusal(await reqAs(viewer, 'GET', `/api/v1/artifacts/${sharedId}/comments?status=resolved`), 400, 'invalid_query');
     const sumBody = (await (await reqAs(viewer, 'GET', `/api/v1/artifacts/${sharedId}/comments/summaries?status=open`)).json()) as { items: CommentThreadSummary[] };
     expect(sumBody.items).toHaveLength(1);
     expect(sumBody.items[0]).toMatchObject({ threadId: root.threadId, contextType: 'artifact', messageCount: 2, status: 'open' });
     expect((await (await reqAs(viewer, 'GET', `/api/v1/artifacts/${sharedId}/comments/threads/${root.threadId}`)).json() as { items: Comment[] }).items).toHaveLength(2);
-    expect((await reqAs(viewer, 'GET', `/api/v1/artifacts/${otherId}/comments/threads/${root.threadId}`)).status).toBe(404);
+    await expectRefusal(await reqAs(viewer, 'GET', `/api/v1/artifacts/${otherId}/comments/threads/${root.threadId}`), 404, 'thread_not_found');
 
     captured = [];
-    expect((await reqAs(commenter, 'POST', `/api/v1/artifacts/${sharedId}/comments/threads/${root.id}/close`)).status).toBe(404);
+    const base = `/api/v1/artifacts/${sharedId}/comments`;
+    const otherBase = `/api/v1/artifacts/${otherId}/comments`;
+    for (const [method, path, body] of [
+      ['POST', base, { content: 'Missing thread', thread_id: MISSING_UUID }],
+      ['POST', otherBase, { content: 'Foreign thread', thread_id: root.threadId }],
+      ['POST', `${base}/threads/${root.id}/close`],
+      ['POST', `${base}/threads/${root.id}/reopen`],
+      ['PATCH', `${base}/threads/${root.id}/assignee`, { assigned_to: null }],
+    ] as const) {
+      await expectRefusal(await reqAs(commenter, method, path, body), 404, 'thread_not_found');
+    }
     const closeRes = await reqAs(commenter, 'POST', `/api/v1/artifacts/${sharedId}/comments/threads/${root.threadId}/close`);
     expect(closeRes.status).toBe(200);
     expect(((await closeRes.json()) as { items: Comment[] }).items.map((c) => c.state)).toEqual(['closed', 'closed']);
@@ -183,12 +248,22 @@ describe('artifact-comments namespace API (C2c, real PostgreSQL)', () => {
     captured = [];
     expect((await reqAs(commenter, 'PATCH', `/api/v1/artifacts/${sharedId}/comments/${root.id}`, { content: 'No' })).status).toBe(403);
     expect((await reqAs(commenter, 'DELETE', `/api/v1/artifacts/${sharedId}/comments/${root.id}`)).status).toBe(403);
-    expect((await reqAs(owner, 'PATCH', `/api/v1/artifacts/${otherId}/comments/${root.id}`, { content: 'Wrong' })).status).toBe(404);
+    for (const [method, body] of [['PATCH', { content: 'Edit reply' }], ['DELETE', undefined]] as const) {
+      await expectRefusal(await reqAs(owner, method, `${base}/${r1.id}`, body), 403, 'comment_forbidden');
+      await expectRefusal(await reqAs(owner, method, `${otherBase}/${r1.id}`, body), 404, 'comment_not_found');
+    }
     const editRes = await reqAs(owner, 'PATCH', `/api/v1/artifacts/${sharedId}/comments/${root.id}`, { content: 'Edited root' });
     expect(((await editRes.json()) as { comment: Comment }).comment.body).toBe('Edited root');
+    const moderateRes = await reqAs(admin, 'PATCH', `${base}/${r1.id}`, { content: 'Moderated reply' });
+    expect(moderateRes.status).toBe(200);
+    expect(((await moderateRes.json()) as { comment: Comment }).comment.body).toBe('Moderated reply');
     const delRes = await reqAs(admin, 'DELETE', `/api/v1/artifacts/${sharedId}/comments/${root.id}`);
     expect(delRes.status).toBe(200);
-    expect(captured.map((e) => e.data)).toEqual([{ action: 'updated', comment_id: root.id }, { action: 'deleted', comment_id: root.id }]);
+    expect(captured.map((e) => e.data)).toEqual([
+      { action: 'updated', comment_id: root.id },
+      { action: 'updated', comment_id: r1.id },
+      { action: 'deleted', comment_id: root.id },
+    ]);
 
     const r2Res = await reqAs(owner, 'POST', `/api/v1/artifacts/${sharedId}/comments`, { content: 'Reply after root delete', thread_id: root.threadId });
     expect(r2Res.status).toBe(201);
