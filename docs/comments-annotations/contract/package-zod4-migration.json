@@ -4,10 +4,11 @@
   "trackItem": "01M5PMR6AG9QDZG9H3N57TB3FS",
   "packageManifest": "packages/comments/package.json",
   "baselineSha256": "821786727350ec56d333b6c8a6199f278c3a72cf1d642c44aaaac25b4f419d08",
-  "migratedSha256": "d1d2447267fba9cfa569c6547102769e7fc212694a171c2003fde5633f65d2a7",
+  "migratedSha256": "0f259d7a036a360c8f6d2c1446896bea211e34e8c11578db579d49665a2be069",
   "changes": {
-    "version": { "from": "0.3.0", "to": "0.3.2" },
-    "dependencies.zod": { "from": "^3.25.76", "to": "^4.6.6" }
+    "version": { "from": "0.3.0", "to": "0.3.3" },
+    "dependencies.zod": { "from": "^3.25.76", "to": "^4.6.6" },
+    "exports./artifact-hono": { "from": null, "to": { "types": "./dist/artifact-hono.d.ts", "import": "./dist/artifact-hono.js" } }
   },
-  "contractImpact": "Package version and dependency closure only; the frozen contract, source modules, exports, conformance corpus and wire/hash rules retain their original pins."
+  "contractImpact": "Package version, dependency closure, and additive ./artifact-hono subpath export only; the frozen contract, source modules, existing exports (. and ./hono), conformance corpus and wire/hash rules retain their original pins."
 }
