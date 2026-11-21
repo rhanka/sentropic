@@ -328,6 +328,31 @@ export const modelProfiles = [
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
   },
+  // Verified 2026-11-21:
+  // - Context window: 1,050,000 tokens (922k max input, 128k max output) per OpenAI
+  //   model docs (https://developers.openai.com/api/docs/models/gpt-6.2-sol); Codex
+  //   CLI 0.171.0 models_cache.json caps Codex sessions at 500,000 (95% effective)
+  //   with max_output_tokens null (Codex backend rejects max_output_tokens, so
+  //   maxOutputTokens stays omitted).
+  // - Supported efforts: low/medium/high/xhigh/max per Codex CLI 0.171.0
+  //   models_cache.json (which also lists `ultra`, outside mesh ReasoningEffort)
+  //   and OpenAI docs (rejects `none` with HTTP 400).
+  // - Remaining capability flags and task hints inherited from gpt-6.1-sol (unverified).
+  {
+    providerId: 'openai',
+    modelId: 'gpt-6.2-sol',
+    label: 'GPT-6.2 Sol',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: {
+      ...modelCapabilities('openai', 'advanced', { vision: true }),
+      contextWindowTokens: 1_050_000,
+      reasoning: {
+        ...modelCapabilities('openai', 'advanced', { vision: true }).reasoning,
+        supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      },
+    },
+  },
   {
     providerId: 'openai',
     modelId: 'gpt-6-astra',
