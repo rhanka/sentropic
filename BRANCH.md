@@ -20,6 +20,13 @@ embeds and Sentropic bucket media), without changing any policy by default.
   - `packages/artifacts/CHANGELOG.md`
   - `package-lock.json`
   - `api/package-lock.json`
+  - `packages/artifacts/src/mcp-core.ts`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `api/tests/api/app-mcp-installed.test.ts`
+  - `api/tests/api/app-mcp-registry.test.ts`
+  - `api/tests/api/mcp-workspaces-list-dispatch.test.ts`
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/**`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -49,4 +56,7 @@ embeds and Sentropic bucket media), without changing any policy by default.
   - [x] Lot gate: `make typecheck-artifacts` + `make test-artifacts SCOPE=tests/content-` on `ENV=test-artifacts-csp` (7 files, 90 tests).
 - [ ] **Lot 2 — Merge & close**
   - [x] Bump `packages/artifacts` 0.2.28 -> 0.2.29 (CHANGELOG, root and api lockfiles) for `enforce-package-bump`.
+  - [x] `ARTIFACTS_PROVIDER_VERSION` follows 0.2.29; APP-P1 manifest digest repinned through the version field only
+    (`83dd0a2c6381363e87e53e556a462dd3e65256dd488fca277d313d9843259ef7`, computed with the API test construction,
+    which reproduces the pinned 0.2.28 digest `b7d6d576...`), as the 0.2.25 and 0.2.23 releases did.
   - [ ] Push branch, open PR, verify CI green.
