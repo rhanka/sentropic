@@ -54,8 +54,8 @@ Add GPT-6.2 Sol (`gpt-6.2-sol`) to `@sentropic/llm-mesh` (catalog, providers, ro
   - [x] Add `openai:gpt-6.2-sol` to `scripts/llm-model-equivalences/council.source.json` and run `make refresh-llm-model-equivalences ENV=test-sol62`.
 
 - [ ] **Lot 2 — Version bump (0.38.5), CHANGELOG, specs, lockfiles & fixtures**
-  - [ ] Bump `packages/llm-mesh/package.json` to `0.38.5`, update `packages/llm-mesh/CHANGELOG.md`, `tests/decision-public-surface.test.ts`, and routing specs.
-  - [ ] Regenerate root `package-lock.json` via `make lock-root ENV=test-sol62`.
+  - [x] Bump `packages/llm-mesh/package.json` to `0.38.5`, update `packages/llm-mesh/CHANGELOG.md`, `tests/decision-public-surface.test.ts`, and routing specs.
+  - [x] Regenerate root `package-lock.json` via `make lock-root ENV=test-sol62`.
   - [ ] Update `packages/cluster-mesh/tests/fixtures/train.ts` and `selected/package.json` + regenerate `selected/package-lock.json` via Make targets.
 
 - [ ] **Lot 3 — Final validation & PR**
