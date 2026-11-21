@@ -9,13 +9,17 @@ embeds and Sentropic bucket media), without changing any policy by default.
 - Scope limited to `packages/artifacts/src/content/headers.ts` and its tests.
 - Make-only workflow, no direct Docker commands; `ENV` last, `ENV=test-*` only.
 - Branch development in `tmp/artifacts-csp-external-sources`.
-- No version bump or publication in this branch (release is a separate act).
+- Version bump 0.2.29 required by `enforce-package-bump`; publication stays a separate CI act.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `packages/artifacts/src/content/headers.ts`
   - `packages/artifacts/tests/content-external-sources.test.ts`
+  - `packages/artifacts/package.json`
+  - `packages/artifacts/CHANGELOG.md`
+  - `package-lock.json`
+  - `api/package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -23,9 +27,11 @@ embeds and Sentropic bucket media), without changing any policy by default.
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `packages/artifacts/package.json` (version bump, not in this branch)
+  - none
 
 ## Feedback Loop
+- `acknowledge`: version bump 0.2.29 (package, CHANGELOG, root and api lockfiles) required by
+  `enforce-package-bump`; CI publishes it on merge. Rollback: revert the bump commit.
 - `attention`: consumer is rhanka/radar-immobilier branch
   `feat/artifacts-quota-exceptions`, which composes the same directives
   host-side until a qualified provider release carries this option.
@@ -42,4 +48,5 @@ embeds and Sentropic bucket media), without changing any policy by default.
   - [x] Unit tests: unchanged defaults, directive-only changes, non-HTML untouched, refusals.
   - [x] Lot gate: `make typecheck-artifacts` + `make test-artifacts SCOPE=tests/content-` on `ENV=test-artifacts-csp` (7 files, 90 tests).
 - [ ] **Lot 2 — Merge & close**
+  - [x] Bump `packages/artifacts` 0.2.28 -> 0.2.29 (CHANGELOG, root and api lockfiles) for `enforce-package-bump`.
   - [ ] Push branch, open PR, verify CI green.
