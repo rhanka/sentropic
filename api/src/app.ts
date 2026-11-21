@@ -39,6 +39,7 @@ import {
 } from './routes/namespaces/workflows-cutover';
 import { productCommentsModule } from './routes/namespaces/comments';
 import { COMMENTS_PATHS } from './routes/namespaces/comments-cutover';
+import { createArtifactCommentsNamespaceRouter } from './routes/namespaces/artifact-comments';
 import { productConnectorsModule } from './routes/namespaces/connectors';
 import {
   CONNECTOR_ADMIN_PATHS,
@@ -493,6 +494,7 @@ app.route('/api/v1', createClusterMeshPlugin({
   namespaces: MOUNTED_NAMESPACE_REGISTRY.map(({ module }) => module),
   mounts: PRODUCT_CLUSTER_MESH_MOUNTS,
 }));
+app.route('/api/v1', createArtifactCommentsNamespaceRouter());
 const perAppRegistrationLoader = (slug: string) =>
   loadAppRegistrationsFromEnv().loaded.find((registration) => registration.appSlug === slug);
 app.route('/', createPerAppMcpRouter(perAppRegistrationLoader));
