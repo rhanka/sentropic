@@ -583,13 +583,25 @@ export const createCanonicalTargetResolver = (
   return (model) => candidates(model)[0];
 };
 
+/** Models kept in catalog for historical/native metadata but retired from routing. */
+export const RETIRED_ROUTING_MODEL_IDS: ReadonlySet<string> = new Set([
+  'claude-fable-5-1',
+]);
+
 /** Identity-only aliases preserve provider/model; effort suffixes are controls. */
 export const normalizeExactModelId = (model: string): string => {
+  if (RETIRED_ROUTING_MODEL_IDS.has(model)) return model;
   if (model === VIBE_CLI_WIRE_MODEL) return 'mistral-medium-3.5';
   if (modelProfiles.some((profile) => profile.modelId === model)) return model;
+  if (!STANDARD_ROUTE_DEFINITIONS.some((definition) => definition.requestedId === model)) {
+    return model;
+  }
   const base = model.replace(/-(?:low|medium|high|xhigh|max)$/, '');
-  return modelProfiles.some((profile) => profile.modelId === base)
-    || STANDARD_ROUTE_DEFINITIONS.some((definition) => definition.requestedId === base) ? base : model;
+  return (!RETIRED_ROUTING_MODEL_IDS.has(base)
+    && modelProfiles.some((profile) => profile.modelId === base))
+    || STANDARD_ROUTE_DEFINITIONS.some((definition) => definition.requestedId === base)
+    ? base
+    : model;
 };
 export const isExactModelTarget = (requested: string, target: Pick<TargetMapping, 'providerId' | 'model'>): boolean => {
   const model = normalizeExactModelId(requested);
