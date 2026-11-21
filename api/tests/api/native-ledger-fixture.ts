@@ -10,7 +10,7 @@ import { db } from '../../src/db/client';
 import { createBudgetAdmission, createRouteSettlement, insertModelPricing, recordLlmUsage } from '../../src/services/llm-metering';
 import { createAnthropicNativePort } from '../../src/services/llm-runtime/anthropic-native';
 export { nativeFrame, nativeStart };
-export const MODELS = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1'];
+export const MODELS = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-2'];
 export const mixed = { input_tokens: 100, cache_read_input_tokens: 10_000, cache_creation_input_tokens: 250,
   cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 50 }, output_tokens: 20 };
 type Options = { model?: string; served?: string; usage?: Record<string, unknown>; body?: Record<string, unknown>;

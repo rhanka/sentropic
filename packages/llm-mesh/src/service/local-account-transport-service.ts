@@ -21,6 +21,7 @@ import { ClaudeRefreshPreparationError } from '../enrollment/claude-code.js';
 import { MusePostRotationError } from '../enrollment/muse-code.js';
 import type { ConfigResolver, KeyringAdapter } from './facade.js';
 import { listModelProfilesByProvider } from '../catalog.js';
+import { RETIRED_ROUTING_MODEL_IDS } from '../routing-targets.js';
 import type { LlmMesh } from '../mesh.js';
 import {
   isDeviceFlowSeatAccount,
@@ -184,7 +185,8 @@ const supportedModelIdsForAccount = (
     return VERIFIED_CLOUD_CODE_MODEL_IDS;
   }
   return listModelProfilesByProvider(account.targetProviderId as ProviderId)
-    .map((profile) => profile.modelId);
+    .map((profile) => profile.modelId)
+    .filter((modelId) => !RETIRED_ROUTING_MODEL_IDS.has(modelId));
 };
 
 // Poll-completing enrollment providers map to the serving transport pair

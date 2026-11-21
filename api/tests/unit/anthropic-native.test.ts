@@ -60,7 +60,7 @@ const hostHarness = async (options: { model?: string; chunks?: Uint8Array[]; bod
   return { ...h, record, recordOutcome, close, finalize, runtime, dependencies };
 };
 const consume = async (stream: AsyncIterable<unknown>) => { for await (const _chunk of stream) { /* Drain opaque bytes. */ } };
-const nativeModels = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1'];
+const nativeModels = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-2'];
 const amount = (modelId: string, usage: Parameters<typeof usageCost>[1]) => usageCost({ id: 'quoted-price',
   providerId: 'anthropic', modelId, input: 1_000_000n, output: 2_000_000n, reasoning: 0n,
   image: 0n, toolCall: 0n, minCharge: 0n }, usage, { providerId: 'anthropic', modelId, pricingMatch: 'exact' });

@@ -110,11 +110,11 @@ describe('add-model scaffold', () => {
   it('should recognize the new repository models as already scaffolded', () => {
     const root = resolve(process.cwd(), '../..');
     for (const [model, base] of [
-      ['claude-fable-5-1', 'claude-fable-5'],
       ['claude-fable-5-2', 'claude-fable-5'],
       ['gpt-6-astra', 'gpt-5.6-sol'],
       ['gpt-6-sol', 'gpt-5.6-sol'],
       ['gpt-6.1-sol', 'gpt-6-sol'],
+      ['gpt-6.2-sol', 'gpt-6.1-sol'],
       ['gpt-6-luna', 'gpt-5.6-luna'],
       ['gemini-3.8-flash', 'gemini-3.7-flash'],
       ['gemini-4-carbon', 'gemini-4-argon'],

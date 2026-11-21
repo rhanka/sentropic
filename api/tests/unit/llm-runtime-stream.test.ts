@@ -1477,6 +1477,7 @@ addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-astra', 'GPT-6 Ast
 addTransportEquivalentFixture('openai', 'gpt-6-astra', 'gpt-6.2-astra', 'GPT-6.2-Astra');
 addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-sol', 'GPT-6 Sol');
 addTransportEquivalentFixture('openai', 'gpt-6-sol', 'gpt-6.1-sol', 'GPT-6.1 Sol');
+addTransportEquivalentFixture('openai', 'gpt-6.1-sol', 'gpt-6.2-sol', 'GPT-6.2 Sol');
 addTransportEquivalentFixture('openai', 'gpt-5.6-terra', 'gpt-6.1-terra', 'GPT-6.1 Terra');
 addTransportEquivalentFixture('openai', 'gpt-5.6-luna', 'gpt-6-luna', 'GPT-6 Luna');
 addTransportEquivalentFixture('gemini', 'gemini-3.7-flash', 'gemini-3.8-flash', 'Gemini 3.8 Flash');
