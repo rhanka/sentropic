@@ -1,0 +1,44 @@
+# Feature: Reject AI attribution trailers in commits and PR text
+
+## Objective
+
+Enforce the owner’s attribution policy on pull requests after the November 21 history cleanup.
+
+## Scope / Guardrails
+
+- Work in `tmp/no-coauthor-trailer` on `ci/no-coauthor-trailer`.
+- Use Make targets with `ENV` last. Scope verification uses `test-trailer-ci` with ports 9202, 5402, and 1302.
+- The repository owner controls whether the new check is required in branch protection.
+
+## Branch Scope Boundaries (MANDATORY)
+
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `.github/workflows/no-coauthor-trailer.yml`
+- **Exception process**:
+  - See `BR9000-EX1` in the Feedback Loop.
+
+## Feedback Loop
+
+- [x] BR9000-EX1 — Add `.github/workflows/no-coauthor-trailer.yml` to enforce the owner’s policy using the shared scanner pinned to a full commit SHA. Impact: the standalone check runs on PR opening, updates, edits, and reopening, with read access to contents and pull requests. Rollback: revert the workflow addition.
+
+## Orchestration Mode (AI-selected)
+
+- [x] **Mono-branch** — One workflow change in a dedicated worktree.
+
+## Plan / Todo (lot-based)
+
+- [x] **Lot 0 — Confirm scope**
+  - [x] Verify the branch with the harness and document the workflow exception.
+- [x] **Lot 1 — Add the PR check**
+  - [x] Pin the shared scanner from `rhanka/h2a` and enable PR text checks.
+  - [x] Use a separate workflow because `ci-gate` aggregates jobs in `ci.yml`.
+- [ ] **Lot 2 — Validate**
+  - [x] Run `make scope-check` with the dedicated environment and ports before committing.
+  - [ ] Verify the attribution scanner and `ci-gate` on the exact PR head.

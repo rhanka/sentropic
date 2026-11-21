@@ -1,0 +1,15 @@
+name: no co-author trailer
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  scan:
+    uses: rhanka/h2a/.github/workflows/no-coauthor-trailer.yml@a445b13974a71ab03cbe27b1e33e41326fb23685
+    with:
+      check-pr-body: true
