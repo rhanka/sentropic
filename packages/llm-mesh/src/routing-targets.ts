@@ -85,6 +85,9 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'gpt-6.1-sol': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.1-sol',
   },
+  'gpt-6.2-sol': {
+    providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.2-sol',
+  },
   'gpt-6-astra': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra',
   },
@@ -350,12 +353,12 @@ export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
   { requestedId: 'claude-fable-5-2-max', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-carbon', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-2-medium', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-carbon', effort: 'medium', codexEffort: 'medium', cloudEffort: 'medium' },
   { requestedId: 'claude-fable-5-2-low', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-carbon', effort: 'low', codexEffort: 'low', cloudEffort: 'low' },
-  { requestedId: 'claude-opus-5-5', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', codexEffort: 'high', cloudEffort: 'medium' },
-  { requestedId: 'claude-opus-5-5-high', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-opus-5-5-xhigh', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'xhigh' },
-  { requestedId: 'claude-opus-5-5-max', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-neon', effort: 'max', codexEffort: 'max', cloudEffort: 'xhigh' },
-  { requestedId: 'claude-opus-5-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', effort: 'medium', codexEffort: 'high', cloudEffort: 'medium' },
-  { requestedId: 'claude-opus-5-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-4-neon', effort: 'low', codexEffort: 'medium', cloudEffort: 'low' },
+  { requestedId: 'claude-opus-5-5', codexModel: 'gpt-6.2-sol', cloudModel: 'gemini-4-neon', codexEffort: 'high', cloudEffort: 'medium' },
+  { requestedId: 'claude-opus-5-5-high', codexModel: 'gpt-6.2-sol', cloudModel: 'gemini-4-neon', effort: 'high', codexEffort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-5-xhigh', codexModel: 'gpt-6.2-sol', cloudModel: 'gemini-4-neon', effort: 'xhigh', codexEffort: 'max', cloudEffort: 'xhigh' },
+  { requestedId: 'claude-opus-5-5-max', codexModel: 'gpt-6.2-sol', cloudModel: 'gemini-4-neon', effort: 'max', codexEffort: 'max', cloudEffort: 'xhigh' },
+  { requestedId: 'claude-opus-5-5-medium', codexModel: 'gpt-6.2-sol', cloudModel: 'gemini-4-neon', effort: 'medium', codexEffort: 'high', cloudEffort: 'medium' },
+  { requestedId: 'claude-opus-5-5-low', codexModel: 'gpt-6.2-sol', cloudModel: 'gemini-4-neon', effort: 'low', codexEffort: 'medium', cloudEffort: 'low' },
   { requestedId: 'claude-sonnet-5-5', codexModel: 'gpt-6.1-terra', cloudModel: 'gemini-4-hydrogen', codexEffort: 'medium', cloudEffort: 'medium' },
   { requestedId: 'claude-sonnet-5-5-high', codexModel: 'gpt-6.1-terra', cloudModel: 'gemini-4-hydrogen', effort: 'high', codexEffort: 'high', cloudEffort: 'high' },
   { requestedId: 'claude-sonnet-5-5-xhigh', codexModel: 'gpt-6.1-terra', cloudModel: 'gemini-4-hydrogen', effort: 'xhigh', codexEffort: 'xhigh', cloudEffort: 'xhigh' },
