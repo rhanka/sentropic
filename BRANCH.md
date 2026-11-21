@@ -46,12 +46,12 @@ Mount the `@sentropic/comments/artifact-hono` router as its own namespace in `ap
   - [x] Read rules, `SPEC-r6.md`, and `ds-review-kit-r6-carbon.md`.
   - [x] Create isolated worktree `tmp/comments-c2c` on `feat/comments-c2c-api-mount` from `origin/main`.
   - [x] Define environment `ENV=test-c2c` and ports `API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296`.
-- [ ] **Lot 1 — Artifact-comments namespace & API tests (test-first)**
+- [x] **Lot 1 — Artifact-comments namespace & API tests (test-first)**
   - [x] Add `@sentropic/comments/artifact-hono` vitest alias in `api/vitest.config.ts`.
   - [x] Write `api/tests/api/artifact-comments.test.ts` covering every verb, refusal, reply inheritance, unassign, and `PgNotifyCommentEventSink` emission.
-  - [ ] Implement `api/src/routes/namespaces/artifact-comments-ports.ts` and `api/src/routes/namespaces/artifact-comments.ts`.
-  - [ ] Mount the artifact-comments namespace router in `api/src/app.ts`.
-  - [ ] Run `make typecheck-api`, `make test-api-endpoints SCOPE=tests/api/artifact-comments.test.ts`, `make lint-api`, `make scope-check` with `ENV=test-c2c`.
+  - [x] Implement `api/src/routes/namespaces/artifact-comments-ports.ts` and `api/src/routes/namespaces/artifact-comments.ts`.
+  - [x] Mount the artifact-comments namespace router in `api/src/app.ts`.
+  - [x] Run `make typecheck-api`, `make test-api-endpoints SCOPE=tests/api/artifact-comments.test.ts`, `make lint-api`, `make scope-check` with `ENV=test-c2c`.
 - [ ] **Lot 2 — Final validation & PR**
   - [ ] Tear down test stack (`make down-volumes` / `make down` + `make clean` for `ENV=test-c2c`).
   - [ ] Remove `BRANCH.md` before final push and open PR.
