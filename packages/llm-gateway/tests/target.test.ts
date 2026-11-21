@@ -408,12 +408,12 @@ describe('describeTargetRoutes (discovery)', () => {
       model: 'zai-glm-5-3', effort,
     });
     const cases: ReadonlyArray<readonly [string, unknown[]]> = [
-      ['claude-opus-5-5', [Wonder('high'), Codex('gpt-6.1-sol', 'high'), Neon('medium'), Glm('high')]],
-      ['claude-opus-5-5-high', [Wonder('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Neon('high'), Glm('max')]],
-      ['claude-opus-5-5-xhigh', [WonderFull('max'), Codex('gpt-6.1-sol', 'max'), Neon('xhigh'), Glm('max')]],
-      ['claude-opus-5-5-max', [WonderFull('max'), Codex('gpt-6.2-astra', 'max'), Neon('xhigh'), Glm('max')]],
-      ['claude-opus-5-5-medium', [Wonder('high'), Codex('gpt-6.1-sol', 'high'), Neon('medium'), Glm('high')]],
-      ['claude-opus-5-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Neon('low'), Glm('high')]],
+      ['claude-opus-5-5', [Wonder('high'), Codex('gpt-6.2-sol', 'high'), Neon('medium'), Glm('high')]],
+      ['claude-opus-5-5-high', [Wonder('xhigh'), Codex('gpt-6.2-sol', 'xhigh'), Neon('high'), Glm('max')]],
+      ['claude-opus-5-5-xhigh', [WonderFull('max'), Codex('gpt-6.2-sol', 'max'), Neon('xhigh'), Glm('max')]],
+      ['claude-opus-5-5-max', [WonderFull('max'), Codex('gpt-6.2-sol', 'max'), Neon('xhigh'), Glm('max')]],
+      ['claude-opus-5-5-medium', [Wonder('high'), Codex('gpt-6.2-sol', 'high'), Neon('medium'), Glm('high')]],
+      ['claude-opus-5-5-low', [Muse('medium'), Codex('gpt-6.2-sol', 'medium'), Neon('low'), Glm('high')]],
       ['claude-sonnet-5-5', [Muse('high'), Codex('gpt-6.1-terra', 'medium'), Hydrogen('medium'), Glm('high')]],
       ['claude-sonnet-5-5-high', [Muse('xhigh'), Codex('gpt-6.1-terra', 'high'), Hydrogen('high'), Glm('max')]],
       ['claude-sonnet-5-5-xhigh', [Wonder('max'), Codex('gpt-6.1-terra', 'xhigh'), Hydrogen('xhigh'), Glm('max')]],
