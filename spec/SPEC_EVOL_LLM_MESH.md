@@ -843,8 +843,9 @@ Normative detail lives in `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16.3/§
   Fable 5.2 rows use Carbon (base/medium -> medium, high/xhigh/max -> high,
   low -> low); Sonnet 5.5 and Haiku 5.5 rows use Hydrogen (base/medium ->
   medium, high -> high, xhigh/max -> xhigh, low -> low). Argon stays in the
-  catalog and keeps the Fable 5.1 rows. Codex slots: Opus 5.5 on GPT-6.1 Sol
-  at +1 effort rung (max on GPT-6.2-Astra max); Fable 5.2 on GPT-6.2-Astra,
+  catalog and keeps the Fable 5.1 rows. Codex slots: Opus 5.5 on GPT-6.2 Sol
+  (preserving the existing per-row efforts: base/medium -> high, high -> xhigh,
+  xhigh/max -> max, low -> medium); Fable 5.2 on GPT-6.2-Astra,
   Sonnet 5.5 on GPT-6.1 Terra, and Haiku 5.5 on GPT-6 Luna at base -> medium
   and 1:1 effort up to max, with explicit codexEffort and cloudEffort on every
   row.
