@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL_EQUIVALENCE_COUNCIL } from '../src/equivalence-council.js';
+import { mappingContentSha256, validateLaunchRoutingContract } from '../src/launch-routing-contract.js';
 import { InMemoryRoutePlanner } from '../src/route-planner.js';
 import { quoteRoute } from '../src/route-quote.js';
 import { resolveRequestedTargets, selectRouteCandidates } from '../src/route-selection.js';
 import { DEFAULT_ROUTE_POLICY } from '../src/routing-policy.js';
 import { FakeRouteDirectory, routingSubject } from './fixtures/route-planner.js';
+
+const retiredFableAliases = [
+  'claude-fable-5-1',
+  'claude-fable-5-1-low',
+  'claude-fable-5-1-medium',
+  'claude-fable-5-1-high',
+  'claude-fable-5-1-xhigh',
+  'claude-fable-5-1-max',
+];
 
 const accounts = [
   {
@@ -131,14 +141,6 @@ describe('route candidate selection', () => {
   });
 
   it('rejects all six removed claude-fable-5-1 aliases as unknown-model across target resolution, selection, planning, and quoting even with an Anthropic seat enrolled', async () => {
-    const removedAliases = [
-      'claude-fable-5-1',
-      'claude-fable-5-1-low',
-      'claude-fable-5-1-medium',
-      'claude-fable-5-1-high',
-      'claude-fable-5-1-xhigh',
-      'claude-fable-5-1-max',
-    ] as const;
     const poolWithAnthropic = [
       {
         accountRef: 'claude-internal', diagnosticAccountRef: 'claude-redacted',
@@ -159,7 +161,7 @@ describe('route candidate selection', () => {
       directory: new FakeRouteDirectory(poolWithAnthropic),
     });
 
-    for (const removed of removedAliases) {
+    for (const removed of retiredFableAliases) {
       for (const allowEquivalentModels of [false, true]) {
         expect(resolveRequestedTargets({ requestedModel: removed }, allowEquivalentModels), `${removed} (${allowEquivalentModels})`)
           .toEqual({ kind: 'unknown-model', requestedModel: removed });
@@ -179,6 +181,51 @@ describe('route candidate selection', () => {
         now: new Date('2026-11-21T00:00:00Z'),
       }), removed).toThrowError(expect.objectContaining({ code: 'unknown-model' }));
     }
+  });
+
+  it.each(retiredFableAliases)('rejects %s even when an explicit contract maps it to an authorized Codex seat', async (requestedModel) => {
+    const subject = routingSubject();
+    const codexAccount = {
+      accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-09-03T00:00:00Z',
+      readiness: 'ready' as const, revision: 'r1',
+    };
+    const targets = Object.fromEntries(retiredFableAliases.map((alias) => [
+      alias, [{ providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra' }],
+    ]));
+    const launchRoutingContract = validateLaunchRoutingContract({
+      version: 1, revision: 'r1', ownerScopeRef: subject.ownerScopeRef,
+      exactModels: retiredFableAliases, authorizedAccountRefs: [codexAccount.accountRef],
+      rotateAccounts: false, effortPolicy: { mode: 'preserve' },
+      mapping: { id: 'retired-aliases', revision: 'r1', targets, contentSha256: mappingContentSha256(targets) },
+    });
+    const request = { requestedModel, launchRoutingContract };
+    const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory([codexAccount]) });
+
+    expect.soft(resolveRequestedTargets(request)).toEqual({ kind: 'unknown-model', requestedModel });
+    expect.soft(() => quoteRoute({
+      ...request, ceiling: { inputTokens: 100, outputTokens: 100 },
+      now: new Date('2026-11-21T00:00:00Z'),
+    })).toThrowError(expect.objectContaining({ code: 'unknown-model' }));
+    await expect.soft(planner.plan(subject, request)).rejects.toMatchObject({ code: 'unknown-model' });
+  });
+
+  it('should route a catalog effort suffix when a matching Claude Code seat is ready', () => {
+    const candidates = candidatesOf(selectRouteCandidates({
+      request: { requestedModel: 'claude-opus-4-8-high' },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: [{
+        accountRef: 'claude-internal', diagnosticAccountRef: 'claude-redacted',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-opus-4-8'], enrollmentCompletedAt: '2026-09-03T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      }],
+    }));
+    expect(candidates[0]?.target).toMatchObject({
+      providerId: 'anthropic', transportProviderId: 'claude-code', modelId: 'claude-opus-4-8', reason: 'alias',
+    });
   });
 
   it('uses a non-Anthropic fallback when faithful Anthropic account is unavailable', () => {
