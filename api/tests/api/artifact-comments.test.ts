@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { createPostgresArtifactStore } from '@sentropic/artifacts/adapters/postgres';
 import type { Comment, CommentThreadSummary } from '@sentropic/comments';
 import { ARTIFACT_COMMENT_SECTION_KEY_MAX_LENGTH, PROVENANCE_TOOL_CALL_ID_REQUIRED_CODE, SECTION_KEY_TOO_LONG_CODE } from '@sentropic/comments/artifact-hono';
 import { eq } from 'drizzle-orm';
@@ -54,26 +53,30 @@ describe('artifact-comments namespace API (C2c, real PostgreSQL)', () => {
       return client as never;
     });
 
-    [owner, commenter, viewer, admin, outsider] = await Promise.all([
-      createAuthenticatedUser('editor'), createAuthenticatedUser('guest'),
-      createAuthenticatedUser('guest'), createAuthenticatedUser('editor'), createAuthenticatedUser('editor'),
-    ]);
-    await Promise.all([
-      putCmWorkspaceMember(owner.workspaceId!, commenter.id, 'commenter'),
-      putCmWorkspaceMember(owner.workspaceId!, viewer.id, 'viewer'),
-      putCmWorkspaceMember(owner.workspaceId!, admin.id, 'admin'),
-    ]);
+    owner = await createAuthenticatedUser('editor');
+    commenter = await createAuthenticatedUser('guest');
+    viewer = await createAuthenticatedUser('guest');
+    admin = await createAuthenticatedUser('editor');
+    outsider = await createAuthenticatedUser('editor');
+    await putCmWorkspaceMember(owner.workspaceId!, commenter.id, 'commenter');
+    await putCmWorkspaceMember(owner.workspaceId!, viewer.id, 'viewer');
+    await putCmWorkspaceMember(owner.workspaceId!, admin.id, 'admin');
     storageScopeId = randomUUID();
     await pool.query(`INSERT INTO control.artifact_host_kv (storage_scope_id, key, value) VALUES ('app-artifact-scopes/v1', $1, $2)`, [JSON.stringify([PLATFORM_TENANT_ID, owner.workspaceId!]), storageScopeId]);
     await pool.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ($1, $2)`, [storageScopeId, PLATFORM_TENANT_ID]);
     [sharedId, privateId, otherId, deletedId] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
-    for (const [id, name] of [[sharedId, 'shared'], [privateId, 'private'], [otherId, 'other'], [deletedId, 'deleted']] as const) {
-      await pool.query(`INSERT INTO artifacts.artifacts (id, storage_scope_id, owner_id, binding_name) VALUES ($1, $2, $3, $4)`, [id, storageScopeId, owner.id, name]);
+    for (const [id, name, mode, pub, state] of [
+      [sharedId, 'shared', 'platform', true, 'active'],
+      [privateId, 'private', 'restricted', false, 'active'],
+      [otherId, 'other', 'platform', true, 'active'],
+      [deletedId, 'deleted', 'restricted', false, 'deleted'],
+    ] as const) {
+      await pool.query(
+        `INSERT INTO artifacts.artifacts (id, storage_scope_id, owner_id, binding_name, access_mode, is_public, lifecycle_state)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [id, storageScopeId, owner.id, name, mode, pub, state],
+      );
     }
-    const store = createPostgresArtifactStore(pool);
-    await store.putArtifactAcl(sharedId, { ownerId: owner.id, storageScopeId, isPublic: true, withdrawn: false, accessMode: 'platform', grants: [] });
-    await store.putArtifactAcl(otherId, { ownerId: owner.id, storageScopeId, isPublic: true, withdrawn: false, accessMode: 'platform', grants: [] });
-    await store.setArtifactState(deletedId, 'deleted');
     await db.insert(comments).values({
       id: createId(), workspaceId: owner.workspaceId!, contextType: 'initiative', contextId: sharedId,
       sectionKey: 'a1:non-artifact', createdBy: owner.id, assignedTo: null, status: 'open',
@@ -89,8 +92,6 @@ describe('artifact-comments namespace API (C2c, real PostgreSQL)', () => {
       await cmDeleteWorkspaceMembers(owner.workspaceId);
     }
     if (storageScopeId) {
-      await pool.query(`DELETE FROM artifacts.artifacts WHERE storage_scope_id = $1`, [storageScopeId]);
-      await pool.query(`DELETE FROM artifacts.storage_scopes WHERE id = $1`, [storageScopeId]);
       await pool.query(`DELETE FROM control.artifact_host_kv WHERE storage_scope_id = 'app-artifact-scopes/v1' AND value = $1`, [storageScopeId]);
     }
     await cleanupAuthData();
