@@ -59,4 +59,6 @@ embeds and Sentropic bucket media), without changing any policy by default.
   - [x] `ARTIFACTS_PROVIDER_VERSION` follows 0.2.29; APP-P1 manifest digest repinned through the version field only
     (`83dd0a2c6381363e87e53e556a462dd3e65256dd488fca277d313d9843259ef7`, computed with the API test construction,
     which reproduces the pinned 0.2.28 digest `b7d6d576...`), as the 0.2.25 and 0.2.23 releases did.
+  - [x] cluster-mesh selected fixture follows 0.2.29 (deterministic `make pack-artifacts` sha256 `94f3013d...`,
+    sha512 repin, mirrored in `artifacts-tuple.spec.ts`); `make probe-artifacts-packed-consumer` PASS.
   - [ ] Push branch, open PR, verify CI green.
