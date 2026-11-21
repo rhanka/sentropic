@@ -447,7 +447,7 @@ describe('opaque route planner', () => {
         {
           accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
           targetProviderId: 'openai', transportProviderId: 'codex',
-          supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+          supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
           readiness: 'ready', revision: 'r1',
         },
         {
@@ -461,7 +461,7 @@ describe('opaque route planner', () => {
       const first = await planner.plan(routingSubject(), {
         requestedModel: 'claude-opus-5-5',
       });
-      expect(first.diagnostics[0]).toMatchObject({ actualModelId: 'gpt-6.1-sol' });
+      expect(first.diagnostics[0]).toMatchObject({ actualModelId: 'gpt-6.2-sol' });
       await (await planner.prepareAttempt(
         routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
       )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope });
@@ -492,7 +492,7 @@ describe('opaque route planner', () => {
     const directory = new FakeRouteDirectory([{
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
       targetProviderId: 'openai', transportProviderId: 'codex',
-      supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
       readiness: 'ready', revision: 'r1',
     }]);
     const planner = new InMemoryRoutePlanner({ profiles: selectedTableProfiles(),
@@ -509,7 +509,7 @@ describe('opaque route planner', () => {
       requestedModel: 'claude-opus-5-5',
     });
     expect(degraded.diagnostics[0]).toMatchObject({
-      actualProviderId: 'openai', actualModelId: 'gpt-6.1-sol', reason: 'alias',
+      actualProviderId: 'openai', actualModelId: 'gpt-6.2-sol', reason: 'alias',
     });
 
     now += 300_000;
@@ -517,7 +517,7 @@ describe('opaque route planner', () => {
       requestedModel: 'claude-opus-5-5',
     });
     expect(retried.diagnostics[0]).toMatchObject({
-      actualProviderId: 'openai', actualModelId: 'gpt-6.1-sol', reason: 'alias',
+      actualProviderId: 'openai', actualModelId: 'gpt-6.2-sol', reason: 'alias',
     });
   });
 
@@ -529,7 +529,7 @@ describe('opaque route planner', () => {
     const directory = new FakeRouteDirectory([{
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
       targetProviderId: 'openai', transportProviderId: 'codex',
-      supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
       readiness: 'ready', revision: 'r1',
     }]);
     const planner = new InMemoryRoutePlanner({ profiles: selectedTableProfiles(),
@@ -557,7 +557,7 @@ describe('opaque route planner', () => {
       requestedModel: 'claude-opus-5-5',
     });
     expect(retried.diagnostics[0]).toMatchObject({
-      actualProviderId: 'openai', actualModelId: 'gpt-6.1-sol', reason: 'alias',
+      actualProviderId: 'openai', actualModelId: 'gpt-6.2-sol', reason: 'alias',
     });
   });
 
@@ -566,13 +566,13 @@ describe('opaque route planner', () => {
       {
         accountRef: 'codex-old', diagnosticAccountRef: 'acct_old',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
       {
         accountRef: 'codex-new', diagnosticAccountRef: 'acct_new',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
     ]);
@@ -599,13 +599,13 @@ describe('opaque route planner', () => {
       {
         accountRef: 'codex-old', diagnosticAccountRef: 'acct_old',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
       {
         accountRef: 'codex-new', diagnosticAccountRef: 'acct_new',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       },
     ]);
@@ -1016,7 +1016,7 @@ describe('opaque route planner', () => {
       directory: new FakeRouteDirectory([{
         accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       }]),
     });
@@ -1029,7 +1029,7 @@ describe('opaque route planner', () => {
       diagnosticAccountRef: 'codex-redacted',
       requestedModel: 'claude-opus-5-5',
       actualProviderId: 'openai',
-      actualModelId: 'gpt-6.1-sol',
+      actualModelId: 'gpt-6.2-sol',
       actualTransportProviderId: 'codex',
       reason: 'alias',
       cacheContinuityRisk: false,

@@ -266,7 +266,7 @@ it.each([false, true])('persists absent physical input/total as null, never fina
     expect(Number(row.cost_micro_usd)).toBe(140); expect(row.attempts[0].estimated).toBe(true);
   });
 });
-it.each([['claude-fable-5-1', 'claude-opus-5'], ['claude-opus-5', 'claude-fable-5-1']]
+it.each([['claude-fable-5-2', 'claude-opus-5'], ['claude-opus-5', 'claude-fable-5-2']]
   .flatMap(([model, served]) => [false, true].map(stream => [model!, served!, stream] as const)))
 ('retains selected pinned price and one joined mismatch audit (%s → %s, stream=%s)', async (model, served, stream) => {
   await withNativeLedger({ model, served, allowanceInput: 10350, allowanceOutput: 20,
@@ -287,7 +287,7 @@ it.each([['claude-fable-5-1', 'claude-opus-5'], ['claude-opus-5', 'claude-fable-
   });
 });
 it('uses unequal selected pinned rates instead of the independently priced served model', async () => {
-  await withNativeLedger({ model: 'claude-fable-5-1', served: 'claude-opus-5', allowanceInput: 10350,
+  await withNativeLedger({ model: 'claude-fable-5-2', served: 'claude-opus-5', allowanceInput: 10350,
     allowanceOutput: 20, inputRate: 3000000, outputRate: 7000000,
     otherPrice: { model: 'claude-opus-5', input: 99000000, output: 99000000 } }, async h => {
     await h.run(); expect(Number((await h.financial()).cost_micro_usd)).toBe(31190);
