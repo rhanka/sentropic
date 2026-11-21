@@ -74,7 +74,7 @@ Implement Sub-Lot L1.3d of the gateway relay chain: a dedicated SCA-gated host a
   - [x] Gate: `make test-api-unit SCOPE=secretlint-scanner-adapter ENV=test-gw-l13d`, `make typecheck-api ENV=test-gw-l13d`, `make lint-api ENV=test-gw-l13d`.
 
 - [ ] **Lot 3 — Standalone host adapter (`apps/llm-gateway/src/secretlint-scanner-adapter.ts` + `app.ts`)**
-  - [ ] Red: write failing `apps/llm-gateway/tests/secretlint-scanner-adapter.test.ts` covering 28-rule preset-recommend synthetic fixtures, `yaml.safeLoad` (`JSON_SCHEMA`) + `!!js/function` rejection, input size bounds, no secret echo, disjoint `dedupeRanges` merge with `KUBECONFIG_PATTERNS`, and 3-wire `P` refusal (`400`, zero dispatch) through `createHostApp`.
+  - [x] Red: write failing `apps/llm-gateway/tests/secretlint-scanner-adapter.test.ts` covering 28-rule preset-recommend synthetic fixtures, `yaml.safeLoad` (`JSON_SCHEMA`) + `!!js/function` rejection, input size bounds, no secret echo, disjoint `dedupeRanges` merge with `KUBECONFIG_PATTERNS`, and 3-wire `P` refusal (`400`, zero dispatch) through `createHostApp`.
   - [ ] Green: implement `apps/llm-gateway/src/secretlint-scanner-adapter.ts` (zero runtime import from `@sentropic/llm-gateway`) and wire optional `guard`/`secretlint` in `apps/llm-gateway/src/app.ts` (byte-identical default).
   - [ ] Gate: `make test-llm-gateway-process ENV=test-gw-l13d`, `make typecheck-llm-gateway-process ENV=test-gw-l13d`, `make lint-llm-gateway-process ENV=test-gw-l13d`.
 
