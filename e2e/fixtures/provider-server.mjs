@@ -323,7 +323,7 @@ export function journeyResponse(body) {
 
 const observationPaths = ['/v1/chat/completions', '/v1/responses', '/v1/messages', '/search', '/extract'];
 const observationModels = ['gpt-5.4-nano', 'gpt-5.5', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna',
-  'gpt-6-sol', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-luna', 'gpt-4.1-nano', 'o1', 'o3', 'o3-mini', 'o4-mini',
+  'gpt-6-sol', 'gpt-6.1-sol', 'gpt-6.2-sol', 'gpt-6.1-terra', 'gpt-6-astra', 'gpt-6.2-astra', 'gpt-6-luna', 'gpt-4.1-nano', 'o1', 'o3', 'o3-mini', 'o4-mini',
   'mistral-small-2603', 'mistral-medium-3.5', 'mistral-large-4', 'magistral-medium-2509', 'zai-glm-5-3',
   'gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-4-argon', 'gemini-4-carbon', 'gemini-3.5-flash', 'gemini-3.1-flash-lite',
   'claude-sonnet-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-fable-5', 'claude-fable-5-1', 'claude-fable-5-2'];

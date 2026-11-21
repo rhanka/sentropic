@@ -114,6 +114,7 @@ describe('add-model scaffold', () => {
       ['gpt-6-astra', 'gpt-5.6-sol'],
       ['gpt-6-sol', 'gpt-5.6-sol'],
       ['gpt-6.1-sol', 'gpt-6-sol'],
+      ['gpt-6.2-sol', 'gpt-6.1-sol'],
       ['gpt-6-luna', 'gpt-5.6-luna'],
       ['gemini-3.8-flash', 'gemini-3.7-flash'],
       ['gemini-4-carbon', 'gemini-4-argon'],
