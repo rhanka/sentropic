@@ -53,12 +53,12 @@ Add GPT-6.2 Sol (`gpt-6.2-sol`) to `@sentropic/llm-mesh` (catalog, providers, ro
   - [x] Map all 6 `claude-opus-5-5` aliases to `codexModel: 'gpt-6.2-sol'` in `packages/llm-mesh/src/routing-targets.ts`.
   - [x] Add `openai:gpt-6.2-sol` to `scripts/llm-model-equivalences/council.source.json` and run `make refresh-llm-model-equivalences ENV=test-sol62`.
 
-- [ ] **Lot 2 — Version bump (0.38.5), CHANGELOG, specs, lockfiles & fixtures**
+- [x] **Lot 2 — Version bump (0.38.5), CHANGELOG, specs, lockfiles & fixtures**
   - [x] Bump `packages/llm-mesh/package.json` to `0.38.5`, update `packages/llm-mesh/CHANGELOG.md`, `tests/decision-public-surface.test.ts`, and routing specs.
   - [x] Regenerate root `package-lock.json` via `make lock-root ENV=test-sol62`.
-  - [ ] Update `packages/cluster-mesh/tests/fixtures/train.ts` and `selected/package.json` + regenerate `selected/package-lock.json` via Make targets.
+  - [x] Update `packages/cluster-mesh/tests/fixtures/train.ts` and `selected/package.json` + regenerate `selected/package-lock.json` via Make targets.
 
-- [ ] **Lot 3 — Final validation & PR**
-  - [ ] Run `make build-llm-mesh`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make test-llm-mesh`, `make check-llm-model-equivalences`, `make test-llm-gateway`, `make audit-llm-routing-package-versions`, `make scope-check` (all `ENV=test-sol62`).
+- [x] **Lot 3 — Final validation & PR**
+  - [x] Run `make build-llm-mesh`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make test-llm-mesh`, `make check-llm-model-equivalences`, `make test-llm-gateway`, `make audit-llm-routing-package-versions`, `make scope-check` (all `ENV=test-sol62`).
   - [ ] Remove `BRANCH.md` before final push and open PR.
   - [ ] Wait for CI green on exact head.
