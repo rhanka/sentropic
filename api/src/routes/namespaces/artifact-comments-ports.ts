@@ -20,6 +20,7 @@ import {
   type ArtifactCommentAuthzPorts,
 } from '../../services/comments/artifact-comment-authz';
 import { commentEventSink, commentStore } from '../../services/comments/instance';
+import { PgNotifyCommentEventSink } from '../../services/comments/pg-notify-comment-event-sink';
 import {
   CmTenantResolutionError,
   findCmWorkspaceMember,
@@ -48,7 +49,7 @@ export const createProductArtifactCommentsRouterOptions = (
 
   return {
     store: commentStore,
-    events: commentEventSink,
+    events: deps.pool ? new PgNotifyCommentEventSink({ pool: deps.pool }) : commentEventSink,
     nonHumanClientIds: [H2A_CLI_CLIENT_ID],
     authz: {
       resolvePrincipal(context) {
