@@ -64,9 +64,6 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'claude-fable-5': {
     providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-fable-5',
   },
-  'claude-fable-5-1': {
-    providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-fable-5-1',
-  },
   'claude-fable-5-2': {
     providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-fable-5-2',
   },
@@ -156,12 +153,11 @@ export interface StandardRouteDefinition {
  * Analysis Intelligence Index, source artificialanalysis.ai/leaderboards/models,
  * read 2026-10-15: Claude Opus 5.5 max 58 / xhigh 56 / high 54 / medium 51 /
  * low 42; Sonnet 5.5 max 56 / xhigh 52 / high 47 / medium 41 / low 36;
- * Fable 5.1 max 53 / xhigh 53 / high 51 / medium 49 / low 47;
  * Gemini 4 Argon high 53 (low/medium unpublished); Gemini 3.8 Flash high 41 /
  * medium 40 / low 33; Muse Wonder Full max 56; Muse Wonder max 52;
  * Muse Spark 1.3 max 48 / xhigh 45). Wonder Full serves the top Opus 5.5 and
- * Sonnet 5.5 rows, Wonder serves the mid Opus 5.5 rows, Sonnet 5.5 xhigh and
- * the Fable 5.1 family, Spark keeps the remaining Sonnet 5.5 and low rows.
+ * Sonnet 5.5 rows, Wonder serves the mid Opus 5.5 rows and Sonnet 5.5 xhigh,
+ * Spark keeps the remaining Sonnet 5.5 and low rows.
  * No `-contributor` Wonder variants exist in the catalog, so the Wonder slots
  * use the plain ids while the BR75-Q3 contributor tier default still applies
  * to Spark via MUSE_CONTRIBUTOR_MODEL. Aliases absent from this map keep the
@@ -177,12 +173,6 @@ export const MUSE_ROUTE_MODEL: Readonly<Record<string, string>> = {
   'claude-sonnet-5-5-max': 'muse-wonder-full-1.0',
   'claude-haiku-5-5-xhigh': 'muse-wonder-1.0',
   'claude-haiku-5-5-max': 'muse-wonder-full-1.0',
-  'claude-fable-5-1': 'muse-wonder-1.0',
-  'claude-fable-5-1-high': 'muse-wonder-1.0',
-  'claude-fable-5-1-xhigh': 'muse-wonder-1.0',
-  'claude-fable-5-1-max': 'muse-wonder-1.0',
-  'claude-fable-5-1-medium': 'muse-wonder-1.0',
-  'claude-fable-5-1-low': 'muse-wonder-1.0',
   // Owner mapping 2026-11-10: Fable 5.2 requests are served by Gemini 4
   // Carbon. No `-contributor` Carbon variant exists in the catalog, so the
   // mapped base/high/xhigh aliases carry no muse candidate (the profile
@@ -205,12 +195,6 @@ export const MUSE_ROUTE_EFFORT: Readonly<Record<string, string>> = {
   'claude-fable-5-max': 'max',
   'claude-fable-5-medium': 'high',
   'claude-fable-5-low': 'medium',
-  'claude-fable-5-1': 'max',
-  'claude-fable-5-1-high': 'max',
-  'claude-fable-5-1-xhigh': 'max',
-  'claude-fable-5-1-max': 'max',
-  'claude-fable-5-1-medium': 'high',
-  'claude-fable-5-1-low': 'medium',
   'claude-fable-5-2': 'max',
   'claude-fable-5-2-high': 'max',
   'claude-fable-5-2-xhigh': 'max',
@@ -264,7 +248,7 @@ export const DEFAULT_MUSE_POSITION: MusePosition = 'after-claude';
 /**
  * GLM 5.3 supplemental fallback effort per launch alias (owner decisions
  * 2026-10-07 and 2026-10-08, Artificial Analysis Intelligence Index:
- * GLM-5.3 (Max) = 45 = Claude Opus 5 (Medium)). The Claude 5.5 and Fable 5.1
+ * GLM-5.3 (Max) = 45 = Claude Opus 5 (Medium)). The Claude 5.5 and Fable 5.2
  * families mirror the requested effort at +1 rung on the native low/high/max
  * ladder (base/low/medium -> high; high/xhigh/max -> max); the Opus 5 and
  * Opus 4.8 families keep the measured GLM-5.3 (Max) configuration.
@@ -279,7 +263,7 @@ export const GLM_ROUTE_EFFORT: Readonly<Record<string, string>> = {
   'claude-opus-4-8': 'max',
   'claude-opus-4-8-xhigh': 'max',
   'claude-opus-4-8-max': 'max',
-  // Claude 5.5 and Fable 5.1 families (owner decision 2026-10-08): GLM 5.3
+  // Claude 5.5 and Fable 5.2 families (owner decision 2026-10-08): GLM 5.3
   // mirrors the requested effort at +1 rung on its native low/high/max
   // ladder (base/low/medium -> high; high/xhigh/max -> max).
   'claude-opus-5-5': 'high',
@@ -294,12 +278,6 @@ export const GLM_ROUTE_EFFORT: Readonly<Record<string, string>> = {
   'claude-sonnet-5-5-high': 'max',
   'claude-sonnet-5-5-xhigh': 'max',
   'claude-sonnet-5-5-max': 'max',
-  'claude-fable-5-1': 'high',
-  'claude-fable-5-1-low': 'high',
-  'claude-fable-5-1-medium': 'high',
-  'claude-fable-5-1-high': 'max',
-  'claude-fable-5-1-xhigh': 'max',
-  'claude-fable-5-1-max': 'max',
   'claude-fable-5-2': 'high',
   'claude-fable-5-2-low': 'high',
   'claude-fable-5-2-medium': 'high',
@@ -341,12 +319,6 @@ export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
   { requestedId: 'claude-fable-5-max', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'max', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-medium', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'medium', codexEffort: 'high', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-low', codexModel: 'gpt-6.1-sol', cloudModel: 'gemini-3.8-flash', effort: 'low', codexEffort: 'medium', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'high', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'xhigh', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'max', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-medium', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'medium', cloudEffort: 'high' },
-  { requestedId: 'claude-fable-5-1-low', codexModel: 'gpt-6-astra', cloudModel: 'gemini-4-argon', effort: 'low', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-2', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-carbon', codexEffort: 'medium', cloudEffort: 'medium' },
   { requestedId: 'claude-fable-5-2-high', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-carbon', effort: 'high', codexEffort: 'high', cloudEffort: 'high' },
   { requestedId: 'claude-fable-5-2-xhigh', codexModel: 'gpt-6.2-astra', cloudModel: 'gemini-4-carbon', effort: 'xhigh', codexEffort: 'xhigh', cloudEffort: 'high' },

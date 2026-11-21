@@ -170,11 +170,11 @@ alias (after Muse, Codex and Cloud Code). Owner decisions 2026-10-07 and
 
 - The Opus 5 and Opus 4.8 families keep the measured GLM-5.3 (Max)
   configuration: effort `max` on every rung.
-- The Claude 5.5 families (opus and sonnet, base/low/medium/high/xhigh/max)
-  and the Fable 5.1 family mirror the requested effort at +1 rung on the
+- The Claude 5.5 families (opus, sonnet, haiku, base/low/medium/high/xhigh/max)
+  and the Fable 5.2 family mirror the requested effort at +1 rung on the
   GLM native low/high/max ladder: base/low/medium map to `high`,
   high/xhigh/max map to `max`.
-- Sonnet 5 and Fable 5 (non-5.1) aliases stay out of the GLM map.
+- Sonnet 5 and Fable 5 (non-5.2) aliases stay out of the GLM map.
 - Aliases absent from the map get no GLM candidate; no alias loses its
   Anthropic-first route.
 
@@ -345,11 +345,13 @@ GPT-6.2 Sol on every Opus 5.5 row (keeping the existing per-row efforts:
 base/medium -> high, high -> xhigh, xhigh/max -> max, low -> medium);
 GPT-6.2-Astra on Fable 5.2, GPT-6.1 Terra on Sonnet 5.5, and GPT-6 Luna on
 Haiku 5.5 (owner mapping 2026-11-18: base rows use medium, then 1:1 up to
-max, with explicit codexEffort on every row); and GPT-6 Astra with inherited
-effort on Fable 5.1 (unchanged).
+max, with explicit codexEffort on every row). The six `claude-fable-5-1`
+aliases are removed; callers must use `claude-fable-5-2` (`gpt-6-astra` and
+`gemini-4-argon` remain in the catalog with no launch-alias rows targeting
+them).
 The Cloud Code slot serves Gemini 4 Neon on Opus 5.5, Gemini 4 Carbon on
-Fable 5.2, Gemini 4 Hydrogen on Sonnet 5.5 and Haiku 5.5, and Gemini 4 Argon
-on Fable 5.1, with explicit cloudEffort on every row (Neon and Hydrogen use
+Fable 5.2, and Gemini 4 Hydrogen on Sonnet 5.5 and Haiku 5.5, with explicit
+cloudEffort on every row (Neon and Hydrogen use
 xhigh for xhigh and max; Carbon uses high for high, xhigh and max);
 the Muse candidate follows the same +1 rule.
 
@@ -1208,7 +1210,7 @@ thin data plane).
   `createCanonicalTargetCandidatesResolver` via
   `CanonicalTargetResolverOptions`; per-position mappings are memoized.
 - Muse insertion efforts (`MUSE_ROUTE_EFFORT`, BR75-D1): `claude-fable-5[*]`
-  and `claude-fable-5-1[*]` (bare, `-high`, `-xhigh`, `-max`) → `max`;
+  and `claude-fable-5-2[*]` (bare, `-high`, `-xhigh`, `-max`) → `max`;
   `claude-opus-5-high` / `-xhigh` → `xhigh`; `claude-opus-5-max` → `max`;
   `claude-opus-4-8-xhigh` → `xhigh`; `claude-opus-4-8-max` → `max`.
 - The muse candidate is always the contributor model
