@@ -98,7 +98,7 @@ describe('L1.3d standalone host secretlint adapter', () => {
       writeFileSync(patternsFilePath, 'patterns:\n  - id: org-token\n    pattern: "stp_[A-Za-z0-9]{32}"\n');
 
       // Default host (no secretlint/guard) preserves payload byte-identically.
-      const defaultSpy = vi.fn(async () => ({
+      const defaultSpy = vi.fn(async (_s: unknown, _w: unknown, _t: unknown, _req: unknown) => ({
         id: 'r0', providerId: 'openai' as const, modelId: 'gpt-fixture',
         message: { role: 'assistant' as const, content: 'ok' }, text: 'ok',
         toolCalls: [], finishReason: 'stop' as const, usage: { inputTokens: 1, outputTokens: 1 },
@@ -123,7 +123,7 @@ describe('L1.3d standalone host secretlint adapter', () => {
           ok: { model: 'gpt-fixture', instructions: 'clean', input: [{ role: 'user', content: `tok ${FAKE_ORG_TOKEN}` }] } },
       ] as const;
       for (const tc of cases) {
-        const generateSpy = vi.fn(async () => ({
+        const generateSpy = vi.fn(async (_s: unknown, _w: unknown, _t: unknown, _req: unknown) => ({
           id: 'r1', providerId: 'openai' as const, modelId: 'gpt-fixture',
           message: { role: 'assistant' as const, content: 'ok' }, text: 'ok',
           toolCalls: [], finishReason: 'stop' as const, usage: { inputTokens: 1, outputTokens: 1 },
