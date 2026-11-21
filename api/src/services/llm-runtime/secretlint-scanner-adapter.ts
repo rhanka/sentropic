@@ -1,5 +1,4 @@
 import { extname } from 'node:path';
-import { lintSource } from '@secretlint/core';
 import { creator as presetRecommend } from '@secretlint/secretlint-rule-preset-recommend';
 import type {
   SecretLintCoreConfig, SecretLintRuleContext, SecretLintRuleCreator, SecretLintRulePresetContext,
@@ -132,6 +131,7 @@ export class SecretlintScannerAdapter implements SecretScannerPort {
   async scanAsync(text: string, options?: SecretScanOptions): Promise<readonly SecretMatch[]> {
     if (!text) return [];
     const bounded = this.boundText(text);
+    const { lintSource } = await import('@secretlint/core');
     const result = await lintSource({
       source: { filePath: options?.filePath ?? this.defaultFilePath, content: bounded, contentType: 'text' },
       options: { config: this.lintConfig, maskSecrets: true, noPhysicFilePath: true },
