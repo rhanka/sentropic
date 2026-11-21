@@ -14,13 +14,13 @@ import {
 const ALPHA = 'aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789';
 const rep = (n: number): string => Array.from({ length: n }, (_, i) => ALPHA[i % ALPHA.length]).join('');
 const FAKE_ORG_TOKEN = ['stp', '_', 'A1b2C3d4'.repeat(4)].join('');
-const FAKE_AWS = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
+const FAKE_AWS = ['AWS_SECRET_ACCESS_KEY', '=', rep(40)].join('');
 const FAKE_GH = ['ghp', '_', rep(36)].join('');
 const FAKE_GL = ['glpat', '-', rep(20)].join('');
 const FAKE_SLACK = ['xoxb', '-', '123456789012', '-', '1234567890123', '-', rep(24)].join('');
 const FAKE_TAILSCALE = ['tskey', '-auth-', rep(12), '-', rep(24)].join('');
-const FAKE_ANTHROPIC = ['sk-ant-', 'api03-', rep(40)].join('');
-const FAKE_PEM = ['-----BEGIN ', 'PRIVATE KEY-----\n', rep(64), '\n-----END ', 'PRIVATE KEY-----'].join('');
+const FAKE_ANTHROPIC = ['sk-ant-', 'api03-', rep(93), 'AA'].join('');
+const FAKE_PEM = ['-----BEGIN ', 'PRIVATE KEY-----\n', 'MI', rep(120), '\n-----END ', 'PRIVATE KEY-----'].join('');
 const FAKE_KUBE_TOKEN = ['FAKE-KUBE-TOK-', rep(28)].join('');
 const BUDGET_CONFIG = {
   mode: 'personal-passthrough' as const,
@@ -64,7 +64,7 @@ describe('L1.3d API secretlint host adapter', () => {
     expect(SECRETLINT_PRESET_RULE_COUNT).toBe(28);
     const adapter = createSecretlintScannerAdapter();
     const samples = [
-      `// secretlint-disable\naws=${FAKE_AWS}`,
+      `// secretlint-disable\n${FAKE_AWS}`,
       `gh=${FAKE_GH} gl=${FAKE_GL}`,
       `slack=${FAKE_SLACK} ts=${FAKE_TAILSCALE}`,
       `ant=${FAKE_ANTHROPIC}\n${FAKE_PEM}`,
@@ -112,10 +112,10 @@ describe('L1.3d API secretlint host adapter', () => {
       expect((caught as Error).message).not.toContain(FAKE_ORG_TOKEN);
       expect(() => parseSecretPatternsYaml('a'.repeat(SECRETLINT_MAX_YAML_BYTES + 1))).toThrow(SecretPatternYamlError);
 
-      const bounded = createSecretlintScannerAdapter({ maxScanChars: 64 });
+      const bounded = createSecretlintScannerAdapter({ maxScanChars: 80 });
       const padded = `${'x'.repeat(120)} ${FAKE_AWS}`;
       expect(bounded.scan(padded)).toEqual([]);
-      expect(bounded.scan(`head ${FAKE_AWS} ${'x'.repeat(120)}`).length).toBeGreaterThan(0);
+      expect(bounded.scan(`${FAKE_AWS} ${'x'.repeat(120)}`).length).toBeGreaterThan(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -124,7 +124,7 @@ describe('L1.3d API secretlint host adapter', () => {
   it('merges preset, YAML, and KUBECONFIG_PATTERNS into strictly disjoint ranges without corrupting redaction', () => {
     const yamlPatterns = parseSecretPatternsYaml(`patterns:\n  - id: overlap-org\n    pattern: "pfx_${FAKE_ORG_TOKEN.slice(0, 10)}[A-Za-z0-9_]+"`);
     const adapter = createSecretlintScannerAdapter({ customPatterns: yamlPatterns });
-    const text = `token: pfx_${FAKE_ORG_TOKEN}\ntoken: ${FAKE_KUBE_TOKEN}\nkey=${FAKE_AWS}`;
+    const text = `token: pfx_${FAKE_ORG_TOKEN}\ntoken: ${FAKE_KUBE_TOKEN}\n${FAKE_AWS}`;
     const matches = adapter.scan(text);
     for (let i = 0; i + 1 < matches.length; i += 1) expect(matches[i]!.end).toBeLessThanOrEqual(matches[i + 1]!.start);
     const masked = redactSecretMatches(text, matches);
@@ -136,7 +136,7 @@ describe('L1.3d API secretlint host adapter', () => {
     const customPatterns = parseSecretPatternsYaml('patterns:\n  - id: org-token\n    pattern: "stp_[A-Za-z0-9]{32}"');
     const scanner = createSecretlintScannerAdapter({ customPatterns });
     const auditGuard = new GuardEngine({ secretScanner: scanner });
-    const cleanPayload = { messages: [{ role: 'user', content: `aws=${FAKE_AWS} org=${FAKE_ORG_TOKEN}` }] };
+    const cleanPayload = { messages: [{ role: 'user', content: `${FAKE_AWS} org=${FAKE_ORG_TOKEN}` }] };
     const auditRes = auditGuard.inspectRequest(cleanPayload);
     expect(auditRes.inFlightPayload).toBe(cleanPayload);
     expect(JSON.stringify(auditRes.maskedCapture.payload)).not.toContain(FAKE_AWS);

@@ -68,10 +68,10 @@ Implement Sub-Lot L1.3d of the gateway relay chain: a dedicated SCA-gated host a
   - [x] Verify exact lockfile pins in `package-lock.json` and zero modification to root `package.json` and `packages/**`.
   - [x] Run `make test-security-sca-gate ENV=test-gw-l13d` and `make test-security-sca ENV=test-gw-l13d`.
 
-- [ ] **Lot 2 — API host adapter (`api/src/services/llm-runtime/secretlint-scanner-adapter.ts` + `gw.ts`)**
+- [x] **Lot 2 — API host adapter (`api/src/services/llm-runtime/secretlint-scanner-adapter.ts` + `gw.ts`)**
   - [x] Red: write failing `api/tests/unit/secretlint-scanner-adapter.test.ts` covering 28-rule preset-recommend synthetic fixtures, `yaml.safeLoad` (`JSON_SCHEMA`) + `!!js/function` rejection, input size bounds, no secret echo in messages/errors, disjoint `dedupeRanges` merge with `KUBECONFIG_PATTERNS`, and 3-wire `P` refusal (`400`, zero dispatch).
-  - [ ] Green: implement `api/src/services/llm-runtime/secretlint-scanner-adapter.ts` and wire optional `guard`/`secretlint` in `api/src/routes/namespaces/gw.ts` (byte-identical default).
-  - [ ] Gate: `make test-api-unit SCOPE=secretlint-scanner-adapter ENV=test-gw-l13d`, `make typecheck-api ENV=test-gw-l13d`, `make lint-api ENV=test-gw-l13d`.
+  - [x] Green: implement `api/src/services/llm-runtime/secretlint-scanner-adapter.ts` and wire optional `guard`/`secretlint` in `api/src/routes/namespaces/gw.ts` (byte-identical default).
+  - [x] Gate: `make test-api-unit SCOPE=secretlint-scanner-adapter ENV=test-gw-l13d`, `make typecheck-api ENV=test-gw-l13d`, `make lint-api ENV=test-gw-l13d`.
 
 - [ ] **Lot 3 — Standalone host adapter (`apps/llm-gateway/src/secretlint-scanner-adapter.ts` + `app.ts`)**
   - [ ] Red: write failing `apps/llm-gateway/tests/secretlint-scanner-adapter.test.ts` covering 28-rule preset-recommend synthetic fixtures, `yaml.safeLoad` (`JSON_SCHEMA`) + `!!js/function` rejection, input size bounds, no secret echo, disjoint `dedupeRanges` merge with `KUBECONFIG_PATTERNS`, and 3-wire `P` refusal (`400`, zero dispatch) through `createHostApp`.
