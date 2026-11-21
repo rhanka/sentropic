@@ -9,7 +9,7 @@ import type {
   AccountDirectoryPort, EligibleAccountDescriptor, RoutePlan, RouteQuote, RouteQuoteInput,
 } from '../src/routing-contracts.js';
 import { InMemoryRoutePolicyProfiles, RoutePolicyError, DEFAULT_ROUTE_POLICY } from '../src/routing-policy.js';
-import { CANONICAL_TARGET_ROUTE_MAPPINGS } from '../src/routing-targets.js';
+import { CANONICAL_TARGET_ROUTE_MAPPINGS, RETIRED_ROUTING_MODEL_IDS } from '../src/routing-targets.js';
 import { FakeRouteDirectory, routingSubject } from './fixtures/route-planner.js';
 
 const NOW = new Date('2026-09-25T12:00:00Z');
@@ -110,7 +110,7 @@ const broadAccounts = (): EligibleAccountDescriptor[] => allProviders.flatMap((p
 const requestedModels = [...new Set([
   ...Object.keys(CANONICAL_TARGET_ROUTE_MAPPINGS),
   ...modelProfiles.map((profile) => profile.modelId as string),
-])].sort();
+])].filter((modelId) => !RETIRED_ROUTING_MODEL_IDS.has(modelId)).sort();
 
 const quoted = (quote: RouteQuote, target: {
   actualProviderId: string; actualModelId: string; actualTransportProviderId: string;

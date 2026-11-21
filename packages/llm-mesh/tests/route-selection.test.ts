@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL_EQUIVALENCE_COUNCIL } from '../src/equivalence-council.js';
-import { selectRouteCandidates } from '../src/route-selection.js';
+import { InMemoryRoutePlanner } from '../src/route-planner.js';
+import { quoteRoute } from '../src/route-quote.js';
+import { resolveRequestedTargets, selectRouteCandidates } from '../src/route-selection.js';
 import { DEFAULT_ROUTE_POLICY } from '../src/routing-policy.js';
+import { FakeRouteDirectory, routingSubject } from './fixtures/route-planner.js';
 
 const accounts = [
   {
@@ -123,7 +126,58 @@ describe('route candidate selection', () => {
         council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
         accounts,
       });
-      expect(removedSelection.kind, removed).toBe('no-eligible-account');
+      expect(removedSelection.kind, removed).toBe('unknown-model');
+    }
+  });
+
+  it('rejects all six removed claude-fable-5-1 aliases as unknown-model across target resolution, selection, planning, and quoting even with an Anthropic seat enrolled', async () => {
+    const removedAliases = [
+      'claude-fable-5-1',
+      'claude-fable-5-1-low',
+      'claude-fable-5-1-medium',
+      'claude-fable-5-1-high',
+      'claude-fable-5-1-xhigh',
+      'claude-fable-5-1-max',
+    ] as const;
+    const poolWithAnthropic = [
+      {
+        accountRef: 'claude-internal', diagnosticAccountRef: 'claude-redacted',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-fable-5-1', 'claude-fable-5-2'],
+        enrollmentCompletedAt: '2026-09-03T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+      {
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6.2-astra', 'gpt-6-astra'],
+        enrollmentCompletedAt: '2026-09-03T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+    ];
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory(poolWithAnthropic),
+    });
+
+    for (const removed of removedAliases) {
+      for (const allowEquivalentModels of [false, true]) {
+        expect(resolveRequestedTargets({ requestedModel: removed }, allowEquivalentModels), `${removed} (${allowEquivalentModels})`)
+          .toEqual({ kind: 'unknown-model', requestedModel: removed });
+        const selection = selectRouteCandidates({
+          request: { requestedModel: removed },
+          policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels },
+          council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+          accounts: poolWithAnthropic,
+        });
+        expect(selection.kind, `${removed} (${allowEquivalentModels})`).toBe('unknown-model');
+      }
+      await expect(planner.plan(routingSubject(), { requestedModel: removed }), removed)
+        .rejects.toMatchObject({ code: 'unknown-model' });
+      expect(() => quoteRoute({
+        requestedModel: removed,
+        ceiling: { inputTokens: 100, outputTokens: 100 },
+        now: new Date('2026-11-21T00:00:00Z'),
+      }), removed).toThrowError(expect.objectContaining({ code: 'unknown-model' }));
     }
   });
 

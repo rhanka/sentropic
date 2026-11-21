@@ -7,7 +7,7 @@ import {
   createCanonicalTargetCandidatesResolver,
   resolveTargetCapabilitySource,
   isExactModelTarget,
-  normalizeExactModelId,
+  RETIRED_ROUTING_MODEL_IDS,
 } from './routing-targets.js';
 import { launchTargets, LaunchRoutingContractError } from './launch-routing-contract.js';
 export interface RankedRouteCandidate {
@@ -83,7 +83,9 @@ export const resolveRequestedTargets = (request: RoutePlanInput, allowEquivalent
   const { requestedModel } = request;
   const selected = request.launchRoutingContract ? launchTargets(request.launchRoutingContract, requestedModel) : undefined;
   const canonicalTargets = selected ?? (allowEquivalentModels ? resolveMappedTargets : resolveCanonicalTargets)(requestedModel);
-  const profile = modelProfiles.find((candidate) => candidate.modelId === normalizeExactModelId(requestedModel));
+  const profile = RETIRED_ROUTING_MODEL_IDS.has(requestedModel)
+    ? undefined
+    : modelProfiles.find((candidate) => candidate.modelId === requestedModel);
   if (canonicalTargets.length === 0 && !profile && resolveMappedTargets(requestedModel).length === 0) {
     return { kind: 'unknown-model', requestedModel };
   }
