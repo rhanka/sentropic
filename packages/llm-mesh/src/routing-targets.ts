@@ -588,17 +588,19 @@ export const RETIRED_ROUTING_MODEL_IDS: ReadonlySet<string> = new Set([
   'claude-fable-5-1',
 ]);
 
+const withoutEffortSuffix = (model: string): string =>
+  model.replace(/-(?:low|medium|high|xhigh|max)$/, '');
+
+export const isRetiredRoutingModelId = (model: string): boolean =>
+  RETIRED_ROUTING_MODEL_IDS.has(model) || RETIRED_ROUTING_MODEL_IDS.has(withoutEffortSuffix(model));
+
 /** Identity-only aliases preserve provider/model; effort suffixes are controls. */
 export const normalizeExactModelId = (model: string): string => {
-  if (RETIRED_ROUTING_MODEL_IDS.has(model)) return model;
+  if (isRetiredRoutingModelId(model)) return model;
   if (model === VIBE_CLI_WIRE_MODEL) return 'mistral-medium-3.5';
   if (modelProfiles.some((profile) => profile.modelId === model)) return model;
-  if (!STANDARD_ROUTE_DEFINITIONS.some((definition) => definition.requestedId === model)) {
-    return model;
-  }
-  const base = model.replace(/-(?:low|medium|high|xhigh|max)$/, '');
-  return (!RETIRED_ROUTING_MODEL_IDS.has(base)
-    && modelProfiles.some((profile) => profile.modelId === base))
+  const base = withoutEffortSuffix(model);
+  return modelProfiles.some((profile) => profile.modelId === base)
     || STANDARD_ROUTE_DEFINITIONS.some((definition) => definition.requestedId === base)
     ? base
     : model;

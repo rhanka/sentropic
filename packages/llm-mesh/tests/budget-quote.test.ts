@@ -224,6 +224,17 @@ describe('pure route quote', () => {
       .toThrow(RoutePolicyError);
   });
 
+  it('should cap GPT-6.2 Sol input at 500,000 tokens when quoting Codex', () => {
+    const quote = (inputTokens: number) => quoteRoute(quoteInput('gpt-6.2-sol', {
+      ceiling: { inputTokens, outputTokens: 1 },
+    }));
+    expect(quote(500_000).candidates).toMatchObject([{
+      providerId: 'openai', modelId: 'gpt-6.2-sol', transportProviderId: 'codex',
+      allowance: { inputTokens: 500_000 },
+    }]);
+    expectQuoteError(() => quote(500_001), 'invalid-ceiling');
+  });
+
   it('raises each quote error code', () => {
     expectQuoteError(() => selectedTableQuote(quoteInput('unknown-contract-model')), 'unknown-model');
     expectQuoteError(() => selectedTableQuote(quoteInput('gemini-3.5-flash', {
