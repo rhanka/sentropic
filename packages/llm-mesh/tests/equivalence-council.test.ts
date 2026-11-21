@@ -51,6 +51,7 @@ describe('model equivalence council', () => {
     expect(excluded).toContain('gemini:gemini-4-hydrogen');
     expect(excluded).toContain('gemini:gemini-4-neon');
     expect(excluded).toContain('openai:gpt-6-astra');
+    expect(excluded).toContain('openai:gpt-6.2-sol');
   });
 
   it('fails when a newly added catalog model is not reviewed', () => {

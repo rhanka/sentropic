@@ -281,7 +281,7 @@ describe('pure route quote', () => {
         outputCeilingEnforced: true,
       },
       {
-        providerId: 'openai', modelId: 'gpt-6.1-sol', transportProviderId: 'codex',
+        providerId: 'openai', modelId: 'gpt-6.2-sol', transportProviderId: 'codex',
         reason: 'alias',
         allowance: { inputTokens: 1_000, outputTokens: 100_000 },
         // The codex transport omits the output ceiling: enforced is false.
@@ -318,7 +318,7 @@ describe('pure route quote', () => {
         id: 'sol-fixture', intent: 'general' as const, expiresAt: '2027-01-01T00:00:00Z',
         evidence,
         members: [
-          { providerId: 'openai', modelId: 'gpt-6.1-sol', rank: 1, requiredCapabilities: [] },
+          { providerId: 'openai', modelId: 'gpt-6.2-sol', rank: 1, requiredCapabilities: [] },
           { providerId: 'openai', modelId: 'gpt-6-luna', rank: 2, requiredCapabilities: [] },
         ],
       }],
@@ -335,7 +335,7 @@ describe('pure route quote', () => {
     expect(expanded.candidates.map((candidate) => `${candidate.providerId}/${candidate.modelId}`))
       .toEqual([
         'muse/muse-wonder-1.0',
-        'openai/gpt-6.1-sol',
+        'openai/gpt-6.2-sol',
         'gemini/gemini-4-neon',
         'mistral/zai-glm-5-3',
         'openai/gpt-6-luna',
@@ -744,4 +744,5 @@ const EXPECTED_UNENFORCED = [
   'openai/gpt-6.1-sol@codex',
   'openai/gpt-6.1-terra@codex',
   'openai/gpt-6.2-astra@codex',
+  'openai/gpt-6.2-sol@codex',
 ];

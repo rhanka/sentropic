@@ -395,13 +395,13 @@ describe('route candidate selection', () => {
       {
         accountRef: 'codex-old', diagnosticAccountRef: 'codex_old',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
       {
         accountRef: 'codex-new', diagnosticAccountRef: 'codex_new',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
     ];
@@ -471,7 +471,7 @@ describe('route candidate selection', () => {
           dimensions: { quality: 'equivalent' },
         }],
         members: [
-          { providerId: 'openai', modelId: 'gpt-6.1-sol', rank: 1, requiredCapabilities: [] },
+          { providerId: 'openai', modelId: 'gpt-6.2-sol', rank: 1, requiredCapabilities: [] },
           { providerId: 'openai', modelId: 'gpt-6-luna', rank: 2, requiredCapabilities: [] },
         ],
       }],
@@ -480,7 +480,7 @@ describe('route candidate selection', () => {
       {
         accountRef: 'codex-sol', diagnosticAccountRef: 'sol-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol', 'gpt-6-luna'],
+        supportedModelIds: ['gpt-6.2-sol', 'gpt-6-luna'],
         enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
@@ -490,21 +490,21 @@ describe('route candidate selection', () => {
       policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true }, council, accounts: councilAccounts,
     }));
     expect(expanded.map((candidate) => candidate.target.modelId))
-      .toEqual(['gpt-6.1-sol', 'gpt-6-luna']);
+      .toEqual(['gpt-6.2-sol', 'gpt-6-luna']);
 
     const control = candidatesOf(selectRouteCandidates({
-      request: { requestedModel: 'gpt-6.1-sol' },
+      request: { requestedModel: 'gpt-6.2-sol' },
       policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true }, council, accounts: councilAccounts,
     }));
     expect(control.map((candidate) => candidate.target.modelId))
-      .toEqual(['gpt-6.1-sol', 'gpt-6-luna']);
+      .toEqual(['gpt-6.2-sol', 'gpt-6-luna']);
   });
 
   it('selects any available transport for the standard alias', () => {
     const solReady = {
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
       targetProviderId: 'openai', transportProviderId: 'codex',
-      supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
       readiness: 'ready' as 'ready' | 'disabled' | 'cooldown' | 'reauth-required',
       revision: 'r1',
     };
@@ -563,7 +563,7 @@ describe('route candidate selection', () => {
       {
         accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
       {

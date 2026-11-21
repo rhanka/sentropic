@@ -17,7 +17,7 @@ describe('explicitly selected canonical mapping tables', () => {
   const resolve = createCanonicalTargetResolver({ allowEquivalentModels: true });
   const resolveCandidates = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true });
 
-  it.each(['gpt-6-sol', 'gpt-6.1-sol', 'gpt-6-luna'])('routes %s faithfully through Codex', (model) => {
+  it.each(['gpt-6-sol', 'gpt-6.1-sol', 'gpt-6.2-sol', 'gpt-6-luna'])('routes %s faithfully through Codex', (model) => {
     const target = { providerId: 'openai', transportProviderId: 'codex', model };
     expect(resolve(model)).toEqual(target);
     expect(resolveCandidates(model)).toEqual([target]);
@@ -28,6 +28,23 @@ describe('explicitly selected canonical mapping tables', () => {
     const added = modelProfiles.find((profile) => profile.modelId === 'gpt-6.1-sol');
     expect(base).toBeDefined();
     expect(added).toEqual({ ...base, modelId: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' });
+  });
+
+  it('declares GPT-6.2 Sol with verified context window and supported reasoning efforts', () => {
+    const profile = modelProfiles.find((candidate) => candidate.modelId === 'gpt-6.2-sol');
+    expect(profile).toBeDefined();
+    expect(profile).toMatchObject({
+      providerId: 'openai',
+      modelId: 'gpt-6.2-sol',
+      label: 'GPT-6.2 Sol',
+      reasoningTier: 'advanced',
+      defaultTaskHints: ['chat', 'structured', 'summary'],
+    });
+    expect(profile?.capabilities.contextWindowTokens).toBe(1_050_000);
+    expect(profile?.capabilities.maxOutputTokens).toBeUndefined();
+    expect(profile?.capabilities.reasoning.supportedEfforts).toEqual([
+      'low', 'medium', 'high', 'xhigh', 'max',
+    ]);
   });
 
   it('keeps Terra on 5.6 and excludes unverified GPT-6 Terra from all targets', () => {
@@ -62,15 +79,25 @@ describe('explicitly selected canonical mapping tables', () => {
     ['claude-fable-5-max', 'max'],
     ['claude-fable-5-medium', 'high'],
     ['claude-fable-5-low', 'medium'],
-    ['claude-opus-5-5', 'high'],
-    ['claude-opus-5-5-high', 'xhigh'],
-    ['claude-opus-5-5-xhigh', 'max'],
-    ['claude-opus-5-5-medium', 'high'],
-    ['claude-opus-5-5-low', 'medium'],
   ])('routes %s through GPT-6.1 Sol at +1 effort rung', (alias, effort) => {
     expect(resolveCandidates(alias!).filter(({ transportProviderId }) => transportProviderId === 'codex'))
       .toEqual([{
         providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.1-sol',
+        effort,
+      }]);
+  });
+
+  it.each([
+    ['claude-opus-5-5', 'high'],
+    ['claude-opus-5-5-high', 'xhigh'],
+    ['claude-opus-5-5-xhigh', 'max'],
+    ['claude-opus-5-5-max', 'max'],
+    ['claude-opus-5-5-medium', 'high'],
+    ['claude-opus-5-5-low', 'medium'],
+  ])('routes %s through GPT-6.2 Sol keeping the existing effort mapping', (alias, effort) => {
+    expect(resolveCandidates(alias!).filter(({ transportProviderId }) => transportProviderId === 'codex'))
+      .toEqual([{
+        providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.2-sol',
         effort,
       }]);
   });
@@ -759,14 +786,14 @@ describe('explicitly selected canonical mapping tables', () => {
     );
   });
 
-  it('routes claude-opus-5-5 through Wonder, Sol 6.1 and Neon without a faithful target', () => {
+  it('routes claude-opus-5-5 through Wonder, Sol 6.2 and Neon without a faithful target', () => {
     const muse = {
       providerId: 'muse', transportProviderId: 'muse',
       model: 'muse-wonder-1.0', effort: 'high',
     };
     const codex = {
       providerId: 'openai', transportProviderId: 'codex',
-      model: 'gpt-6.1-sol', effort: 'high',
+      model: 'gpt-6.2-sol', effort: 'high',
     };
     const cloud = {
       providerId: 'gemini', transportProviderId: 'cloud-code',
@@ -787,7 +814,7 @@ describe('explicitly selected canonical mapping tables', () => {
       ]);
   });
 
-  it('routes claude-opus-5-5-max through Astra max with a Wonder Full max candidate', () => {
+  it('routes claude-opus-5-5-max through Sol 6.2 max with a Wonder Full max candidate', () => {
     expect(resolveCandidates('claude-opus-5-5-max')).toEqual([
       {
         providerId: 'muse', transportProviderId: 'muse',
@@ -795,7 +822,7 @@ describe('explicitly selected canonical mapping tables', () => {
       },
       {
         providerId: 'openai', transportProviderId: 'codex',
-        model: 'gpt-6.2-astra', effort: 'max',
+        model: 'gpt-6.2-sol', effort: 'max',
       },
       {
         providerId: 'gemini', transportProviderId: 'cloud-code',
@@ -1000,4 +1027,5 @@ it('defaults to exact identity without enabling the cross-model table', () => {
   const resolve = createCanonicalTargetCandidatesResolver();
   expect(resolve('claude-opus-5-5')).toEqual([]);
   expect(resolve('gpt-6.1-sol')).toEqual([{ providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.1-sol' }]);
+  expect(resolve('gpt-6.2-sol')).toEqual([{ providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.2-sol' }]);
 });
