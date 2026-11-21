@@ -89,7 +89,9 @@ FROM nginx:1.31.5-alpine3.24@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb6422
 # flagged by Trivy on 2.9.0-r0 (FixedVersion 2.10.0-r0 in Alpine v3.24).
 # Security: pin libxslt 1.1.43-r4 — fixes HIGH CVE-2026-87636 / CVE-2026-9947
 # flagged by Trivy on 1.1.43-r3 (FixedVersion 1.1.43-r4 in Alpine v3.24).
-RUN apk update && apk upgrade && apk add --no-cache libexpat=2.10.0-r0 libxslt=1.1.43-r4 && rm -rf /var/cache/apk/*
+# Security: pin libxml2 2.13.9-r3 — fixes HIGH CVE-2026-86144
+# flagged by Trivy on 2.13.9-r2 (FixedVersion 2.13.9-r3 in Alpine v3.24).
+RUN apk update && apk upgrade && apk add --no-cache libexpat=2.10.0-r0 libxslt=1.1.43-r4 libxml2=2.13.9-r3 && rm -rf /var/cache/apk/*
 COPY --from=build /workspace/ui/build /usr/share/nginx/html
 COPY --from=static-assets /assets/ /usr/share/nginx/html/
 COPY ui/nginx/default.conf /etc/nginx/conf.d/default.conf
