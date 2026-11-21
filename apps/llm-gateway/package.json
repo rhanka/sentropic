@@ -12,12 +12,17 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.6",
+    "@secretlint/core": "^13.1.0",
+    "@secretlint/secretlint-rule-preset-recommend": "^13.1.0",
+    "@secretlint/types": "^13.1.0",
     "@sentropic/cluster-mesh": "file:../../packages/cluster-mesh",
     "@sentropic/llm-gateway": "file:../../packages/llm-gateway",
     "@sentropic/llm-mesh": "file:../../packages/llm-mesh",
-    "hono": "^4.13.16"
+    "hono": "^4.13.16",
+    "js-yaml": "^3.15.2"
   },
   "devDependencies": {
+    "@types/js-yaml": "^3.12.10",
     "@types/node": "^20.14.2",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
