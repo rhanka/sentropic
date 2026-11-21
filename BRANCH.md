@@ -13,6 +13,7 @@ Implement Sub-Lot L1.3d of the gateway relay chain: a dedicated SCA-gated host a
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
   - `api/package.json`
   - `apps/llm-gateway/package.json`
   - `package-lock.json`
@@ -68,7 +69,7 @@ Implement Sub-Lot L1.3d of the gateway relay chain: a dedicated SCA-gated host a
   - [x] Run `make test-security-sca-gate ENV=test-gw-l13d` and `make test-security-sca ENV=test-gw-l13d`.
 
 - [ ] **Lot 2 — API host adapter (`api/src/services/llm-runtime/secretlint-scanner-adapter.ts` + `gw.ts`)**
-  - [ ] Red: write failing `api/tests/unit/secretlint-scanner-adapter.test.ts` covering 28-rule preset-recommend synthetic fixtures, `yaml.safeLoad` (`JSON_SCHEMA`) + `!!js/function` rejection, input size bounds, no secret echo in messages/errors, disjoint `dedupeRanges` merge with `KUBECONFIG_PATTERNS`, and 3-wire `P` refusal (`400`, zero dispatch).
+  - [x] Red: write failing `api/tests/unit/secretlint-scanner-adapter.test.ts` covering 28-rule preset-recommend synthetic fixtures, `yaml.safeLoad` (`JSON_SCHEMA`) + `!!js/function` rejection, input size bounds, no secret echo in messages/errors, disjoint `dedupeRanges` merge with `KUBECONFIG_PATTERNS`, and 3-wire `P` refusal (`400`, zero dispatch).
   - [ ] Green: implement `api/src/services/llm-runtime/secretlint-scanner-adapter.ts` and wire optional `guard`/`secretlint` in `api/src/routes/namespaces/gw.ts` (byte-identical default).
   - [ ] Gate: `make test-api-unit SCOPE=secretlint-scanner-adapter ENV=test-gw-l13d`, `make typecheck-api ENV=test-gw-l13d`, `make lint-api ENV=test-gw-l13d`.
 
