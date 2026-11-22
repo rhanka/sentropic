@@ -2,6 +2,7 @@ import type { ClusterMeshNamespace } from '@sentropic/contracts';
 import { Hono } from 'hono';
 import { createClusterMeshPlugin, type ClusterMeshHonoNamespaceModule } from '../hono/plugin.js';
 import type { ClusterMeshRuntime } from '../runtime/generation.js';
+import { createNamespaceRegistry } from '../runtime/namespace-registry.js';
 
 export const REMOTE_MOUNT_MAP_V1 = Object.freeze({
   root: '/',
@@ -52,8 +53,14 @@ export type RemoteTenantAdmissionResult =
   | { readonly ok: false; readonly code: RemoteBindingRefusalCode; readonly reason: string };
 
 export type RemoteUpgradeResult =
-  | { readonly ok: true; readonly path: '/trunk/v1' | '/ws/v1'; readonly meshId: string; readonly tenantId: string }
-  | { readonly ok: false; readonly status: 400 | 401 | 403 | 426; readonly code: string };
+  | {
+      readonly ok: true;
+      readonly path: '/trunk/v1' | '/ws/v1';
+      readonly meshId: string;
+      readonly tenantId: string;
+      readonly response?: Response;
+    }
+  | { readonly ok: false; readonly status: 400 | 401 | 403 | 426 | 429 | 503; readonly code: string };
 
 export interface RemoteUpgradeAdapter {
   handleTrunkUpgrade(request: Request): RemoteUpgradeResult | Promise<RemoteUpgradeResult>;
@@ -193,20 +200,21 @@ export function composeRemoteRoot(options: ComposeRemoteRootOptions) {
     throw new RemoteAssemblyError('invalid_plugin_mount', 'Remote root requires exact mounts: { "/apps": "/" }');
   }
   const namespaces = [options.enrolmentModule, ...(options.extraPluginNamespaces ?? [])];
-  const plugin = createClusterMeshPlugin({ runtime: options.runtime, namespaces, mounts });
+  createNamespaceRegistry(namespaces);
   if (namespaces.length > 1) throw new RemoteAssemblyError('multiple_namespace_mounts_forbidden', 'Remote root allows exactly one /apps namespace module');
+  const plugin = createClusterMeshPlugin({ runtime: options.runtime, namespaces, mounts });
 
   const app = new Hono();
-  app.route('/', plugin);
   app.route(REMOTE_MOUNT_MAP_V1.authBase, options.authRouter);
   app.get(REMOTE_MOUNT_MAP_V1.trunkUpgradePath, async (c) => {
     const decision = await options.upgradeAdapter.handleTrunkUpgrade(c.req.raw);
-    return decision.ok ? c.json(decision, 200) : c.json({ error: decision.code }, decision.status);
+    return decision.ok ? (decision.response ?? c.json(decision, 200)) : c.json({ error: decision.code }, decision.status);
   });
   app.get(REMOTE_MOUNT_MAP_V1.browserUpgradePath, async (c) => {
     const decision = await options.upgradeAdapter.handleBrowserUpgrade(c.req.raw);
-    return decision.ok ? c.json(decision, 200) : c.json({ error: decision.code }, decision.status);
+    return decision.ok ? (decision.response ?? c.json(decision, 200)) : c.json({ error: decision.code }, decision.status);
   });
+  app.route('/', plugin);
   app.route('/', options.uiRouter);
   return { app, binding: validated.binding, mountMap: REMOTE_MOUNT_MAP_V1 };
 }
