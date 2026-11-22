@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL_EQUIVALENCE_COUNCIL } from '../src/equivalence-council.js';
-import { selectRouteCandidates } from '../src/route-selection.js';
+import { mappingContentSha256, validateLaunchRoutingContract } from '../src/launch-routing-contract.js';
+import { InMemoryRoutePlanner } from '../src/route-planner.js';
+import { quoteRoute } from '../src/route-quote.js';
+import { resolveRequestedTargets, selectRouteCandidates } from '../src/route-selection.js';
 import { DEFAULT_ROUTE_POLICY } from '../src/routing-policy.js';
+import { FakeRouteDirectory, routingSubject } from './fixtures/route-planner.js';
+
+const retiredFableAliases = [
+  'claude-fable-5-1',
+  'claude-fable-5-1-low',
+  'claude-fable-5-1-medium',
+  'claude-fable-5-1-high',
+  'claude-fable-5-1-xhigh',
+  'claude-fable-5-1-max',
+];
 
 const accounts = [
   {
@@ -96,23 +109,122 @@ describe('route candidate selection', () => {
     expect(candidates.map((candidate) => candidate.target.transportProviderId)).toEqual(['codex']);
   });
 
-  it('routes Fable 5.1 max to GPT-6 Astra max when no Anthropic account is enrolled', () => {
+  it('routes Fable 5.2 max to GPT-6.2-Astra max when no Anthropic account is enrolled and refuses Fable 5.1', () => {
+    const accounts = [{
+      accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6.2-astra', 'gpt-6-astra'],
+      enrollmentCompletedAt: '2026-09-03T00:00:00Z',
+      readiness: 'ready' as const, revision: 'r1',
+    }];
     const candidates = candidatesOf(selectRouteCandidates({
-      request: { requestedModel: 'claude-fable-5-1-max' },
+      request: { requestedModel: 'claude-fable-5-2-max' },
       policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
-      accounts: [{
-        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
-        targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6-astra'],
-        enrollmentCompletedAt: '2026-09-03T00:00:00Z',
-        readiness: 'ready', revision: 'r1',
-      }],
+      accounts,
     }));
 
     expect(candidates[0]?.target).toMatchObject({
       providerId: 'openai', transportProviderId: 'codex',
-      modelId: 'gpt-6-astra', effort: 'max', reason: 'alias',
+      modelId: 'gpt-6.2-astra', effort: 'max', reason: 'alias',
+    });
+
+    for (const removed of ['claude-fable-5-1', 'claude-fable-5-1-max']) {
+      const removedSelection = selectRouteCandidates({
+        request: { requestedModel: removed },
+        policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true },
+        council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+        accounts,
+      });
+      expect(removedSelection.kind, removed).toBe('unknown-model');
+    }
+  });
+
+  it('rejects all six removed claude-fable-5-1 aliases as unknown-model across target resolution, selection, planning, and quoting even with an Anthropic seat enrolled', async () => {
+    const poolWithAnthropic = [
+      {
+        accountRef: 'claude-internal', diagnosticAccountRef: 'claude-redacted',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-fable-5-1', 'claude-fable-5-2'],
+        enrollmentCompletedAt: '2026-09-03T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+      {
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-6.2-astra', 'gpt-6-astra'],
+        enrollmentCompletedAt: '2026-09-03T00:00:00Z',
+        readiness: 'ready' as const, revision: 'r1',
+      },
+    ];
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory(poolWithAnthropic),
+    });
+
+    for (const removed of retiredFableAliases) {
+      for (const allowEquivalentModels of [false, true]) {
+        expect(resolveRequestedTargets({ requestedModel: removed }, allowEquivalentModels), `${removed} (${allowEquivalentModels})`)
+          .toEqual({ kind: 'unknown-model', requestedModel: removed });
+        const selection = selectRouteCandidates({
+          request: { requestedModel: removed },
+          policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels },
+          council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+          accounts: poolWithAnthropic,
+        });
+        expect(selection.kind, `${removed} (${allowEquivalentModels})`).toBe('unknown-model');
+      }
+      await expect(planner.plan(routingSubject(), { requestedModel: removed }), removed)
+        .rejects.toMatchObject({ code: 'unknown-model' });
+      expect(() => quoteRoute({
+        requestedModel: removed,
+        ceiling: { inputTokens: 100, outputTokens: 100 },
+        now: new Date('2026-11-21T00:00:00Z'),
+      }), removed).toThrowError(expect.objectContaining({ code: 'unknown-model' }));
+    }
+  });
+
+  it.each(retiredFableAliases)('rejects %s even when an explicit contract maps it to an authorized Codex seat', async (requestedModel) => {
+    const subject = routingSubject();
+    const codexAccount = {
+      accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      supportedModelIds: ['gpt-6-astra'], enrollmentCompletedAt: '2026-09-03T00:00:00Z',
+      readiness: 'ready' as const, revision: 'r1',
+    };
+    const targets = Object.fromEntries(retiredFableAliases.map((alias) => [
+      alias, [{ providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra' }],
+    ]));
+    const launchRoutingContract = validateLaunchRoutingContract({
+      version: 1, revision: 'r1', ownerScopeRef: subject.ownerScopeRef,
+      exactModels: retiredFableAliases, authorizedAccountRefs: [codexAccount.accountRef],
+      rotateAccounts: false, effortPolicy: { mode: 'preserve' },
+      mapping: { id: 'retired-aliases', revision: 'r1', targets, contentSha256: mappingContentSha256(targets) },
+    });
+    const request = { requestedModel, launchRoutingContract };
+    const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory([codexAccount]) });
+
+    expect.soft(resolveRequestedTargets(request)).toEqual({ kind: 'unknown-model', requestedModel });
+    expect.soft(() => quoteRoute({
+      ...request, ceiling: { inputTokens: 100, outputTokens: 100 },
+      now: new Date('2026-11-21T00:00:00Z'),
+    })).toThrowError(expect.objectContaining({ code: 'unknown-model' }));
+    await expect.soft(planner.plan(subject, request)).rejects.toMatchObject({ code: 'unknown-model' });
+  });
+
+  it('should route a catalog effort suffix when a matching Claude Code seat is ready', () => {
+    const candidates = candidatesOf(selectRouteCandidates({
+      request: { requestedModel: 'claude-opus-4-8-high' },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: [{
+        accountRef: 'claude-internal', diagnosticAccountRef: 'claude-redacted',
+        targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+        supportedModelIds: ['claude-opus-4-8'], enrollmentCompletedAt: '2026-09-03T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      }],
+    }));
+    expect(candidates[0]?.target).toMatchObject({
+      providerId: 'anthropic', transportProviderId: 'claude-code', modelId: 'claude-opus-4-8', reason: 'alias',
     });
   });
 
@@ -395,13 +507,13 @@ describe('route candidate selection', () => {
       {
         accountRef: 'codex-old', diagnosticAccountRef: 'codex_old',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
       {
         accountRef: 'codex-new', diagnosticAccountRef: 'codex_new',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
     ];
@@ -471,7 +583,7 @@ describe('route candidate selection', () => {
           dimensions: { quality: 'equivalent' },
         }],
         members: [
-          { providerId: 'openai', modelId: 'gpt-6.1-sol', rank: 1, requiredCapabilities: [] },
+          { providerId: 'openai', modelId: 'gpt-6.2-sol', rank: 1, requiredCapabilities: [] },
           { providerId: 'openai', modelId: 'gpt-6-luna', rank: 2, requiredCapabilities: [] },
         ],
       }],
@@ -480,7 +592,7 @@ describe('route candidate selection', () => {
       {
         accountRef: 'codex-sol', diagnosticAccountRef: 'sol-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol', 'gpt-6-luna'],
+        supportedModelIds: ['gpt-6.2-sol', 'gpt-6-luna'],
         enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
@@ -490,21 +602,21 @@ describe('route candidate selection', () => {
       policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true }, council, accounts: councilAccounts,
     }));
     expect(expanded.map((candidate) => candidate.target.modelId))
-      .toEqual(['gpt-6.1-sol', 'gpt-6-luna']);
+      .toEqual(['gpt-6.2-sol', 'gpt-6-luna']);
 
     const control = candidatesOf(selectRouteCandidates({
-      request: { requestedModel: 'gpt-6.1-sol' },
+      request: { requestedModel: 'gpt-6.2-sol' },
       policy: { ...DEFAULT_ROUTE_POLICY, allowEquivalentModels: true }, council, accounts: councilAccounts,
     }));
     expect(control.map((candidate) => candidate.target.modelId))
-      .toEqual(['gpt-6.1-sol', 'gpt-6-luna']);
+      .toEqual(['gpt-6.2-sol', 'gpt-6-luna']);
   });
 
   it('selects any available transport for the standard alias', () => {
     const solReady = {
       accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
       targetProviderId: 'openai', transportProviderId: 'codex',
-      supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+      supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
       readiness: 'ready' as 'ready' | 'disabled' | 'cooldown' | 'reauth-required',
       revision: 'r1',
     };
@@ -563,7 +675,7 @@ describe('route candidate selection', () => {
       {
         accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-6.1-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        supportedModelIds: ['gpt-6.2-sol'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready' as const, revision: 'r1',
       },
       {

@@ -17,7 +17,7 @@ describe('explicitly selected canonical mapping tables', () => {
   const resolve = createCanonicalTargetResolver({ allowEquivalentModels: true });
   const resolveCandidates = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true });
 
-  it.each(['gpt-6-sol', 'gpt-6.1-sol', 'gpt-6-luna'])('routes %s faithfully through Codex', (model) => {
+  it.each(['gpt-6-sol', 'gpt-6.1-sol', 'gpt-6.2-sol', 'gpt-6-luna'])('routes %s faithfully through Codex', (model) => {
     const target = { providerId: 'openai', transportProviderId: 'codex', model };
     expect(resolve(model)).toEqual(target);
     expect(resolveCandidates(model)).toEqual([target]);
@@ -28,6 +28,23 @@ describe('explicitly selected canonical mapping tables', () => {
     const added = modelProfiles.find((profile) => profile.modelId === 'gpt-6.1-sol');
     expect(base).toBeDefined();
     expect(added).toEqual({ ...base, modelId: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' });
+  });
+
+  it('declares GPT-6.2 Sol with verified context window and supported reasoning efforts', () => {
+    const profile = modelProfiles.find((candidate) => candidate.modelId === 'gpt-6.2-sol');
+    expect(profile).toBeDefined();
+    expect(profile).toMatchObject({
+      providerId: 'openai',
+      modelId: 'gpt-6.2-sol',
+      label: 'GPT-6.2 Sol',
+      reasoningTier: 'advanced',
+      defaultTaskHints: ['chat', 'structured', 'summary'],
+    });
+    expect(profile?.capabilities.contextWindowTokens).toBe(1_050_000);
+    expect(profile?.capabilities.maxOutputTokens).toBeUndefined();
+    expect(profile?.capabilities.reasoning.supportedEfforts).toEqual([
+      'low', 'medium', 'high', 'xhigh', 'max',
+    ]);
   });
 
   it('keeps Terra on 5.6 and excludes unverified GPT-6 Terra from all targets', () => {
@@ -62,15 +79,25 @@ describe('explicitly selected canonical mapping tables', () => {
     ['claude-fable-5-max', 'max'],
     ['claude-fable-5-medium', 'high'],
     ['claude-fable-5-low', 'medium'],
-    ['claude-opus-5-5', 'high'],
-    ['claude-opus-5-5-high', 'xhigh'],
-    ['claude-opus-5-5-xhigh', 'max'],
-    ['claude-opus-5-5-medium', 'high'],
-    ['claude-opus-5-5-low', 'medium'],
   ])('routes %s through GPT-6.1 Sol at +1 effort rung', (alias, effort) => {
     expect(resolveCandidates(alias!).filter(({ transportProviderId }) => transportProviderId === 'codex'))
       .toEqual([{
         providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.1-sol',
+        effort,
+      }]);
+  });
+
+  it.each([
+    ['claude-opus-5-5', 'high'],
+    ['claude-opus-5-5-high', 'xhigh'],
+    ['claude-opus-5-5-xhigh', 'max'],
+    ['claude-opus-5-5-max', 'max'],
+    ['claude-opus-5-5-medium', 'high'],
+    ['claude-opus-5-5-low', 'medium'],
+  ])('routes %s through GPT-6.2 Sol keeping the existing effort mapping', (alias, effort) => {
+    expect(resolveCandidates(alias!).filter(({ transportProviderId }) => transportProviderId === 'codex'))
+      .toEqual([{
+        providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.2-sol',
         effort,
       }]);
   });
@@ -136,10 +163,6 @@ describe('explicitly selected canonical mapping tables', () => {
       transportProviderId: 'cloud-code',
       model: 'gemini-4-carbon',
     });
-    expect(resolve('claude-fable-5-1')).toEqual({
-      providerId: 'anthropic', transportProviderId: 'claude-code',
-      model: 'claude-fable-5-1',
-    });
     expect(resolve('claude-fable-5-2')).toEqual({
       providerId: 'anthropic', transportProviderId: 'claude-code',
       model: 'claude-fable-5-2',
@@ -173,12 +196,6 @@ describe('explicitly selected canonical mapping tables', () => {
       transportProviderId: 'claude-code',
       model: 'claude-opus-5',
       effort: 'medium',
-    });
-    expect(resolve('claude-fable-5-1-low')).toEqual({
-      providerId: 'anthropic',
-      transportProviderId: 'claude-code',
-      model: 'claude-fable-5-1',
-      effort: 'low',
     });
     expect(resolve('claude-fable-5-2-low')).toEqual({
       providerId: 'anthropic',
@@ -290,8 +307,6 @@ describe('explicitly selected canonical mapping tables', () => {
       'claude-sonnet-5-low', 'claude-sonnet-4-6',
       'claude-fable-5', 'claude-fable-5-high', 'claude-fable-5-xhigh',
       'claude-fable-5-max', 'claude-fable-5-medium', 'claude-fable-5-low',
-      'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
-      'claude-fable-5-1-max', 'claude-fable-5-1-medium', 'claude-fable-5-1-low',
       'claude-fable-5-2', 'claude-fable-5-2-high', 'claude-fable-5-2-xhigh',
       'claude-fable-5-2-max', 'claude-fable-5-2-medium', 'claude-fable-5-2-low',
       'claude-opus-5-5', 'claude-opus-5-5-high', 'claude-opus-5-5-xhigh',
@@ -381,25 +396,28 @@ describe('explicitly selected canonical mapping tables', () => {
     }
   });
 
-  it('routes every Fable 5.1 fallback through Astra with inherited effort', () => {
-    const museEffort: Readonly<Record<string, string>> = {
-      base: 'max', high: 'max', xhigh: 'max', max: 'max', medium: 'high', low: 'medium',
-    };
-    for (const [suffix, muse] of Object.entries(museEffort)) {
-      const alias = suffix === 'base' ? 'claude-fable-5-1' : `claude-fable-5-1-${suffix}`;
-      const candidates = resolveCandidates(alias);
-      expect(candidates[1]).toEqual({
-        providerId: 'muse', transportProviderId: 'muse',
-        model: 'muse-wonder-1.0', effort: muse,
-      });
-      expect(candidates[2]).toEqual({
-        providerId: 'openai', transportProviderId: 'codex',
-        model: 'gpt-6-astra', ...(suffix === 'base' ? {} : { effort: suffix }),
-      });
-      expect(candidates[3]).toEqual({
-        providerId: 'gemini', transportProviderId: 'cloud-code',
-        model: 'gemini-4-argon', effort: 'high',
-      });
+  it('rejects all removed claude-fable-5-1 aliases as unroutable', () => {
+    const exactResolve = createCanonicalTargetResolver();
+    const exactCandidates = createCanonicalTargetCandidatesResolver();
+    const descriptions = describeCanonicalTargetRoutes();
+    for (const alias of [
+      'claude-fable-5-1',
+      'claude-fable-5-1-high',
+      'claude-fable-5-1-xhigh',
+      'claude-fable-5-1-max',
+      'claude-fable-5-1-medium',
+      'claude-fable-5-1-low',
+    ]) {
+      expect(resolve(alias), alias).toBeUndefined();
+      expect(resolveCandidates(alias), alias).toEqual([]);
+      expect(exactResolve(alias), alias).toBeUndefined();
+      expect(exactCandidates(alias), alias).toEqual([]);
+      expect(CANONICAL_TARGET_MAPPINGS[alias], alias).toBeUndefined();
+      expect(LAUNCH_ALIAS_TARGET_MAPPINGS[alias], alias).toBeUndefined();
+      expect(LAUNCH_ALIAS_ROUTE_MAPPINGS[alias], alias).toBeUndefined();
+      expect(MUSE_ROUTE_MODEL[alias], alias).toBeUndefined();
+      expect(STANDARD_ROUTE_DEFINITIONS.some((entry) => entry.requestedId === alias), alias).toBe(false);
+      expect(descriptions.some((route) => route.requestedId === alias), alias).toBe(false);
     }
   });
 
@@ -527,7 +545,7 @@ describe('explicitly selected canonical mapping tables', () => {
     }
   });
 
-  it('maps the GLM 5.3 supplemental fallback onto Opus, Claude 5.5 and Fable 5.1 families', () => {
+  it('maps the GLM 5.3 supplemental fallback onto Opus, Claude 5.5 and Fable 5.2 families', () => {
     const glmEffort: Readonly<Record<string, string>> = {
       'claude-opus-5': 'max', 'claude-opus-5-high': 'max', 'claude-opus-5-xhigh': 'max', 'claude-opus-5-max': 'max',
       'claude-opus-4-8': 'max', 'claude-opus-4-8-xhigh': 'max', 'claude-opus-4-8-max': 'max',
@@ -537,8 +555,6 @@ describe('explicitly selected canonical mapping tables', () => {
       'claude-sonnet-5-5-high': 'max', 'claude-sonnet-5-5-xhigh': 'max', 'claude-sonnet-5-5-max': 'max',
       'claude-haiku-5-5': 'high', 'claude-haiku-5-5-low': 'high', 'claude-haiku-5-5-medium': 'high',
       'claude-haiku-5-5-high': 'max', 'claude-haiku-5-5-xhigh': 'max', 'claude-haiku-5-5-max': 'max',
-      'claude-fable-5-1': 'high', 'claude-fable-5-1-low': 'high', 'claude-fable-5-1-medium': 'high',
-      'claude-fable-5-1-high': 'max', 'claude-fable-5-1-xhigh': 'max', 'claude-fable-5-1-max': 'max',
       'claude-fable-5-2': 'high', 'claude-fable-5-2-low': 'high', 'claude-fable-5-2-medium': 'high',
       'claude-fable-5-2-high': 'max', 'claude-fable-5-2-xhigh': 'max', 'claude-fable-5-2-max': 'max',
     };
@@ -633,8 +649,7 @@ describe('explicitly selected canonical mapping tables', () => {
   it('routes every Claude tier to its mapped Cloud Code model', () => {
     // Owner mapping 2026-11-18: Opus 5.5 rows serve Gemini 4 Neon, Fable 5.2
     // rows serve Gemini 4 Carbon, Sonnet 5.5 and Haiku 5.5 rows serve Gemini 4
-    // Hydrogen, Fable 5.1 rows stay on Gemini 4 Argon; every other row keeps
-    // 3.8 Flash at high effort.
+    // Hydrogen; every other row keeps 3.8 Flash at high effort.
     const neonEffort: Readonly<Record<string, string>> = {
       'claude-opus-5-5': 'medium', 'claude-opus-5-5-low': 'low',
       'claude-opus-5-5-medium': 'medium', 'claude-opus-5-5-high': 'high',
@@ -645,10 +660,6 @@ describe('explicitly selected canonical mapping tables', () => {
       'claude-fable-5-2-medium': 'medium', 'claude-fable-5-2-high': 'high',
       'claude-fable-5-2-xhigh': 'high', 'claude-fable-5-2-max': 'high',
     };
-    const argonHigh = new Set([
-      'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
-      'claude-fable-5-1-max', 'claude-fable-5-1-medium', 'claude-fable-5-1-low',
-    ]);
     const hydrogenEffort: Readonly<Record<string, string>> = {
       'claude-sonnet-5-5': 'medium', 'claude-sonnet-5-5-high': 'high',
       'claude-sonnet-5-5-xhigh': 'xhigh', 'claude-sonnet-5-5-max': 'xhigh',
@@ -668,7 +679,6 @@ describe('explicitly selected canonical mapping tables', () => {
       'claude-fable-5-max', 'claude-fable-5-medium', 'claude-fable-5-low',
       ...Object.keys(neonEffort),
       ...Object.keys(carbonEffort),
-      ...argonHigh,
       ...Object.keys(hydrogenEffort),
     ];
 
@@ -677,11 +687,9 @@ describe('explicitly selected canonical mapping tables', () => {
         ? { model: 'gemini-4-neon', effort: neonEffort[alias]! }
         : alias in carbonEffort
           ? { model: 'gemini-4-carbon', effort: carbonEffort[alias]! }
-          : argonHigh.has(alias)
-            ? { model: 'gemini-4-argon', effort: 'high' }
           : alias in hydrogenEffort
-          ? { model: 'gemini-4-hydrogen', effort: hydrogenEffort[alias]! }
-          : { model: 'gemini-3.8-flash', effort: 'high' };
+            ? { model: 'gemini-4-hydrogen', effort: hydrogenEffort[alias]! }
+            : { model: 'gemini-3.8-flash', effort: 'high' };
       const candidates = resolveCandidates(alias);
       const cloudCodeTargets = candidates.filter(
         ({ transportProviderId }) => transportProviderId === 'cloud-code',
@@ -759,14 +767,14 @@ describe('explicitly selected canonical mapping tables', () => {
     );
   });
 
-  it('routes claude-opus-5-5 through Wonder, Sol 6.1 and Neon without a faithful target', () => {
+  it('routes claude-opus-5-5 through Wonder, Sol 6.2 and Neon without a faithful target', () => {
     const muse = {
       providerId: 'muse', transportProviderId: 'muse',
       model: 'muse-wonder-1.0', effort: 'high',
     };
     const codex = {
       providerId: 'openai', transportProviderId: 'codex',
-      model: 'gpt-6.1-sol', effort: 'high',
+      model: 'gpt-6.2-sol', effort: 'high',
     };
     const cloud = {
       providerId: 'gemini', transportProviderId: 'cloud-code',
@@ -787,7 +795,7 @@ describe('explicitly selected canonical mapping tables', () => {
       ]);
   });
 
-  it('routes claude-opus-5-5-max through Astra max with a Wonder Full max candidate', () => {
+  it('routes claude-opus-5-5-max through Sol 6.2 max with a Wonder Full max candidate', () => {
     expect(resolveCandidates('claude-opus-5-5-max')).toEqual([
       {
         providerId: 'muse', transportProviderId: 'muse',
@@ -795,7 +803,7 @@ describe('explicitly selected canonical mapping tables', () => {
       },
       {
         providerId: 'openai', transportProviderId: 'codex',
-        model: 'gpt-6.2-astra', effort: 'max',
+        model: 'gpt-6.2-sol', effort: 'max',
       },
       {
         providerId: 'gemini', transportProviderId: 'cloud-code',
@@ -938,12 +946,6 @@ describe('explicitly selected canonical mapping tables', () => {
       ['claude-haiku-5-5-max', wonderFull, 'max', 'gemini-4-hydrogen', 'xhigh'],
       ['claude-haiku-5-5-medium', spark, 'high', 'gemini-4-hydrogen', 'medium'],
       ['claude-haiku-5-5-low', spark, 'medium', 'gemini-4-hydrogen', 'low'],
-      ['claude-fable-5-1', wonder, 'max', 'gemini-4-argon', 'high'],
-      ['claude-fable-5-1-high', wonder, 'max', 'gemini-4-argon', 'high'],
-      ['claude-fable-5-1-xhigh', wonder, 'max', 'gemini-4-argon', 'high'],
-      ['claude-fable-5-1-max', wonder, 'max', 'gemini-4-argon', 'high'],
-      ['claude-fable-5-1-medium', wonder, 'high', 'gemini-4-argon', 'high'],
-      ['claude-fable-5-1-low', wonder, 'medium', 'gemini-4-argon', 'high'],
     ];
     for (const [alias, museModel, museEffort, cloudModel, cloudEffort] of rows) {
       const byTransport = new Map(
@@ -1000,4 +1002,5 @@ it('defaults to exact identity without enabling the cross-model table', () => {
   const resolve = createCanonicalTargetCandidatesResolver();
   expect(resolve('claude-opus-5-5')).toEqual([]);
   expect(resolve('gpt-6.1-sol')).toEqual([{ providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.1-sol' }]);
+  expect(resolve('gpt-6.2-sol')).toEqual([{ providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6.2-sol' }]);
 });
