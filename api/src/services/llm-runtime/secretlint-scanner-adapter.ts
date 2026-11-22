@@ -39,16 +39,28 @@ const collector: SecretLintRulePresetContext = {
 };
 presetRecommend.create(collector, {});
 
+const safeExt = (filePath: string): string => {
+  const ext = extname(filePath).toLowerCase();
+  return ext === '.p12' ? '' : ext;
+};
+
 const createSyncSourceCode = (raw: string, filePath: string): { source: SecretLintSourceCode; bomOffset: number } => {
   const hasBOM = raw.charCodeAt(0) === 0xfeff;
   const content = hasBOM ? raw.slice(1) : raw;
-  const rawExt = extname(filePath);
-  const ext = rawExt === '.p12' ? '' : rawExt;
+  const ext = safeExt(filePath);
   let lineStarts: number[] | undefined;
   const starts = (): number[] => {
     if (!lineStarts) {
       lineStarts = [0];
-      for (let i = 0; i < content.length; i += 1) if (content.charCodeAt(i) === 10) lineStarts.push(i + 1);
+      for (let i = 0; i < content.length; i += 1) {
+        const ch = content.charCodeAt(i);
+        if (ch === 13) {
+          if (content.charCodeAt(i + 1) === 10) i += 1;
+          if (i + 1 < content.length) lineStarts.push(i + 1);
+        } else if (ch === 10 || ch === 0x2028 || ch === 0x2029) {
+          if (i + 1 < content.length) lineStarts.push(i + 1);
+        }
+      }
     }
     return lineStarts;
   };
@@ -59,7 +71,9 @@ const createSyncSourceCode = (raw: string, filePath: string): { source: SecretLi
   };
   const positionToIndex = (pos: SecretLintSourceNodePosition): number => {
     const s = starts();
-    return Math.min(content.length, (s[Math.max(0, Math.min(pos.line - 1, s.length - 1))] ?? content.length) + Math.max(0, pos.column));
+    if (pos.line - 1 >= s.length) return content.length + 1;
+    const base = s[Math.max(0, pos.line - 1)] ?? 0;
+    return Math.min(content.length, base + Math.max(0, pos.column));
   };
   return {
     bomOffset: hasBOM ? 1 : 0,
@@ -131,13 +145,15 @@ export class SecretlintScannerAdapter implements SecretScannerPort {
   async scanAsync(text: string, options?: SecretScanOptions): Promise<readonly SecretMatch[]> {
     if (!text) return [];
     const bounded = this.boundText(text);
+    const filePath = options?.filePath ?? this.defaultFilePath;
+    const bomOffset = bounded.charCodeAt(0) === 0xfeff ? 1 : 0;
     const { lintSource } = await import('@secretlint/core');
     const result = await lintSource({
-      source: { filePath: options?.filePath ?? this.defaultFilePath, content: bounded, contentType: 'text' },
+      source: { filePath, ext: safeExt(filePath), content: bounded, contentType: 'text' },
       options: { config: this.lintConfig, maskSecrets: true, noPhysicFilePath: true },
     });
     const preset: SecretMatch[] = result.messages.map((m) => ({
-      start: m.range[0], end: m.range[1], ruleId: m.ruleId, message: `secret detected by ${m.ruleId}`,
+      start: m.range[0] + bomOffset, end: m.range[1] + bomOffset, ruleId: m.ruleId, message: `secret detected by ${m.ruleId}`,
     }));
     return dedupeRanges([...preset, ...scanCustom(bounded, this.resolvePatterns(options))]);
   }

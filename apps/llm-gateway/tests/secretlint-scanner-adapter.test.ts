@@ -20,6 +20,10 @@ const FAKE_SLACK = ['xoxb', '-', '123456789012', '-', '1234567890123', '-', rep(
 const FAKE_TAILSCALE = ['tskey', '-auth-', rep(12), '-', rep(24)].join('');
 const FAKE_ANTHROPIC = ['sk-ant-', 'api03-', rep(93), 'AA'].join('');
 const FAKE_PEM = ['-----BEGIN ', 'PRIVATE KEY-----\n', 'MI', rep(120), '\n-----END ', 'PRIVATE KEY-----'].join('');
+const FAKE_GCP_SA_JSON = JSON.stringify({
+  type: 'service_account', project_id: 'synth-proj', private_key_id: rep(40),
+  private_key: FAKE_PEM, client_email: 'synth@synth-proj.iam.gserviceaccount.com',
+});
 const FAKE_KUBE_TOKEN = ['FAKE-KUBE-TOK-', rep(28)].join('');
 
 describe('L1.3d standalone host secretlint adapter', () => {
@@ -47,6 +51,31 @@ describe('L1.3d standalone host secretlint adapter', () => {
         expect(m.message).not.toContain(secret);
       }
     }
+  });
+
+  it('keeps scan and scanAsync parity on BOM, .json/.P12 extensions, and disable-line on last line without newline', async () => {
+    const adapter = createSecretlintScannerAdapter();
+    const bomInput = `\uFEFF${FAKE_GH}`;
+    const bomSync = adapter.scan(bomInput, { includeDefaultPatterns: false });
+    const bomAsync = await adapter.scanAsync(bomInput, { includeDefaultPatterns: false });
+    expect(bomSync).toEqual(bomAsync);
+    expect(bomSync[0]!.start).toBe(1);
+    expect(bomAsync[0]!.end).toBe(bomInput.length);
+
+    const gcpSync = adapter.scan(FAKE_GCP_SA_JSON, { filePath: 'sa.json', includeDefaultPatterns: false });
+    const gcpAsync = await adapter.scanAsync(FAKE_GCP_SA_JSON, { filePath: 'sa.json', includeDefaultPatterns: false });
+    expect(gcpSync).toEqual(gcpAsync);
+    expect(gcpSync.some((m) => m.ruleId === '@secretlint/secretlint-rule-gcp')).toBe(true);
+    expect(adapter.scan(FAKE_GCP_SA_JSON, { filePath: 'SA.JSON', includeDefaultPatterns: false })).toEqual(gcpSync);
+    expect(adapter.scan('plain', { filePath: '/nonexistent/secret.P12', includeDefaultPatterns: false })).toEqual([]);
+    expect(await adapter.scanAsync('plain', { filePath: '/nonexistent/secret.P12', includeDefaultPatterns: false })).toEqual([]);
+
+    const honoring = createSecretlintScannerAdapter({ honorDisableComments: true });
+    expect(honoring.scan(`${FAKE_AWS} // secretlint-disable-line`, { includeDefaultPatterns: false })).toEqual([]);
+    expect(honoring.scan(`hdr\r${FAKE_AWS} // secretlint-disable-line`, { includeDefaultPatterns: false })).toEqual([]);
+    const crWithNl = `hdr\r${FAKE_AWS} // secretlint-disable-line\n`;
+    expect(honoring.scan(crWithNl, { includeDefaultPatterns: false })).toEqual([]);
+    expect(await honoring.scanAsync(crWithNl, { includeDefaultPatterns: false })).toEqual([]);
   });
 
   it('parses YAML patterns via safeLoad JSON_SCHEMA, skips invalid entries, rejects !!js/function, and bounds input sizes', () => {
