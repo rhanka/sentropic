@@ -32,8 +32,10 @@ import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type { AnthropicAdapterClient } from '../adapters.js';
 import {
+  CLAUDE_CODE_SUPPORTED_EFFORTS,
   ClaudeCliQuotaError,
   ClaudeCodeRuntimeClient,
+  resolveClaudeCodeSupportedEfforts,
   type ClaudeCodeAccessProjection,
   type ClaudeCodeCliCapabilities,
   type ClaudeCodeCliEvent,
@@ -84,7 +86,8 @@ const nonEmpty = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= 4096
   && !/[\0-\x1f\x7f]/.test(value);
 
-const validEffort = (value: string): boolean => /^[A-Za-z0-9-]{1,16}$/.test(value);
+const validEffort = (value: string): boolean =>
+  (CLAUDE_CODE_SUPPORTED_EFFORTS as readonly string[]).includes(value);
 
 const validModelId = (value: string): boolean =>
   /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(value) && value.length <= 256;
@@ -229,7 +232,7 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
       throw new Error('claude CLI path must be a non-empty string');
     }
     if (options.effort !== undefined && !validEffort(options.effort)) {
-      throw new Error('claude CLI effort must match [A-Za-z0-9-]{1,16}');
+      throw new Error(`claude CLI effort must be one of: ${CLAUDE_CODE_SUPPORTED_EFFORTS.join(', ')}`);
     }
     if (options.systemPromptFile !== undefined && !nonEmpty(options.systemPromptFile)) {
       throw new Error('claude CLI system prompt file must be a non-empty string');
@@ -266,6 +269,13 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
       throw runnerError('claude CLI runner refused an invalid access projection');
     }
     if (!validModelId(request.modelId)) throw runnerError('claude CLI runner refused an invalid model id');
+    const effort = request.effort ?? this.effort;
+    const supportedEfforts = resolveClaudeCodeSupportedEfforts(request.modelId);
+    if (!supportedEfforts.includes(effort)) {
+      throw runnerError(
+        `claude CLI runner refused unsupported effort for ${request.modelId}; supported: ${supportedEfforts.join(', ')}`,
+      );
+    }
     // Tool definitions are never forwarded: the CLI runs with `--tools ""`,
     // so accepting them would silently drop caller intent. Refuse instead.
     if (request.tools !== undefined && request.tools.length > 0) {
@@ -288,7 +298,7 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
       // --strict-mcp-config and no --mcp-config no MCP server can load;
       // --no-session-persistence keeps the seat run off disk.
       const args = ['-p', '--verbose', '--output-format', 'stream-json',
-        '--model', request.modelId, '--effort', this.effort,
+        '--model', request.modelId, '--effort', effort,
         '--tools', '', '--strict-mcp-config', '--no-session-persistence',
         ...(this.systemPromptFile ? ['--system-prompt-file', this.systemPromptFile] : [])];
       const env = buildChildEnv(sandboxDir, access.accessToken);

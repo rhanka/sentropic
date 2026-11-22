@@ -571,4 +571,33 @@ describe('node claude CLI runner', () => {
     expect(response.finishReason).toBe('stop');
     expect(response.usage).toEqual({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
   });
+
+  it.each([
+    ['claude-opus-5-5', 'low'],
+    ['claude-sonnet-5-5', 'xhigh'],
+    ['claude-haiku-5-5', 'max'],
+  ] as const)('should forward per-request effort for %s (%s) via --effort', async (modelId, effort) => {
+    const client = createClaudeSeatAnthropicClient({
+      capabilities: { protocol: 'claude-code-stream-json-v1',
+        cliVersion: '2.1.296', source: 'fake-source', qualificationRef: 'fake-receipt' },
+      effort: 'medium',
+      cliPath: join(dir, 'claude'),
+    });
+    await client.generate(
+      { modelId, reasoning: { effort }, messages: [{ role: 'user', content: 'Classify' }] },
+      { auth: credential() },
+    );
+    await waitFor('argv');
+    expect(await readDump('argv')).toContain(`--model\n${modelId}\n--effort\n${effort}\n`);
+  });
+
+  it('should reject unsupported efforts in runner options and per-request before spawning', async () => {
+    expect(() => new NodeClaudeCodeCliRunner({ effort: 'none' })).toThrow(/effort/i);
+    expect(() => new NodeClaudeCodeCliRunner({ effort: 'ultra' })).toThrow(/effort/i);
+    const runner = new NodeClaudeCodeCliRunner();
+    await expect(collect(runner.run({
+      access, request: { ...request('claude-haiku-5-5'), effort: 'none' }, signal: never,
+    }))).rejects.toMatchObject({ name: 'ClaudeCliRunnerError', message: expect.stringMatching(/unsupported effort/i) });
+    await expect(readDump('argv')).rejects.toThrow();
+  });
 });

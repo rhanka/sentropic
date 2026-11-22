@@ -95,6 +95,32 @@ describe('Claude CLI capability boundary', () => {
         usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } } },
     ]);
   });
+
+  it.each(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] as const)(
+    'should forward supported effort levels for %s', async (modelId) => {
+      for (const effort of ['low', 'medium', 'high', 'xhigh', 'max'] as const) {
+        const { client, run } = fixture();
+        await client.generate({ ...request(), modelId, reasoning: { effort } }, { auth: credential() });
+        expect(run.mock.calls[0]?.[0].request).toMatchObject({ modelId, effort });
+      }
+    });
+
+  it.each([
+    { reasoning: { effort: 'none' } },
+    { reasoning: { effort: 'ultra' } },
+    { reasoning: { effort: 'low', summary: 'auto' } },
+    { reasoning: { effort: 'low', enabled: false } },
+    { reasoning: { effort: 'low', budgetTokens: 1024 } },
+  ])('should reject unsupported Claude CLI reasoning %j with a clear error before runner call', async (patch) => {
+    const { client, run } = fixture();
+    const error = await client.generate(
+      { ...request(), modelId: 'claude-haiku-5-5', ...patch } as StreamRequest,
+      { auth: credential() },
+    ).catch((cause: unknown) => cause);
+    expect(error).toMatchObject({ code: 'claude_cli_unsupported' });
+    expect((error as Error).message).toMatch(/effort|reasoning/i);
+    expect(run).not.toHaveBeenCalled();
+  });
 });
 
 describe('Claude CLI access and routing', () => {

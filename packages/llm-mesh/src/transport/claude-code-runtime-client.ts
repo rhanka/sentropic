@@ -1,9 +1,17 @@
 import type { AnthropicAdapterClient } from '../adapters.js';
 import { getSecretAuthMaterial, type AuthInput } from '../auth.js';
+import { getModelProfile } from '../catalog.js';
 import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from '../generation.js';
 import type { ProviderRuntimeContext } from '../registry.js';
 import type { StreamEvent, TokenUsage } from '../streaming.js';
 import type { ToolCall } from '../tools.js';
+
+export const CLAUDE_CODE_SUPPORTED_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+export const resolveClaudeCodeSupportedEfforts = (modelId: string): readonly string[] => {
+  const supported = getModelProfile('anthropic', modelId)?.capabilities.reasoning.supportedEfforts;
+  return supported && supported.length > 0 ? supported : CLAUDE_CODE_SUPPORTED_EFFORTS;
+};
 
 /** In-process secret boundary. Never serialize this input into logs, argv or env. */
 export interface ClaudeCodeAccessProjection {
@@ -19,6 +27,7 @@ export type ClaudeCodeCliContent =
 
 export interface ClaudeCodeCliRequest {
   readonly modelId: string;
+  readonly effort?: string;
   readonly messages: readonly {
     role: 'user' | 'assistant'; content: readonly ClaudeCodeCliContent[];
   }[];
@@ -107,8 +116,12 @@ class ClaudeCodeFailure extends Error {
   readonly retryable?: boolean;
   readonly retryReason?: string;
   readonly retryAfterMs?: number;
-  constructor(code: 'unsupported' | 'auth' | 'runner' | 'rate_limited' | 'aborted', quota?: { retryAfterMs?: number }) {
-    super(`Claude CLI ${code === 'aborted' ? 'request aborted'
+  constructor(
+    code: 'unsupported' | 'auth' | 'runner' | 'rate_limited' | 'aborted',
+    quota?: { retryAfterMs?: number },
+    detail?: string,
+  ) {
+    super(detail ?? `Claude CLI ${code === 'aborted' ? 'request aborted'
       : code === 'rate_limited' ? 'quota exhausted' : `${code} unavailable`}`);
     this.code = `claude_cli_${code}`;
     if (code === 'aborted') this.name = 'AbortError';
@@ -118,8 +131,11 @@ class ClaudeCodeFailure extends Error {
     }
   }
 }
-const failure = (code: ConstructorParameters<typeof ClaudeCodeFailure>[0],
-  quota?: { retryAfterMs?: number }) => new ClaudeCodeFailure(code, quota);
+const failure = (
+  code: ConstructorParameters<typeof ClaudeCodeFailure>[0],
+  quota?: { retryAfterMs?: number },
+  detail?: string,
+) => new ClaudeCodeFailure(code, quota, detail);
 const textValue = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0 && !value.includes('\0');
 const jsonCopy = (value: unknown, canonical = false): unknown => {
@@ -164,10 +180,24 @@ const projectRequest = (request: StreamRequest, caps: ClaudeCodeCliCapabilities)
   if (request.providerId !== undefined && request.providerId !== 'anthropic') throw failure('unsupported');
   if (request.model !== undefined || !textValue(request.modelId)
     || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(request.modelId)) throw failure('unsupported');
-  if ([request.temperature, request.topP, request.maxOutputTokens, request.reasoning,
+  if ([request.temperature, request.topP, request.maxOutputTokens,
     request.providerOptions, request.previousResponseId, request.parallelToolCalls].some((v) => v !== undefined)
     || (request.responseFormat !== undefined && request.responseFormat.type !== 'text')
     || (request.toolChoice !== undefined && request.toolChoice !== 'auto')) throw failure('unsupported');
+  let effort: string | undefined;
+  if (request.reasoning !== undefined) {
+    if (request.reasoning.summary !== undefined || request.reasoning.enabled !== undefined
+      || request.reasoning.budgetTokens !== undefined || request.reasoning.effort === undefined) {
+      throw failure('unsupported', undefined,
+        'Claude CLI only supports reasoning.effort without summary, enabled, or budgetTokens');
+    }
+    const supported = resolveClaudeCodeSupportedEfforts(request.modelId);
+    if (!supported.includes(request.reasoning.effort)) {
+      throw failure('unsupported', undefined,
+        `Claude CLI does not support reasoning effort for ${request.modelId}; supported: ${supported.join(', ')}`);
+    }
+    effort = request.reasoning.effort;
+  }
   if (!request.messages.length || (!textValue(caps.history)
     && (request.messages.length !== 1 || request.messages[0].role !== 'user'))) throw failure('unsupported');
   const tools = request.tools?.map((tool) => {
@@ -222,7 +252,12 @@ const projectRequest = (request: StreamRequest, caps: ClaudeCodeCliCapabilities)
     messages.push({ role: message.role, content });
   }
   if (pending.size) throw failure('unsupported');
-  return { modelId: request.modelId, messages, ...(tools?.length ? { tools } : {}) };
+  return {
+    modelId: request.modelId,
+    ...(effort !== undefined ? { effort } : {}),
+    messages,
+    ...(tools?.length ? { tools } : {}),
+  };
 };
 
 export class ClaudeCodeRuntimeClient implements AnthropicAdapterClient {
@@ -257,7 +292,10 @@ export class ClaudeCodeRuntimeClient implements AnthropicAdapterClient {
     const access = projectAccess(auth, (this.options.now ?? Date.now)());
     let projected: ClaudeCodeCliRequest;
     try { projected = projectRequest(request, this.capabilities); }
-    catch { throw failure('unsupported'); }
+    catch (error) {
+      if (error instanceof ClaudeCodeFailure) throw error;
+      throw failure('unsupported');
+    }
     return this.events(access, projected, request.signal);
   }
 
