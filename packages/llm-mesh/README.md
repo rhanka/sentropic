@@ -140,22 +140,27 @@ const facade = createLlmMeshFacade({
 That migration option is only for pre-ownerScope local records. New enrollment
 always takes ownership from `StartEnrollmentInput.ownerScope`.
 
-## Device-flow enrollment CLI (`llm-mesh-enroll`)
+## Enrollment & probe CLI (`llm-mesh-enroll`)
 
 The `llm-mesh-enroll` bin enrolls seat-billed device-flow accounts
-(muse-code and codex, repeatable for N accounts) and probes muse-code seat
-accounts. The keyring key is read from the environment variable named by
-`--keyring-key-env` (never from argv): it must hold 32 bytes as 64 hex
-chars or 44/43-char base64 (a human passphrase is refused). stdout carries
-one JSON object per line, secrets never reach stdout, stderr, or error
-messages. `probe` only supports `--provider muse-code` and verifies the
-stored account provider before any token leaves the keyring; `--effort` is
-validated for forward compatibility but not forwarded on the Muse Chat wire.
+(`muse-code` and `codex`, repeatable for N accounts), imports or re-enrolls
+`cloud-code` seats from a valid local `agy` login (`--from-agy`), and probes
+stored `muse-code` or `cloud-code` accounts. For `muse-code` and `codex`, the
+keyring key is read from the environment variable named by `--keyring-key-env`
+(never from argv): it must hold 32 bytes as 64 hex chars or 44/43-char base64
+(a human passphrase is refused). For `cloud-code`, `--keyring-key-env` is
+optional: when omitted, `EncryptedFileKeyring` uses the existing `.key` file
+in `--keyring-dir` (re-enrolling `--account <id>` validates the existing
+record before writing and never creates a new master key). stdout carries one
+JSON object per line; secrets never reach stdout, stderr, or error messages.
+`probe` verifies the stored account provider before any token leaves the
+keyring; `--effort` is validated for forward compatibility on `muse-code` and
+forwarded as the Cloud Code thinking level on `cloud-code`.
 
 ```sh
 export SENTROPIC_LLM_MESH_KEYRING_KEY  # owner-held 32-byte key (hex), set in the environment
 
-# 1. Enroll one account (repeat with a new --label per account).
+# 1. Enroll one muse-code account (repeat with a new --label per account).
 #    The owner approves each device login on accountscenter.meta.com.
 llm-mesh-enroll enroll --provider muse-code \
   --keyring-dir ~/.sentropic/immo-detection-keyring \
@@ -163,13 +168,42 @@ llm-mesh-enroll enroll --provider muse-code \
   --label "Immo Detection 1" \
   --keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY
 
-# 2. Probe the stored account (prints status plus latency plus usage only).
+# 2. Probe the stored muse-code account (prints status plus latency plus usage only).
 llm-mesh-enroll probe --provider muse-code \
   --keyring-dir ~/.sentropic/immo-detection-keyring \
   --account <account-id-from-enroll> \
   --model muse-wonder-1.0 --effort low \
   --keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY
 ```
+
+### Re-enrolling a `cloud-code` seat from `agy`
+
+When a `cloud-code` seat flips to `reauth_required` while `agy` itself is still
+authenticated, re-import the valid `agy` OAuth login (read from
+`~/.gemini/antigravity-cli/antigravity-oauth-token`, `--agy-token-file <path>`,
+or the Linux desktop Secret Service entry `service=gemini, username=antigravity`),
+refresh it against Google OAuth, resolve `cloudaicompanionProject` via
+`loadCodeAssist`, and re-activate the account in place:
+
+```sh
+# 1. Confirm the local agy login is still valid (no secrets printed).
+agy -p /usage
+
+# 2. Re-enroll the existing cloud-code account in place (reuses existing .key).
+#    Omit --account to create a new account (uses --owner-scope or cli:<hostname>).
+llm-mesh-enroll enroll --provider cloud-code --from-agy \
+  --account <account-id> \
+  --keyring-dir ~/.sentropic/llm-mesh-keyring
+
+# 3. Verify the active seat with a minimal probe on mesh:gemini-4-hydrogen-low.
+llm-mesh-enroll probe --provider cloud-code \
+  --account <account-id> \
+  --keyring-dir ~/.sentropic/llm-mesh-keyring \
+  --model gemini-4-hydrogen --effort low
+```
+
+Pass `--keyring-key-env <NAME>` on both commands when targeting a keyring
+protected by an environment-held 32-byte master key instead of `.key`.
 
 A probe 402 means `billing_not_configured` on the non-seat `muse.ts`
 direct-key path: re-enroll a seat account with the device flow above.
