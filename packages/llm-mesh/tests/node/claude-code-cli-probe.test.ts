@@ -136,4 +136,74 @@ describe('claude CLI strict probe and --system-prompt-file verification', () => 
       name: 'ClaudeCliRunnerError', message: expect.stringContaining(flag),
     });
   });
+
+  it.each([
+    ['--verbose', '--verbose-logging'],
+    ['--output-format', '--output-format-v2'],
+    ['--model', '--model-id'],
+    ['--effort', '--effort-level'],
+  ] as const)('rejects required flag %s when prose-only or only longer prefix %s exists', async (flag, longer) => {
+    const cleaned = scrubFlagMentions(stripOptionBlock(REAL_2_1_330_HELP, flag), flag)
+      .replace('  --bare                                Minimal mode:',
+        `  --bare                                Minimal mode (mentions ${flag} in prose):`)
+      .replace('  --bare', `  ${longer}                Extended flag\n  --bare`);
+    await setFixture(cleaned);
+    await expect(probe()).rejects.toMatchObject({
+      name: 'ClaudeCliRunnerError', message: expect.stringContaining(flag),
+    });
+  });
+
+  it('rejects -p when missing or only mentioned in prose / longer prefix', async () => {
+    const noP = stripOptionBlock(REAL_2_1_330_HELP, '-p')
+      .replace('  --verbose', '  -print                                Not short -p\n  --verbose');
+    await setFixture(noP);
+    await expect(probe()).rejects.toMatchObject({
+      name: 'ClaudeCliRunnerError', message: expect.stringMatching(/headless.*-p/),
+    });
+  });
+
+  it('rejects stream-json missing from --output-format even when present elsewhere or as longer token', async () => {
+    const noStream = REAL_2_1_330_HELP.replace(
+      /  --output-format <format>[\s\S]*?(?=\n  --permission-mode)/,
+      '  --output-format <format>              Output format: "text", "json", "stream-json-v2"',
+    );
+    await setFixture(noStream);
+    await expect(probe()).rejects.toMatchObject({
+      name: 'ClaudeCliRunnerError', message: expect.stringMatching(/stream-json.*--output-format/),
+    });
+  });
+
+  it('requires positive evidence for --system-prompt-file in probe and runner when configured', async () => {
+    expect((await probe({ requireSystemPromptFile: true })).cliVersion).toBe('2.1.330');
+    const access = { accessToken: 'canary-tok', expiresAt: Date.now() + 60_000, scopes: ['user:inference'] };
+    const req = { modelId: 'claude-opus-5-5', messages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'hi' }] }] };
+    const okRunner = new NodeClaudeCodeCliRunner({ cliPath, systemPromptFile: '/tmp/sys.md' });
+    await writeFile(join(dir, 'calls'), '', 'utf8');
+    const collect = async (runner: NodeClaudeCodeCliRunner) => {
+      const out: unknown[] = [];
+      for await (const event of runner.run({ access, request: req, signal: new AbortController().signal })) out.push(event);
+      return out;
+    };
+    expect(await collect(okRunner)).toEqual([
+      { type: 'text_delta', text: 'ok' },
+      { type: 'result', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1 } },
+    ]);
+    await collect(okRunner);
+    const okCalls = (await readFile(join(dir, 'calls'), 'utf8')).trim().split('\n');
+    expect(okCalls.filter((line) => line.includes('claude-probe-nonexistent-system-prompt.txt'))).toHaveLength(1);
+    expect(okCalls.filter((line) => line.includes('--system-prompt-file /tmp/sys.md'))).toHaveLength(2);
+
+    for (const mode of ['unknown', 'silent-zero', 'silent-auth'] as const) {
+      await setFixture(REAL_2_1_330_HELP, '2.1.330 (Claude Code)\n', mode);
+      await expect(probe({ requireSystemPromptFile: true })).rejects.toMatchObject({
+        name: 'ClaudeCliRunnerError', message: expect.stringContaining('--system-prompt-file'),
+      });
+      await writeFile(join(dir, 'oauth'), '', 'utf8');
+      const badRunner = new NodeClaudeCodeCliRunner({ cliPath, systemPromptFile: '/tmp/sys.md' });
+      await expect(collect(badRunner)).rejects.toMatchObject({
+        name: 'ClaudeCliRunnerError', message: expect.stringContaining('--system-prompt-file'),
+      });
+      expect(await readFile(join(dir, 'oauth'), 'utf8')).not.toContain('yes');
+    }
+  });
 });
