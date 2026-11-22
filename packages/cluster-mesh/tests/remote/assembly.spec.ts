@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createClusterMeshRuntime, NamespaceRegistrationError, type ClusterMeshHonoNamespaceModule } from '../../src/index.js';
 import {
   composeRemoteRoot, REMOTE_MOUNT_MAP_V1, RemoteAssemblyError, validateRemoteAuthorityBinding,
-  type RemoteAuthorityBinding, type RemoteUpgradeAdapter,
+  validateRemoteTenantAdmission, type RemoteAuthorityBinding, type RemoteTier, type RemoteUpgradeAdapter,
 } from '../../src/remote/assembly-contract.js';
 
 const makeRuntime = () => createClusterMeshRuntime({
@@ -20,7 +20,6 @@ const makeBinding = (overrides: Partial<RemoteAuthorityBinding> = {}): RemoteAut
   meshId: 'remote-preprod',
   publicOrigin: 'https://preprod.remote.sent-tech.ca',
   trunkEndpoint: 'wss://preprod.remote.sent-tech.ca/trunk/v1',
-  tenantId: 'owner',
   storage: { engine: 'postgres', storeMeshId: 'remote-preprod', allowedTenants: ['owner', 'isolation-fixture'], dedicatedAuditWriter: true },
   admissionReady: true,
   receiptPortReady: true,
@@ -42,13 +41,19 @@ const makeUpgradeAdapter = (binding: RemoteAuthorityBinding): RemoteUpgradeAdapt
   handleTrunkUpgrade: (request) => {
     if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') return { ok: false, status: 426, code: 'upgrade_required' };
     if (request.headers.get('cookie') || request.headers.get('origin')) return { ok: false, status: 400, code: 'forbidden_browser_headers' };
-    return { ok: true, path: '/trunk/v1', meshId: binding.meshId, tenantId: binding.tenantId };
+    const tenantId = request.headers.get('x-remote-tenant') ?? binding.tenantId ?? 'owner';
+    const admitted = validateRemoteTenantAdmission(binding, tenantId);
+    if (!admitted.ok) return { ok: false, status: 403, code: admitted.code };
+    return { ok: true, path: '/trunk/v1', meshId: admitted.meshId, tenantId: admitted.tenantId };
   },
   handleBrowserUpgrade: (request) => {
     if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') return { ok: false, status: 426, code: 'upgrade_required' };
     if (request.headers.get('origin') !== binding.publicOrigin) return { ok: false, status: 403, code: 'invalid_origin' };
     if (!request.headers.get('cookie')?.includes('__Host-remote_session=')) return { ok: false, status: 401, code: 'missing_host_session_cookie' };
-    return { ok: true, path: '/ws/v1', meshId: binding.meshId, tenantId: binding.tenantId };
+    const tenantId = request.headers.get('x-remote-tenant') ?? binding.tenantId ?? 'owner';
+    const admitted = validateRemoteTenantAdmission(binding, tenantId);
+    if (!admitted.ok) return { ok: false, status: 403, code: admitted.code };
+    return { ok: true, path: '/ws/v1', meshId: admitted.meshId, tenantId: admitted.tenantId };
   },
 });
 
@@ -118,5 +123,37 @@ describe('RM-0 (a) assembly proof: package-only Remote root and binding invarian
     }))).toMatchObject({ ok: false, code: 'mesh_storage_mismatch' });
     expect(validateRemoteAuthorityBinding(makeBinding({ admissionReady: false }))).toMatchObject({ ok: false, code: 'authority_not_ready' });
     expect(validateRemoteAuthorityBinding(makeBinding({ receiptPortReady: false }))).toMatchObject({ ok: false, code: 'receipt_port_not_ready' });
+    expect(validateRemoteAuthorityBinding(makeBinding({ tier: 'staging' as RemoteTier }))).toMatchObject({ ok: false, code: 'invalid_tier' });
+    expect(validateRemoteAuthorityBinding(makeBinding({
+      tier: 'prod', meshId: 'remote-prod', publicOrigin: 'https://remote.sent-tech.ca',
+      trunkEndpoint: 'wss://remote.sent-tech.ca/trunk/v1', tenantId: 'owner',
+      storage: { engine: 'postgres', storeMeshId: 'remote-prod', allowedTenants: ['owner', 'isolation-fixture'], dedicatedAuditWriter: true },
+    }))).toMatchObject({ ok: false, code: 'isolation_fixture_forbidden_in_prod' });
+    expect(validateRemoteAuthorityBinding(makeBinding({
+      storage: { engine: 'postgres', storeMeshId: 'remote-preprod', allowedTenants: ['owner', 'remote'], dedicatedAuditWriter: true },
+    }))).toMatchObject({ ok: false, code: 'site_name_used_as_tenant' });
+    expect(validateRemoteAuthorityBinding(makeBinding({
+      storage: { engine: 'postgres', storeMeshId: 'remote-preprod', allowedTenants: [], dedicatedAuditWriter: true },
+    }))).toMatchObject({ ok: false, code: 'invalid_allowed_tenants' });
+    expect(validateRemoteAuthorityBinding(makeBinding({
+      storage: { engine: 'postgres', storeMeshId: 'remote-preprod', allowedTenants: ['owner', 'owner'], dedicatedAuditWriter: true },
+    }))).toMatchObject({ ok: false, code: 'invalid_allowed_tenants' });
+    expect(validateRemoteAuthorityBinding(makeBinding({
+      tier: 'prod', meshId: 'remote-prod', publicOrigin: 'https://remote.sent-tech.ca',
+      trunkEndpoint: 'wss://remote.sent-tech.ca/trunk/v1',
+      storage: { engine: 'sqlite', allowSqliteForTest: true, storeMeshId: 'remote-prod', allowedTenants: ['owner'], dedicatedAuditWriter: true },
+    }))).toMatchObject({ ok: false, code: 'sqlite_forbidden_in_deployed_tier' });
+    expect(validateRemoteAuthorityBinding(makeBinding({
+      storage: { engine: 'sqlite', storeMeshId: 'remote-preprod', allowedTenants: ['owner'], dedicatedAuditWriter: true },
+    }))).toMatchObject({ ok: false, code: 'sqlite_forbidden_in_deployed_tier' });
+    expect(validateRemoteAuthorityBinding(makeBinding({
+      storage: { engine: 'sqlite', allowSqliteForTest: true, storeMeshId: 'remote-preprod', allowedTenants: ['owner'], dedicatedAuditWriter: true },
+    }))).toMatchObject({ ok: true });
+
+    const preprodProcess = makeBinding();
+    expect(validateRemoteTenantAdmission(preprodProcess, 'owner')).toEqual({ ok: true, meshId: 'remote-preprod', tenantId: 'owner' });
+    expect(validateRemoteTenantAdmission(preprodProcess, 'isolation-fixture')).toEqual({ ok: true, meshId: 'remote-preprod', tenantId: 'isolation-fixture' });
+    expect(validateRemoteTenantAdmission(preprodProcess, 'stranger')).toMatchObject({ ok: false, code: 'tenant_not_allowed_in_store' });
+    expect(validateRemoteTenantAdmission(preprodProcess, 'remote')).toMatchObject({ ok: false, code: 'site_name_used_as_tenant' });
   });
 });
