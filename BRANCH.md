@@ -48,3 +48,7 @@ Enforce the owner’s attribution policy on pull requests after the November 21 
 - [x] **Lot 3 — Address Neon review**
   - [x] Pin the scanner to a full commit SHA on `rhanka/h2a:main` and grant only contents read access.
   - [x] Record the checks for the exact post-review head in the delivery report.
+- [x] **Lot 4 — Re-pin on hardened guard**
+  - [x] Re-pin the reusable workflow to `8922dfab31fe8ffacda8506fd3051a6455670165` on `rhanka/h2a:main` with email-only identity check (`fabien.antoine@m4x.org`, empty `require-name`, `allowed-github-actor: rhanka`).
+  - [x] Skip `scan` only for `dependabot[bot]` and `github-actions[bot]` PR authors because the reusable workflow has no bot-allowlist input.
+  - [x] Document the bot exemption choice in the workflow file and PR body.

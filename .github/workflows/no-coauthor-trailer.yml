@@ -9,6 +9,16 @@ permissions:
 
 jobs:
   scan:
-    uses: rhanka/h2a/.github/workflows/no-coauthor-trailer.yml@621cac4fae441b874bc82fe1078a4f18d374743b
+    # Owner policy keeps dependabot[bot] and github-actions[bot] PRs in sentropic.
+    # The pinned rhanka/h2a reusable workflow has no bot-allowlist input and
+    # rejects bot PR authors/commits, so skip the job only for those two exact
+    # GitHub bot logins. Human and AI identities are never exempted.
+    if: >-
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.user.login != 'github-actions[bot]'
+    uses: rhanka/h2a/.github/workflows/no-coauthor-trailer.yml@8922dfab31fe8ffacda8506fd3051a6455670165
     with:
       check-pr-body: true
+      allowed-author-email: fabien.antoine@m4x.org
+      require-name: ""
+      allowed-github-actor: rhanka
