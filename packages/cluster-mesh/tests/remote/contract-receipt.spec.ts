@@ -3,9 +3,11 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  computeNormalizedDocumentHash,
   computeWet2TextHash,
   evaluateWet2ContractReceipt,
   extractWet2Section,
+  OBSOLETE_PG9_PAGES_SPEC_HASH,
   PINNED_R11_WET2_TEXT_HASH,
   REMOTE_SPEC_REVISION,
   REQUIRED_WET21_CLAUSES,
@@ -89,7 +91,7 @@ describe('RM-0 (g) contract baseline: WET-2.1 canonical hash and pages receipt e
     });
   });
 
-  it('refuses a previously matching receipt when §6 text is amended by even one byte', () => {
+  it('refuses a previously matching receipt and the unsigned baseline when §6 text is amended by even one byte', () => {
     const amendedSpec = LIVE_SPEC_MARKDOWN.replace(
       'r11 proposes `WET-2.1`',
       'r11 proposes `WET-2.1` (amended)',
@@ -99,6 +101,45 @@ describe('RM-0 (g) contract baseline: WET-2.1 canonical hash and pages receipt e
       ok: false,
       code: 'wet2_hash_mismatch',
     });
+    expect(evaluateWet2ContractReceipt(RM0_REPO_BASELINE_RECEIPT, amendedSpec)).toMatchObject({
+      ok: false,
+      code: 'wet2_hash_mismatch',
+    });
+  });
+
+  it('refuses obsolete PG9 pages revisions, copied wet2 hashes, and one-byte pages document drift', () => {
+    expect(evaluateWet2ContractReceipt(
+      makeSyntheticValidReceipt({ pagesSpecRevision: 'r9' }),
+      LIVE_SPEC_MARKDOWN,
+    )).toMatchObject({ ok: false, code: 'stale_contract_version' });
+    expect(evaluateWet2ContractReceipt(
+      makeSyntheticValidReceipt({ pagesSpecRevision: 'revision 9' }),
+      LIVE_SPEC_MARKDOWN,
+    )).toMatchObject({ ok: false, code: 'stale_contract_version' });
+    expect(evaluateWet2ContractReceipt(
+      makeSyntheticValidReceipt({ pagesSpecHash: OBSOLETE_PG9_PAGES_SPEC_HASH }),
+      LIVE_SPEC_MARKDOWN,
+    )).toMatchObject({ ok: false, code: 'stale_contract_version' });
+    expect(evaluateWet2ContractReceipt(
+      makeSyntheticValidReceipt({ pagesSpecHash: PINNED_R11_WET2_TEXT_HASH }),
+      LIVE_SPEC_MARKDOWN,
+    )).toMatchObject({ ok: false, code: 'stale_contract_version' });
+
+    const livePagesFixture = '# Pages Plan r10\n\nCites WET-2.1 clauses 18-19 and §6.9.\n';
+    const pagesHash = computeNormalizedDocumentHash(livePagesFixture);
+    const matchingReceipt = makeSyntheticValidReceipt({ pagesSpecRevision: 'r10', pagesSpecHash: pagesHash });
+    expect(evaluateWet2ContractReceipt(matchingReceipt, LIVE_SPEC_MARKDOWN, livePagesFixture)).toEqual({
+      ok: true,
+      contractVersion: 'WET-2.1',
+      wet2TextHash: PINNED_R11_WET2_TEXT_HASH,
+      pagesSpecHash: pagesHash,
+    });
+    expect(
+      evaluateWet2ContractReceipt(matchingReceipt, LIVE_SPEC_MARKDOWN, livePagesFixture.replaceAll('\n', '\r\n')),
+    ).toMatchObject({ ok: true, pagesSpecHash: pagesHash });
+    expect(
+      evaluateWet2ContractReceipt(matchingReceipt, LIVE_SPEC_MARKDOWN, `${livePagesFixture} `),
+    ).toMatchObject({ ok: false, code: 'pages_hash_mismatch' });
   });
 
   it('accepts a complete synthetic fixture receipt only when version, hash, clauses, and Track id all match', () => {
@@ -110,14 +151,12 @@ describe('RM-0 (g) contract baseline: WET-2.1 canonical hash and pages receipt e
     });
   });
 
-  it('RM-0 (g) live countersignature gate: fails by construction until the pages WET-2.1 countersignature lands', () => {
+  it('RM-0 (g) live countersignature gate: fails closed with missing_pages_countersignature until pages countersigns WET-2.1', () => {
     const decision = evaluateWet2ContractReceipt(RM0_REPO_BASELINE_RECEIPT, LIVE_SPEC_MARKDOWN);
-    expect(
-      decision.ok,
-      decision.ok
-        ? undefined
-        : `RM-0 (g) GATE BLOCKED (expected by construction per spec §6 ~:381): ${decision.code} — ${decision.reason} `
-          + `(wet2TextHash=${PINNED_R11_WET2_TEXT_HASH}). Blocks RM-E start and RM-C golden-vector freeze/publication until the citing pages revision countersigns WET-2.1.`,
-    ).toBe(true);
+    expect(decision).toMatchObject({
+      ok: false,
+      code: 'missing_pages_countersignature',
+      liveWet2TextHash: PINNED_R11_WET2_TEXT_HASH,
+    });
   });
 });
