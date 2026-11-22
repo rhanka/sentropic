@@ -99,11 +99,64 @@ describe('RM-0 (a) assembly proof: package-only Remote root and binding invarian
       authRouter: new Hono(), uiRouter: new Hono(), upgradeAdapter: makeUpgradeAdapter(binding),
     };
 
-    expect(() => composeRemoteRoot({ ...base, extraPluginNamespaces: [{ namespace: '/session', enabled: true, createRouter: () => new Hono() }] })).toThrow(RemoteAssemblyError);
+    const sessionCreateRouter = vi.fn(() => new Hono());
+    expect(() => composeRemoteRoot({ ...base, extraPluginNamespaces: [{ namespace: '/session', enabled: true, createRouter: sessionCreateRouter }] })).toThrow(RemoteAssemblyError);
+    expect(sessionCreateRouter).not.toHaveBeenCalled();
     expect(() => composeRemoteRoot({ ...base, extraPluginNamespaces: [makeAppsModule()] })).toThrow(NamespaceRegistrationError);
     expect(() => composeRemoteRoot({ ...base, enrolmentModule: makeAppsModule(false) })).toThrow(/enrolment_module_disabled/);
     expect(() => composeRemoteRoot({ ...base, enrolmentModule: { namespace: '/health', enabled: true, createRouter: () => new Hono() } })).toThrow(/invalid_plugin_namespace/);
     expect(() => composeRemoteRoot({ ...base, mounts: { '/apps': '/api/v1' } })).toThrow(/invalid_plugin_mount/);
+  });
+
+  it('preserves direct upgrade responses, 429/503 refusals, and route precedence ahead of /apps', async () => {
+    const binding = makeBinding();
+    const rogueAppsModule: ClusterMeshHonoNamespaceModule = {
+      namespace: '/apps',
+      enabled: true,
+      createRouter: () => new Hono()
+        .post('/enrolment/v1/ceremony/open', (c) => c.json({ status: 'pending' }, 201))
+        .get('/ws/v1', (c) => c.json({ hijacked: true }, 200))
+        .get('/trunk/v1', (c) => c.json({ hijacked: true }, 200))
+        .get('/auth/callback', (c) => c.json({ hijacked: true }, 200)),
+    };
+    const composed = composeRemoteRoot({
+      runtime: makeRuntime(),
+      binding,
+      enrolmentModule: rogueAppsModule,
+      authRouter: new Hono().get('/callback', (c) => c.json({ route: 'auth-callback' })),
+      uiRouter: new Hono().get('/status', (c) => c.json({ route: 'remote-ui' })),
+      upgradeAdapter: {
+        handleTrunkUpgrade: (request) => {
+          if (request.headers.get('x-sim') === 'busy') return { ok: false, status: 429, code: 'handshake_busy' };
+          if (request.headers.get('x-sim') === 'draining') return { ok: false, status: 503, code: 'draining' };
+          return {
+            ok: true, path: '/trunk/v1', meshId: binding.meshId, tenantId: 'owner',
+            response: new Response(null, { status: 204, headers: { 'x-ws-upgrade': 'trunk' } }),
+          };
+        },
+        handleBrowserUpgrade: (request) => {
+          if (request.headers.get('origin') !== binding.publicOrigin) return { ok: false, status: 403, code: 'invalid_origin' };
+          if (!request.headers.get('cookie')?.includes('__Host-remote_session=')) return { ok: false, status: 401, code: 'missing_host_session_cookie' };
+          return {
+            ok: true, path: '/ws/v1', meshId: binding.meshId, tenantId: 'owner',
+            response: new Response(null, { status: 204, headers: { 'x-ws-upgrade': 'browser' } }),
+          };
+        },
+      },
+    });
+
+    expect((await composed.app.request('/ws/v1', { headers: { origin: 'https://evil.sent-tech.ca' } })).status).toBe(403);
+    expect((await composed.app.request('/ws/v1', { headers: { origin: binding.publicOrigin } })).status).toBe(401);
+    const wsUp = await composed.app.request('/ws/v1', { headers: { origin: binding.publicOrigin, cookie: '__Host-remote_session=ok' } });
+    expect(wsUp.status).toBe(204);
+    expect(wsUp.headers.get('x-ws-upgrade')).toBe('browser');
+
+    const trunkUp = await composed.app.request('/trunk/v1');
+    expect(trunkUp.status).toBe(204);
+    expect(trunkUp.headers.get('x-ws-upgrade')).toBe('trunk');
+    expect((await composed.app.request('/trunk/v1', { headers: { 'x-sim': 'busy' } })).status).toBe(429);
+    expect((await composed.app.request('/trunk/v1', { headers: { 'x-sim': 'draining' } })).status).toBe(503);
+    await expect((await composed.app.request('/auth/callback')).json()).resolves.toEqual({ route: 'auth-callback' });
   });
 
   it('refuses invalid endpoint, mesh/storage mismatch, site-as-tenant confusion, and prod isolation-fixture', () => {
