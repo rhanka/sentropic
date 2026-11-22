@@ -4,6 +4,8 @@ export const WET2_CONTRACT_VERSION = 'WET-2.1' as const;
 export const REMOTE_SPEC_REVISION = 'r11' as const;
 export const PINNED_R11_WET2_TEXT_HASH =
   'b3c8a8fa7f3eff0c7066d0618c6d4fae1ce7f018e4ce58439e0598f23975035c';
+export const OBSOLETE_PG9_PAGES_SPEC_HASH =
+  'df868b0f801ed11e71de892aa7d8fb1130c085785f3dd8d5305b2465fbf704ee';
 
 export const REQUIRED_WET21_CLAUSES = Object.freeze([
   'clause-18-state-sync-quota',
@@ -26,13 +28,14 @@ export interface Wet2CountersignatureReceipt {
 
 export type Wet2ReceiptRefusalCode =
   | 'missing_receipt' | 'missing_pages_countersignature' | 'stale_contract_version'
-  | 'wet2_hash_mismatch' | 'missing_wet21_clause_acceptance' | 'missing_track_record';
+  | 'wet2_hash_mismatch' | 'pages_hash_mismatch' | 'missing_wet21_clause_acceptance' | 'missing_track_record';
 
 export type Wet2ReceiptDecision =
   | { readonly ok: true; readonly contractVersion: typeof WET2_CONTRACT_VERSION; readonly wet2TextHash: string; readonly pagesSpecHash: string }
   | { readonly ok: false; readonly code: Wet2ReceiptRefusalCode; readonly reason: string; readonly liveWet2TextHash: string };
 
 const SHA256_HEX = /^[a-f0-9]{64}$/;
+const PRE_R10_PAGES_REVISION = /^(?:r|rev(?:ision)?\s*)?[0-9]$/i;
 
 /** Canonical §6 slice per SPEC_EVOL_REMOTE_FASTLANE.md §10.2: LF-normalized UTF-8 from `## 6.` up to the byte before `## 7.`. */
 export function extractWet2Section(markdown: string): string {
@@ -45,6 +48,10 @@ export function extractWet2Section(markdown: string): string {
   return rest.slice(0, endMatch.index);
 }
 
+export function computeNormalizedDocumentHash(markdown: string): string {
+  return createHash('sha256').update(Buffer.from(markdown.replace(/\r\n?/g, '\n'), 'utf8')).digest('hex');
+}
+
 export function computeWet2TextHash(markdown: string): string {
   return createHash('sha256').update(Buffer.from(extractWet2Section(markdown), 'utf8')).digest('hex');
 }
@@ -52,21 +59,11 @@ export function computeWet2TextHash(markdown: string): string {
 export function evaluateWet2ContractReceipt(
   receipt: Wet2CountersignatureReceipt | null,
   liveSpecMarkdown: string,
+  livePagesMarkdown?: string,
 ): Wet2ReceiptDecision {
   const liveWet2TextHash = computeWet2TextHash(liveSpecMarkdown);
   if (!receipt) {
     return { ok: false, code: 'missing_receipt', reason: 'No WET-2.1 countersignature receipt is recorded', liveWet2TextHash };
-  }
-  if (
-    !receipt.pagesCountersigned || !receipt.pagesCountersignedBy?.trim()
-    || !receipt.pagesSpecRevision?.trim() || !receipt.pagesSpecHash || !SHA256_HEX.test(receipt.pagesSpecHash)
-  ) {
-    return {
-      ok: false,
-      code: 'missing_pages_countersignature',
-      reason: 'Pages conductor has not countersigned WET-2.1 with a citing pages revision hash',
-      liveWet2TextHash,
-    };
   }
   if (receipt.contractVersion !== WET2_CONTRACT_VERSION || receipt.remoteSpecRevision !== REMOTE_SPEC_REVISION) {
     return {
@@ -83,6 +80,40 @@ export function evaluateWet2ContractReceipt(
       reason: `Receipt wet2TextHash ${receipt.wet2TextHash} does not match live §6 hash ${liveWet2TextHash}`,
       liveWet2TextHash,
     };
+  }
+  if (
+    !receipt.pagesCountersigned || !receipt.pagesCountersignedBy?.trim()
+    || !receipt.pagesSpecRevision?.trim() || !receipt.pagesSpecHash || !SHA256_HEX.test(receipt.pagesSpecHash)
+  ) {
+    return {
+      ok: false,
+      code: 'missing_pages_countersignature',
+      reason: 'Pages conductor has not countersigned WET-2.1 with a citing pages revision hash',
+      liveWet2TextHash,
+    };
+  }
+  if (
+    PRE_R10_PAGES_REVISION.test(receipt.pagesSpecRevision.trim())
+    || receipt.pagesSpecHash === OBSOLETE_PG9_PAGES_SPEC_HASH
+    || receipt.pagesSpecHash === liveWet2TextHash
+  ) {
+    return {
+      ok: false,
+      code: 'stale_contract_version',
+      reason: `Pages revision ${receipt.pagesSpecRevision} (${receipt.pagesSpecHash}) cannot countersign ${WET2_CONTRACT_VERSION}`,
+      liveWet2TextHash,
+    };
+  }
+  if (livePagesMarkdown !== undefined) {
+    const livePagesHash = computeNormalizedDocumentHash(livePagesMarkdown);
+    if (receipt.pagesSpecHash !== livePagesHash) {
+      return {
+        ok: false,
+        code: 'pages_hash_mismatch',
+        reason: `Receipt pagesSpecHash ${receipt.pagesSpecHash} does not match live pages document hash ${livePagesHash}`,
+        liveWet2TextHash,
+      };
+    }
   }
   const missingClauses = REQUIRED_WET21_CLAUSES.filter((c) => !receipt.acceptedClauses.includes(c));
   if (missingClauses.length > 0) {
