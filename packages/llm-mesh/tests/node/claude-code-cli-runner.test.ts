@@ -69,13 +69,13 @@ fi
 if [ "$1" = "--help" ]; then
   case "$mode" in
     help-stripped)
-      printf '%s\n' '-p' '--verbose' '--output-format' 'stream-json' '--model' '--effort' '--tools' '--no-session-persistence' '--system-prompt-file' ;;
+      printf '%s\n' '-p' '--verbose' '--output-format <format>  stream-json' '--model' '--effort' '--tools' '--no-session-persistence' '--system-prompt-file' ;;
     help-nostream)
-      printf '%s\n' '-p' '--verbose' '--output-format' '--model' '--effort' '--tools' '--strict-mcp-config' '--no-session-persistence' '--system-prompt-file' ;;
+      printf '%s\n' '-p' '--verbose' '--output-format <format>  text, json' '--model' '--effort' '--tools' '--strict-mcp-config' '--no-session-persistence' '--system-prompt-file' ;;
     help-nop)
-      printf '%s\n' '--verbose' '--output-format' 'stream-json' '--model' '--effort' '--tools' '--strict-mcp-config' '--no-session-persistence' '--system-prompt-file' ;;
+      printf '%s\n' '--verbose' '--output-format <format>  stream-json' '--model' '--effort' '--tools' '--strict-mcp-config' '--no-session-persistence' '--system-prompt-file' ;;
     *)
-      printf '%s\n' '-p' '--verbose' '--output-format' 'stream-json' '--model' '--effort' '--system-prompt-file' '--tools' '--strict-mcp-config' '--no-session-persistence' ;;
+      printf '%s\n' '-p' '--verbose' '--output-format <format>  stream-json' '--model' '--effort' '--system-prompt-file' '--tools' '--strict-mcp-config' '--no-session-persistence' ;;
   esac
   exit 0
 fi
