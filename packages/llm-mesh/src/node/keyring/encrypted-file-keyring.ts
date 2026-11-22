@@ -8,6 +8,7 @@ import {
   chmod,
   link,
   mkdir,
+  readdir,
   readFile,
   rename,
   stat,
@@ -16,7 +17,11 @@ import {
 } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { KeyringAdapter } from '../../service/facade.js';
+import type {
+  KeyringAdapter,
+  KeyringCasGuard,
+  KeyringCasUpdate,
+} from '../../service/facade.js';
 
 interface EncryptedRecord {
   v: 1;
@@ -174,6 +179,48 @@ export class EncryptedFileKeyring implements KeyringAdapter {
     }
   }
 
+  async compareAndSetSecret(
+    key: string,
+    expected: string | null,
+    secret: string,
+  ): Promise<boolean> {
+    return this.compareAndSetSecrets([{ key, expected, secret }]);
+  }
+
+  async compareAndSetSecrets(
+    updates: readonly KeyringCasUpdate[],
+    guards: readonly KeyringCasGuard[] = [],
+  ): Promise<boolean> {
+    for (const entry of [...guards, ...updates]) {
+      if ((await this.getSecret(entry.key)) !== entry.expected) return false;
+    }
+    const masterKey = await this.readMasterKey(true);
+    return this.withLock(async () => {
+      for (const entry of [...guards, ...updates]) {
+        if ((await this.getSecret(entry.key)) !== entry.expected) return false;
+      }
+      const prepared = await Promise.all(updates.map(async (u) => ({
+        destination: this.secretPath(u.key),
+        payload: JSON.stringify(this.encryptWithKey(masterKey, u.key, u.secret)),
+        previous: await this.readRawIfPresent(this.secretPath(u.key)),
+      })));
+      const committed: { destination: string; previous: Buffer | null }[] = [];
+      try {
+        for (const item of prepared) {
+          await this.writeAtomicBytes(item.destination, item.payload);
+          committed.push({ destination: item.destination, previous: item.previous });
+        }
+        return true;
+      } catch (error) {
+        for (const item of committed.reverse()) {
+          if (item.previous === null) await this.unlinkIfPresent(item.destination);
+          else await this.writeAtomicBytes(item.destination, item.previous).catch(() => {});
+        }
+        throw error;
+      }
+    });
+  }
+
   async deleteSecret(key: string): Promise<void> {
     await this.unlinkIfPresent(this.secretPath(key));
   }
@@ -183,8 +230,7 @@ export class EncryptedFileKeyring implements KeyringAdapter {
     return join(this.directory, `${filename}.json`);
   }
 
-  private async encryptSecret(key: string, secret: string): Promise<EncryptedRecord> {
-    const masterKey = await this.readMasterKey(true);
+  private encryptWithKey(masterKey: Buffer, key: string, secret: string): EncryptedRecord {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', masterKey, iv);
     cipher.setAAD(Buffer.from(key, 'utf8'));
@@ -200,8 +246,80 @@ export class EncryptedFileKeyring implements KeyringAdapter {
     };
   }
 
+  private async encryptSecret(key: string, secret: string): Promise<EncryptedRecord> {
+    const masterKey = await this.readMasterKey(true);
+    return this.encryptWithKey(masterKey, key, secret);
+  }
+
+  private async readRawIfPresent(path: string): Promise<Buffer | null> {
+    try {
+      return await readFile(path);
+    } catch (error) {
+      if (isErrorCode(error, 'ENOENT')) return null;
+      throw error;
+    }
+  }
+
+  private async writeAtomicBytes(destination: string, data: string | Uint8Array): Promise<void> {
+    const temporary = `${destination}.${randomBytes(8).toString('hex')}.tmp`;
+    try {
+      await writeFile(temporary, data, { flag: 'wx', mode: 0o600 });
+      await rename(temporary, destination);
+      await chmod(destination, 0o600);
+    } catch (error) {
+      await this.unlinkIfPresent(temporary);
+      throw error;
+    }
+  }
+
+  private async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    const lockPath = join(this.directory, '.keyring.lock');
+    const deadline = Date.now() + 2_000;
+    while (true) {
+      try {
+        await writeFile(lockPath, '1', { flag: 'wx', mode: 0o600 });
+        break;
+      } catch (error) {
+        if (!isErrorCode(error, 'EEXIST')) throw error;
+        const lockStat = await stat(lockPath).catch(() => null);
+        if (lockStat && Date.now() - lockStat.mtimeMs > 30_000) {
+          await this.unlinkIfPresent(lockPath);
+          continue;
+        }
+        if (Date.now() >= deadline) {
+          throw new Error('Encrypted keyring lock acquisition timed out');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 15));
+      }
+    }
+    try {
+      return await fn();
+    } finally {
+      await this.unlinkIfPresent(lockPath);
+    }
+  }
+
+  private async assertDirectoryMode(): Promise<void> {
+    let directoryStat;
+    try {
+      directoryStat = await stat(this.directory);
+    } catch (error) {
+      if (isErrorCode(error, 'ENOENT')) {
+        throw new Error('Encrypted keyring master key is missing');
+      }
+      throw error;
+    }
+    if ((directoryStat.mode & 0o777) !== 0o700) {
+      throw new KeyringInsecurePermissionsError('directory', 0o700, directoryStat.mode);
+    }
+  }
+
   private async readMasterKey(create: boolean): Promise<Buffer> {
     if (this.explicitMasterKey) {
+      if (!create) {
+        await this.assertDirectoryMode();
+        return this.explicitMasterKey;
+      }
       await mkdir(this.directory, { recursive: true, mode: 0o700 });
       await this.setModeIfDifferent(this.directory, 0o700);
       return this.explicitMasterKey;
@@ -217,6 +335,11 @@ export class EncryptedFileKeyring implements KeyringAdapter {
       return await this.loadAndValidateMasterKey(path);
     } catch (error) {
       if (!isErrorCode(error, 'ENOENT')) throw error;
+    }
+
+    const entries = await readdir(this.directory);
+    if (entries.some((entry) => entry.endsWith('.json'))) {
+      throw new Error('Encrypted keyring master key is missing for an existing keyring');
     }
 
     const candidate = randomBytes(32);
@@ -237,18 +360,7 @@ export class EncryptedFileKeyring implements KeyringAdapter {
   }
 
   private async readExistingMasterKey(path: string): Promise<Buffer> {
-    let directoryStat;
-    try {
-      directoryStat = await stat(this.directory);
-    } catch (error) {
-      if (isErrorCode(error, 'ENOENT')) {
-        throw new Error('Encrypted keyring master key is missing');
-      }
-      throw error;
-    }
-    if ((directoryStat.mode & 0o777) !== 0o700) {
-      throw new KeyringInsecurePermissionsError('directory', 0o700, directoryStat.mode);
-    }
+    await this.assertDirectoryMode();
     let keyStat;
     try {
       keyStat = await stat(path);
