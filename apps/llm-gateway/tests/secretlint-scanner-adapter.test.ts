@@ -7,6 +7,7 @@ import {
   SECRETLINT_MAX_YAML_BYTES, SECRETLINT_PRESET_RULE_COUNT, SecretPatternYamlError,
   createSecretlintScannerAdapter, loadSecretPatterns, parseSecretPatternsYaml,
 } from '../src/secretlint-scanner-adapter';
+import { scanCustomPatterns } from '../src/secretlint-yaml-patterns';
 import { AUTHORIZATION, fixtureDependencies, testConfig } from './fixtures';
 
 const ALPHA = 'aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789';
@@ -72,6 +73,30 @@ describe('L1.3d standalone host secretlint adapter', () => {
       expect(caught).toBeInstanceOf(SecretPatternYamlError);
       expect((caught as Error).message).not.toContain(FAKE_ORG_TOKEN);
       expect(() => parseSecretPatternsYaml('a'.repeat(SECRETLINT_MAX_YAML_BYTES + 1))).toThrow(SecretPatternYamlError);
+      expect(() => parseSecretPatternsYaml('a'.repeat(SECRETLINT_MAX_YAML_BYTES + 1), Number.NaN)).toThrow(SecretPatternYamlError);
+      expect(() => parseSecretPatternsYaml('a'.repeat(SECRETLINT_MAX_YAML_BYTES + 1), Number.POSITIVE_INFINITY)).toThrow(SecretPatternYamlError);
+      const hugeFile = join(dir, 'huge.yaml');
+      writeFileSync(hugeFile, 'a'.repeat(SECRETLINT_MAX_YAML_BYTES + 1));
+      expect(() => loadSecretPatterns(hugeFile, Number.NaN)).toThrow(SecretPatternYamlError);
+      expect(() => loadSecretPatterns(dir)).toThrow(/not a regular file/);
+
+      const uniquePattern = [{ id: 'cache-probe', pattern: 'cache_probe_[0-9]{6}' }];
+      const OrigRegExp = globalThis.RegExp;
+      let compileCount = 0;
+      globalThis.RegExp = new Proxy(OrigRegExp, {
+        construct(target, args, newTarget) {
+          compileCount += 1;
+          return Reflect.construct(target, args, newTarget);
+        },
+      });
+      try {
+        expect(scanCustomPatterns('cache_probe_123456', uniquePattern)).toHaveLength(1);
+        expect(compileCount).toBe(1);
+        expect(scanCustomPatterns('cache_probe_654321', uniquePattern)).toHaveLength(1);
+        expect(compileCount).toBe(1);
+      } finally {
+        globalThis.RegExp = OrigRegExp;
+      }
 
       const bounded = createSecretlintScannerAdapter({ maxScanChars: 80 });
       expect(bounded.scan(`${'x'.repeat(120)} ${FAKE_AWS}`)).toEqual([]);
