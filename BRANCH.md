@@ -64,6 +64,6 @@ Add real Claude 5.5 catalog profiles (`claude-opus-5-5`, `claude-sonnet-5-5`, `c
   - [x] `muse` (`MuseRuntimeClient`): project validated effort-only `reasoning: { effort }` on `/v1/responses` while rejecting `none` and unsupported fields (`summary`, `enabled`, `budgetTokens`) fail-closed before I/O.
   - [x] `mistral-vibe` (`MistralRuntimeClient`): clamp `mistral-large-4` (`xhigh`/`max` -> `high`) and `zai-glm-5-3` (`medium` -> `low`, `xhigh` -> `high`) to model-supported efforts; add `'max'` to `CodexReasoningEffort`.
 - [ ] **Lot 3 — Version 0.38.8, validation gates, and PR**
-  - [ ] Bump `@sentropic/llm-mesh` to `0.38.8`, update `CHANGELOG.md`, `decision-public-surface.test.ts`, lockfiles, and `cluster-mesh` fixtures.
-  - [ ] Run `make check-llm-model-equivalences`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make build-llm-mesh`, `make test-llm-mesh`, `make typecheck-llm-gateway`, `make test-llm-gateway`, and `make scope-check` with `ENV=test-mesh-c55`.
+  - [x] Bump `@sentropic/llm-mesh` to `0.38.8`, update `CHANGELOG.md`, `decision-public-surface.test.ts`, lockfiles, and `cluster-mesh` fixtures.
+  - [x] Run `make check-llm-model-equivalences`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make build-llm-mesh`, `make test-llm-mesh`, `make typecheck-llm-gateway`, `make test-llm-gateway`, and `make scope-check` with `ENV=test-mesh-c55`.
   - [ ] Push `feat/llm-mesh-claude-55`, open PR, and wait for CI green on exact HEAD without merging.
