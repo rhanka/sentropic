@@ -54,10 +54,11 @@ describe('product native route and quote composition', () => {
     expect(plane.nativeCountTokens).toBe(port.countTokens);
     expect(port.countTokens.prepare).not.toHaveBeenCalled();
   });
-  // W folds every launch alias (N12c): `claude-opus-5-5` is unknown here, not
-  // exclusively unavailable — the port allowlist still gates `claude-opus-5`.
-  it.each([['unknown-model', 'missing-model'], ['unknown-model', 'claude-opus-5-5'],
-    ['native-unavailable', 'gpt-5.6-terra'], ['native-unavailable', 'claude-opus-5']])('refuses %s %s before route bookkeeping', async (code, model) => {
+  // `claude-opus-5-5` is in the Anthropic catalog and gated by the native allowlist,
+  // while suffixed launch alias `claude-opus-5-5-xhigh` stays unknown.
+  it.each([['unknown-model', 'missing-model'], ['unknown-model', 'claude-opus-5-5-xhigh'],
+    ['native-unavailable', 'gpt-5.6-terra'], ['native-unavailable', 'claude-opus-5-5'],
+    ['native-unavailable', 'claude-opus-5']])('refuses %s %s before route bookkeeping', async (code, model) => {
     const { plane, available, prepare } = fixture();
     expect(() => plane.planner.quote!({ ...quoteInput, requestedModel: model })).toThrow(expect.objectContaining({ code }));
     await expect(plane.planner.plan(subject, { ...route, requestedModel: model })).rejects.toMatchObject({ code });

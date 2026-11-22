@@ -1470,6 +1470,9 @@ function addSharedNormalizerFixture(
 
 addTransportEquivalentFixture('anthropic', 'claude-fable-5', 'claude-fable-5-1', 'Claude Fable 5.1');
 addTransportEquivalentFixture('anthropic', 'claude-fable-5-1', 'claude-fable-5-2', 'Claude Fable 5.2');
+addTransportEquivalentFixture('anthropic', 'claude-fable-5', 'claude-opus-5-5', 'Claude Opus 5.5');
+addTransportEquivalentFixture('anthropic', 'claude-fable-5', 'claude-sonnet-5-5', 'Claude Sonnet 5.5');
+addTransportEquivalentFixture('anthropic', 'claude-fable-5', 'claude-haiku-5-5', 'Claude Haiku 5.5');
 addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'mistral-large-4', 'Mistral Large 4');
 addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'mistral-medium-3.5', 'Mistral Medium 3.5');
 addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'zai-glm-5-3', 'GLM 5.3 (Mistral)');
