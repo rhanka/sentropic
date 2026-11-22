@@ -36,7 +36,9 @@ import { runReservationReaperSweep, type ReapResult } from '../../../api/src/ser
 import {
   createHostReadiness, storeProbe, type DependencyProbe, type HostReadiness, type ProbeFailure,
 } from './readiness';
-import { createSecretlintScannerAdapter, type SecretlintGuardOptions } from './secretlint-scanner-adapter';
+import {
+  buildSecretlintGuardEngineOptions, createSecretlintScannerAdapter, type SecretlintGuardOptions,
+} from './secretlint-scanner-adapter';
 
 type Gateway = typeof import('@sentropic/llm-gateway');
 type Probe = (signal: AbortSignal) => Promise<boolean>;
@@ -240,7 +242,10 @@ export const createHostApp = async (options: CreateHostAppOptions): Promise<Host
       const router = new Hono();
       router.use('/v1/*', settlementModeMiddleware());
       const guard = dependencies.guard ?? (dependencies.secretlint
-        ? new gateway.GuardEngine({ ...dependencies.secretlint, secretScanner: createSecretlintScannerAdapter(dependencies.secretlint) })
+        ? new gateway.GuardEngine(buildSecretlintGuardEngineOptions(
+          dependencies.secretlint,
+          createSecretlintScannerAdapter(dependencies.secretlint),
+        ))
         : undefined);
       router.route('/', gateway.createGatewayRouter({
         config, readiness, routePlanner, routeMetering, ...(routeInput ? { routeInput } : {}),

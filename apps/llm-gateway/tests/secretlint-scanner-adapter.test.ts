@@ -2,11 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { GuardEngine } from '@sentropic/llm-gateway';
 import { createHostApp } from '../src/app';
 import {
   SECRETLINT_MAX_SCAN_CHARS, SECRETLINT_MAX_YAML_BYTES, SECRETLINT_PRESET_RULE_COUNT,
   SECRETLINT_SCAN_LIMIT_RULE_ID, SecretPatternYamlError,
-  createSecretlintScannerAdapter, loadSecretPatterns, parseSecretPatternsYaml,
+  buildSecretlintGuardEngineOptions, createSecretlintScannerAdapter, loadSecretPatterns, parseSecretPatternsYaml,
 } from '../src/secretlint-scanner-adapter';
 import { scanCustomPatterns } from '../src/secretlint-yaml-patterns';
 import { AUTHORIZATION, fixtureDependencies, testConfig } from './fixtures';
@@ -155,6 +156,29 @@ describe('L1.3d standalone host secretlint adapter', () => {
     expect(matches.length).toBeGreaterThanOrEqual(3);
     for (let i = 0; i + 1 < matches.length; i += 1) expect(matches[i]!.end).toBeLessThanOrEqual(matches[i + 1]!.start);
     expect(adapter.scan(`token: ${FAKE_KUBE_TOKEN}`, { includeDefaultPatterns: false })).toEqual([]);
+  });
+
+  it('avoids double-counting customPatterns and fails closed on scan-limit in createHostApp', async () => {
+    const customPatterns = [{ id: 'org-token', pattern: 'stp_[A-Za-z0-9]{32}' }];
+    const opts = { customPatterns };
+    const guard = new GuardEngine(buildSecretlintGuardEngineOptions(opts, createSecretlintScannerAdapter(opts)));
+    expect(guard.scanText(`token=${FAKE_ORG_TOKEN}`).findings.find((f) => f.detectorId === 'custom:org-token')?.count).toBe(1);
+
+    const generateSpy = vi.fn();
+    const host = await createHostApp({
+      config: testConfig(),
+      dependencies: {
+        ...fixtureDependencies(undefined, generateSpy).dependencies,
+        secretlint: { customPatterns, maxScanChars: 80, detectorActions: { 'custom:org-token': 'mask_in_flight' } },
+      },
+    });
+    const overRes = await host.app.request('/v1/chat/completions', {
+      method: 'POST', headers: { authorization: AUTHORIZATION, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-fixture', messages: [{ role: 'user', content: `${'x'.repeat(120)} ${FAKE_ORG_TOKEN}` }] }),
+    });
+    expect(overRes.status).toBe(400);
+    expect(overRes.headers.get('x-should-retry')).toBe('false');
+    expect(generateSpy).not.toHaveBeenCalled();
   });
 
   it('wires secretlint into createHostApp: refuses YAML mask_in_flight inside P across all 3 wires and keeps default byte-identical', async () => {

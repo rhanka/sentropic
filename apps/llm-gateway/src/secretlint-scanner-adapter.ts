@@ -228,3 +228,23 @@ export class SecretlintScannerAdapter implements SecretScannerPort {
 
 export const createSecretlintScannerAdapter = (options?: SecretlintScannerOptions): SecretlintScannerAdapter =>
   new SecretlintScannerAdapter(options);
+
+export const buildSecretlintGuardEngineOptions = (
+  options: SecretlintGuardOptions | undefined,
+  secretScanner: SecretScannerPort,
+): GuardEngineOptions => {
+  const hasStrictPolicy = options?.defaultAction === 'block'
+    || options?.defaultAction === 'mask_in_flight'
+    || Object.values(options?.detectorActions ?? {}).some((a) => a === 'block' || a === 'mask_in_flight');
+  const detectorActions = hasStrictPolicy
+    ? { [SECRETLINT_SCAN_LIMIT_RULE_ID]: 'block' as const, ...options?.detectorActions }
+    : options?.detectorActions;
+  return {
+    ...(options?.defaultAction !== undefined ? { defaultAction: options.defaultAction } : {}),
+    ...(options?.hopEgressHighConfidenceAction !== undefined
+      ? { hopEgressHighConfidenceAction: options.hopEgressHighConfidenceAction }
+      : {}),
+    ...(detectorActions !== undefined ? { detectorActions } : {}),
+    secretScanner,
+  };
+};
