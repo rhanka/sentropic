@@ -53,11 +53,11 @@ Add real Claude 5.5 catalog profiles (`claude-opus-5-5`, `claude-sonnet-5-5`, `c
   - [x] Create isolated worktree `tmp/llm-mesh-claude-55` on `feat/llm-mesh-claude-55` from `origin/main`.
   - [x] Verify `claude`, `agy`, `muse`, `codex`, and `vibe` effort support and audit gateway alias collision.
   - [x] Confirm ports `API_PORT=9212 UI_PORT=5412 MAILDEV_UI_PORT=1312` and `ENV=test-mesh-c55`.
-- [ ] **Lot 1 — Claude 5.5 catalog profiles and gateway alias collision decoupling**
+- [x] **Lot 1 — Claude 5.5 catalog profiles and gateway alias collision decoupling**
   - [x] Add `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5` to `providers.ts`, `catalog.ts`, and `council.source.json` + regenerate `generated-model-council.ts`.
   - [x] Add `GATEWAY_ALIAS_ONLY_CLAUDE_MODEL_IDS` guard in `routing-targets.ts` and `route-selection.ts` so gateway launch aliases stay unchanged while direct `anthropic:claude-*-5-5` seat routing works.
   - [x] Add `supportedEfforts` metadata to audited catalog profiles (`gemini-4-*`, `gpt-6-luna`, `mistral-large-4`, `zai-glm-5-3`, `muse-wonder-1.0`, `muse-ember-1.0`, `claude-*-5-5`).
-  - [ ] Update catalog, council, routing, and impacted `api` unit/API fixture tests.
+  - [x] Update catalog, council, routing, and impacted `api` unit/API fixture tests.
 - [ ] **Lot 2 — Per-seat effort mapping fixes (test-first)**
   - [ ] `claude-code` (`ClaudeCodeRuntimeClient`, `NodeClaudeCodeCliRunner`): forward validated per-request `effort` to `--effort` and reject unsupported efforts (`none`, unknown, or disallowed per profile) before spawning with a clear error.
   - [ ] `cloud-code` (`CloudCodeRuntimeClient`): map `max` to `XHIGH` (`-xhigh`) for `CLOUD_CODE_XHIGH_MODEL_IDS` (`gemini-4-neon`, `gemini-4-hydrogen`) while keeping `HIGH` clamp for `gemini-4-argon` and `gemini-4-carbon`.

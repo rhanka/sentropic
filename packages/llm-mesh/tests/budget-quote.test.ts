@@ -391,7 +391,18 @@ describe('pure route quote', () => {
     expect(modelProfiles
       .filter((profile) => profile.capabilities.maxOutputTokens !== undefined)
       .map((profile) => `${profile.providerId}/${profile.modelId}=${profile.capabilities.maxOutputTokens}`))
-      .toEqual(['gemini/gemini-3.7-flash=65536', 'gemini/gemini-3.8-flash=65536', 'gemini/gemini-4-argon=65536', 'gemini/gemini-4-hydrogen=65536', 'gemini/gemini-4-neon=65536', 'gemini/gemini-4-carbon=65536', 'mistral/zai-glm-5-3=131072']);
+      .toEqual([
+        'gemini/gemini-3.7-flash=65536',
+        'gemini/gemini-3.8-flash=65536',
+        'gemini/gemini-4-argon=65536',
+        'gemini/gemini-4-hydrogen=65536',
+        'gemini/gemini-4-neon=65536',
+        'gemini/gemini-4-carbon=65536',
+        'anthropic/claude-opus-5-5=128000',
+        'anthropic/claude-sonnet-5-5=128000',
+        'anthropic/claude-haiku-5-5=128000',
+        'mistral/zai-glm-5-3=131072',
+      ]);
     const capped = quoteRoute(quoteInput('gemini-3.8-flash'));
     expect(capped.candidates[0]!.allowance.outputTokens).toBe(65_536);
     const below = quoteRoute(quoteInput('gemini-3.8-flash', {

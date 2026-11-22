@@ -768,6 +768,9 @@ describe('explicitly selected canonical mapping tables', () => {
   });
 
   it('routes claude-opus-5-5 through Wonder, Sol 6.2 and Neon without a faithful target', () => {
+    for (const id of ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] as const) {
+      expect(modelProfiles.find((p) => p.providerId === 'anthropic' && p.modelId === id)).toBeDefined();
+    }
     const muse = {
       providerId: 'muse', transportProviderId: 'muse',
       model: 'muse-wonder-1.0', effort: 'high',

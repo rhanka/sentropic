@@ -17,11 +17,12 @@ describe('model equivalence council', () => {
     )).not.toThrow();
   });
 
-  it('derives the 5.5 aliases to their first standard target without a profile or exclusion', () => {
-    for (const [alias, effort, modelId] of [
-      ['claude-opus-5-5', 'high', 'muse-wonder-1.0'],
-      ['claude-opus-5-5-max', 'max', 'muse-wonder-full-1.0'],
-      ['claude-sonnet-5-5', 'high', 'muse-spark-1.3-contributor'],
+  it('derives the 5.5 aliases to their first standard target while classifying real 5.5 catalog profiles', () => {
+    for (const [alias, effort, modelId, hasProfile] of [
+      ['claude-opus-5-5', 'high', 'muse-wonder-1.0', true],
+      ['claude-opus-5-5-max', 'max', 'muse-wonder-full-1.0', false],
+      ['claude-sonnet-5-5', 'high', 'muse-spark-1.3-contributor', true],
+      ['claude-haiku-5-5', 'high', 'muse-spark-1.3-contributor', true],
     ] as const) {
       expect(DEFAULT_MODEL_EQUIVALENCE_COUNCIL.aliases.find(
         (entry) => entry.alias === alias,
@@ -29,9 +30,14 @@ describe('model equivalence council', () => {
         alias, providerId: 'muse', modelId,
         transportProviderId: 'muse', effort,
       });
-      expect(modelProfiles.some((profile) => profile.modelId === alias)).toBe(false);
-      expect(DEFAULT_MODEL_EQUIVALENCE_COUNCIL.exclusions.map((entry) => entry.modelId))
-        .not.toContain(alias);
+      expect(modelProfiles.some((profile) => profile.modelId === alias)).toBe(hasProfile);
+      if (hasProfile) {
+        expect(DEFAULT_MODEL_EQUIVALENCE_COUNCIL.exclusions.map((entry) => `${entry.providerId}:${entry.modelId}`))
+          .toContain(`anthropic:${alias}`);
+      } else {
+        expect(DEFAULT_MODEL_EQUIVALENCE_COUNCIL.exclusions.map((entry) => entry.modelId))
+          .not.toContain(alias);
+      }
     }
     expect(() => validateEquivalenceCouncil(
       DEFAULT_MODEL_EQUIVALENCE_COUNCIL, modelProfiles, now,
