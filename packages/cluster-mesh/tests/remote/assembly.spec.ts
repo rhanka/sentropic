@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
-import { createClusterMeshRuntime, NamespaceRegistrationError, type ClusterMeshHonoNamespaceModule } from '../../src/index.js';
 import {
-  composeRemoteRoot, REMOTE_MOUNT_MAP_V1, RemoteAssemblyError, validateRemoteAuthorityBinding,
-  validateRemoteTenantAdmission, type RemoteAuthorityBinding, type RemoteTier, type RemoteUpgradeAdapter,
-} from '../../src/remote/assembly-contract.js';
+  composeRemoteRoot, createClusterMeshRuntime, createRemoteChannelCreditWindow,
+  NamespaceRegistrationError, PINNED_R11_WET2_TEXT_HASH, REMOTE_MOUNT_MAP_V1,
+  RemoteAssemblyError, validateRemoteAuthorityBinding, validateRemoteTenantAdmission,
+  type ClusterMeshHonoNamespaceModule, type RemoteAuthorityBinding,
+  type RemoteTier, type RemoteUpgradeAdapter,
+} from '../../src/index.js';
 
 const makeRuntime = () => createClusterMeshRuntime({
   generationId: 'rm0-gen-1',
@@ -58,6 +61,19 @@ const makeUpgradeAdapter = (binding: RemoteAuthorityBinding): RemoteUpgradeAdapt
 });
 
 describe('RM-0 (a) assembly proof: package-only Remote root and binding invariants', () => {
+  it('re-exports RM-0 contracts from the package root while keeping ./trunk and ./node-enrolment unexported at RM-0', () => {
+    const manifest = JSON.parse(
+      readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+    ) as { exports: Record<string, unknown> };
+    expect(typeof composeRemoteRoot).toBe('function');
+    expect(typeof validateRemoteAuthorityBinding).toBe('function');
+    expect(typeof validateRemoteTenantAdmission).toBe('function');
+    expect(typeof createRemoteChannelCreditWindow).toBe('function');
+    expect(PINNED_R11_WET2_TEXT_HASH).toMatch(/^[a-f0-9]{64}$/u);
+    expect(Object.hasOwn(manifest.exports, './trunk')).toBe(false);
+    expect(Object.hasOwn(manifest.exports, './node-enrolment')).toBe(false);
+  });
+
   it('mounts createClusterMeshPlugin at / with a single /apps module, /auth, UI, and both upgrades', async () => {
     const binding = makeBinding();
     const composed = composeRemoteRoot({

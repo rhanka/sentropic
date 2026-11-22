@@ -61,3 +61,6 @@ export { createGitHubAppApi } from './forge/github-api.js';
 export { createGitHubAppEnrollment } from './forge/enrollment.js';
 export { createGitHubAppRouter } from './forge/hono.js';
 export * from './prompts/registry.js';
+export * from './remote/assembly-contract.js';
+export * from './remote/credit-baseline.js';
+export * from './remote/contract-receipt.js';
