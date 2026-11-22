@@ -5,6 +5,7 @@
 // var NAME is quoted, never its value.
 
 import { stderr, stdout } from 'node:process';
+import { CloudCodeEnrollmentProvider } from '../../enrollment/cloud-code.js';
 import { CodexEnrollmentProvider } from '../../enrollment/codex.js';
 import type { EnrollmentProvider } from '../../enrollment/contracts.js';
 import { MuseCodeEnrollmentProvider } from '../../enrollment/muse-code.js';
@@ -33,6 +34,7 @@ export interface EnrollCliDeps {
   fetchFn?: typeof fetch;
   writers?: CliWriters;
   env?: Record<string, string | undefined>;
+  readAgyToken?: () => Promise<string>;
 }
 
 export interface ParsedArgs {
@@ -46,6 +48,8 @@ export interface ParsedArgs {
   model?: string;
   effort?: string;
   maxAttempts?: number;
+  fromAgy?: boolean;
+  agyTokenFile?: string;
 }
 
 const KNOWN_FLAGS = new Set([
@@ -58,6 +62,8 @@ const KNOWN_FLAGS = new Set([
   'model',
   'effort',
   'max-attempts',
+  'from-agy',
+  'agy-token-file',
   'help',
 ]);
 
@@ -98,16 +104,20 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
   }
   rejectUnknownFlags(rest);
   const maxAttemptsRaw = flagValue(rest, 'max-attempts');
+  const provider = flagValue(rest, 'provider') ?? 'muse-code';
+  const defaultModel = provider === 'cloud-code' ? 'gemini-4-hydrogen' : 'muse-wonder-1.0';
   return {
     command,
-    provider: flagValue(rest, 'provider') ?? 'muse-code',
+    provider,
     keyringDir: flagValue(rest, 'keyring-dir'),
     keyringKeyEnv: flagValue(rest, 'keyring-key-env'),
     ownerScope: flagValue(rest, 'owner-scope'),
     label: flagValue(rest, 'label'),
     account: flagValue(rest, 'account'),
-    model: flagValue(rest, 'model') ?? 'muse-wonder-1.0',
+    model: flagValue(rest, 'model') ?? defaultModel,
     effort: flagValue(rest, 'effort') ?? 'low',
+    ...(hasFlag(rest, 'from-agy') ? { fromAgy: true } : {}),
+    ...(flagValue(rest, 'agy-token-file') ? { agyTokenFile: flagValue(rest, 'agy-token-file') } : {}),
     ...(maxAttemptsRaw !== undefined ? { maxAttempts: Number(maxAttemptsRaw) } : {}),
   };
 };
@@ -117,8 +127,13 @@ export const usageText = (): string =>
     'llm-mesh-enroll enroll --provider muse-code --keyring-dir <dir>',
     '  --owner-scope <ref> [--label <label>] --keyring-key-env <NAME>',
     '  [--max-attempts <n>]',
+    'llm-mesh-enroll enroll --provider cloud-code --from-agy --keyring-dir <dir>',
+    '  [--account <id>] [--owner-scope <ref>] [--label <label>]',
+    '  [--keyring-key-env <NAME>] [--agy-token-file <path>]',
     'llm-mesh-enroll probe --provider muse-code --keyring-dir <dir>',
     '  --account <id> --model muse-wonder-1.0 --effort low --keyring-key-env <NAME>',
+    'llm-mesh-enroll probe --provider cloud-code --keyring-dir <dir>',
+    '  --account <id> [--model gemini-4-hydrogen] [--effort low] [--keyring-key-env <NAME>]',
   ].join('\n');
 
 export const defaultWriters = (): CliWriters => ({
@@ -150,8 +165,26 @@ export const resolveMasterKey = (
   }
 };
 
+export const openKeyringForCli = (
+  provider: string,
+  keyringDir: string,
+  keyringKeyEnv: string | undefined,
+  env: Record<string, string | undefined>,
+): { keyring?: EncryptedFileKeyring; error?: string } => {
+  if (keyringKeyEnv !== undefined) {
+    const resolved = resolveMasterKey(keyringKeyEnv, env);
+    if (!resolved.key) return { error: resolved.error ?? 'key error' };
+    return { keyring: new EncryptedFileKeyring(keyringDir, resolved.key) };
+  }
+  if (provider === 'cloud-code') {
+    return { keyring: new EncryptedFileKeyring(keyringDir) };
+  }
+  return { error: 'missing --keyring-key-env <NAME>' };
+};
+
 const buildProviders = (fetchFn: typeof fetch): Map<string, EnrollmentProvider> =>
   new Map<string, EnrollmentProvider>([
+    ['cloud-code', new CloudCodeEnrollmentProvider({ fetchFn })],
     ['muse-code', new MuseCodeEnrollmentProvider({ fetchFn })],
     ['codex', new CodexEnrollmentProvider({ fetchFn })],
   ]);
