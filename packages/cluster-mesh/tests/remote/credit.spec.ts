@@ -91,4 +91,63 @@ describe('RM-0 (d) credit proof: relay evaluator reuse and Remote two-node windo
     })).toBe('allow');
     expect(window.send('node-A', 16384)).toEqual({ ok: true, nodeId: 'node-A', seq: 3, cumulativeBytes: 49152 });
   });
+
+  it('rejects non-monotonic credit acks, invalid channel/window bounds, bad nodeIds, and keeps recordEnds bounded', () => {
+    const advancedState = makeLedgerState({
+      creditRevision: 2, receivedThroughSeq: 6, receivedThroughBytes: 6000, sendLimitSeq: 10, sendLimitBytes: 131072,
+      recordEnds: [[0, 0], [2, 2000], [6, 6000]],
+    });
+    expect(evaluateRemoteCreditGrant(makeGrant({
+      creditRevision: 3, receivedThroughSeq: 2, receivedThroughBytes: 2000, sendLimitSeq: 10, sendLimitBytes: 131072,
+    }), advancedState)).toBe('relay_frame_conflict');
+    expect(evaluateRemoteCreditGrant(makeGrant({
+      creditRevision: 3, receivedThroughSeq: 6, receivedThroughBytes: 5999, sendLimitSeq: 10, sendLimitBytes: 131072,
+    }), advancedState)).toBe('relay_frame_conflict');
+    expect(evaluateRemoteCreditGrant(makeGrant({
+      creditRevision: 3, receivedThroughSeq: 6, receivedThroughBytes: 6000, sendLimitSeq: 5, sendLimitBytes: 131072,
+    }), advancedState)).toBe('relay_frame_conflict');
+    expect(evaluateRemoteCreditGrant(makeGrant({
+      creditRevision: 3, receivedThroughSeq: 6, receivedThroughBytes: 6000, sendLimitSeq: 10, sendLimitBytes: 5999,
+    }), advancedState)).toBe('relay_frame_conflict');
+
+    const base = { hopId: 'browser-sock-1', direction: 'app-to-browser' as const, ch: 1, linkGeneration: 1, maxRecordBytes: 8192 };
+    expect(() => createRemoteChannelCreditWindow({ ...base, ch: 0 })).toThrow(RangeError);
+    expect(() => createRemoteChannelCreditWindow({ ...base, linkGeneration: 0 })).toThrow(RangeError);
+    expect(() => createRemoteChannelCreditWindow({ ...base, maxRecordBytes: 0 })).toThrow(RangeError);
+    expect(() => createRemoteChannelCreditWindow({ ...base, initialLimitRecords: REMOTE_CREDIT_MAX_RECORDS + 1 })).toThrow(RangeError);
+    expect(() => createRemoteChannelCreditWindow({ ...base, initialLimitBytes: REMOTE_CREDIT_MAX_BYTES + 1 })).toThrow(RangeError);
+
+    const window = createRemoteChannelCreditWindow(base);
+    expect(window.send('', 1000)).toEqual({ ok: false, reason: 'invalid_node_id' });
+    expect(window.send('n'.repeat(37), 1000)).toEqual({ ok: false, reason: 'invalid_node_id' });
+    expect(window.send('nœud-1', 1000)).toEqual({ ok: false, reason: 'invalid_node_id' });
+
+    for (let i = 0; i < 6; i += 1) expect(window.send('node-A', 1000)).toMatchObject({ ok: true, seq: i + 1 });
+    expect(window.applyCredit({
+      hopId: 'browser-sock-1', direction: 'app-to-browser', ch: 1, linkGeneration: 1, creditRevision: 2,
+      receivedThroughSeq: 6, receivedThroughBytes: 6000, sendLimitSeq: 10, sendLimitBytes: 131072,
+    })).toBe('allow');
+    expect(window.applyCredit({
+      hopId: 'browser-sock-1', direction: 'app-to-browser', ch: 1, linkGeneration: 1, creditRevision: 3,
+      receivedThroughSeq: 2, receivedThroughBytes: 2000, sendLimitSeq: 10, sendLimitBytes: 131072,
+    })).toBe('relay_frame_conflict');
+
+    let rev = 2;
+    let seq = 6;
+    let bytes = 6000;
+    for (let cycle = 0; cycle < 30; cycle += 1) {
+      for (let i = 0; i < 4; i += 1) {
+        seq += 1;
+        bytes += 1000;
+        expect(window.send('node-A', 1000)).toEqual({ ok: true, nodeId: 'node-A', seq, cumulativeBytes: bytes });
+      }
+      rev += 1;
+      expect(window.applyCredit({
+        hopId: 'browser-sock-1', direction: 'app-to-browser', ch: 1, linkGeneration: 1, creditRevision: rev,
+        receivedThroughSeq: seq, receivedThroughBytes: bytes,
+        sendLimitSeq: seq + REMOTE_CREDIT_MAX_RECORDS, sendLimitBytes: bytes + REMOTE_CREDIT_MAX_BYTES,
+      })).toBe('allow');
+      expect(window.retainedBoundaryCount()).toBeLessThanOrEqual(REMOTE_CREDIT_MAX_RECORDS + 1);
+    }
+  });
 });
