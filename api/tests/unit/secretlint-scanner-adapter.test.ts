@@ -1,11 +1,17 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { Hono } from 'hono';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryRoutePlanner, type PreparedRouteAttempt } from '@sentropic/llm-mesh';
 import {
   GuardEngine, createGatewayRouter, redactSecretMatches, type RouteFlowDeps,
 } from '@sentropic/llm-gateway';
+import {
+  createGwNamespaceModule, GW_AUTHOR, type CreateGwNamespaceModuleOptions,
+} from '../../src/routes/namespaces/gw';
+import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
+import { routePartitionHash } from '../../src/services/llm-metering';
 import {
   SECRETLINT_MAX_SCAN_CHARS, SECRETLINT_MAX_YAML_BYTES, SECRETLINT_PRESET_RULE_COUNT,
   SECRETLINT_SCAN_LIMIT_RULE_ID, SecretPatternYamlError,
@@ -64,6 +70,43 @@ const plannerFor = (dispatchSpy: (req: unknown) => void, model: string, provider
     }) as unknown as PreparedRouteAttempt,
   },
 });
+
+afterEach(() => vi.restoreAllMocks());
+
+const buildGwModule = async (
+  dispatchSpy: (req: unknown) => void,
+  model: string,
+  provider: string,
+  extra: Partial<CreateGwNamespaceModuleOptions> = {},
+) => {
+  const control = clusterMeshAdapter.sessionControl!;
+  vi.spyOn(control.cutovers, 'find').mockResolvedValue({
+    compositionRoot: 'product', namespace: '/gw', status: 'active', activeAuthor: GW_AUTHOR,
+    selectedGenerationId: control.runtime.generation.generationId,
+  } as NonNullable<Awaited<ReturnType<typeof control.cutovers.find>>>);
+  const tenants = { t1: { product: ['u1'] } };
+  const partition = { revision: 'r-l13d', hash: routePartitionHash('r-l13d', tenants), tenants };
+  const planner = plannerFor(dispatchSpy, model, provider);
+  return createGwNamespaceModule({
+    nativeMessagesEnabled: false,
+    routePlane: { planner } as unknown as CreateGwNamespaceModuleOptions['routePlane'],
+    authenticate: async (_c, next) => next(),
+    resolveCaller: () => ({
+      tenantId: 't1', workspaceId: 'w1', principalId: 'u1',
+      ownerScopeRef: 'w1:u1', source: 'test', correlationId: 'c1',
+    }),
+    budget: {
+      admit: async () => ({ kind: 'admitted', holdRef: 'hold-l13d' }),
+      markDispatched: async () => undefined,
+      release: async () => undefined,
+      probe: async () => true,
+    },
+    settlement: { settleRoute: async () => undefined, probe: async () => true },
+    partition: { load: () => partition, expected: () => partition },
+    identityReady: async () => true,
+    ...extra,
+  });
+};
 
 describe('L1.3d API secretlint host adapter', () => {
   it('loads all 28 preset-recommend rules, matches lintSource parity, never echoes secrets, and ignores secretlint-disable', async () => {
@@ -238,6 +281,69 @@ describe('L1.3d API secretlint host adapter', () => {
       expect(okRes.status).toBe(200);
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       expect(JSON.stringify(dispatchSpy.mock.calls[0]![0])).not.toContain(FAKE_ORG_TOKEN);
+    }
+  });
+
+  it('wires secretlint eagerly inside createGwNamespaceModule: enforces P on 3 wires, keeps default byte-identical, and fails closed 503 on bad YAML', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'l13d-gw-mod-'));
+    try {
+      const defaultSpy = vi.fn();
+      const defaultMod = await buildGwModule(defaultSpy, 'gpt-5.6-terra', 'openai');
+      const defaultApp = new Hono().route('/api/v1/gw', defaultMod.createRouter());
+      const defaultRes = await defaultApp.request('/api/v1/gw/v1/chat/completions', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-5.6-terra', messages: [{ role: 'developer', content: `dev ${FAKE_ORG_TOKEN}` }, { role: 'user', content: 'hi' }] }),
+      });
+      expect(defaultRes.status, await defaultRes.clone().text()).toBe(200);
+      expect(JSON.stringify(defaultSpy.mock.calls[0]![0])).toContain(FAKE_ORG_TOKEN);
+
+      const cases = [
+        { path: '/v1/messages', model: 'claude-sonnet-5', provider: 'anthropic',
+          bad: { model: 'claude-sonnet-5', max_tokens: 16, system: `sys ${FAKE_ORG_TOKEN}`, messages: [{ role: 'user', content: 'hi' }] },
+          ok: { model: 'claude-sonnet-5', max_tokens: 16, system: 'clean', messages: [{ role: 'user', content: `tok ${FAKE_ORG_TOKEN}` }] } },
+        { path: '/v1/chat/completions', model: 'gpt-5.6-terra', provider: 'openai',
+          bad: { model: 'gpt-5.6-terra', messages: [{ role: 'developer', content: `dev ${FAKE_ORG_TOKEN}` }, { role: 'user', content: 'hi' }] },
+          ok: { model: 'gpt-5.6-terra', messages: [{ role: 'developer', content: 'clean' }, { role: 'user', content: `tok ${FAKE_ORG_TOKEN}` }] } },
+        { path: '/v1/responses', model: 'gpt-5.6-terra', provider: 'openai',
+          bad: { model: 'gpt-5.6-terra', instructions: `inst ${FAKE_ORG_TOKEN}`, input: [{ role: 'user', content: 'hi' }] },
+          ok: { model: 'gpt-5.6-terra', instructions: 'clean', input: [{ role: 'user', content: `tok ${FAKE_ORG_TOKEN}` }] } },
+      ] as const;
+      for (const tc of cases) {
+        const patternsFilePath = join(dir, `patterns-${tc.provider}.yaml`);
+        writeFileSync(patternsFilePath, 'patterns:\n  - id: org-token\n    pattern: "stp_[A-Za-z0-9]{32}"\n');
+        const dispatchSpy = vi.fn();
+        const mod = await buildGwModule(dispatchSpy, tc.model, tc.provider, {
+          secretlint: { patternsFilePath, detectorActions: { 'custom:org-token': 'mask_in_flight' } },
+        });
+        unlinkSync(patternsFilePath);
+        const app = new Hono().route('/api/v1/gw', mod.createRouter());
+        expect(() => mod.createRouter()).not.toThrow();
+        const badRes = await app.request(`/api/v1/gw${tc.path}`, {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(tc.bad),
+        });
+        expect(badRes.status).toBe(400);
+        expect(badRes.headers.get('x-should-retry')).toBe('false');
+        expect(dispatchSpy).not.toHaveBeenCalled();
+        const okRes = await app.request(`/api/v1/gw${tc.path}`, {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(tc.ok),
+        });
+        expect(okRes.status).toBe(200);
+        expect(dispatchSpy).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(dispatchSpy.mock.calls[0]![0])).not.toContain(FAKE_ORG_TOKEN);
+        expect(JSON.stringify(dispatchSpy.mock.calls[0]![0])).toContain('<<SECRET:custom_org-token:');
+      }
+
+      const broken = await buildGwModule(vi.fn(), 'claude-sonnet-5', 'anthropic', {
+        secretlint: { patternsFilePath: join(dir, 'missing.yaml') },
+      });
+      const brokenApp = new Hono().route('/api/v1/gw', broken.createRouter());
+      for (const path of ['/api/v1/gw/healthz', '/api/v1/gw/v1/messages']) {
+        const res = await brokenApp.request(path, path.endsWith('messages') ? { method: 'POST', body: '{}' } : undefined);
+        expect(res.status).toBe(503);
+        expect(await res.json()).toEqual({ error: 'gateway_module_unavailable' });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

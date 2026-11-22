@@ -201,6 +201,7 @@ export const createGwNamespaceModule = async (
 
   let prepared: ClusterMeshHonoNamespaceModule;
   try {
+    const guard = options.guard ?? (options.secretlint ? createSecretlintGuard(options.secretlint) : undefined);
     prepared = await createGatewayNamespaceModule(options.modules ?? createClusterMeshModules(), {
       enabled: options.enabled ?? true,
       authMode: 'host',
@@ -245,7 +246,6 @@ export const createGwNamespaceModule = async (
         router.use('/muse-code/models', authenticate);
         router.use('/muse-code/models', settlementMode);
         router.use('/muse-code/models', bridgeCaller);
-        const guard = options.guard ?? (options.secretlint ? createSecretlintGuard(options.secretlint) : undefined);
         router.route('/', gateway.createGatewayRouter({
           config, readiness, routePlanner: routePlane.planner, routeMetering: settlement,
           nativeMessagesEnabled, nativeCountTokens: routePlane.nativeCountTokens, nativeCountRate: options.nativeCountRate,
