@@ -13,7 +13,7 @@ import {
 } from '@sentropic/cluster-mesh';
 import { createGatewayNamespaceModule } from '@sentropic/cluster-mesh/compose/gateway';
 import type {
-  BudgetAdmissionPort, CallerAuthPort, CreateGatewayRouterOptions, GatewayConfig, RouteMeteringSink,
+  BudgetAdmissionPort, CallerAuthPort, CreateGatewayRouterOptions, GatewayConfig, GuardPort, RouteMeteringSink,
 } from '@sentropic/llm-gateway';
 import type { RoutePlanner } from '@sentropic/llm-mesh';
 import { startGatewayHost, type StartGatewayHostOptions } from '@sentropic/llm-gateway/node';
@@ -36,6 +36,9 @@ import { runReservationReaperSweep, type ReapResult } from '../../../api/src/ser
 import {
   createHostReadiness, storeProbe, type DependencyProbe, type HostReadiness, type ProbeFailure,
 } from './readiness';
+import {
+  buildSecretlintGuardEngineOptions, createSecretlintScannerAdapter, type SecretlintGuardOptions,
+} from './secretlint-scanner-adapter';
 
 type Gateway = typeof import('@sentropic/llm-gateway');
 type Probe = (signal: AbortSignal) => Promise<boolean>;
@@ -70,6 +73,8 @@ export interface HostDependencies {
   readonly budget?: BudgetDependency;
   readonly settlement?: SettlementDependency;
   readonly partition?: PartitionDependency;
+  readonly guard?: GuardPort;
+  readonly secretlint?: SecretlintGuardOptions;
 }
 
 export class HostCompositionError extends Error {
@@ -171,6 +176,7 @@ const validateDependencies = (gateway: Gateway, dependencies: HostDependencies):
     requireMethods('settlement.metering', settlement.metering, ['settleRoute']);
   }
   if (partition) requireMethods('partition.source', partition.source, ['load', 'expected']);
+  if (dependencies.guard) requireMethods('guard', dependencies.guard, ['inspectRequest', 'maskForCapture', 'scanText']);
 };
 
 const SLOTS = ['identity', 'routing', 'budget', 'settlement', 'partition'] as const;
@@ -235,8 +241,15 @@ export const createHostApp = async (options: CreateHostAppOptions): Promise<Host
       const routeInput = dependencies.routing?.routeInput;
       const router = new Hono();
       router.use('/v1/*', settlementModeMiddleware());
+      const guard = dependencies.guard ?? (dependencies.secretlint
+        ? new gateway.GuardEngine(buildSecretlintGuardEngineOptions(
+          dependencies.secretlint,
+          createSecretlintScannerAdapter(dependencies.secretlint),
+        ))
+        : undefined);
       router.route('/', gateway.createGatewayRouter({
         config, readiness, routePlanner, routeMetering, ...(routeInput ? { routeInput } : {}),
+        ...(guard ? { guard } : {}),
         // Budget admission is never optional here: every admitted request reserves before dispatch.
         budget: { port: budgetPort, ...(defaultOutputTokens !== undefined ? { defaultOutputTokens } : {}) },
       }));
