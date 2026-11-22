@@ -9,7 +9,8 @@ import {
 import {
   SECRETLINT_MAX_SCAN_CHARS, SECRETLINT_MAX_YAML_BYTES, SECRETLINT_PRESET_RULE_COUNT,
   SECRETLINT_SCAN_LIMIT_RULE_ID, SecretPatternYamlError,
-  createSecretlintScannerAdapter, loadSecretPatterns, parseSecretPatternsYaml,
+  buildSecretlintGuardEngineOptions, createSecretlintGuard, createSecretlintScannerAdapter,
+  loadSecretPatterns, parseSecretPatternsYaml,
 } from '../../src/services/llm-runtime/secretlint-scanner-adapter';
 
 const ALPHA = 'aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789';
@@ -177,6 +178,25 @@ describe('L1.3d API secretlint host adapter', () => {
     const masked = redactSecretMatches(text, matches);
     for (const raw of [FAKE_ORG_TOKEN, FAKE_KUBE_TOKEN, FAKE_AWS]) expect(masked).not.toContain(raw);
     expect(masked).toContain('<<SECRET:');
+  });
+
+  it('avoids double-counting customPatterns in createSecretlintGuard and fails closed on scan-limit under strict policies', () => {
+    const customPatterns = [{ id: 'org-token', pattern: 'stp_[A-Za-z0-9]{32}' }];
+    const engineOpts = buildSecretlintGuardEngineOptions({ customPatterns, includeDefaultPatterns: false }, createSecretlintScannerAdapter({ customPatterns }));
+    expect(engineOpts.customPatterns).toBeUndefined();
+    expect(engineOpts.includeDefaultPatterns).toBeUndefined();
+    const guard = createSecretlintGuard({ customPatterns });
+    const textRes = guard.scanText(`token=${FAKE_ORG_TOKEN}`);
+    expect(textRes.findings.find((f) => f.detectorId === 'custom:org-token')?.count).toBe(1);
+
+    const auditBounded = createSecretlintGuard({ maxScanChars: 80 });
+    const auditOver = auditBounded.inspectRequest({ messages: [{ role: 'user', content: `${'x'.repeat(120)} ${FAKE_AWS}` }] });
+    expect(auditOver.verdict).toBe('masked');
+    expect(JSON.stringify(auditOver.maskedCapture.payload)).not.toContain(FAKE_AWS);
+
+    const strictBounded = createSecretlintGuard({ maxScanChars: 80, detectorActions: { 'custom:org-token': 'mask_in_flight' } });
+    const strictOver = strictBounded.inspectRequest({ messages: [{ role: 'user', content: `${'x'.repeat(120)} ${FAKE_ORG_TOKEN}` }] });
+    expect(strictOver.verdict).toBe('blocked');
   });
 
   it('refuses YAML mask_in_flight matches inside P across all 3 wires (400, zero dispatch) and preserves audit_mask_copy byte-identity', async () => {
