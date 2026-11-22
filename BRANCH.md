@@ -58,11 +58,11 @@ Add real Claude 5.5 catalog profiles (`claude-opus-5-5`, `claude-sonnet-5-5`, `c
   - [x] Add `GATEWAY_ALIAS_ONLY_CLAUDE_MODEL_IDS` guard in `routing-targets.ts` and `route-selection.ts` so gateway launch aliases stay unchanged while direct `anthropic:claude-*-5-5` seat routing works.
   - [x] Add `supportedEfforts` metadata to audited catalog profiles (`gemini-4-*`, `gpt-6-luna`, `mistral-large-4`, `zai-glm-5-3`, `muse-wonder-1.0`, `muse-ember-1.0`, `claude-*-5-5`).
   - [x] Update catalog, council, routing, and impacted `api` unit/API fixture tests.
-- [ ] **Lot 2 — Per-seat effort mapping fixes (test-first)**
-  - [ ] `claude-code` (`ClaudeCodeRuntimeClient`, `NodeClaudeCodeCliRunner`): forward validated per-request `effort` to `--effort` and reject unsupported efforts (`none`, unknown, or disallowed per profile) before spawning with a clear error.
-  - [ ] `cloud-code` (`CloudCodeRuntimeClient`): map `max` to `XHIGH` (`-xhigh`) for `CLOUD_CODE_XHIGH_MODEL_IDS` (`gemini-4-neon`, `gemini-4-hydrogen`) while keeping `HIGH` clamp for `gemini-4-argon` and `gemini-4-carbon`.
-  - [ ] `muse` (`MuseRuntimeClient`): project validated effort-only `reasoning: { effort }` on `/v1/responses` while rejecting `none` and unsupported fields (`summary`, `enabled`, `budgetTokens`) fail-closed before I/O.
-  - [ ] `mistral-vibe` (`MistralRuntimeClient`): clamp `mistral-large-4` (`xhigh`/`max` -> `high`) and `zai-glm-5-3` (`medium` -> `low`, `xhigh` -> `high`) to model-supported efforts; add `'max'` to `CodexReasoningEffort`.
+- [x] **Lot 2 — Per-seat effort mapping fixes (test-first)**
+  - [x] `claude-code` (`ClaudeCodeRuntimeClient`, `NodeClaudeCodeCliRunner`): forward validated per-request `effort` to `--effort` and reject unsupported efforts (`none`, unknown, or disallowed per profile) before spawning with a clear error.
+  - [x] `cloud-code` (`CloudCodeRuntimeClient`): map `max` to `XHIGH` (`-xhigh`) for `CLOUD_CODE_XHIGH_MODEL_IDS` (`gemini-4-neon`, `gemini-4-hydrogen`) while keeping `HIGH` clamp for `gemini-4-argon` and `gemini-4-carbon`.
+  - [x] `muse` (`MuseRuntimeClient`): project validated effort-only `reasoning: { effort }` on `/v1/responses` while rejecting `none` and unsupported fields (`summary`, `enabled`, `budgetTokens`) fail-closed before I/O.
+  - [x] `mistral-vibe` (`MistralRuntimeClient`): clamp `mistral-large-4` (`xhigh`/`max` -> `high`) and `zai-glm-5-3` (`medium` -> `low`, `xhigh` -> `high`) to model-supported efforts; add `'max'` to `CodexReasoningEffort`.
 - [ ] **Lot 3 — Version 0.38.8, validation gates, and PR**
   - [ ] Bump `@sentropic/llm-mesh` to `0.38.8`, update `CHANGELOG.md`, `decision-public-surface.test.ts`, lockfiles, and `cluster-mesh` fixtures.
   - [ ] Run `make check-llm-model-equivalences`, `make typecheck-llm-mesh`, `make lint-llm-mesh`, `make build-llm-mesh`, `make test-llm-mesh`, `make typecheck-llm-gateway`, `make test-llm-gateway`, and `make scope-check` with `ENV=test-mesh-c55`.
