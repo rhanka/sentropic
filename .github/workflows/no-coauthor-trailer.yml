@@ -11,14 +11,124 @@ jobs:
   scan:
     # Owner policy keeps dependabot[bot] and github-actions[bot] PRs in sentropic.
     # The pinned rhanka/h2a reusable workflow has no bot-allowlist input and
-    # rejects bot PR authors/commits, so skip the job only for those two exact
-    # GitHub bot logins. Human and AI identities are never exempted.
+    # rejects bot PR authors/commits, so skip scan only for those two exact
+    # GitHub bot logins; trailer-gate still verifies every commit and PR text on
+    # skipped bot PRs so human or AI commits pushed there cannot bypass scanning.
     if: >-
       github.event.pull_request.user.login != 'dependabot[bot]' &&
       github.event.pull_request.user.login != 'github-actions[bot]'
-    uses: rhanka/h2a/.github/workflows/no-coauthor-trailer.yml@8922dfab31fe8ffacda8506fd3051a6455670165
+    uses: rhanka/h2a/.github/workflows/no-coauthor-trailer.yml@c9e42acf9c0b6758061f81535799eb3c11d6b300
     with:
       check-pr-body: true
       allowed-author-email: fabien.antoine@m4x.org
       require-name: ""
       allowed-github-actor: rhanka
+
+  trailer-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: [scan]
+    if: always()
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository for exempt bot PR verification
+        if: >-
+          needs.scan.result == 'skipped' &&
+          (github.event.pull_request.user.login == 'dependabot[bot]' ||
+           github.event.pull_request.user.login == 'github-actions[bot]')
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Enforce attribution gate
+        env:
+          SCAN_RESULT: ${{ needs.scan.result }}
+          PR_AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+          PR_ACTION: ${{ github.event.action }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+
+          if [ "$SCAN_RESULT" = "success" ]; then
+            echo "OK: scan succeeded."
+            exit 0
+          fi
+
+          if [ "$SCAN_RESULT" != "skipped" ]; then
+            echo "::error::trailer-gate failed: scan result is '${SCAN_RESULT}'."
+            exit 1
+          fi
+
+          case "$PR_AUTHOR_LOGIN" in
+            'dependabot[bot]')
+              expected_bot_email='49699333+dependabot[bot]@users.noreply.github.com'
+              ;;
+            'github-actions[bot]')
+              expected_bot_email='41898282+github-actions[bot]@users.noreply.github.com'
+              ;;
+            *)
+              echo "::error::trailer-gate failed: scan skipped for non-exempt PR author."
+              exit 1
+              ;;
+          esac
+
+          if [ -z "$PR_BASE_SHA" ] || [ -z "$PR_HEAD_SHA" ]; then
+            echo "::error::trailer-gate failed: missing PR commit range on exempt bot PR."
+            exit 1
+          fi
+
+          if ! git cat-file -e "${PR_BASE_SHA}^{commit}" || ! git cat-file -e "${PR_HEAD_SHA}^{commit}"; then
+            echo "::error::trailer-gate failed: PR commit range not resolvable in checkout."
+            exit 1
+          fi
+
+          if [ "$PR_ACTION" = "opened" ] || [ "$PR_ACTION" = "synchronize" ]; then
+            if [ "$GITHUB_ACTOR" != "$PR_AUTHOR_LOGIN" ]; then
+              echo "::error::trailer-gate failed: bot PR received push from non-bot actor."
+              exit 1
+            fi
+          fi
+
+          fail=0
+          commit_count=0
+          while IFS=$'\t' read -r sha author_email committer_email; do
+            [ -n "$sha" ] || continue
+            commit_count=$((commit_count + 1))
+            ae_lower="$(printf '%s' "$author_email" | tr '[:upper:]' '[:lower:]')"
+            ce_lower="$(printf '%s' "$committer_email" | tr '[:upper:]' '[:lower:]')"
+            if [ "$ae_lower" != "$expected_bot_email" ]; then
+              echo "::error::commit ${sha:0:10}: non-bot author on bot PR; human or AI commits cannot bypass scan."
+              fail=$((fail + 1))
+            fi
+            if [ "$ce_lower" != "$expected_bot_email" ] && [ "$ce_lower" != "noreply@github.com" ]; then
+              echo "::error::commit ${sha:0:10}: unexpected committer on bot PR."
+              fail=$((fail + 1))
+            fi
+          done < <(git log --format='%H%x09%ae%x09%ce' "${PR_BASE_SHA}..${PR_HEAD_SHA}" --)
+
+          if [ "$commit_count" -eq 0 ]; then
+            echo "::error::trailer-gate failed: zero commits found in bot PR range."
+            exit 1
+          fi
+
+          trailer_re='(^[[:space:]]*(co-authored-by|claude-session|(ai-)?assisted-by|generated-(by|with))[[:space:]]*:|claude\.com/claude-code|claude\.ai/code/session_[a-z0-9_-]+|🤖.*generated[[:space:]]+(with|by))'
+          if git log --format='%B' "${PR_BASE_SHA}..${PR_HEAD_SHA}" -- | grep -Ei "$trailer_re" >/dev/null; then
+            echo "::error::bot PR commit message contains a forbidden attribution trailer."
+            fail=$((fail + 1))
+          fi
+          if printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | grep -Ei "$trailer_re" >/dev/null; then
+            echo "::error::bot PR title or body contains a forbidden attribution trailer."
+            fail=$((fail + 1))
+          fi
+
+          if [ "$fail" -gt 0 ]; then
+            echo "::error::trailer-gate failed with ${fail} violation(s) on bot PR."
+            exit 1
+          fi
+
+          echo "OK: bot PR verified (${commit_count} bot commit(s), zero forbidden trailers)."
