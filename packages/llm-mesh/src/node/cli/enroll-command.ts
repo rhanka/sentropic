@@ -5,6 +5,7 @@
 // progress goes to stderr; secrets never printed.
 
 import { EncryptedFileKeyring } from '../keyring/encrypted-file-keyring.js';
+import { runCloudCodeEnroll } from './enroll-cloud-code.js';
 import {
   defaultWriters,
   EXIT_CODES,
@@ -46,8 +47,17 @@ export const runEnroll = async (
   const writers = deps.writers ?? defaultWriters();
   const env = deps.env ?? process.env;
   const fetchFn = deps.fetchFn ?? fetch;
+  if (args.missingValueFlags?.length) {
+    return fail(writers, EXIT_CODES.usage, `flag '--${args.missingValueFlags[0]}' requires a non-empty value`);
+  }
+  if (args.provider === 'cloud-code') {
+    return runCloudCodeEnroll(args, deps);
+  }
+  if (args.fromAgy || args.credentialStdin || args.createAccount) {
+    return fail(writers, EXIT_CODES.usage, '--from-agy, --credential-stdin, and --create-account are only supported with --provider cloud-code');
+  }
   if (args.provider !== 'muse-code' && args.provider !== 'codex') {
-    return fail(writers, EXIT_CODES.usage, `unknown provider '${args.provider}'; expected 'muse-code' or 'codex'`);
+    return fail(writers, EXIT_CODES.usage, `unknown provider '${args.provider}'; expected 'muse-code', 'codex', or 'cloud-code'`);
   }
   if (!args.keyringDir) return fail(writers, EXIT_CODES.usage, 'missing --keyring-dir <dir>');
   if (!args.ownerScope) return fail(writers, EXIT_CODES.usage, 'missing --owner-scope <ref>');

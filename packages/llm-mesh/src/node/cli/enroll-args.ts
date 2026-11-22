@@ -4,7 +4,8 @@
 // llm-mesh-enroll CLI. Secrets never enter error messages: only the env
 // var NAME is quoted, never its value.
 
-import { stderr, stdout } from 'node:process';
+import { stderr, stdout, type ProcessReadStream } from 'node:process';
+import { CloudCodeEnrollmentProvider } from '../../enrollment/cloud-code.js';
 import { CodexEnrollmentProvider } from '../../enrollment/codex.js';
 import type { EnrollmentProvider } from '../../enrollment/contracts.js';
 import { MuseCodeEnrollmentProvider } from '../../enrollment/muse-code.js';
@@ -33,6 +34,11 @@ export interface EnrollCliDeps {
   fetchFn?: typeof fetch;
   writers?: CliWriters;
   env?: Record<string, string | undefined>;
+  stdin?: ProcessReadStream;
+  secretToolPath?: string;
+  secretToolTimeoutMs?: number;
+  hostname?: string;
+  readAgyToken?: () => Promise<string>;
 }
 
 export interface ParsedArgs {
@@ -46,9 +52,13 @@ export interface ParsedArgs {
   model?: string;
   effort?: string;
   maxAttempts?: number;
+  fromAgy?: boolean;
+  credentialStdin?: boolean;
+  createAccount?: boolean;
+  missingValueFlags?: readonly string[];
 }
 
-const KNOWN_FLAGS = new Set([
+const VALUE_FLAGS = [
   'provider',
   'keyring-dir',
   'keyring-key-env',
@@ -58,8 +68,16 @@ const KNOWN_FLAGS = new Set([
   'model',
   'effort',
   'max-attempts',
+] as const;
+
+const BOOLEAN_FLAGS = new Set([
+  'from-agy',
+  'credential-stdin',
+  'create-account',
   'help',
 ]);
+
+const KNOWN_FLAGS = new Set<string>([...VALUE_FLAGS, ...BOOLEAN_FLAGS]);
 
 const flagValue = (argv: string[], name: string): string | undefined => {
   for (let i = 0; i < argv.length; i += 1) {
@@ -67,11 +85,11 @@ const flagValue = (argv: string[], name: string): string | undefined => {
     if (arg === `--${name}`) {
       const next = argv[i + 1];
       if (next === undefined || next.startsWith('--')) return undefined;
-      return next;
+      return next.trim().length > 0 ? next : undefined;
     }
     if (arg.startsWith(`--${name}=`)) {
       const value = arg.slice(name.length + 3);
-      return value.length > 0 ? value : undefined;
+      return value.trim().length > 0 ? value : undefined;
     }
   }
   return undefined;
@@ -83,31 +101,40 @@ const hasFlag = (argv: string[], name: string): boolean =>
 const rejectUnknownFlags = (argv: string[]): void => {
   for (const arg of argv) {
     if (!arg.startsWith('--')) continue;
-    const name = arg.slice(2).split('=', 1)[0];
+    const eq = arg.indexOf('=');
+    const name = eq === -1 ? arg.slice(2) : arg.slice(2, eq);
     if (!KNOWN_FLAGS.has(name)) throw new Error(`unknown flag '--${name}'`);
+    if (eq !== -1 && BOOLEAN_FLAGS.has(name)) throw new Error(`flag '--${name}' does not take a value`);
   }
 };
 
 export const parseArgs = (argv: string[]): ParsedArgs => {
   const [command, ...rest] = argv;
-  if (!command || command === 'help' || hasFlag(argv, 'help')) {
+  if (!command || command === 'help' || argv.includes('--help')) {
     return { command: 'help', provider: 'muse-code' };
   }
   if (command !== 'enroll' && command !== 'probe') {
     throw new Error(`unknown command '${command}'; expected 'enroll' or 'probe'`);
   }
   rejectUnknownFlags(rest);
+  const missingValueFlags = VALUE_FLAGS.filter((name) => hasFlag(rest, name) && flagValue(rest, name) === undefined);
   const maxAttemptsRaw = flagValue(rest, 'max-attempts');
+  const provider = flagValue(rest, 'provider') ?? 'muse-code';
+  const defaultModel = provider === 'cloud-code' ? 'gemini-4-hydrogen' : 'muse-wonder-1.0';
   return {
     command,
-    provider: flagValue(rest, 'provider') ?? 'muse-code',
+    provider,
     keyringDir: flagValue(rest, 'keyring-dir'),
     keyringKeyEnv: flagValue(rest, 'keyring-key-env'),
     ownerScope: flagValue(rest, 'owner-scope'),
     label: flagValue(rest, 'label'),
     account: flagValue(rest, 'account'),
-    model: flagValue(rest, 'model') ?? 'muse-wonder-1.0',
+    model: flagValue(rest, 'model') ?? defaultModel,
     effort: flagValue(rest, 'effort') ?? 'low',
+    ...(hasFlag(rest, 'from-agy') ? { fromAgy: true } : {}),
+    ...(hasFlag(rest, 'credential-stdin') ? { credentialStdin: true } : {}),
+    ...(hasFlag(rest, 'create-account') ? { createAccount: true } : {}),
+    ...(missingValueFlags.length ? { missingValueFlags } : {}),
     ...(maxAttemptsRaw !== undefined ? { maxAttempts: Number(maxAttemptsRaw) } : {}),
   };
 };
@@ -117,8 +144,13 @@ export const usageText = (): string =>
     'llm-mesh-enroll enroll --provider muse-code --keyring-dir <dir>',
     '  --owner-scope <ref> [--label <label>] --keyring-key-env <NAME>',
     '  [--max-attempts <n>]',
+    'llm-mesh-enroll enroll --provider cloud-code (--from-agy | --credential-stdin)',
+    '  --keyring-dir <dir> (--account <id> | --create-account --owner-scope <ref>)',
+    '  [--owner-scope <ref>] [--label <label>] [--keyring-key-env <NAME>]',
     'llm-mesh-enroll probe --provider muse-code --keyring-dir <dir>',
     '  --account <id> --model muse-wonder-1.0 --effort low --keyring-key-env <NAME>',
+    'llm-mesh-enroll probe --provider cloud-code --keyring-dir <dir>',
+    '  --account <id> [--model gemini-4-hydrogen] [--effort low] [--keyring-key-env <NAME>]',
   ].join('\n');
 
 export const defaultWriters = (): CliWriters => ({
@@ -150,8 +182,26 @@ export const resolveMasterKey = (
   }
 };
 
+export const openKeyringForCli = (
+  provider: string,
+  keyringDir: string,
+  keyringKeyEnv: string | undefined,
+  env: Record<string, string | undefined>,
+): { keyring?: EncryptedFileKeyring; error?: string } => {
+  if (keyringKeyEnv !== undefined) {
+    const resolved = resolveMasterKey(keyringKeyEnv, env);
+    if (!resolved.key) return { error: resolved.error ?? 'key error' };
+    return { keyring: new EncryptedFileKeyring(keyringDir, resolved.key) };
+  }
+  if (provider === 'cloud-code') {
+    return { keyring: new EncryptedFileKeyring(keyringDir) };
+  }
+  return { error: 'missing --keyring-key-env <NAME>' };
+};
+
 const buildProviders = (fetchFn: typeof fetch): Map<string, EnrollmentProvider> =>
   new Map<string, EnrollmentProvider>([
+    ['cloud-code', new CloudCodeEnrollmentProvider({ fetchFn })],
     ['muse-code', new MuseCodeEnrollmentProvider({ fetchFn })],
     ['codex', new CodexEnrollmentProvider({ fetchFn })],
   ]);
