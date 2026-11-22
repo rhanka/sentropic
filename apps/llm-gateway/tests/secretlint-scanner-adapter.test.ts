@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createHostApp } from '../src/app';
 import {
-  SECRETLINT_MAX_YAML_BYTES, SECRETLINT_PRESET_RULE_COUNT, SecretPatternYamlError,
+  SECRETLINT_MAX_SCAN_CHARS, SECRETLINT_MAX_YAML_BYTES, SECRETLINT_PRESET_RULE_COUNT,
+  SECRETLINT_SCAN_LIMIT_RULE_ID, SecretPatternYamlError,
   createSecretlintScannerAdapter, loadSecretPatterns, parseSecretPatternsYaml,
 } from '../src/secretlint-scanner-adapter';
 import { scanCustomPatterns } from '../src/secretlint-yaml-patterns';
@@ -78,7 +79,7 @@ describe('L1.3d standalone host secretlint adapter', () => {
     expect(await honoring.scanAsync(crWithNl, { includeDefaultPatterns: false })).toEqual([]);
   });
 
-  it('parses YAML patterns via safeLoad JSON_SCHEMA, skips invalid entries, rejects !!js/function, and bounds input sizes', () => {
+  it('parses YAML patterns via safeLoad JSON_SCHEMA, skips invalid entries, rejects !!js/function, and bounds input sizes', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'l13d-host-'));
     try {
       const validFile = join(dir, 'patterns.yaml');
@@ -128,8 +129,19 @@ describe('L1.3d standalone host secretlint adapter', () => {
       }
 
       const bounded = createSecretlintScannerAdapter({ maxScanChars: 80 });
-      expect(bounded.scan(`${'x'.repeat(120)} ${FAKE_AWS}`)).toEqual([]);
-      expect(bounded.scan(`${FAKE_AWS} ${'x'.repeat(120)}`).length).toBeGreaterThan(0);
+      const padded = `${'x'.repeat(120)} ${FAKE_AWS}`;
+      const overSync = bounded.scan(padded);
+      expect(overSync).toEqual([expect.objectContaining({ ruleId: SECRETLINT_SCAN_LIMIT_RULE_ID, start: 0, end: padded.length })]);
+      expect(await bounded.scanAsync(padded)).toEqual(overSync);
+      expect(bounded.scan(`${FAKE_AWS} ${'x'.repeat(10)}`).some((m) => m.ruleId === '@secretlint/secretlint-rule-aws')).toBe(true);
+
+      expect(SECRETLINT_MAX_SCAN_CHARS).toBe(32 * 1024 * 1024);
+      const large = `${'x'.repeat(505 * 1024)} ${FAKE_GH} ${'x'.repeat(100 * 1024)} ${FAKE_AWS}`;
+      const fullAdapter = createSecretlintScannerAdapter({ maxScanChars: Number.NaN });
+      const rawLarge = fullAdapter.scanRaw(large, { includeDefaultPatterns: false });
+      expect(rawLarge.filter((m) => m.ruleId === '@secretlint/secretlint-rule-github')).toHaveLength(1);
+      expect(rawLarge.some((m) => m.ruleId === '@secretlint/secretlint-rule-aws' && m.start > 600 * 1024)).toBe(true);
+      expect(fullAdapter.scan(large, { includeDefaultPatterns: false })).toEqual(await fullAdapter.scanAsync(large, { includeDefaultPatterns: false }));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
