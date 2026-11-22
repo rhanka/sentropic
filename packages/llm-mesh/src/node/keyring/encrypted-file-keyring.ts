@@ -199,7 +199,10 @@ export class EncryptedFileKeyring implements KeyringAdapter {
       for (const entry of [...guards, ...updates]) {
         if ((await this.getSecret(entry.key)) !== entry.expected) return false;
       }
+      const customSetSecret = this.setSecret !== EncryptedFileKeyring.prototype.setSecret;
       const prepared = await Promise.all(updates.map(async (u) => ({
+        key: u.key,
+        secret: u.secret,
         destination: this.secretPath(u.key),
         payload: JSON.stringify(this.encryptWithKey(masterKey, u.key, u.secret)),
         previous: await this.readRawIfPresent(this.secretPath(u.key)),
@@ -207,7 +210,8 @@ export class EncryptedFileKeyring implements KeyringAdapter {
       const committed: { destination: string; previous: Buffer | null }[] = [];
       try {
         for (const item of prepared) {
-          await this.writeAtomicBytes(item.destination, item.payload);
+          if (customSetSecret) await this.setSecret(item.key, item.secret);
+          else await this.writeAtomicBytes(item.destination, item.payload);
           committed.push({ destination: item.destination, previous: item.previous });
         }
         return true;

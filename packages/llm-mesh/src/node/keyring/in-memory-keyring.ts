@@ -36,10 +36,19 @@ export class InMemoryKeyring implements KeyringAdapter {
     for (const entry of [...guards, ...updates]) {
       if ((this.store.get(entry.key) ?? null) !== entry.expected) return false;
     }
-    for (const update of updates) {
-      this.store.set(update.key, update.secret);
+    const previous = updates.map((u) => ({ key: u.key, value: this.store.get(u.key) }));
+    try {
+      for (const update of updates) {
+        await this.setSecret(update.key, update.secret);
+      }
+      return true;
+    } catch (error) {
+      for (const entry of previous) {
+        if (entry.value === undefined) this.store.delete(entry.key);
+        else this.store.set(entry.key, entry.value);
+      }
+      throw error;
     }
-    return true;
   }
 
   async deleteSecret(key: string): Promise<void> {
