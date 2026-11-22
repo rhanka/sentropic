@@ -10,7 +10,7 @@ import {
 } from '@sentropic/cluster-mesh';
 import { createGatewayNamespaceModule } from '@sentropic/cluster-mesh/compose/gateway';
 import type {
-  BudgetAdmissionPort, CallerAuthPort, CostContext, GatewayConfig, RouteMeteringSink, NativeCountTokensRateLimiter,
+  BudgetAdmissionPort, CallerAuthPort, CostContext, GatewayConfig, GuardPort, RouteMeteringSink, NativeCountTokensRateLimiter,
 } from '@sentropic/llm-gateway';
 import { sql } from 'drizzle-orm';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
@@ -31,6 +31,7 @@ import {
   createCmAuthResolver, createCmDispatchPort, createCmPoolPort,
 } from '../../services/llm-runtime/gateway-cm-ports';
 import { gatewayStartupRecord, resolveGatewayPackageVersion } from '../../services/llm-runtime/gateway-package-version';
+import { createSecretlintGuard, type SecretlintGuardOptions } from '../../services/llm-runtime/secretlint-scanner-adapter';
 
 export const GW_AUTHOR = 'llm-gateway-module';
 export const GW_PATHS = [
@@ -140,6 +141,8 @@ export interface CreateGwNamespaceModuleOptions {
   readonly partition?: RoutePartitionSource;
   readonly identityReady?: () => Promise<boolean>;
   readonly defaultOutputTokens?: number;
+  readonly guard?: GuardPort;
+  readonly secretlint?: SecretlintGuardOptions;
 }
 
 /** Fail closed per namespace when the gateway module cannot be prepared: every `/gw` path is 503. */
@@ -198,6 +201,7 @@ export const createGwNamespaceModule = async (
 
   let prepared: ClusterMeshHonoNamespaceModule;
   try {
+    const guard = options.guard ?? (options.secretlint ? createSecretlintGuard(options.secretlint) : undefined);
     prepared = await createGatewayNamespaceModule(options.modules ?? createClusterMeshModules(), {
       enabled: options.enabled ?? true,
       authMode: 'host',
@@ -247,6 +251,7 @@ export const createGwNamespaceModule = async (
           nativeMessagesEnabled, nativeCountTokens: routePlane.nativeCountTokens, nativeCountRate: options.nativeCountRate,
           budget: { port: budget, defaultOutputTokens: options.defaultOutputTokens ?? GW_DEFAULT_OUTPUT_TOKENS },
           requestBody: gatewayBodyOptions,
+          ...(guard ? { guard } : {}),
         }));
         return router;
       },
