@@ -111,3 +111,120 @@ Options:
                                         number or URL, or pick from a list
                                         (optionally with a search term)
   -h, --help                            Display help for command
+  --ide                                 Automatically connect to IDE on startup
+                                        if exactly one valid IDE is available
+  --include-hook-events                 Include all hook lifecycle events in the
+                                        output stream (only works with
+                                        --output-format=stream-json)
+  --include-partial-messages            Include partial message chunks as they
+                                        arrive (only works with --print and
+                                        --output-format=stream-json)
+  --input-format <format>               Input format (only works with --print):
+                                        "text" (default), or "stream-json"
+                                        (realtime streaming input) (choices:
+                                        "text", "stream-json")
+  --json-schema <schema>                JSON Schema for structured output
+                                        validation (only works with --print).
+                                        Example:
+                                        {"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}
+  --max-budget-usd <amount>             Maximum dollar amount to spend on API
+                                        calls (only works with --print)
+  --mcp-config <configs...>             Load MCP servers from JSON files or
+                                        strings (space-separated)
+  --model <model>                       Model for the current session. Use an
+                                        alias for the latest model (e.g.
+                                        'fable', 'opus', or 'sonnet') or a
+                                        model's full name.
+  -n, --name <name>                     Set a display name for this session
+                                        (shown in the prompt box, /resume
+                                        picker, and terminal title). Also names
+                                        a new cloud session.
+  --no-chrome                           Turn off Claude in Chrome
+  --no-session-persistence              Don't save sessions to disk; they can't
+                                        be resumed (only works with --print)
+  --output-format <format>              Output format (only works with --print):
+                                        "text" (default), "json" (single
+                                        result), or "stream-json" (realtime
+                                        streaming) (choices: "text", "json",
+                                        "stream-json")
+  --permission-mode <mode>              Permission mode to use for the session
+                                        (choices: "acceptEdits", "auto",
+                                        "bypassPermissions", "manual",
+                                        "dontAsk", "plan")
+  --permission-prompts <target>         Who answers permission prompts with
+                                        --print: "host" (the SDK host or
+                                        --permission-prompt-tool) or "none"
+                                        (nobody: anything that would prompt is
+                                        denied automatically; the permission
+                                        mode still decides everything else)
+                                        (choices: "host", "none", default:
+                                        "host")
+  --plugin-dir <path>                   Load a plugin from a directory or .zip
+                                        for this session only; a folder of
+                                        plugins loads each child (repeatable:
+                                        --plugin-dir A --plugin-dir B.zip)
+                                        (default: [])
+  --plugin-url <url>                    Fetch a plugin .zip from a URL for this
+                                        session only (repeatable: --plugin-url A
+                                        --plugin-url B) (default: [])
+  -p, --print                           Print response and exit (useful for
+                                        pipes). Note: The workspace trust dialog
+                                        is skipped when Claude is run in
+                                        non-interactive mode (via -p, or when
+                                        stdout is not a TTY, e.g. piped or
+                                        redirected output). Only use this in
+                                        directories you trust. Settings files
+                                        that fail validation are silently
+                                        ignored in this mode (no error dialog is
+                                        shown).
+  --prompt-suggestions [value]          Turn on prompt suggestions. In print/SDK
+                                        mode, sends a prompt_suggestion message
+                                        after each turn with a predicted next
+                                        user prompt (choices: "true", "false",
+                                        "1", "0", "yes", "no", "on", "off",
+                                        preset: "true")
+  --remote-control [name]               Start an interactive session with Remote
+                                        Control enabled (optionally named)
+  --remote-control-session-name-prefix <prefix>
+      Prefix for auto-generated Remote Control session names (default: hostname)
+  --replay-user-messages                Re-emit user messages from stdin back on
+                                        stdout for acknowledgment (only works
+                                        with --input-format=stream-json and
+                                        --output-format=stream-json)
+  --restricted                          Restricted mode: removes the built-in
+                                        tools that run commands or code (Bash,
+                                        PowerShell and the other code-running
+                                        tools) and WebFetch unless --tools names
+                                        them, and ignores user, project and
+                                        local settings files (managed settings
+                                        and --settings still apply; add
+                                        --strict-mcp-config to skip MCP servers
+                                        too). Also starts no plugin language
+                                        servers, confines the file tools to the
+                                        working directories (--add-dir
+                                        included), refuses bypassPermissions,
+                                        and lets only a person or the configured
+                                        permission handler approve writes to
+                                        settings, git and tool-configuration
+                                        files.
+  -r, --resume [value]                  Resume a conversation by session ID or
+                                        name, or pick from a list (optionally
+                                        with a search term)
+  --safe-mode                           Start with all customizations
+                                        (CLAUDE.md, skills, installed plugins,
+                                        hooks, MCP servers, custom commands and
+                                        agents, output styles, workflows, custom
+                                        themes, keybindings, and more) disabled
+                                        — useful for troubleshooting a broken
+                                        configuration. Admin-managed (policy)
+                                        settings and the hooks of managed
+                                        plugins still apply. Auth, model
+                                        selection, built-in tools and plugins,
+                                        and permissions work normally. Sets
+                                        CLAUDE_CODE_SAFE_MODE=1.
+  --session-id <uuid>                   Use a specific session ID for the
+                                        conversation (must be a valid UUID)
+  --setting-sources <sources>           Comma-separated list of setting sources
+                                        to load (user, project, local).
+  --settings <file-or-json>             Settings file or JSON string to load
+                                        more settings from
