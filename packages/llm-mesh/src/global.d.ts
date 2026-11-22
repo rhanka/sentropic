@@ -73,6 +73,7 @@ declare module 'node:fs/promises' {
 
 declare module 'node:os' {
   export function homedir(): string;
+  export function hostname(): string;
   export function tmpdir(): string;
 }
 
@@ -164,5 +165,6 @@ declare const Buffer: {
 declare const process: {
   env: Record<string, string | undefined>;
   platform: string;
+  getuid?: () => number;
   kill(pid: number, signal?: string): void;
 };
