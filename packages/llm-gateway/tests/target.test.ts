@@ -42,8 +42,8 @@ describe('launch-alias target-map', () => {
     });
   });
 
-  it('routes the Fable 5, 5.1 and 5.2 launch aliases to Anthropic at high/xhigh/max', () => {
-    for (const model of ['claude-fable-5', 'claude-fable-5-1', 'claude-fable-5-2']) {
+  it('routes the Fable 5 and 5.2 launch aliases to Anthropic at high/xhigh/max', () => {
+    for (const model of ['claude-fable-5', 'claude-fable-5-2']) {
       for (const effort of ['high', 'xhigh', 'max', 'medium', 'low'] as const) {
         expect(resolve(`${model}-${effort}`)).toEqual({
           providerId: 'anthropic', transportProviderId: 'claude-code', model, effort,
@@ -74,10 +74,6 @@ describe('launch-alias target-map', () => {
       transportProviderId: 'claude-code',
       model: 'claude-fable-5',
     });
-    expect(resolve('claude-fable-5-1')).toEqual({
-      providerId: 'anthropic', transportProviderId: 'claude-code',
-      model: 'claude-fable-5-1',
-    });
     expect(resolve('claude-fable-5-2')).toEqual({
       providerId: 'anthropic', transportProviderId: 'claude-code',
       model: 'claude-fable-5-2',
@@ -104,6 +100,16 @@ describe('launch-alias target-map', () => {
     expect(resolve('gemini-3.1-pro')).toBeUndefined();
     expect(resolve('claude-opus-5-ultra')).toBeUndefined();
     expect(resolve('claude-sonnet-5-ultra')).toBeUndefined();
+    const resolveCanonical = createCanonicalTargetResolver({ allowEquivalentModels: true });
+    const resolveCanonicalCandidates = createCanonicalTargetCandidatesResolver({ allowEquivalentModels: true });
+    for (const alias of [
+      'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
+      'claude-fable-5-1-max', 'claude-fable-5-1-medium', 'claude-fable-5-1-low',
+    ]) {
+      expect(resolve(alias), alias).toBeUndefined();
+      expect(resolveCanonical(alias), alias).toBeUndefined();
+      expect(resolveCanonicalCandidates(alias), alias).toEqual([]);
+    }
   });
 
   it('resolves the Vibe 2.26.1 wire name via the mesh re-export, with no gateway table', () => {
@@ -202,25 +208,8 @@ describe('describeTargetRoutes (discovery)', () => {
         effort: 'max',
       },
     ]);
-    expect(CANONICAL_TARGET_ROUTE_MAPPINGS['claude-fable-5-1-max']).toEqual([
-      MERGED['claude-fable-5-1-max'],
-      {
-        providerId: 'muse', transportProviderId: 'muse',
-        model: 'muse-wonder-1.0', effort: 'max',
-      },
-      {
-        providerId: 'openai', transportProviderId: 'codex',
-        model: 'gpt-6-astra', effort: 'max',
-      },
-      {
-        providerId: 'gemini', transportProviderId: 'cloud-code',
-        model: 'gemini-4-argon', effort: 'high',
-      },
-      {
-        providerId: 'mistral', transportProviderId: 'mistral-vibe',
-        model: 'zai-glm-5-3', effort: 'max',
-      },
-    ]);
+    expect(CANONICAL_TARGET_ROUTE_MAPPINGS['claude-fable-5-1']).toBeUndefined();
+    expect(CANONICAL_TARGET_ROUTE_MAPPINGS['claude-fable-5-1-max']).toBeUndefined();
     // Owner mapping 2026-11-10: Fable 5.2 requests are served by Gemini 4
     // Carbon on the cloud slot. The unmapped max alias keeps the default
     // contributor muse candidate like every other unlisted alias, then the
@@ -259,9 +248,7 @@ describe('describeTargetRoutes (discovery)', () => {
     expect(resolveCandidates('claude-opus-5-xhigh').map(
       (target) => target.transportProviderId,
     )).toEqual(['claude-code', 'muse', 'codex', 'cloud-code', 'mistral-vibe']);
-    expect(resolveCandidates('claude-fable-5-1-max')[2]).toMatchObject({
-      transportProviderId: 'codex', model: 'gpt-6-astra', effort: 'max',
-    });
+    expect(resolveCandidates('claude-fable-5-1-max')).toEqual([]);
     expect(resolveCandidates('claude-fable-5-2-max')[2]).toMatchObject({
       transportProviderId: 'codex', model: 'gpt-6.2-astra', effort: 'max',
     });
@@ -284,16 +271,6 @@ describe('describeTargetRoutes (discovery)', () => {
       providerId: 'gemini', transportProviderId: 'cloud-code',
       model: 'gemini-3.8-flash', effort: 'high',
     });
-    // Argon/Wonder slots (owner mapping 2026-11-18): the Fable 5.1 family
-    // stays on Wonder + Argon high on the muse/cloud slots.
-    const Wonder = (effort: string) => ({
-      providerId: 'muse', transportProviderId: 'muse',
-      model: 'muse-wonder-1.0', effort,
-    });
-    const Argon = () => ({
-      providerId: 'gemini', transportProviderId: 'cloud-code',
-      model: 'gemini-4-argon', effort: 'high',
-    });
     // Carbon slot (owner mapping 2026-11-18): the Fable 5.2 family serves
     // GPT-6.2-Astra on the codex slot and Gemini 4 Carbon on the cloud slot.
     const Carbon = (effort = 'high') => ({
@@ -302,7 +279,7 @@ describe('describeTargetRoutes (discovery)', () => {
     });
     // GLM 5.3 supplemental fallback (owner decisions 2026-10-07 and
     // 2026-10-08): appended after Codex and Cloud Code for the Opus, Claude
-    // 5.5 and Fable 5.1 aliases, at +1 rung on the low/high/max ladder.
+    // 5.5 and Fable 5.2 aliases, at +1 rung on the low/high/max ladder.
     const Glm = (effort = 'max') => ({
       providerId: 'mistral', transportProviderId: 'mistral-vibe',
       model: 'zai-glm-5-3', effort,
@@ -314,9 +291,6 @@ describe('describeTargetRoutes (discovery)', () => {
       ['claude-fable-5-max', [Muse('max'), Codex('gpt-6.1-sol', 'max'), Cloud()]],
       ['claude-fable-5-medium', [Muse('high'), Codex('gpt-6.1-sol', 'high'), Cloud()]],
       ['claude-fable-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Cloud()]],
-      ['claude-fable-5-1-max', [Wonder('max'), Codex('gpt-6-astra', 'max'), Argon(), Glm()]],
-      ['claude-fable-5-1-medium', [Wonder('high'), Codex('gpt-6-astra', 'medium'), Argon(), Glm('high')]],
-      ['claude-fable-5-1-low', [Wonder('medium'), Codex('gpt-6-astra', 'low'), Argon(), Glm('high')]],
       ['claude-fable-5-2-max', [Muse('max'), Codex('gpt-6.2-astra', 'max'), Carbon('high'), Glm()]],
       ['claude-fable-5-2-medium', [Muse('high'), Codex('gpt-6.2-astra', 'medium'), Carbon('medium'), Glm('high')]],
       ['claude-fable-5-2-low', [Muse('medium'), Codex('gpt-6.2-astra', 'low'), Carbon('low'), Glm('high')]],
@@ -408,12 +382,12 @@ describe('describeTargetRoutes (discovery)', () => {
       model: 'zai-glm-5-3', effort,
     });
     const cases: ReadonlyArray<readonly [string, unknown[]]> = [
-      ['claude-opus-5-5', [Wonder('high'), Codex('gpt-6.1-sol', 'high'), Neon('medium'), Glm('high')]],
-      ['claude-opus-5-5-high', [Wonder('xhigh'), Codex('gpt-6.1-sol', 'xhigh'), Neon('high'), Glm('max')]],
-      ['claude-opus-5-5-xhigh', [WonderFull('max'), Codex('gpt-6.1-sol', 'max'), Neon('xhigh'), Glm('max')]],
-      ['claude-opus-5-5-max', [WonderFull('max'), Codex('gpt-6.2-astra', 'max'), Neon('xhigh'), Glm('max')]],
-      ['claude-opus-5-5-medium', [Wonder('high'), Codex('gpt-6.1-sol', 'high'), Neon('medium'), Glm('high')]],
-      ['claude-opus-5-5-low', [Muse('medium'), Codex('gpt-6.1-sol', 'medium'), Neon('low'), Glm('high')]],
+      ['claude-opus-5-5', [Wonder('high'), Codex('gpt-6.2-sol', 'high'), Neon('medium'), Glm('high')]],
+      ['claude-opus-5-5-high', [Wonder('xhigh'), Codex('gpt-6.2-sol', 'xhigh'), Neon('high'), Glm('max')]],
+      ['claude-opus-5-5-xhigh', [WonderFull('max'), Codex('gpt-6.2-sol', 'max'), Neon('xhigh'), Glm('max')]],
+      ['claude-opus-5-5-max', [WonderFull('max'), Codex('gpt-6.2-sol', 'max'), Neon('xhigh'), Glm('max')]],
+      ['claude-opus-5-5-medium', [Wonder('high'), Codex('gpt-6.2-sol', 'high'), Neon('medium'), Glm('high')]],
+      ['claude-opus-5-5-low', [Muse('medium'), Codex('gpt-6.2-sol', 'medium'), Neon('low'), Glm('high')]],
       ['claude-sonnet-5-5', [Muse('high'), Codex('gpt-6.1-terra', 'medium'), Hydrogen('medium'), Glm('high')]],
       ['claude-sonnet-5-5-high', [Muse('xhigh'), Codex('gpt-6.1-terra', 'high'), Hydrogen('high'), Glm('max')]],
       ['claude-sonnet-5-5-xhigh', [Wonder('max'), Codex('gpt-6.1-terra', 'xhigh'), Hydrogen('xhigh'), Glm('max')]],

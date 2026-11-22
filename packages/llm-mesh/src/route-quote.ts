@@ -24,6 +24,7 @@ export const MAX_ROUTE_QUOTE_CANDIDATES = 16;
 
 /** Transports that cannot apply a caller output ceiling (the Codex wire omits it). */
 const OUTPUT_CEILING_UNENFORCED_TRANSPORTS: readonly string[] = ['codex'];
+const CODEX_SOL_MAX_INPUT_TOKENS = 500_000;
 
 export class RouteQuoteError extends Error {
   constructor(
@@ -268,6 +269,11 @@ export const quoteRoute = (input: RouteQuoteInput, options: RouteQuoteOptions = 
   const { ceiling } = input;
   const candidates = candidateTargets.map((target): QuotedRouteCandidate => {
     const modelCapabilities = profileFor(target)?.capabilities;
+    if (target.providerId === 'openai' && target.modelId === 'gpt-6.2-sol'
+      && (target.transportProviderId === 'codex' || target.transportProviderId === undefined)
+      && ceiling.inputTokens > CODEX_SOL_MAX_INPUT_TOKENS) {
+      throw new RouteQuoteError('Input ceiling exceeds the GPT-6.2 Sol Codex limit', 'invalid-ceiling');
+    }
     const contextWindow = modelCapabilities?.contextWindowTokens;
     if (contextWindow !== undefined && ceiling.inputTokens > contextWindow) {
       throw new RouteQuoteError(
