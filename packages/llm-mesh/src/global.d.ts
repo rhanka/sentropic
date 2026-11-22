@@ -45,6 +45,7 @@ declare module 'node:fs/promises' {
   export interface Stats {
     mode: number;
     size: number;
+    mtimeMs: number;
     isFile(): boolean;
     isDirectory(): boolean;
     isSymbolicLink(): boolean;

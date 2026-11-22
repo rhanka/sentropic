@@ -1,4 +1,8 @@
-import type { KeyringAdapter } from '../../service/facade.js';
+import type {
+  KeyringAdapter,
+  KeyringCasGuard,
+  KeyringCasUpdate,
+} from '../../service/facade.js';
 
 export class InMemoryKeyring implements KeyringAdapter {
   private readonly store = new Map<string, string>();
@@ -14,6 +18,27 @@ export class InMemoryKeyring implements KeyringAdapter {
   async setSecretIfAbsent(key: string, secret: string): Promise<boolean> {
     if (this.store.has(key)) return false;
     this.store.set(key, secret);
+    return true;
+  }
+
+  async compareAndSetSecret(
+    key: string,
+    expected: string | null,
+    secret: string,
+  ): Promise<boolean> {
+    return this.compareAndSetSecrets([{ key, expected, secret }]);
+  }
+
+  async compareAndSetSecrets(
+    updates: readonly KeyringCasUpdate[],
+    guards: readonly KeyringCasGuard[] = [],
+  ): Promise<boolean> {
+    for (const entry of [...guards, ...updates]) {
+      if ((this.store.get(entry.key) ?? null) !== entry.expected) return false;
+    }
+    for (const update of updates) {
+      this.store.set(update.key, update.secret);
+    }
     return true;
   }
 
