@@ -1,4 +1,5 @@
 import { getSecretAuthMaterial } from '../auth.js';
+import { getModelProfile } from '../catalog.js';
 import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from '../generation.js';
 import type { LlmMeshMessage } from '../messages.js';
 import type { MuseAdapterClient } from '../adapters.js';
@@ -30,6 +31,31 @@ export const MUSE_CLIENT_ID = 'tbh:exec';
 
 const MUSE_DEFAULT_BASE_URL = 'https://api.meta.ai';
 const MUSE_SERVING_PATH = '/v1/responses';
+const MUSE_DEFAULT_SUPPORTED_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+const resolveMuseReasoningEffort = (request: GenerateRequest): string | undefined => {
+  if (!request.reasoning || Object.keys(request.reasoning).length === 0) return undefined;
+  if (
+    request.reasoning.summary !== undefined
+    || request.reasoning.enabled !== undefined
+    || request.reasoning.budgetTokens !== undefined
+    || request.reasoning.effort === undefined
+  ) {
+    throw Object.assign(new Error('Muse Responses only preserves supported reasoning effort controls'), {
+      status: 400, code: 'unsupported_projection', param: 'reasoning',
+    });
+  }
+  const modelId = request.modelId ?? 'muse-spark-1.3';
+  const supported = getModelProfile('muse', modelId)?.capabilities.reasoning.supportedEfforts
+    ?? MUSE_DEFAULT_SUPPORTED_EFFORTS;
+  if (!supported.includes(request.reasoning.effort)) {
+    throw Object.assign(
+      new Error(`Muse model ${modelId} does not support reasoning effort (supported: ${supported.join(', ')})`),
+      { status: 400, code: 'unsupported_projection', param: 'reasoning' },
+    );
+  }
+  return request.reasoning.effort;
+};
 
 const textOf = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null;
@@ -101,6 +127,7 @@ const stringify = (value: unknown): string => {
 const buildResponsesBody = (
   request: GenerateRequest,
   stream: boolean,
+  reasoningEffort?: string,
 ): Record<string, unknown> => {
   const instructions: string[] = [];
   const input: unknown[] = [];
@@ -156,6 +183,7 @@ const buildResponsesBody = (
       ? { max_output_tokens: request.maxOutputTokens } : {}),
     ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
     ...(request.topP !== undefined ? { top_p: request.topP } : {}),
+    ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
   };
 };
 
@@ -340,11 +368,7 @@ export class MuseRuntimeClient implements MuseAdapterClient {
     accept: string,
     stream = false,
   ): Promise<Response> {
-    if (request.reasoning && Object.keys(request.reasoning).length > 0) {
-      throw Object.assign(new Error('Muse Chat cannot preserve required reasoning controls'), {
-        status: 400, code: 'unsupported_projection', param: 'reasoning',
-      });
-    }
+    const reasoningEffort = resolveMuseReasoningEffort(request);
     const auth = getSecretAuthMaterial(context?.auth);
     if (!auth || !('accessToken' in auth) || !auth.accessToken) {
       throw Object.assign(new Error('Muse account token is missing'), { status: 401, code: 'AUTHENTICATION_FAILED' });
@@ -369,7 +393,7 @@ export class MuseRuntimeClient implements MuseAdapterClient {
           'x-tbh-root-session-id': stableSessionId,
         } : {}),
       },
-      body: JSON.stringify(buildResponsesBody(request, stream)),
+      body: JSON.stringify(buildResponsesBody(request, stream, reasoningEffort)),
     });
     if (!response.ok) {
       // Key never enters the message: status + retry hint only. A 401/403
