@@ -347,6 +347,19 @@ export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
 
 const ANTHROPIC_FAITHFUL_TRANSPORT_PROVIDERS: readonly string[] = ['claude-code'];
 
+/**
+ * Claude 5.5 catalog profiles are directly callable on `anthropic` (e.g.
+ * `anthropic:claude-opus-5-5` over `claude-code` via `LlmMesh` or
+ * `ClaudeCodeRuntimeClient`), while their bare/suffixed launch-alias rows in
+ * `STANDARD_ROUTE_DEFINITIONS` stay gateway alias routes (Muse -> Codex ->
+ * Cloud Code -> GLM) without auto-injecting a faithful Anthropic target.
+ */
+export const GATEWAY_ALIAS_ONLY_CLAUDE_MODEL_IDS: ReadonlySet<string> = new Set([
+  'claude-opus-5-5',
+  'claude-sonnet-5-5',
+  'claude-haiku-5-5',
+]);
+
 const CLAUDE_SUCCESSION_MAP: Readonly<Record<string, string>> = {
   // RATIFICATION PENDING (owner decision not yet traced; see PR body):
   // model succession from api/src/services/model-selection-legacy.ts:
@@ -407,6 +420,7 @@ const resolveFaithfulAnthropicTarget = (
   effort?: string,
 ): TargetMapping | undefined => {
   let faithfulModel = faithfulClaudeModel(requestedId);
+  if (GATEWAY_ALIAS_ONLY_CLAUDE_MODEL_IDS.has(faithfulModel)) return undefined;
   const seen = new Set<string>();
 
   while (!seen.has(faithfulModel)) {
