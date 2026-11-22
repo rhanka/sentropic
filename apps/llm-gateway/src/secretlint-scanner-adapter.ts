@@ -19,9 +19,50 @@ export {
 };
 
 const FILTER_COMMENTS_RULE_ID = '@secretlint/secretlint-rule-filter-comments';
-export const SECRETLINT_MAX_SCAN_CHARS = 512 * 1024;
-const SECRETLINT_HARD_MAX_SCAN_CHARS = 2 * 1024 * 1024;
+export const SECRETLINT_SCAN_WINDOW_CHARS = 512 * 1024;
+export const SECRETLINT_SCAN_OVERLAP_CHARS = 16 * 1024;
+export const SECRETLINT_MAX_SCAN_CHARS = 32 * 1024 * 1024;
+const SECRETLINT_HARD_MAX_SCAN_CHARS = 32 * 1024 * 1024;
+export const SECRETLINT_SCAN_LIMIT_RULE_ID = '@sentropic/secretlint-scan-limit-exceeded';
 export const SECRETLINT_PRESET_RULE_COUNT = presetRecommend.rules.length;
+
+const dedupePerRule = (matches: readonly SecretMatch[]): SecretMatch[] => {
+  if (matches.length <= 1) return [...matches];
+  const byRule = new Map<string, SecretMatch[]>();
+  for (const m of matches) {
+    const bucket = byRule.get(m.ruleId);
+    if (bucket) bucket.push(m);
+    else byRule.set(m.ruleId, [m]);
+  }
+  const out: SecretMatch[] = [];
+  for (const bucket of byRule.values()) out.push(...dedupeSecretRanges(bucket));
+  return out.sort((a, b) => a.start - b.start || b.end - a.end);
+};
+
+const windowSlices = (text: string, limit: number): { offset: number; chunk: string }[] => {
+  const cap = Math.min(text.length, limit);
+  if (cap <= SECRETLINT_SCAN_WINDOW_CHARS) return [{ offset: 0, chunk: text.slice(0, cap) }];
+  const step = SECRETLINT_SCAN_WINDOW_CHARS - SECRETLINT_SCAN_OVERLAP_CHARS;
+  const slices: { offset: number; chunk: string }[] = [];
+  let offset = 0;
+  while (offset < cap) {
+    let end = Math.min(cap, offset + SECRETLINT_SCAN_WINDOW_CHARS);
+    if (end < cap && text.charCodeAt(end - 1) >= 0xd800 && text.charCodeAt(end - 1) <= 0xdbff) end -= 1;
+    slices.push({ offset, chunk: text.slice(offset, end) });
+    if (end >= cap) break;
+    let next = offset + step;
+    if (next > 0 && text.charCodeAt(next - 1) >= 0xd800 && text.charCodeAt(next - 1) <= 0xdbff) next -= 1;
+    offset = next;
+  }
+  return slices;
+};
+
+const scanLimitMatch = (textLength: number, maxScanChars: number): SecretMatch => ({
+  start: Math.max(0, maxScanChars - SECRETLINT_SCAN_OVERLAP_CHARS),
+  end: textLength,
+  ruleId: SECRETLINT_SCAN_LIMIT_RULE_ID,
+  message: 'scan input exceeded maxScanChars; uninspected tail',
+});
 
 export interface SecretlintScannerOptions extends SecretScanOptions {
   readonly patternsFilePath?: string;
@@ -117,7 +158,10 @@ export class SecretlintScannerAdapter implements SecretScannerPort {
     this.defaultIncludeKubeconfig = options.includeDefaultPatterns ?? true;
     const loaded = options.patternsFilePath ? loadSecretPatterns(options.patternsFilePath, options.maxYamlBytes) : [];
     this.baseCustomPatterns = [...loaded, ...(options.customPatterns ?? [])];
-    this.maxScanChars = Math.max(1, Math.min(options.maxScanChars ?? SECRETLINT_MAX_SCAN_CHARS, SECRETLINT_HARD_MAX_SCAN_CHARS));
+    const rawMax = options.maxScanChars;
+    this.maxScanChars = typeof rawMax === 'number' && Number.isFinite(rawMax)
+      ? Math.max(1, Math.min(Math.floor(rawMax), SECRETLINT_HARD_MAX_SCAN_CHARS))
+      : SECRETLINT_MAX_SCAN_CHARS;
     this.honorDisableComments = options.honorDisableComments === true;
     const activeRules = this.honorDisableComments ? PRESET_RULES : PRESET_RULES.filter((r) => r.meta.id !== FILTER_COMMENTS_RULE_ID);
     this.lintConfig = { rules: activeRules.map((rule) => ({ id: rule.meta.id, rule })) };
@@ -128,12 +172,22 @@ export class SecretlintScannerAdapter implements SecretScannerPort {
     return [...this.baseCustomPatterns, ...(options?.customPatterns ?? []), ...defaults];
   }
 
-  private boundText(text: string): string { return text.length > this.maxScanChars ? text.slice(0, this.maxScanChars) : text; }
-
   scanRaw(text: string, options?: SecretScanOptions): readonly SecretMatch[] {
     if (!text) return [];
-    const bounded = this.boundText(text);
-    return [...runPresetSync(bounded, options?.filePath ?? this.defaultFilePath, this.honorDisableComments), ...scanCustomPatterns(bounded, this.resolvePatterns(options))];
+    const filePath = options?.filePath ?? this.defaultFilePath;
+    const patterns = this.resolvePatterns(options);
+    const matches: SecretMatch[] = [];
+    for (const { offset, chunk } of windowSlices(text, this.maxScanChars)) {
+      for (const m of runPresetSync(chunk, filePath, this.honorDisableComments)) {
+        matches.push({ ...m, start: m.start + offset, end: m.end + offset });
+      }
+      for (const m of scanCustomPatterns(chunk, patterns)) {
+        matches.push({ ...m, start: m.start + offset, end: m.end + offset });
+      }
+    }
+    const deduped = dedupePerRule(matches);
+    if (text.length > this.maxScanChars) deduped.push(scanLimitMatch(text.length, this.maxScanChars));
+    return deduped;
   }
 
   scan(text: string, options?: SecretScanOptions): readonly SecretMatch[] {
@@ -143,18 +197,32 @@ export class SecretlintScannerAdapter implements SecretScannerPort {
 
   async scanAsync(text: string, options?: SecretScanOptions): Promise<readonly SecretMatch[]> {
     if (!text) return [];
-    const bounded = this.boundText(text);
     const filePath = options?.filePath ?? this.defaultFilePath;
-    const bomOffset = bounded.charCodeAt(0) === 0xfeff ? 1 : 0;
+    const ext = safeExt(filePath);
+    const patterns = this.resolvePatterns(options);
     const { lintSource } = await import('@secretlint/core');
-    const result = await lintSource({
-      source: { filePath, ext: safeExt(filePath), content: bounded, contentType: 'text' },
-      options: { config: this.lintConfig, maskSecrets: true, noPhysicFilePath: true },
-    });
-    const preset: SecretMatch[] = result.messages.map((m) => ({
-      start: m.range[0] + bomOffset, end: m.range[1] + bomOffset, ruleId: m.ruleId, message: `secret detected by ${m.ruleId}`,
-    }));
-    return dedupeSecretRanges([...preset, ...scanCustomPatterns(bounded, this.resolvePatterns(options))]);
+    const matches: SecretMatch[] = [];
+    for (const { offset, chunk } of windowSlices(text, this.maxScanChars)) {
+      const bomOffset = chunk.charCodeAt(0) === 0xfeff ? 1 : 0;
+      const result = await lintSource({
+        source: { filePath, ext, content: chunk, contentType: 'text' },
+        options: { config: this.lintConfig, maskSecrets: true, noPhysicFilePath: true },
+      });
+      for (const m of result.messages) {
+        matches.push({
+          start: m.range[0] + bomOffset + offset,
+          end: m.range[1] + bomOffset + offset,
+          ruleId: m.ruleId,
+          message: `secret detected by ${m.ruleId}`,
+        });
+      }
+      for (const m of scanCustomPatterns(chunk, patterns)) {
+        matches.push({ ...m, start: m.start + offset, end: m.end + offset });
+      }
+    }
+    const deduped = dedupePerRule(matches);
+    if (text.length > this.maxScanChars) deduped.push(scanLimitMatch(text.length, this.maxScanChars));
+    return dedupeSecretRanges(deduped);
   }
 }
 
