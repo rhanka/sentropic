@@ -24,9 +24,15 @@ export class SecretPatternYamlError extends Error {
   }
 }
 
+const resolveMaxYamlBytes = (maxBytes?: number): number =>
+  typeof maxBytes === 'number' && Number.isFinite(maxBytes)
+    ? Math.max(1, Math.min(Math.floor(maxBytes), SECRETLINT_MAX_YAML_BYTES))
+    : SECRETLINT_MAX_YAML_BYTES;
+
 /** Parse custom secret patterns from YAML strictly via `yaml.safeLoad` + `JSON_SCHEMA`. */
 export const parseSecretPatternsYaml = (raw: string, maxBytes = SECRETLINT_MAX_YAML_BYTES): CustomSecretPattern[] => {
-  if (Buffer.byteLength(raw, 'utf8') > maxBytes) {
+  const limit = resolveMaxYamlBytes(maxBytes);
+  if (Buffer.byteLength(raw, 'utf8') > limit) {
     throw new SecretPatternYamlError('yaml_too_large', 'secret patterns YAML exceeds size limit');
   }
   let parsed: unknown;
@@ -53,15 +59,45 @@ export const parseSecretPatternsYaml = (raw: string, maxBytes = SECRETLINT_MAX_Y
 
 /** Read and parse a YAML custom-pattern file with upfront size bound and `safeLoad` only. */
 export const loadSecretPatterns = (filePath: string, maxBytes = SECRETLINT_MAX_YAML_BYTES): CustomSecretPattern[] => {
+  const limit = resolveMaxYamlBytes(maxBytes);
   let size: number;
-  try { size = statSync(filePath).size; }
-  catch { throw new SecretPatternYamlError('yaml_read_failed', 'secret patterns YAML file cannot be read'); }
-  if (size > maxBytes) throw new SecretPatternYamlError('yaml_too_large', 'secret patterns YAML file exceeds size limit');
-  try { return parseSecretPatternsYaml(readFileSync(filePath, 'utf8'), maxBytes); }
+  let isRegularFile: boolean;
+  try {
+    const st = statSync(filePath);
+    size = st.size;
+    isRegularFile = st.isFile();
+  } catch {
+    throw new SecretPatternYamlError('yaml_read_failed', 'secret patterns YAML file cannot be read');
+  }
+  if (!isRegularFile) {
+    throw new SecretPatternYamlError('yaml_read_failed', 'secret patterns YAML path is not a regular file');
+  }
+  if (size > limit) throw new SecretPatternYamlError('yaml_too_large', 'secret patterns YAML file exceeds size limit');
+  try { return parseSecretPatternsYaml(readFileSync(filePath, 'utf8'), limit); }
   catch (err) {
     if (err instanceof SecretPatternYamlError) throw err;
     throw new SecretPatternYamlError('yaml_read_failed', 'secret patterns YAML file cannot be read');
   }
+};
+
+const COMPILED_REGEX_CACHE = new Map<string, RegExp | null>();
+const MAX_REGEX_CACHE = 256;
+
+const compileCustomRegex = (pattern: string, rawFlags?: string): RegExp | null => {
+  const flags = new Set((rawFlags ?? '').split(''));
+  flags.delete('y');
+  flags.add('g');
+  const normalized = [...flags].sort().join('');
+  const key = `${pattern}\0${normalized}`;
+  if (COMPILED_REGEX_CACHE.has(key)) return COMPILED_REGEX_CACHE.get(key) ?? null;
+  let compiled: RegExp | null;
+  try { compiled = new RegExp(pattern, normalized); } catch { compiled = null; }
+  if (COMPILED_REGEX_CACHE.size >= MAX_REGEX_CACHE) {
+    const oldest = COMPILED_REGEX_CACHE.keys().next().value;
+    if (oldest !== undefined) COMPILED_REGEX_CACHE.delete(oldest);
+  }
+  COMPILED_REGEX_CACHE.set(key, compiled);
+  return compiled;
 };
 
 export const scanCustomPatterns = (text: string, patterns: readonly CustomSecretPattern[]): SecretMatch[] => {
@@ -69,11 +105,9 @@ export const scanCustomPatterns = (text: string, patterns: readonly CustomSecret
   const matches: SecretMatch[] = [];
   for (const p of patterns) {
     if (!p || typeof p.id !== 'string' || !p.id || typeof p.pattern !== 'string' || !p.pattern) continue;
-    const flags = new Set((p.flags ?? '').split(''));
-    flags.delete('y');
-    flags.add('g');
-    let re: RegExp;
-    try { re = new RegExp(p.pattern, [...flags].sort().join('')); } catch { continue; }
+    const re = compileCustomRegex(p.pattern, p.flags);
+    if (!re) continue;
+    re.lastIndex = 0;
     for (const m of text.matchAll(re)) {
       if (m.index === undefined || m[0].length === 0) continue;
       matches.push({ start: m.index, end: m.index + m[0].length, ruleId: `custom:${p.id}`, message: `custom pattern ${p.id}` });

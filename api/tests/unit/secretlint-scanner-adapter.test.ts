@@ -111,6 +111,12 @@ describe('L1.3d API secretlint host adapter', () => {
       expect(caught).toBeInstanceOf(SecretPatternYamlError);
       expect((caught as Error).message).not.toContain(FAKE_ORG_TOKEN);
       expect(() => parseSecretPatternsYaml('a'.repeat(SECRETLINT_MAX_YAML_BYTES + 1))).toThrow(SecretPatternYamlError);
+      expect(() => parseSecretPatternsYaml('a'.repeat(SECRETLINT_MAX_YAML_BYTES + 1), Number.NaN)).toThrow(SecretPatternYamlError);
+      expect(() => parseSecretPatternsYaml('a'.repeat(SECRETLINT_MAX_YAML_BYTES + 1), Number.POSITIVE_INFINITY)).toThrow(SecretPatternYamlError);
+      const hugeFile = join(dir, 'huge.yaml');
+      writeFileSync(hugeFile, 'a'.repeat(SECRETLINT_MAX_YAML_BYTES + 1));
+      expect(() => loadSecretPatterns(hugeFile, Number.NaN)).toThrow(SecretPatternYamlError);
+      expect(() => loadSecretPatterns(dir)).toThrow(/not a regular file/);
 
       const bounded = createSecretlintScannerAdapter({ maxScanChars: 80 });
       const padded = `${'x'.repeat(120)} ${FAKE_AWS}`;

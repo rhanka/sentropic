@@ -15,9 +15,15 @@ export class SecretPatternYamlError extends Error {
   }
 }
 
+const resolveMaxYamlBytes = (maxBytes?: number): number =>
+  typeof maxBytes === 'number' && Number.isFinite(maxBytes)
+    ? Math.max(1, Math.min(Math.floor(maxBytes), SECRETLINT_MAX_YAML_BYTES))
+    : SECRETLINT_MAX_YAML_BYTES;
+
 /** Parse custom secret patterns from YAML strictly via `yaml.safeLoad` + `JSON_SCHEMA`. */
 export const parseSecretPatternsYaml = (raw: string, maxBytes = SECRETLINT_MAX_YAML_BYTES): CustomSecretPattern[] => {
-  if (Buffer.byteLength(raw, 'utf8') > maxBytes) {
+  const limit = resolveMaxYamlBytes(maxBytes);
+  if (Buffer.byteLength(raw, 'utf8') > limit) {
     throw new SecretPatternYamlError('yaml_too_large', 'secret patterns YAML exceeds size limit');
   }
   let parsed: unknown;
@@ -44,11 +50,21 @@ export const parseSecretPatternsYaml = (raw: string, maxBytes = SECRETLINT_MAX_Y
 
 /** Read and parse a YAML custom-pattern file with upfront size bound and `safeLoad` only. */
 export const loadSecretPatterns = (filePath: string, maxBytes = SECRETLINT_MAX_YAML_BYTES): CustomSecretPattern[] => {
+  const limit = resolveMaxYamlBytes(maxBytes);
   let size: number;
-  try { size = statSync(filePath).size; }
-  catch { throw new SecretPatternYamlError('yaml_read_failed', 'secret patterns YAML file cannot be read'); }
-  if (size > maxBytes) throw new SecretPatternYamlError('yaml_too_large', 'secret patterns YAML file exceeds size limit');
-  try { return parseSecretPatternsYaml(readFileSync(filePath, 'utf8'), maxBytes); }
+  let isRegularFile: boolean;
+  try {
+    const st = statSync(filePath);
+    size = st.size;
+    isRegularFile = st.isFile();
+  } catch {
+    throw new SecretPatternYamlError('yaml_read_failed', 'secret patterns YAML file cannot be read');
+  }
+  if (!isRegularFile) {
+    throw new SecretPatternYamlError('yaml_read_failed', 'secret patterns YAML path is not a regular file');
+  }
+  if (size > limit) throw new SecretPatternYamlError('yaml_too_large', 'secret patterns YAML file exceeds size limit');
+  try { return parseSecretPatternsYaml(readFileSync(filePath, 'utf8'), limit); }
   catch (err) {
     if (err instanceof SecretPatternYamlError) throw err;
     throw new SecretPatternYamlError('yaml_read_failed', 'secret patterns YAML file cannot be read');
