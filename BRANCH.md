@@ -21,6 +21,9 @@ Add `llm-mesh-enroll enroll --provider cloud-code --from-agy [--account <id>] --
   - `packages/llm-mesh/src/node/cli/**`
   - `packages/llm-mesh/tests/node/**`
   - `packages/llm-mesh/tests/decision-public-surface.test.ts`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
