@@ -18,6 +18,7 @@ Add real Claude 5.5 catalog profiles (`claude-opus-5-5`, `claude-sonnet-5-5`, `c
   - `api/tests/api/models.test.ts`
   - `api/tests/api/cluster-mesh-gw-native.test.ts`
   - `api/tests/api/gw-count-tokens.test.ts`
+  - `api/tests/unit/claude-provider.test.ts`
   - `api/tests/unit/gateway-route-plane-native.test.ts`
   - `api/tests/unit/llm-runtime-stream.test.ts`
   - `package-lock.json`
