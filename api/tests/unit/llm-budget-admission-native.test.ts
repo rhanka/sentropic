@@ -3,7 +3,7 @@ import { usageCost, type AttemptPricingContext, type PricedUsage, type PricingRo
 import { redactSettlementAttempt } from '../../src/services/llm-metering/route-settlement';
 import type { RouteAttemptSettlement } from '@sentropic/llm-gateway';
 
-const MODELS = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1'];
+const MODELS = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-2'];
 const context = (modelId = MODELS[0]!): AttemptPricingContext => ({ providerId: 'anthropic', modelId, pricingMatch: 'exact' });
 const price = (modelId = MODELS[0]!): PricingRow => ({ id: 'pinned', providerId: 'anthropic', modelId,
   input: 1_000_000n, output: 2_000_000n, reasoning: 0n, image: 0n, toolCall: 0n, minCharge: 0n });

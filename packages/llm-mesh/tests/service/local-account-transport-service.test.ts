@@ -1281,7 +1281,7 @@ describe('LocalAccountTransportService', () => {
       },
       {
         accountId: 'sol-account', targetProviderId: 'openai',
-        transportProviderId: 'codex', modelIds: ['gpt-6.1-sol'],
+        transportProviderId: 'codex', modelIds: ['gpt-6.2-sol'],
       },
     ]) {
       service.registerAccount({
