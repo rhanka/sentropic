@@ -13,6 +13,7 @@ Add `llm-mesh-enroll enroll --provider cloud-code --from-agy [--account <id>] --
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
+  - `package-lock.json`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/CHANGELOG.md`
   - `packages/llm-mesh/README.md`
