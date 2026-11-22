@@ -140,22 +140,24 @@ const facade = createLlmMeshFacade({
 That migration option is only for pre-ownerScope local records. New enrollment
 always takes ownership from `StartEnrollmentInput.ownerScope`.
 
-## Device-flow enrollment CLI (`llm-mesh-enroll`)
+## Enrollment & probe CLI (`llm-mesh-enroll`)
 
 The `llm-mesh-enroll` bin enrolls seat-billed device-flow accounts
-(muse-code and codex, repeatable for N accounts) and probes muse-code seat
-accounts. The keyring key is read from the environment variable named by
-`--keyring-key-env` (never from argv): it must hold 32 bytes as 64 hex
-chars or 44/43-char base64 (a human passphrase is refused). stdout carries
-one JSON object per line, secrets never reach stdout, stderr, or error
-messages. `probe` only supports `--provider muse-code` and verifies the
-stored account provider before any token leaves the keyring; `--effort` is
-validated for forward compatibility but not forwarded on the Muse Chat wire.
+(`muse-code` and `codex`, repeatable for N accounts), re-enrolls or creates
+`cloud-code` seats (`--from-agy` or memory-only `--credential-stdin`), and
+probes stored `muse-code` or `cloud-code` accounts. For `muse-code` and
+`codex`, `--keyring-key-env` is mandatory (32 bytes as 64 hex chars or
+44/43-char base64; passphrases refused). For `cloud-code`, `--keyring-key-env`
+is optional when the directory uses `.key`; the CLI refuses to create a `.key`
+next to existing encrypted records that lack one. `probe` is strictly read-only
+in every option combination (works on `:ro` mounts without touching directory
+bytes, mode, or mtime). stdout emits one JSON object per line; secrets and
+emails are never printed by default.
 
 ```sh
 export SENTROPIC_LLM_MESH_KEYRING_KEY  # owner-held 32-byte key (hex), set in the environment
 
-# 1. Enroll one account (repeat with a new --label per account).
+# 1. Enroll one muse-code account (repeat with a new --label per account).
 #    The owner approves each device login on accountscenter.meta.com.
 llm-mesh-enroll enroll --provider muse-code \
   --keyring-dir ~/.sentropic/immo-detection-keyring \
@@ -163,12 +165,69 @@ llm-mesh-enroll enroll --provider muse-code \
   --label "Immo Detection 1" \
   --keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY
 
-# 2. Probe the stored account (prints status plus latency plus usage only).
+# 2. Probe the stored muse-code account (prints status plus latency plus usage only).
 llm-mesh-enroll probe --provider muse-code \
   --keyring-dir ~/.sentropic/immo-detection-keyring \
   --account <account-id-from-enroll> \
   --model muse-wonder-1.0 --effort low \
   --keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY
+```
+
+### Re-enrolling a `cloud-code` seat (workstation vs headless PROD)
+
+By default, `enroll --provider cloud-code` updates an **explicit existing**
+`--account <id>` in place and refuses unknown, removed, foreign-owner,
+external-seat, or other-provider accounts. Creating a new account requires the
+explicit `--create-account --owner-scope <ref>` flags. Commits use keyring
+compare-and-set so concurrent CLI enrollment and `LocalAccountTransportService`
+custodian refresh never clobber each other; restart long-lived daemons after
+in-place re-enrollment so they reload the new grant, and keep one active
+refresh holder per Google OAuth grant.
+
+**Workstation (`--from-agy` via `/usr/bin/secret-tool`, or `--credential-stdin`)**:
+
+```sh
+# 1. Re-enroll an existing cloud-code account in place (reuses .key; requires
+#    libsecret-tools at /usr/bin/secret-tool, or pipe JSON via --credential-stdin).
+llm-mesh-enroll enroll --provider cloud-code --from-agy \
+  --account <account-id> \
+  --keyring-dir ~/.sentropic/llm-mesh-keyring
+
+# 2. Strictly read-only live verification on mesh:gemini-4-hydrogen-low.
+llm-mesh-enroll probe --provider cloud-code \
+  --account <account-id> \
+  --keyring-dir ~/.sentropic/llm-mesh-keyring \
+  --model gemini-4-hydrogen --effort low
+```
+
+**Headless PROD (e.g., `/keyring/runtime`, no `agy`, no Secret Service)**:
+
+Never copy a workstation `agy` refresh token to PROD: two active refresh
+holders on one Google grant risk mutual invalidation. Give PROD its **own**
+Google OAuth grant via `CloudCodeEnrollmentProvider` (`src/enrollment/cloud-code.ts`)
+in `mode: 'portal'` (`access_type=offline&prompt=consent`, pasted authorization
+code), commit it in memory over `--credential-stdin` under `/keyring/runtime/.refresh.lock`,
+verify read-only with `probe`, and restart cached Deployments:
+
+```sh
+# 1. Read-only live status check on /keyring/runtime (works on :ro mounts):
+kubectl -n radar-immobilier exec deploy/radar-api -- \
+  ./node_modules/.bin/llm-mesh-enroll probe \
+    --provider cloud-code --account <account-id> \
+    --keyring-dir /keyring/runtime [--keyring-key-env <KEY_VAR>] \
+    --model gemini-4-hydrogen --effort low
+
+# 2. Obtain a dedicated PROD Google grant with a pasted authorization code
+#    (CloudCodeEnrollmentProvider start(mode:'portal') -> browser consent ->
+#    complete({ enrollmentId, code })), then stream that dedicated JSON on stdin:
+... | kubectl -n radar-immobilier exec -i deploy/radar-api -- \
+  /usr/bin/flock -w 60 /keyring/runtime/.refresh.lock \
+  ./node_modules/.bin/llm-mesh-enroll enroll \
+    --provider cloud-code --credential-stdin \
+    --account <account-id> --owner-scope "$REFRESH_OWNER_SCOPE_REF" \
+    --keyring-dir /keyring/runtime [--keyring-key-env <KEY_VAR>]
+
+# 3. Re-run Step 1 (probe) and restart any long-lived Deployment caching the keyring.
 ```
 
 A probe 402 means `billing_not_configured` on the non-seat `muse.ts`
