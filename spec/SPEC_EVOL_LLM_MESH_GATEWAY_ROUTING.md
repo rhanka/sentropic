@@ -1253,17 +1253,30 @@ thin data plane).
   unchanged); no api change (account transport acquisition is
   model-agnostic).
 - Responses-wire compatibility: execution features are transport-keyed, so
-  both Wonder ids inherit the proven `muse` set (`named-tool-choice`,
-  `parallel-tool-control`, `explicit-output-ceiling`, `strict-schema`) and
-  serve through the translated Muse adapter. R5-MAJ-1: `reasoning-controls`
-  is NOT declared (no proven Meta Chat reasoning slot) — a request carrying
-  reasoning effort/summary is refused before dispatch with a named
-  capability 400, never served with the effort silently dropped.
-- Effort mapping: no per-model effort table exists in mesh. The canonical
-  `reasoning.effort` is validated at the Responses ingress (CLI tiers
-  none/minimal/low/medium/high/xhigh/max/ultra per `muse model-profile
-  --help`) but is NOT forwarded on the Muse Chat egress: the Meta
-  `/v1/chat/completions` shim has no proven reasoning slot (R5-MAJ-1).
+  both Wonder ids inherit the `muse` set (`named-tool-choice`,
+  `parallel-tool-control`, `explicit-output-ceiling`, `strict-schema`,
+  `reasoning-controls` — the last per the §16.4 addendum 2026-11-23 below)
+  and serve through the Muse adapter on the native Responses wire
+  (`MuseRuntimeClient`, `POST /v1/responses`). R5-MAJ-1 is superseded
+  only for that Responses client: the legacy Meta Chat egress
+  (`/v1/chat/completions`, e.g. the api `MuseProviderRuntime`) still has
+  no proven reasoning slot and is unchanged. On the Responses client a
+  request carrying an unsupported reasoning effort/summary is refused
+  before I/O with a named 400, never served with the effort silently
+  dropped or clamped.
+- Effort mapping: one per-model effort table exists in mesh, in
+  `packages/llm-mesh/src/catalog.ts` (`MUSE_REASONING_EFFORTS`, the single
+  source for both the catalog `supportedEfforts` and the
+  `MuseRuntimeClient` validator). Official Meta Reasoning docs
+  (https://dev.meta.ai/docs/reasoning, re-checked 2026-11-23): `max` on
+  `muse-spark-1.3`, `muse-wonder-1.0`, `muse-wonder-full-1.0` (Muse
+  Code) and `muse-ember-1.0`; `max` "isn't available with
+  muse-spark-1.3-contributor", so contributor and the spark-1.2 ids cap
+  at `xhigh`; `none` returns HTTP 400 and is in no row. The canonical
+  `reasoning.effort` is validated at the Responses ingress, forwarded as
+  nested `reasoning: { effort, summary }` on the Responses wire only
+  (never top-level `reasoning_effort`, the Chat Completions spelling),
+  and NOT forwarded on the Muse Chat egress (R5-MAJ-1 still holds there).
 - Count/accounting: model-agnostic — `responsesUsage` mapping and
   route settlement/quote allowance apply identically (no per-model pricing
   table in mesh or gateway).
@@ -1684,11 +1697,37 @@ same opaque mesh attempt and gateway Responses encoder.
 | Provider / account transport | Egress already present | Responses execution in this extension |
 |---|---|---|
 | OpenAI / `codex` | `https://chatgpt.com/backend-api/codex/responses` | Native Responses via `CodexRuntimeClient`; validate/project the native carrier, preserve call ids, terminal items and available reasoning artifacts. Upstream remains streaming with `store:false`; collect for downstream JSON requests. |
-| Muse / `muse` | Meta `/v1/chat/completions` | Translate Responses to canonical to Chat and back. The CLI's `/responses` path does not establish a native Meta serving endpoint; do not repoint `MUSE_SERVING_PATH` on that inference. No reasoning slot is proven on this Chat egress (R5-MAJ-1): `muse` declares no `reasoning-controls`; reasoning requests fail closed. |
+| Muse / `muse` | Meta `/v1/responses` (`MUSE_SERVING_PATH`, account transport) | Native Responses via `MuseRuntimeClient`. Addendum 2026-11-23 superseding R5-MAJ-1 for this client only (see below): `muse` declares `reasoning-controls`; validated `reasoning: { effort, summary }` is projected per `MUSE_REASONING_EFFORTS` (catalog.ts, single source), unsupported efforts fail closed before I/O, and no live dispatch is claimed. The legacy Chat egress (`/v1/chat/completions`) keeps R5-MAJ-1: no proven reasoning slot there. |
 | Mistral / `mistral-vibe` | Mistral `/v1/chat/completions` | Translate text, images and qualified function/tool-result controls. Preserve the plan-billed account transport. |
 | Gemini / `cloud-code` | Cloud Code generation transport | Translate supported canonical content/tools/summaries; retain required provider continuation signatures or refuse the affected round trip. No Gemini ingress is added. |
 | Anthropic / `claude-code` | Qualified CLI runtime seam | Translation is conditional on that runtime's proven capabilities. Its current strict request projector rejects several canonical fields; do not label it universally compatible or substitute an unapproved HTTP transport. |
 | Other injected API-key/runtime adapters | Host-selected implementation | Translation only for advertised, tested controls. Being an OpenAI model or having a Responses URL elsewhere does not prove this configured adapter serves it natively. |
+
+Addendum 2026-11-23 (R5-MAJ-1 reversal, Responses client only): the
+original gate ("`reasoning-controls` is NOT declared … until a slot is
+proven by an authenticated probe") targeted the Chat egress. Slot
+existence on the Responses wire is now established from primary sources:
+official Meta Reasoning docs (https://dev.meta.ai/docs/reasoning: nest
+as `reasoning.effort`; `reasoning.summary` in `auto|concise|detailed`;
+`max` supported by muse-wonder-1.0 / muse-spark-1.3 / muse-ember-1.0
+and "isn't available with muse-spark-1.3-contributor"; `none` = HTTP
+400) and the installed muse CLI bundle `muse-bin-1.4.25-R9361.1`
+(sha256 `c1b728fb…`, request field table carrying nested
+`reasoning{effort,summary}`). A local muse catalog cache listing a
+contributor `max` variant and a recorded CLI request carrying that pair
+do NOT override the official docs: contributor caps at `xhigh` in the
+single mesh table (`MUSE_REASONING_EFFORTS`). The authenticated-probe
+part of the gate is NOT discharged: no live Muse reasoning dispatch is
+claimed, and an authenticated seat probe per model/effort (in
+particular muse-wonder-full-1.0 at `max`) remains a conductor follow-up
+before any live reliance; owner acceptance of documentary evidence for
+merge is recorded on the PR, not assumed here. Disclosed side effect:
+declaring `reasoning-controls` and projecting the slot activates the
+launch-alias Muse candidates (`MUSE_ROUTE_EFFORT`, default Spark
+contributor tier, BR75-Q3) in hosts wiring `MuseRuntimeClient` —
+previously every such candidate died before I/O; the seam is pinned by
+`packages/llm-mesh/tests/muse-routing-seam.test.ts`, and `max` aliases
+routed to the contributor fail closed before I/O under the cap above.
 
 Two existing defects directly block CLI tools: both Muse and Mistral runtime
 clients currently return `toolCalls: []` and stream text only. Fix their

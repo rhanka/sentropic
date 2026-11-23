@@ -59,11 +59,18 @@ export const EXECUTION_FEATURES: readonly ExecutionFeature[] = [
  * additionally forwards the Vibe-proven `reasoning_effort` slot. Muse
  * serves the native Responses wire (`POST /v1/responses`, not the legacy
  * Chat egress): `reasoning: { effort, summary }` is documented on that
- * endpoint (Meta Reasoning docs) and measured in the installed muse CLI
- * request field table, so `muse` declares `reasoning-controls`; an effort
- * the served model does not support still fails closed in the client
- * before I/O. `max_output_tokens` is projected, so
- * `explicit-output-ceiling` holds.
+ * endpoint by the official Meta Reasoning docs and measured in the
+ * installed muse CLI request field table, so `muse` declares
+ * `reasoning-controls`. This supersedes R5-MAJ-1 only for this Responses
+ * client (spec §16.4 addendum 2026-11-23): the Chat egress still has no
+ * proven reasoning slot, no live Muse dispatch is claimed (an
+ * authenticated seat probe per model/effort remains the conductor
+ * follow-up), and an effort the served model does not support — `max`
+ * on muse-spark-1.3-contributor included — still fails closed in the
+ * client before I/O. Declaring the feature also makes the launch-alias
+ * Muse candidates dispatchable in a host wiring MuseRuntimeClient
+ * (disclosed activation, muse-routing-seam.test.ts). `max_output_tokens`
+ * is projected, so `explicit-output-ceiling` holds.
  * Both translated clients forward the validated `strict` flag on function
  * tools (standard OpenAI function shape); a provider that rejects it fails
  * visibly as a provider 400, never as a silent drop.
