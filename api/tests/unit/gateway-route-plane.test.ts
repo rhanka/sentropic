@@ -13,6 +13,7 @@ vi.mock('../../src/services/llm-runtime/index', () => ({
 }));
 
 import { createApplicationGatewayRoutePlane } from '../../src/services/llm-runtime/gateway-route-plane';
+import { resolveRuntimeSelection } from '../../src/services/llm-runtime/index';
 
 const SUBJECT: VerifiedRoutingSubject = { principalRef: 'user-1', ownerScopeRef: 'owner-1' };
 
@@ -30,4 +31,17 @@ describe('application gateway route plane execution features', () => {
       ['named-tool-choice', 'parallel-tool-control'],
     );
   });
+
+  it.each(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-opus-5-5-xhigh'])(
+    'refuses bare alias-only %s as unknown-model on the non-native quote and plan', async (model) => {
+      vi.mocked(resolveRuntimeSelection).mockClear();
+      const plane = createApplicationGatewayRoutePlane();
+      expect(() => plane.planner.quote!({
+        requestedModel: model, now: new Date('2026-10-04T00:00:00Z'),
+        ceiling: { inputTokens: 100, outputTokens: 16 },
+      })).toThrow(expect.objectContaining({ code: 'unknown-model' }));
+      await expect(plane.planner.plan(SUBJECT, { requestedModel: model }))
+        .rejects.toMatchObject({ code: 'unknown-model' });
+      expect(resolveRuntimeSelection).not.toHaveBeenCalled();
+    });
 });

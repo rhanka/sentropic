@@ -136,9 +136,9 @@ const cloudCodeToolConfig = (request: GenerateRequest): unknown => {
 };
 
 // Cloud Code models with an announced xhigh wire id (agy models,
-// 2026-11-18: gemini-4-neon-xhigh and gemini-4-hydrogen-xhigh; Argon and
-// Carbon have no xhigh). xhigh reaches the wire only for these models;
-// every other model keeps the existing clamping to high.
+// 2026-11-22: gemini-4-neon-xhigh and gemini-4-hydrogen-xhigh; Argon and
+// Carbon have no xhigh). Both xhigh and max map to XHIGH for these models;
+// every other model keeps clamping to HIGH.
 const CLOUD_CODE_XHIGH_MODEL_IDS: ReadonlySet<string> = new Set([
   'gemini-4-neon',
   'gemini-4-hydrogen',
@@ -149,7 +149,7 @@ const cloudCodeThinkingLevel = (request: GenerateRequest): 'LOW' | 'MEDIUM' | 'H
   if (!effort || effort === 'none') return undefined;
   if (effort === 'low') return 'LOW';
   if (effort === 'medium') return 'MEDIUM';
-  if (effort === 'xhigh') {
+  if (effort === 'xhigh' || effort === 'max') {
     const modelId = request.modelId ?? (typeof request.model === 'string' ? request.model : undefined);
     if (modelId && CLOUD_CODE_XHIGH_MODEL_IDS.has(modelId)) return 'XHIGH';
     return 'HIGH';

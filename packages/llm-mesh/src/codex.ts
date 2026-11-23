@@ -1,6 +1,6 @@
 export const CODEX_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses';
 
-export type CodexReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+export type CodexReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type CodexContentPart =
   | { type: 'text' | 'input_text'; text?: string }
   | { type: string; [key: string]: unknown };

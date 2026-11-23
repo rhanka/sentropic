@@ -347,6 +347,28 @@ export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
 
 const ANTHROPIC_FAITHFUL_TRANSPORT_PROVIDERS: readonly string[] = ['claude-code'];
 
+/**
+ * Owner rule (absolute): the bare Claude 5.5 ids stay gateway aliases on
+ * every surface. Their launch-alias rows in `STANDARD_ROUTE_DEFINITIONS`
+ * route to Muse -> Codex -> Cloud Code -> GLM without auto-injecting a
+ * faithful Anthropic target. The real Claude 5.5 models stay reachable only
+ * through an explicit `anthropic:` / `claude-code` qualified request on the
+ * claude-code seat (e.g. `anthropic:claude-opus-5-5` via `LlmMesh` or
+ * `ClaudeCodeRuntimeClient`), never through `ANTHROPIC_API_KEY` or any
+ * other Anthropic credential and never as a fallback.
+ */
+export const GATEWAY_ALIAS_ONLY_CLAUDE_MODEL_IDS: ReadonlySet<string> = new Set([
+  'claude-opus-5-5',
+  'claude-sonnet-5-5',
+  'claude-haiku-5-5',
+]);
+
+/** True for a bare or effort-suffixed alias-only Claude 5.5 id. */
+export const isGatewayAliasOnlyClaudeModelId = (modelId: string): boolean =>
+  GATEWAY_ALIAS_ONLY_CLAUDE_MODEL_IDS.has(
+    modelId.replace(/-(?:high|xhigh|max|medium|low)$/, ''),
+  );
+
 const CLAUDE_SUCCESSION_MAP: Readonly<Record<string, string>> = {
   // RATIFICATION PENDING (owner decision not yet traced; see PR body):
   // model succession from api/src/services/model-selection-legacy.ts:
@@ -407,6 +429,7 @@ const resolveFaithfulAnthropicTarget = (
   effort?: string,
 ): TargetMapping | undefined => {
   let faithfulModel = faithfulClaudeModel(requestedId);
+  if (GATEWAY_ALIAS_ONLY_CLAUDE_MODEL_IDS.has(faithfulModel)) return undefined;
   const seen = new Set<string>();
 
   while (!seen.has(faithfulModel)) {

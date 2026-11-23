@@ -1,5 +1,6 @@
 import {
   getProviderProfile,
+  isGatewayAliasOnlyClaudeModelId,
   listModelProfilesByProvider,
   providerIds as meshProviderIds,
   type CapabilitySupport,
@@ -102,7 +103,13 @@ const toRuntimeModel = (profile: ModelProfile): ModelCatalogEntry => ({
 export const listRuntimeModelsByProvider = (
   providerId: ProviderId,
 ): ModelCatalogEntry[] => {
-  return listModelProfilesByProvider(providerId).map(toRuntimeModel);
+  // Owner rule: bare Claude 5.5 ids are gateway aliases, never product
+  // catalog models. Hiding them here keeps the product catalog, app-chat
+  // selection and every registry-backed gateway projection on the alias
+  // contract; the real models stay reachable only on the claude-code seat.
+  return listModelProfilesByProvider(providerId)
+    .filter((profile) => !isGatewayAliasOnlyClaudeModelId(profile.modelId))
+    .map(toRuntimeModel);
 };
 
 export const buildRuntimeProviderDescriptor = (input: {

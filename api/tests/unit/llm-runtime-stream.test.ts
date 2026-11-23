@@ -1470,6 +1470,8 @@ function addSharedNormalizerFixture(
 
 addTransportEquivalentFixture('anthropic', 'claude-fable-5', 'claude-fable-5-1', 'Claude Fable 5.1');
 addTransportEquivalentFixture('anthropic', 'claude-fable-5-1', 'claude-fable-5-2', 'Claude Fable 5.2');
+// Owner rule: bare `claude-*-5-5` ids are gateway aliases, never advertised
+// Anthropic catalog models, so they carry no product stream fixture.
 addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'mistral-large-4', 'Mistral Large 4');
 addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'mistral-medium-3.5', 'Mistral Medium 3.5');
 addTransportEquivalentFixture('mistral', 'magistral-medium-2509', 'zai-glm-5-3', 'GLM 5.3 (Mistral)');

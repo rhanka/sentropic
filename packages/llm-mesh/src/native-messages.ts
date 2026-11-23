@@ -1,7 +1,7 @@
 import type { RouteAttemptUsage } from './routing-contracts.js';
 import { readRequestSizeDetail, type RequestSizeDetail } from './errors.js';
 import { modelProfiles } from './catalog.js';
-import { LAUNCH_ALIAS_ROUTE_MAPPINGS } from './routing-targets.js';
+import { GATEWAY_ALIAS_ONLY_CLAUDE_MODEL_IDS, LAUNCH_ALIAS_ROUTE_MAPPINGS } from './routing-targets.js';
 
 export type NativeInputUsageSource = 'json' | 'message_start' | 'message_delta';
 export type NativeUsageUncertainty =
@@ -117,8 +117,11 @@ export const validateNativeModelAllowlist = (
     // `EXCLUSIVE_LAUNCH_ALIAS_TARGET_MAPPINGS`; W folds every launch alias
     // into `LAUNCH_ALIAS_ROUTE_MAPPINGS`, so any alias key without its own
     // exact Anthropic catalog entry is rejected. Bare ids that are exact
-    // catalog models (e.g. `claude-sonnet-5`) remain accepted.
+    // catalog models (e.g. `claude-sonnet-5`) remain accepted. The alias-only
+    // Claude 5.5 ids keep exact profiles for the explicit claude-code seat
+    // path only and are rejected here regardless of their profile.
     if (!isExactAnthropicCatalogModel(modelId)
+      || GATEWAY_ALIAS_ONLY_CLAUDE_MODEL_IDS.has(modelId)
       || Object.hasOwn(LAUNCH_ALIAS_ROUTE_MAPPINGS, modelId) && !isExactAnthropicCatalogModel(modelId)) {
       throw new Error('Native Messages allowlist requires exact non-exclusive Anthropic model IDs');
     }

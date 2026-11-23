@@ -487,6 +487,57 @@ describe('Cloud Code runtime client', () => {
     });
   });
 
+  it('maps hydrogen max to XHIGH (-xhigh) and low to LOW (-low)', async () => {
+    const catalogue = ['gemini-4-hydrogen-low', 'gemini-4-hydrogen-medium', 'gemini-4-hydrogen-high', 'gemini-4-hydrogen-xhigh'];
+    const lowFetch = createFetch(catalogue);
+    await new CloudCodeRuntimeClient(lowFetch).generate({
+      providerId: 'gemini', modelId: 'gemini-4-hydrogen',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'low' },
+    }, context);
+    expect(JSON.parse(String(streamInit(lowFetch).body))).toMatchObject({
+      model: 'gemini-4-hydrogen-low',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } } },
+    });
+
+    const maxFetch = createFetch(catalogue);
+    await new CloudCodeRuntimeClient(maxFetch).generate({
+      providerId: 'gemini', modelId: 'gemini-4-hydrogen',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'max' },
+    }, context);
+    expect(JSON.parse(String(streamInit(maxFetch).body))).toMatchObject({
+      model: 'gemini-4-hydrogen-xhigh',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'XHIGH' } } },
+    });
+  });
+
+  it.each(['gemini-4-argon', 'gemini-4-carbon'] as const)(
+    'maps %s low to LOW (-low) and clamps max to HIGH (-high)', async (modelId) => {
+      const catalogue = [`${modelId}-low`, `${modelId}-medium`, `${modelId}-high`];
+      const lowFetch = createFetch(catalogue);
+      await new CloudCodeRuntimeClient(lowFetch).generate({
+        providerId: 'gemini', modelId,
+        messages: [{ role: 'user', content: 'hello' }],
+        reasoning: { effort: 'low' },
+      }, context);
+      expect(JSON.parse(String(streamInit(lowFetch).body))).toMatchObject({
+        model: `${modelId}-low`,
+        request: { generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } } },
+      });
+
+      const maxFetch = createFetch(catalogue);
+      await new CloudCodeRuntimeClient(maxFetch).generate({
+        providerId: 'gemini', modelId,
+        messages: [{ role: 'user', content: 'hello' }],
+        reasoning: { effort: 'max' },
+      }, context);
+      expect(JSON.parse(String(streamInit(maxFetch).body))).toMatchObject({
+        model: `${modelId}-high`,
+        request: { generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } },
+      });
+    });
+
   it('uses an announced base wire id with the requested thinking level', async () => {
     const fetchFn = createFetch(['claude-sonnet-4-6']);
     const client = new CloudCodeRuntimeClient(fetchFn);

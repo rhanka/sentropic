@@ -266,8 +266,22 @@ describe('Muse runtime client (mesh-side upstream transport)', () => {
     await expect(client.generate({
       ...request, reasoning: { effort: 'none' },
     }, auth)).rejects.toMatchObject({ status: 400, code: 'unsupported_projection', param: 'reasoning' });
+    await expect(client.generate({
+      ...request, modelId: 'muse-wonder-1.0', reasoning: { effort: 'none' },
+    }, auth)).rejects.toMatchObject({ status: 400, code: 'unsupported_projection', param: 'reasoning' });
     expect(fetchFn).not.toHaveBeenCalled();
   });
+
+  it.each(['muse-wonder-1.0', 'muse-ember-1.0'] as const)(
+    'projects supported effort-only reasoning (low and max) onto /v1/responses for %s', async (modelId) => {
+      for (const effort of ['low', 'max'] as const) {
+        const fetchFn = vi.fn(async () => new Response(JSON.stringify({ ...completedPayload, model: modelId }), { status: 200 }));
+        const client = new MuseRuntimeClient({ fetch: fetchFn });
+        await client.generate({ ...request, modelId, reasoning: { effort } }, auth);
+        const [, init] = fetchFn.mock.calls[0]!;
+        expect(JSON.parse(String(init.body))).toMatchObject({ model: modelId, reasoning: { effort } });
+      }
+    });
 
   it('sets stream:true on the wire for SSE', async () => {
     const fetchFn = vi.fn(async () => sseResponse([]));

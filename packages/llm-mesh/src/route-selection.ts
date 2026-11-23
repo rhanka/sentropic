@@ -5,6 +5,7 @@ import type { EligibleAccountDescriptor, PlannedRouteTarget, RoutePlanInput } fr
 import { resolveRouteStrategy, type RoutePolicy, type RouteSelector } from './routing-policy.js';
 import {
   createCanonicalTargetCandidatesResolver,
+  GATEWAY_ALIAS_ONLY_CLAUDE_MODEL_IDS,
   resolveTargetCapabilitySource,
   isExactModelTarget,
   isRetiredRoutingModelId,
@@ -87,12 +88,15 @@ export const resolveRequestedTargets = (request: RoutePlanInput, allowEquivalent
   const canonicalTargets = selected ?? (allowEquivalentModels ? resolveMappedTargets : resolveCanonicalTargets)(requestedModel);
   const model = normalizeExactModelId(requestedModel);
   const profile = modelProfiles.find((candidate) => candidate.modelId === model);
-  if (canonicalTargets.length === 0 && !profile && resolveMappedTargets(requestedModel).length === 0) {
+  const fallbackProfile = profile && !GATEWAY_ALIAS_ONLY_CLAUDE_MODEL_IDS.has(profile.modelId)
+    ? profile
+    : undefined;
+  if (canonicalTargets.length === 0 && !fallbackProfile && resolveMappedTargets(requestedModel).length === 0) {
     return { kind: 'unknown-model', requestedModel };
   }
   const standardTargets = canonicalTargets.length > 0
     ? canonicalTargets
-    : profile ? [{ providerId: profile.providerId, model: profile.modelId, transportProviderId: undefined }] : [];
+    : fallbackProfile ? [{ providerId: fallbackProfile.providerId, model: fallbackProfile.modelId, transportProviderId: undefined }] : [];
   const faithfulClaudeTarget = requestedModel.startsWith('claude-')
     ? standardTargets.find((target) => target.providerId === 'anthropic')
     : undefined;

@@ -72,6 +72,8 @@ describe('llm-mesh model projections', () => {
       'gemini-4-hydrogen',
       'gemini-4-neon',
     ]);
+    // Owner rule: the bare Claude 5.5 ids are gateway aliases, never product
+    // catalog models; the real models stay seat-only and unlisted here.
     expect(modelsByProvider('anthropic')).toEqual([
       'claude-fable-5',
       'claude-fable-5-1',

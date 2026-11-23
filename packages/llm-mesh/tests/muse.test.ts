@@ -78,6 +78,9 @@ describe('muse provider package surface', () => {
 
     expect(wonder?.label).toBe('Muse Wonder');
     expect(wonder?.reasoningTier).toBe('advanced');
+    expect(wonder?.capabilities.reasoning.supportedEfforts).toEqual([
+      'low', 'medium', 'high', 'xhigh', 'max',
+    ]);
     expect(full?.label).toBe('Muse Wonder Full');
     expect(full?.reasoningTier).toBe('advanced');
   });

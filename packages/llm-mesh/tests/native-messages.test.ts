@@ -10,6 +10,10 @@ import { LAUNCH_ALIAS_ROUTE_MAPPINGS } from '../src/routing-targets.js';
 import { modelProfiles } from '../src/catalog.js';
 
 const qualifiedIds = ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1', 'claude-fable-5-2'];
+// Owner rule: the bare Claude 5.5 ids are gateway aliases on every surface.
+// They keep exact Anthropic catalog profiles for the explicit claude-code
+// seat path only and must stay out of the native allowlist regardless.
+const aliasOnlyIds = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'];
 // W semantic port of R's exclusive-alias rejection: every launch alias that
 // is not itself an exact Anthropic catalog model stays out of the allowlist.
 // Bare ids below are exact catalog models, so they are accepted (see next test).
@@ -68,6 +72,19 @@ describe('native Messages contracts', () => {
     'should reject non-Anthropic or nonexact allowlist entry %s', (modelId) => {
       expect(() => validateNativeModelAllowlist([modelId])).toThrow(/exact non-exclusive Anthropic/);
     });
+
+  it.each([...aliasOnlyIds, 'claude-opus-5-5-xhigh', 'claude-sonnet-5-5-max', 'claude-haiku-5-5-low'])(
+    'should reject alias-only Claude 5.5 allowlist entry %s despite its exact profile', (modelId) => {
+      expect(() => validateNativeModelAllowlist([modelId])).toThrow(/exact non-exclusive Anthropic/);
+    });
+
+  it('keeps exact Anthropic profiles for the alias-only ids (explicit seat path only)', () => {
+    for (const modelId of aliasOnlyIds) {
+      expect(modelProfiles.some(
+        (profile) => profile.providerId === 'anthropic' && profile.modelId === modelId,
+      )).toBe(true);
+    }
+  });
 
   it('should reject every launch alias without an exact Anthropic catalog entry', () => {
     expect(nonexactAliases.length).toBeGreaterThan(0);

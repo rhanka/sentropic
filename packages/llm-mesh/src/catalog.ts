@@ -448,7 +448,13 @@ export const modelProfiles = [
     label: 'GPT-6 Luna',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'summary'],
-    capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
+    capabilities: {
+      ...modelCapabilities('openai', 'advanced', { vision: true }),
+      reasoning: {
+        ...modelCapabilities('openai', 'advanced', { vision: true }).reasoning,
+        supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      },
+    },
   },
   {
     providerId: 'openai',
@@ -508,6 +514,10 @@ export const modelProfiles = [
       ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }),
       contextWindowTokens: 1_000_000,
       maxOutputTokens: 65_536,
+      reasoning: {
+        ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }).reasoning,
+        supportedEfforts: ['low', 'medium', 'high'],
+      },
     },
   },
   {
@@ -520,6 +530,10 @@ export const modelProfiles = [
       ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }),
       contextWindowTokens: 1_000_000,
       maxOutputTokens: 65_536,
+      reasoning: {
+        ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }).reasoning,
+        supportedEfforts: ['low', 'medium', 'high', 'xhigh'],
+      },
     },
   },
   {
@@ -532,6 +546,10 @@ export const modelProfiles = [
       ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }),
       contextWindowTokens: 1_000_000,
       maxOutputTokens: 65_536,
+      reasoning: {
+        ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }).reasoning,
+        supportedEfforts: ['low', 'medium', 'high', 'xhigh'],
+      },
     },
   },
   {
@@ -544,6 +562,10 @@ export const modelProfiles = [
       ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }),
       contextWindowTokens: 1_000_000,
       maxOutputTokens: 65_536,
+      reasoning: {
+        ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }).reasoning,
+        supportedEfforts: ['low', 'medium', 'high'],
+      },
     },
   },
   {
@@ -588,6 +610,59 @@ export const modelProfiles = [
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('anthropic', 'advanced', { vision: true }),
+  },
+  // Verified 2026-11-22 against Anthropic platform docs and Claude Code CLI 2.1.330:
+  // all three Claude 5.5 models have 1M context, 128K max output, adaptive thinking,
+  // and accept low/medium/high/xhigh/max efforts (`none` is unsupported and rejected).
+  // Gateway launch-alias rows for these ids remain alias-only (Muse/Codex/Cloud/GLM)
+  // via GATEWAY_ALIAS_ONLY_CLAUDE_MODEL_IDS in routing-targets.ts.
+  {
+    providerId: 'anthropic',
+    modelId: 'claude-opus-5-5',
+    label: 'Opus 5.5',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: {
+      ...modelCapabilities('anthropic', 'advanced', { vision: true }),
+      contextWindowTokens: 1_000_000,
+      maxOutputTokens: 128_000,
+      reasoning: {
+        ...modelCapabilities('anthropic', 'advanced', { vision: true }).reasoning,
+        supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      },
+    },
+  },
+  {
+    providerId: 'anthropic',
+    modelId: 'claude-sonnet-5-5',
+    label: 'Sonnet 5.5',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured'],
+    capabilities: {
+      ...modelCapabilities('anthropic', 'advanced', { vision: true }),
+      contextWindowTokens: 1_000_000,
+      maxOutputTokens: 128_000,
+      reasoning: {
+        ...modelCapabilities('anthropic', 'advanced', { vision: true }).reasoning,
+        supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      },
+    },
+  },
+  {
+    providerId: 'anthropic',
+    modelId: 'claude-haiku-5-5',
+    label: 'Haiku 5.5',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: {
+      ...modelCapabilities('anthropic', 'advanced', { vision: true }),
+      contextWindowTokens: 1_000_000,
+      maxOutputTokens: 128_000,
+      reasoning: {
+        ...modelCapabilities('anthropic', 'advanced', { vision: true }).reasoning,
+        supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      },
+    },
   },
   {
     providerId: 'anthropic',
@@ -643,6 +718,10 @@ export const modelProfiles = [
     capabilities: {
       ...modelCapabilities('mistral', 'advanced', { vision: true }),
       contextWindowTokens: 1_000_000,
+      reasoning: {
+        ...modelCapabilities('mistral', 'advanced', { vision: true }).reasoning,
+        supportedEfforts: ['low', 'medium', 'high'],
+      },
     },
   },
   // Mistral Medium 3.5: Vibe CLI default model (alias `mistral-medium-3.5`,
@@ -675,6 +754,10 @@ export const modelProfiles = [
       ...modelCapabilities('mistral', 'advanced'),
       contextWindowTokens: 1_000_000,
       maxOutputTokens: 131_072,
+      reasoning: {
+        ...modelCapabilities('mistral', 'advanced').reasoning,
+        supportedEfforts: ['low', 'high', 'max'],
+      },
     },
   },
   {
@@ -773,6 +856,7 @@ export const modelProfiles = [
     capabilities: {
       ...museModelCapabilities('muse-ember-1.0'),
       contextWindowTokens: 1_000_000,
+
     },
   },
   {
