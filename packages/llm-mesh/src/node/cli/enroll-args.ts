@@ -37,12 +37,13 @@ export interface EnrollCliDeps {
   stdin?: ProcessReadStream;
   secretToolPath?: string;
   secretToolTimeoutMs?: number;
+  oauthPasteTimeoutMs?: number;
   hostname?: string;
   readAgyToken?: () => Promise<string>;
 }
 
 export interface ParsedArgs {
-  command: 'enroll' | 'probe' | 'help';
+  command: 'enroll' | 'probe' | 'list' | 'help';
   provider: string;
   keyringDir?: string;
   keyringKeyEnv?: string;
@@ -54,6 +55,7 @@ export interface ParsedArgs {
   maxAttempts?: number;
   fromAgy?: boolean;
   credentialStdin?: boolean;
+  oauthPaste?: boolean;
   createAccount?: boolean;
   missingValueFlags?: readonly string[];
 }
@@ -73,6 +75,7 @@ const VALUE_FLAGS = [
 const BOOLEAN_FLAGS = new Set([
   'from-agy',
   'credential-stdin',
+  'oauth-paste',
   'create-account',
   'help',
 ]);
@@ -113,8 +116,8 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
   if (!command || command === 'help' || argv.includes('--help')) {
     return { command: 'help', provider: 'muse-code' };
   }
-  if (command !== 'enroll' && command !== 'probe') {
-    throw new Error(`unknown command '${command}'; expected 'enroll' or 'probe'`);
+  if (command !== 'enroll' && command !== 'probe' && command !== 'list') {
+    throw new Error(`unknown command '${command}'; expected 'enroll', 'probe', or 'list'`);
   }
   rejectUnknownFlags(rest);
   const missingValueFlags = VALUE_FLAGS.filter((name) => hasFlag(rest, name) && flagValue(rest, name) === undefined);
@@ -133,6 +136,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     effort: flagValue(rest, 'effort') ?? 'low',
     ...(hasFlag(rest, 'from-agy') ? { fromAgy: true } : {}),
     ...(hasFlag(rest, 'credential-stdin') ? { credentialStdin: true } : {}),
+    ...(hasFlag(rest, 'oauth-paste') ? { oauthPaste: true } : {}),
     ...(hasFlag(rest, 'create-account') ? { createAccount: true } : {}),
     ...(missingValueFlags.length ? { missingValueFlags } : {}),
     ...(maxAttemptsRaw !== undefined ? { maxAttempts: Number(maxAttemptsRaw) } : {}),
@@ -144,9 +148,10 @@ export const usageText = (): string =>
     'llm-mesh-enroll enroll --provider muse-code --keyring-dir <dir>',
     '  --owner-scope <ref> [--label <label>] --keyring-key-env <NAME>',
     '  [--max-attempts <n>]',
-    'llm-mesh-enroll enroll --provider cloud-code (--from-agy | --credential-stdin)',
+    'llm-mesh-enroll enroll --provider cloud-code (--from-agy | --credential-stdin | --oauth-paste)',
     '  --keyring-dir <dir> (--account <id> | --create-account --owner-scope <ref>)',
     '  [--owner-scope <ref>] [--label <label>] [--keyring-key-env <NAME>]',
+    'llm-mesh-enroll list --keyring-dir <dir> [--keyring-key-env <NAME>]',
     'llm-mesh-enroll probe --provider muse-code --keyring-dir <dir>',
     '  --account <id> --model muse-wonder-1.0 --effort low --keyring-key-env <NAME>',
     'llm-mesh-enroll probe --provider cloud-code --keyring-dir <dir>',

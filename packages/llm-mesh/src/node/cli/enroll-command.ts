@@ -53,8 +53,8 @@ export const runEnroll = async (
   if (args.provider === 'cloud-code') {
     return runCloudCodeEnroll(args, deps);
   }
-  if (args.fromAgy || args.credentialStdin || args.createAccount) {
-    return fail(writers, EXIT_CODES.usage, '--from-agy, --credential-stdin, and --create-account are only supported with --provider cloud-code');
+  if (args.fromAgy || args.credentialStdin || args.oauthPaste || args.createAccount) {
+    return fail(writers, EXIT_CODES.usage, '--from-agy, --credential-stdin, --oauth-paste, and --create-account are only supported with --provider cloud-code');
   }
   if (args.provider !== 'muse-code' && args.provider !== 'codex') {
     return fail(writers, EXIT_CODES.usage, `unknown provider '${args.provider}'; expected 'muse-code', 'codex', or 'cloud-code'`);

@@ -16,6 +16,7 @@ import {
   type ParsedArgs,
 } from './enroll-args.js';
 import { runEnroll } from './enroll-command.js';
+import { runList } from './list-accounts.js';
 import { probeCloudCode } from './probe-cloud-code.js';
 
 const KNOWN_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
@@ -133,5 +134,6 @@ export const run = async (argv: string[], deps: EnrollCliDeps = {}): Promise<num
     return EXIT_CODES.ok;
   }
   if (args.command === 'enroll') return runEnroll(args, deps);
+  if (args.command === 'list') return runList(args, deps);
   return runProbe(args, deps);
 };

@@ -1,6 +1,6 @@
 // @sentropic/llm-mesh/node/cli/enroll-cloud-code.ts
 //
-// `llm-mesh-enroll enroll --provider cloud-code (--from-agy | --credential-stdin)`
+// `llm-mesh-enroll enroll --provider cloud-code (--from-agy | --credential-stdin | --oauth-paste)`
 // Requires an explicit existing `--account <id>` by default (`--create-account`
 // + `--owner-scope <ref>` for a new account). Commits with a single CAS over
 // :envelope, :public, :owner (when created), and accounts:index, so neither
@@ -23,6 +23,7 @@ import {
   parseAccountIndex,
   sanitizeUpstreamStatus,
 } from './cloud-code-record.js';
+import { readPastedOAuthCallback } from './oauth-paste.js';
 import {
   defaultWriters,
   EXIT_CODES,
@@ -32,10 +33,13 @@ import {
   type ParsedArgs,
 } from './enroll-args.js';
 
+const OAUTH_PASTE_REDIRECT_URI = 'http://127.0.0.1:1/oauth/callback';
+
 const validateArgs = (args: ParsedArgs): string | null => {
   if (args.missingValueFlags?.length) return `flag '--${args.missingValueFlags[0]}' requires a non-empty value`;
-  if (args.fromAgy && args.credentialStdin) return 'pass either --from-agy or --credential-stdin, not both';
-  if (!args.fromAgy && !args.credentialStdin) return 'cloud-code enrollment requires --from-agy or --credential-stdin';
+  const sources = [args.fromAgy, args.credentialStdin, args.oauthPaste].filter(Boolean).length;
+  if (sources > 1) return 'pass exactly one of --from-agy, --credential-stdin, or --oauth-paste';
+  if (sources === 0) return 'cloud-code enrollment requires --from-agy, --credential-stdin, or --oauth-paste';
   if (!args.keyringDir) return 'missing --keyring-dir <dir>';
   if (args.createAccount && args.account !== undefined) return '--create-account cannot be combined with --account';
   if (args.createAccount && !args.ownerScope?.trim()) return '--create-account requires --owner-scope <ref>';
@@ -88,28 +92,68 @@ export const runCloudCodeEnroll = async (
     }
   }
 
-  let cred;
-  try {
-    cred = await readCloudCodeCredential({
-      source: args.credentialStdin ? 'credential-stdin' : 'from-agy',
-      env, stdin: deps.stdin, secretToolPath: deps.secretToolPath,
-      secretToolTimeoutMs: deps.secretToolTimeoutMs, readRaw: deps.readAgyToken,
-    });
-  } catch (error) {
-    return fail(writers, EXIT_CODES.enrollmentFailed, error instanceof AgyTokenReadError ? error.message : 'failed to read credential');
-  }
-
   const provider = new CloudCodeEnrollmentProvider({ fetchFn });
-  let exchanged;
-  try {
-    exchanged = await provider.refresh({ accountId, refreshToken: cred.refreshToken, credentialVersion: 'v1.0.0' });
-  } catch (error) {
-    return fail(writers, EXIT_CODES.enrollmentFailed, `cloud-code token refresh failed${sanitizeUpstreamStatus(error)}`);
+  let refreshed: {
+    accountId: string; accessToken: string; refreshToken: string;
+    expiresAt: string; authClientConfigVersion: string;
+  };
+  if (args.oauthPaste) {
+    // Dedicated grant minted in place: read-only preflight above has
+    // already passed and no keyring lock is held while the operator
+    // completes browser consent.
+    let session;
+    try {
+      session = await provider.start({
+        configRef: 'default', mode: 'portal', redirectUri: OAUTH_PASTE_REDIRECT_URI, ownerScope,
+      });
+    } catch {
+      return fail(writers, EXIT_CODES.enrollmentFailed, 'cloud-code OAuth session start failed');
+    }
+    if (session.kind !== 'authorization-url') {
+      return fail(writers, EXIT_CODES.enrollmentFailed, 'cloud-code OAuth session start failed');
+    }
+    writers.out(JSON.stringify({ authorizationUrl: session.url, expiresAt: session.expiresAt }));
+    let pasted;
+    try {
+      pasted = await readPastedOAuthCallback(deps.stdin, deps.oauthPasteTimeoutMs);
+    } catch (error) {
+      return fail(writers, EXIT_CODES.enrollmentFailed, error instanceof AgyTokenReadError ? error.message : 'failed to read pasted OAuth callback');
+    }
+    let minted;
+    try {
+      minted = await provider.complete({ enrollmentId: session.enrollmentId, code: pasted.code, state: pasted.state });
+    } catch (error) {
+      return fail(writers, EXIT_CODES.enrollmentFailed, `cloud-code token exchange failed${sanitizeUpstreamStatus(error)}`);
+    }
+    if (!minted.refreshToken) {
+      return fail(writers, EXIT_CODES.enrollmentFailed, 'cloud-code token exchange returned no refresh token; retry the consent flow');
+    }
+    refreshed = {
+      accountId, accessToken: minted.accessToken, refreshToken: minted.refreshToken,
+      expiresAt: minted.expiresAt, authClientConfigVersion: minted.authClientConfigVersion,
+    };
+  } else {
+    let cred;
+    try {
+      cred = await readCloudCodeCredential({
+        source: args.credentialStdin ? 'credential-stdin' : 'from-agy',
+        env, stdin: deps.stdin, secretToolPath: deps.secretToolPath,
+        secretToolTimeoutMs: deps.secretToolTimeoutMs, readRaw: deps.readAgyToken,
+      });
+    } catch (error) {
+      return fail(writers, EXIT_CODES.enrollmentFailed, error instanceof AgyTokenReadError ? error.message : 'failed to read credential');
+    }
+    let exchanged;
+    try {
+      exchanged = await provider.refresh({ accountId, refreshToken: cred.refreshToken, credentialVersion: 'v1.0.0' });
+    } catch (error) {
+      return fail(writers, EXIT_CODES.enrollmentFailed, `cloud-code token refresh failed${sanitizeUpstreamStatus(error)}`);
+    }
+    if (!exchanged.refreshToken) {
+      return fail(writers, EXIT_CODES.enrollmentFailed, 'cloud-code token refresh returned no refresh token');
+    }
+    refreshed = { ...exchanged, refreshToken: exchanged.refreshToken };
   }
-  if (!exchanged.refreshToken) {
-    return fail(writers, EXIT_CODES.enrollmentFailed, 'cloud-code token refresh returned no refresh token');
-  }
-  const refreshed = { ...exchanged, refreshToken: exchanged.refreshToken };
   let metadata;
   try { metadata = await provider.resolve(refreshed); } catch (error) {
     return fail(writers, EXIT_CODES.enrollmentFailed, `cloud-code loadCodeAssist failed${sanitizeUpstreamStatus(error)}`);
