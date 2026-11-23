@@ -5,7 +5,6 @@
 // legacy records, and never defaults labels to an email address.
 
 import type { ResolvedProviderMetadata } from '../../enrollment/contracts.js';
-import type { EncryptedFileKeyring } from '../keyring/encrypted-file-keyring.js';
 
 export const ACCOUNT_INDEX_KEY = 'sentropic-llm-mesh:accounts:index';
 
@@ -28,7 +27,7 @@ export const sanitizeUpstreamStatus = (error: unknown): string => {
   return match ? ` (status ${match[1]})` : '';
 };
 
-const parseIndex = (raw: string | null): string[] => {
+export const parseAccountIndex = (raw: string | null): string[] => {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -38,35 +37,8 @@ const parseIndex = (raw: string | null): string[] => {
   }
 };
 
-export const appendIndexCas = async (keyring: EncryptedFileKeyring, accountId: string): Promise<boolean> => {
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const raw = await keyring.getSecret(ACCOUNT_INDEX_KEY);
-    const ids = parseIndex(raw);
-    if (ids.includes(accountId)) return true;
-    ids.push(accountId);
-    if (await keyring.compareAndSetSecret(ACCOUNT_INDEX_KEY, raw, JSON.stringify(ids))) return true;
-  }
-  return false;
-};
-
-export const verifyDurableOwner = async (
-  keyring: EncryptedFileKeyring,
-  accountId: string,
-  ownerScope: string,
-): Promise<string | null> => {
-  const ownerKey = `sentropic-llm-mesh:${accountId}:owner`;
-  const ownerJson = JSON.stringify({ v: 1, accountId, ownerScopeRef: ownerScope });
-  const created = await keyring.setSecretIfAbsent(ownerKey, ownerJson);
-  const durable = created ? ownerJson : await keyring.getSecret(ownerKey);
-  if (!durable) return null;
-  try {
-    const parsed = JSON.parse(durable) as Record<string, unknown>;
-    if (parsed.v !== 1 || parsed.accountId !== accountId || parsed.ownerScopeRef !== ownerScope) return null;
-    return durable;
-  } catch {
-    return null;
-  }
-};
+export const ownerClaimJson = (accountId: string, ownerScope: string): string =>
+  JSON.stringify({ v: 1, accountId, ownerScopeRef: ownerScope });
 
 /** Allowlist-only public record construction: never spreads existing records or metadata. */
 export const buildAllowlistedPublicRecord = (input: {

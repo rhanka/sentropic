@@ -2,8 +2,10 @@
 //
 // `llm-mesh-enroll enroll --provider cloud-code (--from-agy | --credential-stdin)`
 // Requires an explicit existing `--account <id>` by default (`--create-account`
-// + `--owner-scope <ref>` for a new account). Commits with CAS so neither CLI
-// enroll nor custodian refresh clobbers the other.
+// + `--owner-scope <ref>` for a new account). Commits with a single CAS over
+// :envelope, :public, :owner (when created), and accounts:index, so neither
+// CLI enroll nor custodian refresh clobbers the other and any abort leaves
+// the keyring byte-identical.
 
 import { randomBytes } from 'node:crypto';
 import { hostname } from 'node:os';
@@ -16,10 +18,10 @@ import {
 } from './cloud-code-account-guard.js';
 import {
   ACCOUNT_INDEX_KEY,
-  appendIndexCas,
   buildAllowlistedPublicRecord,
+  ownerClaimJson,
+  parseAccountIndex,
   sanitizeUpstreamStatus,
-  verifyDurableOwner,
 } from './cloud-code-record.js';
 import {
   defaultWriters,
@@ -64,9 +66,10 @@ export const runCloudCodeEnroll = async (
   let existing: LoadedExistingAccount | null = null;
   let accountId: string;
   let ownerScope: string;
+  let indexRaw: string | null;
 
   if (args.createAccount) {
-    try { await keyring.getSecret(ACCOUNT_INDEX_KEY); } catch {
+    try { indexRaw = await keyring.getSecret(ACCOUNT_INDEX_KEY); } catch {
       return fail(writers, EXIT_CODES.keyringKey, 'keyring read failed; check the key and permissions');
     }
     accountId = `acct_cc_${Date.now().toString(36)}_${randomBytes(4).toString('hex').slice(0, 6)}`;
@@ -80,6 +83,9 @@ export const runCloudCodeEnroll = async (
     }
     existing = loaded.loaded;
     ownerScope = existing.ownerScope;
+    try { indexRaw = await keyring.getSecret(ACCOUNT_INDEX_KEY); } catch {
+      return fail(writers, EXIT_CODES.keyringKey, 'keyring read failed; check the key and permissions');
+    }
   }
 
   let cred;
@@ -94,12 +100,16 @@ export const runCloudCodeEnroll = async (
   }
 
   const provider = new CloudCodeEnrollmentProvider({ fetchFn });
-  let refreshed;
+  let exchanged;
   try {
-    refreshed = await provider.refresh({ accountId, refreshToken: cred.refreshToken, credentialVersion: 'v1.0.0' });
+    exchanged = await provider.refresh({ accountId, refreshToken: cred.refreshToken, credentialVersion: 'v1.0.0' });
   } catch (error) {
     return fail(writers, EXIT_CODES.enrollmentFailed, `cloud-code token refresh failed${sanitizeUpstreamStatus(error)}`);
   }
+  if (!exchanged.refreshToken) {
+    return fail(writers, EXIT_CODES.enrollmentFailed, 'cloud-code token refresh returned no refresh token');
+  }
+  const refreshed = { ...exchanged, refreshToken: exchanged.refreshToken };
   let metadata;
   try { metadata = await provider.resolve(refreshed); } catch (error) {
     return fail(writers, EXIT_CODES.enrollmentFailed, `cloud-code loadCodeAssist failed${sanitizeUpstreamStatus(error)}`);
@@ -116,22 +126,30 @@ export const runCloudCodeEnroll = async (
   const nextPublic = JSON.stringify(built.publicRecord);
 
   try {
-    const ownerRaw = existing?.snapshot.ownerRaw ?? await verifyDurableOwner(keyring, accountId, ownerScope);
-    if (!ownerRaw) return fail(writers, EXIT_CODES.enrollmentFailed, `account '${accountId}' belongs to another owner scope`);
-    const committed = await keyring.compareAndSetSecrets(
-      [
-        { key: `sentropic-llm-mesh:${accountId}:envelope`, expected: existing?.snapshot.envelopeRaw ?? null, secret: nextEnvelope },
-        { key: `sentropic-llm-mesh:${accountId}:public`, expected: existing?.snapshot.publicRaw ?? null, secret: nextPublic },
-      ],
-      [
-        { key: `sentropic-llm-mesh:${accountId}:owner`, expected: ownerRaw },
-        { key: `sentropic-llm-mesh:${accountId}:removed`, expected: existing?.snapshot.removedRaw ?? null },
-      ],
-    );
-    if (!committed) return fail(writers, EXIT_CODES.enrollmentFailed, `account '${accountId}' was modified concurrently; retry`);
-    if (!(await appendIndexCas(keyring, accountId))) {
-      return fail(writers, EXIT_CODES.enrollmentFailed, 'keyring index was modified concurrently; retry');
+    // One atomic transaction: :owner creation and the index append ride
+    // the same CAS as :envelope/:public, so any abort or write error
+    // rolls every record back byte-identically.
+    const updates: { key: string; expected: string | null; secret: string }[] = [
+      { key: `sentropic-llm-mesh:${accountId}:envelope`, expected: existing?.snapshot.envelopeRaw ?? null, secret: nextEnvelope },
+      { key: `sentropic-llm-mesh:${accountId}:public`, expected: existing?.snapshot.publicRaw ?? null, secret: nextPublic },
+    ];
+    const guards: { key: string; expected: string | null }[] = [
+      { key: `sentropic-llm-mesh:${accountId}:removed`, expected: existing?.snapshot.removedRaw ?? null },
+    ];
+    if (existing?.snapshot.ownerRaw != null) {
+      guards.push({ key: `sentropic-llm-mesh:${accountId}:owner`, expected: existing.snapshot.ownerRaw });
+    } else {
+      updates.push({
+        key: `sentropic-llm-mesh:${accountId}:owner`, expected: null,
+        secret: ownerClaimJson(accountId, ownerScope),
+      });
     }
+    const indexIds = parseAccountIndex(indexRaw);
+    if (!indexIds.includes(accountId)) {
+      updates.push({ key: ACCOUNT_INDEX_KEY, expected: indexRaw, secret: JSON.stringify([...indexIds, accountId]) });
+    }
+    const committed = await keyring.compareAndSetSecrets(updates, guards);
+    if (!committed) return fail(writers, EXIT_CODES.enrollmentFailed, `account '${accountId}' was modified concurrently; retry`);
   } catch {
     return fail(writers, EXIT_CODES.keyringKey, 'keyring write failed; check the key and permissions');
   }
