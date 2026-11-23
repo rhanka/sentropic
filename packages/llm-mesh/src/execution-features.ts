@@ -56,14 +56,14 @@ export const EXECUTION_FEATURES: readonly ExecutionFeature[] = [
  * reasoning items natively (it cannot enforce an explicit output ceiling —
  * no `max_output_tokens` slot, spec §16.4). The translated Chat clients
  * project named choice and parallel control with tests; Mistral
- * additionally forwards the Vibe-proven `reasoning_effort` slot. Meta has
- * no proven reasoning slot on the Chat egress (spec §16.4, R5-MAJ-1):
- * unauthenticated probes are auth-first (401 for every variant), Meta 400s
- * unknown params (`max_output_tokens` precedent), and the binary
- * `reasoningEffort` belongs to the native TBH `/responses` transport, not
- * this OpenAI-compat shim — so `muse` declares no `reasoning-controls` and
- * reasoning requests fail closed until a slot is proven by an authenticated
- * probe. `max_tokens` is projected, so `explicit-output-ceiling` holds.
+ * additionally forwards the Vibe-proven `reasoning_effort` slot. Muse
+ * serves the native Responses wire (`POST /v1/responses`, not the legacy
+ * Chat egress): `reasoning: { effort, summary }` is documented on that
+ * endpoint (Meta Reasoning docs) and measured in the installed muse CLI
+ * request field table, so `muse` declares `reasoning-controls`; an effort
+ * the served model does not support still fails closed in the client
+ * before I/O. `max_output_tokens` is projected, so
+ * `explicit-output-ceiling` holds.
  * Both translated clients forward the validated `strict` flag on function
  * tools (standard OpenAI function shape); a provider that rejects it fails
  * visibly as a provider 400, never as a silent drop.
@@ -74,7 +74,7 @@ const TRANSPORT_EXECUTION_FEATURES: Readonly<
   codex: ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema',
     'reasoning-context', 'custom-tools', 'verbosity'],
   muse: ['named-tool-choice', 'parallel-tool-control', 'explicit-output-ceiling',
-    'strict-schema'],
+    'strict-schema', 'reasoning-controls'],
   'mistral-vibe': ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema'],
 };
 

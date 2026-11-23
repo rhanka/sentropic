@@ -1,5 +1,5 @@
 import { getSecretAuthMaterial } from '../auth.js';
-import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from '../generation.js';
+import type { GenerateRequest, GenerateResponse, ReasoningEffort, StreamRequest, StreamResult } from '../generation.js';
 import type { LlmMeshMessage } from '../messages.js';
 import type { MuseAdapterClient } from '../adapters.js';
 import type { ProviderRuntimeContext } from '../registry.js';
@@ -30,6 +30,74 @@ export const MUSE_CLIENT_ID = 'tbh:exec';
 
 const MUSE_DEFAULT_BASE_URL = 'https://api.meta.ai';
 const MUSE_SERVING_PATH = '/v1/responses';
+
+// Reasoning wire [MEASURED/DOCUMENTED] 2026-11-22: the Responses body nests
+// `reasoning: { effort, summary }` — Meta Reasoning docs
+// (https://dev.meta.ai/docs/reasoning: "nest it as `reasoning.effort`"; the
+// top-level `reasoning_effort` spelling belongs to Chat Completions) and
+// the installed muse CLI bundle (muse-bin-1.4.25-R9361.1), whose request
+// field table carries `reasoning` with nested `effort`/`summary` next to
+// `max_output_tokens`/`previous_response_id`. Per-model tiers are the muse
+// provider catalog `reasoning_effort_variants` (profile `tbh`): low..max on
+// the spark-1.3 / wonder / ember ids, low..xhigh on spark-1.2. The Meta
+// provider rejects `none` (HTTP 400), so no model lists it here.
+const MUSE_LOW_TO_MAX: readonly ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+const MUSE_LOW_TO_XHIGH: readonly ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh'];
+const MUSE_REASONING_EFFORTS: Readonly<Record<string, readonly ReasoningEffort[]>> = {
+  'muse-spark-1.3': MUSE_LOW_TO_MAX,
+  'muse-spark-1.3-contributor': MUSE_LOW_TO_MAX,
+  'muse-wonder-1.0': MUSE_LOW_TO_MAX,
+  'muse-wonder-full-1.0': MUSE_LOW_TO_MAX,
+  'muse-ember-1.0': MUSE_LOW_TO_MAX,
+  'muse-spark-1.2': MUSE_LOW_TO_XHIGH,
+  'muse-spark-1.2-contributor': MUSE_LOW_TO_XHIGH,
+};
+const MUSE_REASONING_SUMMARIES: readonly string[] = ['auto', 'concise', 'detailed'];
+
+interface MuseWireReasoning {
+  effort?: ReasoningEffort;
+  summary?: string;
+}
+
+const unsupportedReasoning = (message: string): Error => Object.assign(new Error(message), {
+  status: 400, code: 'unsupported_projection', param: 'reasoning',
+});
+
+/**
+ * Validate mesh reasoning controls onto the proven Responses slots. Only
+ * `effort` and `summary` have a wire slot; `enabled`/`budgetTokens` and an
+ * effort the served model does not support fail closed before any I/O.
+ */
+const resolveMuseReasoning = (request: GenerateRequest): MuseWireReasoning | undefined => {
+  const reasoning = request.reasoning;
+  if (!reasoning) return undefined;
+  if (reasoning.enabled !== undefined) {
+    throw unsupportedReasoning('Muse Responses cannot preserve reasoning.enabled');
+  }
+  if (reasoning.budgetTokens !== undefined) {
+    throw unsupportedReasoning('Muse Responses cannot preserve reasoning.budgetTokens');
+  }
+  const { effort, summary } = reasoning;
+  if (effort === undefined && summary === undefined) return undefined;
+  if (summary !== undefined && !MUSE_REASONING_SUMMARIES.includes(summary)) {
+    throw unsupportedReasoning(
+      `Muse Responses does not support reasoning summary "${summary}" (supported: auto, concise, detailed)`,
+    );
+  }
+  if (effort !== undefined) {
+    const modelId = request.modelId ?? 'muse-spark-1.3';
+    const supported = MUSE_REASONING_EFFORTS[modelId] ?? [];
+    if (!supported.includes(effort)) {
+      throw unsupportedReasoning(
+        `Muse model ${modelId} does not support reasoning effort "${effort}" (supported: ${supported.length ? supported.join(', ') : 'none'})`,
+      );
+    }
+  }
+  return {
+    ...(effort !== undefined ? { effort } : {}),
+    ...(summary !== undefined ? { summary } : {}),
+  };
+};
 
 const textOf = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null;
@@ -101,6 +169,7 @@ const stringify = (value: unknown): string => {
 const buildResponsesBody = (
   request: GenerateRequest,
   stream: boolean,
+  reasoning?: MuseWireReasoning,
 ): Record<string, unknown> => {
   const instructions: string[] = [];
   const input: unknown[] = [];
@@ -156,6 +225,7 @@ const buildResponsesBody = (
       ? { max_output_tokens: request.maxOutputTokens } : {}),
     ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
     ...(request.topP !== undefined ? { top_p: request.topP } : {}),
+    ...(reasoning ? { reasoning } : {}),
   };
 };
 
@@ -340,11 +410,7 @@ export class MuseRuntimeClient implements MuseAdapterClient {
     accept: string,
     stream = false,
   ): Promise<Response> {
-    if (request.reasoning && Object.keys(request.reasoning).length > 0) {
-      throw Object.assign(new Error('Muse Chat cannot preserve required reasoning controls'), {
-        status: 400, code: 'unsupported_projection', param: 'reasoning',
-      });
-    }
+    const reasoning = resolveMuseReasoning(request);
     const auth = getSecretAuthMaterial(context?.auth);
     if (!auth || !('accessToken' in auth) || !auth.accessToken) {
       throw Object.assign(new Error('Muse account token is missing'), { status: 401, code: 'AUTHENTICATION_FAILED' });
@@ -369,7 +435,7 @@ export class MuseRuntimeClient implements MuseAdapterClient {
           'x-tbh-root-session-id': stableSessionId,
         } : {}),
       },
-      body: JSON.stringify(buildResponsesBody(request, stream)),
+      body: JSON.stringify(buildResponsesBody(request, stream, reasoning)),
     });
     if (!response.ok) {
       // Key never enters the message: status + retry hint only. A 401/403
