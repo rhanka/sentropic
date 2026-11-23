@@ -6,10 +6,17 @@
 import { stdin as defaultStdin, type ProcessReadStream } from 'node:process';
 
 export const MAX_CREDENTIAL_BYTES = 64 * 1024;
+export const CREDENTIAL_STDIN_TIMEOUT_MS = 30_000;
 const MAX_TOKEN_CHARS = 8192;
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const ALLOWED_TOKEN_KEYS = new Set(['access_token', 'refresh_token', 'token_type', 'expiry', 'expires_in']);
-const ALLOWED_FLAT_KEYS = new Set([...ALLOWED_TOKEN_KEYS, 'accessToken', 'refreshToken', 'expiresAt']);
+// Flat payloads may be a raw Google token response or a
+// CloudCodeEnrollmentProvider.complete() result: non-token metadata keys are
+// admitted here and discarded after light type checks, never trusted.
+const ALLOWED_FLAT_KEYS = new Set([
+  ...ALLOWED_TOKEN_KEYS, 'accessToken', 'refreshToken', 'expiresAt',
+  'scope', 'scopes', 'id_token', 'refresh_token_expires_in', 'accountId', 'authClientConfigVersion',
+]);
 const ALLOWED_WRAPPED_ROOT_KEYS = new Set([
   'token', 'auth_method', 'id_token_email', 'id_token', 'scope', 'scopes', 'client_id', 'project_id', 'created_at', 'updated_at',
 ]);
@@ -81,6 +88,19 @@ export const parseCloudCodeCredentialPayload = (raw: string): CloudCodeOAuthCred
   if (inner.expires_in !== undefined && (typeof inner.expires_in !== 'number' || !Number.isFinite(inner.expires_in) || inner.expires_in <= 0)) {
     throw new AgyTokenReadError('credential payload has invalid expires_in');
   }
+  // Discarded flat metadata must still be well-typed; it is never echoed.
+  for (const key of ['scope', 'id_token', 'accountId', 'authClientConfigVersion'] as const) {
+    if (inner[key] !== undefined && (typeof inner[key] !== 'string' || !(inner[key] as string).trim())) {
+      throw new AgyTokenReadError('credential payload has invalid metadata fields');
+    }
+  }
+  if (inner.scopes !== undefined && (!Array.isArray(inner.scopes) || inner.scopes.some((s) => typeof s !== 'string'))) {
+    throw new AgyTokenReadError('credential payload has invalid metadata fields');
+  }
+  if (inner.refresh_token_expires_in !== undefined
+    && (typeof inner.refresh_token_expires_in !== 'number' || !Number.isFinite(inner.refresh_token_expires_in) || inner.refresh_token_expires_in <= 0)) {
+    throw new AgyTokenReadError('credential payload has invalid metadata fields');
+  }
   const rawExpiry = inner.expiry ?? inner.expiresAt;
   let expiresAt: string | undefined;
   if (rawExpiry !== undefined) {
@@ -91,17 +111,37 @@ export const parseCloudCodeCredentialPayload = (raw: string): CloudCodeOAuthCred
   return { accessToken, refreshToken, ...(expiresAt ? { expiresAt } : {}) };
 };
 
-export const readCredentialFromStdin = async (stream: ProcessReadStream = defaultStdin): Promise<string> => {
+export const readCredentialFromStdin = async (
+  stream: ProcessReadStream = defaultStdin,
+  timeoutMs: number = CREDENTIAL_STDIN_TIMEOUT_MS,
+): Promise<string> => {
   if (stream.isTTY) throw new AgyTokenReadError('refusing to read credential from interactive TTY; pipe JSON on stdin');
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for await (const chunk of stream) {
-    const buf = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk;
-    total += buf.length;
-    if (total > MAX_CREDENTIAL_BYTES) throw new AgyTokenReadError('credential on stdin exceeds maximum allowed size');
-    chunks.push(buf);
+  const deadlineMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : CREDENTIAL_STDIN_TIMEOUT_MS;
+  const readAll = async (): Promise<string> => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    for await (const chunk of stream) {
+      const buf = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk;
+      total += buf.length;
+      if (total > MAX_CREDENTIAL_BYTES) throw new AgyTokenReadError('credential on stdin exceeds maximum allowed size');
+      chunks.push(buf);
+    }
+    const raw = Buffer.concat(chunks).toString('utf8');
+    if (!raw.trim()) throw new AgyTokenReadError('credential on stdin is empty');
+    return raw;
+  };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      readAll(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          try { (stream as unknown as { destroy?: () => void }).destroy?.(); } catch { /* gone */ }
+          reject(new AgyTokenReadError('timed out waiting for credential on stdin'));
+        }, deadlineMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
-  const raw = Buffer.concat(chunks).toString('utf8');
-  if (!raw.trim()) throw new AgyTokenReadError('credential on stdin is empty');
-  return raw;
 };
