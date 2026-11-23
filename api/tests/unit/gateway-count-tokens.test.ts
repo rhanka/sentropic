@@ -30,6 +30,9 @@ vi.mock('../../src/services/provider-registry', () => ({
   providerRegistry: {
     listModels: () => [
       { providerId: 'anthropic', modelId: 'claude-opus-5' },
+      { providerId: 'anthropic', modelId: 'claude-opus-5-5' },
+      { providerId: 'anthropic', modelId: 'claude-sonnet-5-5' },
+      { providerId: 'anthropic', modelId: 'claude-haiku-5-5' },
       { providerId: 'openai', modelId: 'gpt-5.5' },
     ],
   },
@@ -91,6 +94,19 @@ describe('createGatewayCountTokensPort', () => {
       headers: { 'anthropic-beta': 'future', 'anthropic-version': '2023-06-01' },
     });
   });
+
+  it.each(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-opus-5-5-xhigh'])(
+    'keeps alias-only %s out of the count list before credential, account or lease', async (modelId) => {
+      const countTokens = vi.fn();
+      const port = portFor({ countTokens });
+      expect(port.modelIds).not.toContain(modelId);
+      expect(await port.prepare(SUBJECT, { ...PREPARE_INPUT, modelId })).toBeUndefined();
+      expect(resolveCredential).not.toHaveBeenCalled();
+      expect(transportMode).not.toHaveBeenCalled();
+      expect(primaryAccount).not.toHaveBeenCalled();
+      expect(acquire).not.toHaveBeenCalled();
+      expect(countTokens).not.toHaveBeenCalled();
+    });
 
   it('refuses non-anthropic models before any credential resolution', async () => {
     const port = portFor({ countTokens: vi.fn() });

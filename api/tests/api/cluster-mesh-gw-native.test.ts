@@ -41,9 +41,9 @@ it('relays ON safeguards/extensions without exposing caller credential selection
   expect(h.runtime.nativeMessages).toHaveBeenCalledOnce(); expect(h.generate).not.toHaveBeenCalled();
   expect(h.runtime.nativeMessages.mock.calls[0]![0]).toMatchObject({ body, credential: 'fixture-server-key' });
 });
-// `claude-opus-5-5` is an Anthropic catalog model outside the native allowlist (400),
-// while the suffixed launch alias `claude-opus-5-5-xhigh` stays unknown (404).
-it.each([['unknown-fixture', 404], ['gpt-5.6-terra', 400], ['claude-opus-5-5', 400], ['claude-opus-5-5-xhigh', 404]])('refuses required model %s before admission', async (model, status) => {
+// Owner rule: bare `claude-*-5-5*` ids are gateway aliases, unknown on the
+// product gateway (404), never native-unavailable Anthropic models.
+it.each([['unknown-fixture', 404], ['gpt-5.6-terra', 400], ['claude-opus-5-5', 404], ['claude-sonnet-5-5', 404], ['claude-haiku-5-5', 404], ['claude-opus-5-5-xhigh', 404]])('refuses required model %s before admission', async (model, status) => {
   const h = await gwNativeFixture();
   expect((await h.post({ ...message, model, safeguards: {} })).status).toBe(status);
   expect(h.budget.admit).not.toHaveBeenCalled(); expect(h.runtime.nativeMessages).not.toHaveBeenCalled();

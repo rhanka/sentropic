@@ -72,16 +72,15 @@ describe('llm-mesh model projections', () => {
       'gemini-4-hydrogen',
       'gemini-4-neon',
     ]);
+    // Owner rule: the bare Claude 5.5 ids are gateway aliases, never product
+    // catalog models; the real models stay seat-only and unlisted here.
     expect(modelsByProvider('anthropic')).toEqual([
       'claude-fable-5',
       'claude-fable-5-1',
       'claude-fable-5-2',
-      'claude-haiku-5-5',
       'claude-opus-4-8',
       'claude-opus-5',
-      'claude-opus-5-5',
       'claude-sonnet-5',
-      'claude-sonnet-5-5',
     ]);
     expect(modelsByProvider('mistral')).toEqual([
       'magistral-medium-2509',
@@ -104,7 +103,7 @@ describe('llm-mesh model projections', () => {
       'muse-wonder-1.0',
       'muse-wonder-full-1.0',
     ]);
-    expect(data.models).toHaveLength(46);
+    expect(data.models).toHaveLength(43);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');

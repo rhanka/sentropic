@@ -342,15 +342,12 @@ describe('ClaudeProviderRuntime', () => {
   describe('listModels', () => {
     it('should return Claude model catalog entries', () => {
       const models = runtime.listModels();
-      expect(models).toHaveLength(9);
+      expect(models).toHaveLength(6);
 
+      // Owner rule: bare Claude 5.5 ids are gateway aliases, never Anthropic
+      // catalog entries on the product surface (seat-only, unlisted).
       for (const modelId of ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']) {
-        const claude55 = models.find((m) => m.modelId === modelId);
-        expect(claude55).toBeDefined();
-        expect(claude55!.providerId).toBe('anthropic');
-        expect(claude55!.reasoningTier).toBe('advanced');
-        expect(claude55!.supportsTools).toBe(true);
-        expect(claude55!.supportsStreaming).toBe(true);
+        expect(models.find((m) => m.modelId === modelId)).toBeUndefined();
       }
 
       const fable51 = models.find((m) => m.modelId === 'claude-fable-5-1');

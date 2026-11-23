@@ -1,4 +1,4 @@
-import { isNativeMessagesTarget, NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS, validateNativeModelAllowlist,
+import { isGatewayAliasOnlyClaudeModelId, isNativeMessagesTarget, NATIVE_ANTHROPIC_MESSAGES_MODEL_IDS, validateNativeModelAllowlist,
   NativeMessagesUpstreamError, modelProfiles, RouteQuoteError, type NativeMessagesRequest,
   type NativeMessagesResult, type PreparedNativeMessages, type VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 import type { NativeCountTokensPort } from '@sentropic/llm-gateway';
@@ -117,7 +117,7 @@ export const createAnthropicNativePort = (options: AnthropicNativeOptions = {}):
       && !!await authFor(subject, workspaceId),
     countTokens: { modelIds, async prepare(subject, input) {
       input.signal.throwIfAborted();
-      if (!modelProfiles.some(model => model.modelId === input.modelId)) throw new RouteQuoteError('Unknown requested model', 'unknown-model');
+      if (isGatewayAliasOnlyClaudeModelId(input.modelId) || !modelProfiles.some(model => model.modelId === input.modelId)) throw new RouteQuoteError('Unknown requested model', 'unknown-model');
       if (!isNativeMessagesTarget({ providerId: 'anthropic', modelId: input.modelId }, modelIds)) return undefined;
       const auth = await authFor(subject, input.workspaceId);
       if (!auth) return undefined;

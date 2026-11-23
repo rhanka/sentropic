@@ -1,5 +1,6 @@
 import {
   type ExecutionFeature,
+  isGatewayAliasOnlyClaudeModelId,
   type PlannedRouteTarget,
   RoutePlanError,
   type RoutePlanInput,
@@ -39,6 +40,11 @@ const resolveTarget = async (
   subject: VerifiedRoutingSubject,
   requestedModel: string,
 ): Promise<PlannedRouteTarget> => {
+  // Owner rule: bare Claude 5.5 ids are gateway aliases with no product
+  // gateway target; refuse before selection, credential or dispatch.
+  if (isGatewayAliasOnlyClaudeModelId(requestedModel)) {
+    throw new RoutePlanError('Unknown requested model', 'unknown-model');
+  }
   const selected = await resolveRuntimeSelection({
     model: requestedModel,
     userId: subject.principalRef,
