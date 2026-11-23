@@ -47,6 +47,9 @@ export interface StartEnrollmentInput {
 export interface CompleteEnrollmentInput {
   enrollmentId: string;
   code: string;
+  // OAuth callback `state`. Cloud Code requires it for non-loopback
+  // (portal / pasted-callback) completion and verifies it whenever given.
+  state?: string;
 }
 
 export interface PreparedCredential {

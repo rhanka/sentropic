@@ -2,6 +2,7 @@
 
 export type {
   AccountPublic,
+  CompleteEnrollmentInput,
   CredentialEnvelope,
   EnrollmentCompletion,
   EnrollmentProvider,
@@ -10,6 +11,8 @@ export type {
   ResolvedProviderMetadata,
   StartEnrollmentInput,
 } from './contracts.js';
+export { CloudCodeEnrollmentProvider } from './cloud-code.js';
+export type { CloudCodeEnrollmentOptions } from './cloud-code.js';
 export type { AgyApplicationTuple, AgySeatPersistence, AgySeatProjectionInput } from './agy-cli-import.js';
 export { AgyMappingError, persistAgySeatProjection, translateAgySeatToApplication } from './agy-cli-import.js';
 export type { CliSeatProfileInput, SeatSourceMode, TokenSeatEnvelopeInput } from './cli-seat-import.js';
