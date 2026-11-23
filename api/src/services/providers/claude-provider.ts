@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream';
+import { isGatewayAliasOnlyClaudeModelId } from '@sentropic/llm-mesh';
 import { env } from '../../config/env';
 import { qualificationSdkOptions } from '../llm-runtime/gw-native-qualification-transport';
 import { executeClaudeNative, type ClaudeNativeRequest, type ClaudeNativeCountRequest } from '../llm-runtime/anthropic-native-http';
@@ -31,6 +32,22 @@ export type ClaudeStreamGenerateRequest = {
   signal?: AbortSignal;
 };
 
+// Owner rule: alias-only Claude 5.5 ids reach Anthropic only on an explicit
+// claude-code seat transport, never through an API-key credential. The
+// native relay never serves them (see the native allowlist guard).
+const assertAliasOnlySeat = (model: unknown, seat?: { accessToken?: string }): void => {
+  if (typeof model === 'string' && isGatewayAliasOnlyClaudeModelId(model)
+    && !seat?.accessToken) {
+    throw new Error(`Model ${model} requires an explicit claude-code seat transport`);
+  }
+};
+
+const assertNoAliasOnlyNative = (model: unknown): void => {
+  if (typeof model === 'string' && isGatewayAliasOnlyClaudeModelId(model)) {
+    throw new Error(`Model ${model} requires an explicit claude-code seat transport`);
+  }
+};
+
 const buildClaudeCodeFetch =
   (transport: { accessToken: string; accountId?: string | null; stableSessionId?: string | null }): typeof fetch =>
   async (input, init) => {
@@ -56,10 +73,12 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
   }
 
   nativeMessages(request: ClaudeNativeRequest) {
+    assertNoAliasOnlyNative(request.body.model);
     return executeClaudeNative({ ...request, credential: request.credential || env.ANTHROPIC_API_KEY });
   }
 
   nativeCountTokens(request: ClaudeNativeCountRequest) {
+    assertNoAliasOnlyNative(request.body.model);
     return executeClaudeNative({ ...request, stream: false, finalize: undefined, onResponseStarted: undefined,
       credential: request.credential || env.ANTHROPIC_API_KEY }, 'count_tokens');
   }
@@ -106,6 +125,7 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
     if (payload.mode !== 'messages') {
       throw new Error('ClaudeProviderRuntime.generate: unsupported mode');
     }
+    assertAliasOnlySeat(payload.requestOptions?.model, payload.claudeCodeTransport);
 
     const client = this.getClient(payload.credential, payload.claudeCodeTransport);
     return await client.messages.create(
@@ -119,6 +139,7 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
     if (payload.mode !== 'messages') {
       throw new Error('ClaudeProviderRuntime.streamGenerate: unsupported mode');
     }
+    assertAliasOnlySeat(payload.requestOptions?.model, payload.claudeCodeTransport);
 
     const client = this.getClient(payload.credential, payload.claudeCodeTransport);
     const stream = client.messages.stream(payload.requestOptions, {

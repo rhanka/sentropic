@@ -493,6 +493,58 @@ describe('ClaudeProviderRuntime', () => {
     });
   });
 
+  describe('alias-only Claude 5.5 seat guard', () => {
+    it.each(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'])(
+      'refuses %s with an API-key credential before any Anthropic call', async (model) => {
+        await expect(runtime.generate({
+          mode: 'messages',
+          credential: 'test-anthropic-key',
+          requestOptions: { model, max_tokens: 16, messages: [{ role: 'user', content: 'Hi' }] },
+        })).rejects.toThrow(/claude-code seat/);
+        expect(mockAnthropicConstructor).not.toHaveBeenCalled();
+        expect(mockAnthropicCreate).not.toHaveBeenCalled();
+      });
+
+    it('refuses a bare alias-only stream without a claude-code seat transport', async () => {
+      await expect(runtime.streamGenerate({
+        mode: 'messages',
+        requestOptions: {
+          model: 'claude-opus-5-5', max_tokens: 16, messages: [{ role: 'user', content: 'Hi' }],
+        },
+      })).rejects.toThrow(/claude-code seat/);
+      expect(mockAnthropicStream).not.toHaveBeenCalled();
+    });
+
+    it('refuses an alias-only id on the native relay before any HTTP call', async () => {
+      let calls = 0;
+      await withNativeHttp((_request, response) => {
+        calls++;
+        response.end('{}');
+      }, async () => {
+        expect(() => runtime.nativeMessages({
+          ...nativeRequest(), body: { model: 'claude-opus-5-5', messages: [] },
+        })).toThrow(/claude-code seat/);
+        expect(() => runtime.nativeCountTokens({
+          ...nativeRequest(), body: { model: 'claude-sonnet-5-5', messages: [] },
+        })).toThrow(/claude-code seat/);
+      });
+      expect(calls).toBe(0);
+    });
+
+    it('serves an alias-only id only on an explicit claude-code seat transport', async () => {
+      mockAnthropicCreate.mockResolvedValue({ content: [{ type: 'text', text: 'Seat' }] });
+      const result = await runtime.generate({
+        mode: 'messages',
+        claudeCodeTransport: { accessToken: 'seat-access-token' },
+        requestOptions: {
+          model: 'claude-opus-5-5', max_tokens: 16, messages: [{ role: 'user', content: 'Hi' }],
+        },
+      });
+      expect(result).toEqual({ content: [{ type: 'text', text: 'Seat' }] });
+      expect(mockAnthropicCreate).toHaveBeenCalledOnce();
+    });
+  });
+
   describe('streamGenerate', () => {
     it('should reject unsupported mode', async () => {
       await expect(
