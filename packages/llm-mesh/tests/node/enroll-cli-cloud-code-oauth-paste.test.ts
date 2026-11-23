@@ -1,4 +1,7 @@
 // `enroll --provider cloud-code --oauth-paste`: dedicated in-pod PKCE grant.
+// Preflight runs before any authorization URL is printed, no keyring lock is
+// held while waiting for the pasted callback, and the pasted code/state and
+// minted tokens never appear in CLI output. Every secret below is fake.
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -144,6 +147,122 @@ describe('llm-mesh-enroll cloud-code --oauth-paste', () => {
       for (const forbidden of [PASTED_CODE, NEW_ACCESS, NEW_REFRESH]) {
         expect(allOutput(writers)).not.toContain(forbidden);
       }
+    } finally { await cleanup(); }
+  });
+
+  it('accepts code#state and creates an account only with --create-account --owner-scope', async () => {
+    const { dir, cleanup } = await tempDir();
+    try {
+      const krDir = join(dir, 'kr-paste-new');
+      const stub = stubPasteFetch();
+      const writers = captureWriters();
+      const stdin = controllableStdin();
+      const pending = run(
+        ['enroll', '--provider', 'cloud-code', '--oauth-paste', '--create-account', '--owner-scope', OWNER, '--keyring-dir', krDir],
+        { fetchFn: stub.fetchFn, writers, env: {}, stdin: stdin.stream, hostname: HOST },
+      );
+      stdin.push(callbackFor(await waitForFirstLine(writers), 'code#state'));
+      expect(await pending).toBe(EXIT_CODES.ok);
+      const out = JSON.parse(writers.outLines[1] as string) as { accountId: string };
+      expect(out.accountId).toMatch(/^acct_cc_/);
+      const kr = new EncryptedFileKeyring(krDir);
+      expect(JSON.parse((await kr.getSecret(`sentropic-llm-mesh:${out.accountId}:envelope`))!))
+        .toMatchObject({ refreshToken: NEW_REFRESH });
+      expect(JSON.parse((await kr.getSecret('sentropic-llm-mesh:accounts:index'))!)).toEqual([out.accountId]);
+    } finally { await cleanup(); }
+  });
+
+  it('runs account preflight before printing any authorization URL or fetching', async () => {
+    const { dir, cleanup } = await tempDir();
+    try {
+      const krDir = join(dir, 'kr-paste-pre');
+      const kr = new EncryptedFileKeyring(krDir);
+      await seedPasteAccount(kr, 'acct_cc_prod');
+      const before = await snap(krDir);
+      const stub = stubPasteFetch();
+      const writers = captureWriters();
+      expect(await runEnroll(
+        { command: 'enroll', provider: 'cloud-code', oauthPaste: true, account: 'acct_cc_unknown', keyringDir: krDir },
+        { fetchFn: stub.fetchFn, writers, env: {}, stdin: controllableStdin().stream, hostname: HOST },
+      )).toBe(EXIT_CODES.accountNotFound);
+      expect(writers.outLines).toEqual([]);
+      expect(stub.calls).toEqual([]);
+      expect(await snap(krDir)).toEqual(before);
+    } finally { await cleanup(); }
+  });
+
+  it('rejects wrong-state, stateless, TTY and timed-out pastes without writes, fetches, or echoing the paste', async () => {
+    const { dir, cleanup } = await tempDir();
+    try {
+      const krDir = join(dir, 'kr-paste-bad');
+      const kr = new EncryptedFileKeyring(krDir);
+      await seedPasteAccount(kr, 'acct_cc_prod');
+      const before = await snap(krDir);
+
+      const runPaste = (
+        paste: string | null, opts: { timeoutMs?: number; tty?: boolean } = {},
+      ) => {
+        const stub = stubPasteFetch();
+        const writers = captureWriters();
+        const stdin = controllableStdin();
+        const stream = opts.tty ? { ...stdin.stream, isTTY: true } : stdin.stream;
+        const pending = runEnroll(
+          { command: 'enroll', provider: 'cloud-code', oauthPaste: true, account: 'acct_cc_prod', keyringDir: krDir },
+          {
+            fetchFn: stub.fetchFn, writers, env: {}, stdin: stream, hostname: HOST,
+            ...(opts.timeoutMs ? { oauthPasteTimeoutMs: opts.timeoutMs } : {}),
+          },
+        );
+        return { stub, writers, stdin, pending };
+      };
+
+      const wrongState = runPaste(null);
+      await waitForFirstLine(wrongState.writers);
+      wrongState.stdin.push(`http://127.0.0.1:1/oauth/callback?state=attacker-state&code=${PASTED_CODE}\n`);
+      expect(await wrongState.pending).toBe(EXIT_CODES.enrollmentFailed);
+      expect(wrongState.stub.calls).toEqual([]);
+
+      const stateless = runPaste(null);
+      await waitForFirstLine(stateless.writers);
+      stateless.stdin.push(`${PASTED_CODE}\n`);
+      expect(await stateless.pending).toBe(EXIT_CODES.enrollmentFailed);
+      expect(stateless.stub.calls).toEqual([]);
+
+      const tty = runPaste(null, { tty: true });
+      expect(await tty.pending).toBe(EXIT_CODES.enrollmentFailed);
+      expect(tty.stub.calls).toEqual([]);
+
+      const stalled = runPaste(null, { timeoutMs: 80 });
+      await waitForFirstLine(stalled.writers);
+      expect(await stalled.pending).toBe(EXIT_CODES.enrollmentFailed);
+      expect(allOutput(stalled.writers)).toMatch(/timed out/i);
+
+      for (const w of [wrongState.writers, stateless.writers, tty.writers, stalled.writers]) {
+        expect(allOutput(w)).not.toContain(PASTED_CODE);
+        expect(allOutput(w)).not.toContain('attacker-state');
+      }
+      expect(await snap(krDir)).toEqual(before);
+    } finally { await cleanup(); }
+  });
+
+  it('fails closed when the token exchange returns no refresh token', async () => {
+    const { dir, cleanup } = await tempDir();
+    try {
+      const krDir = join(dir, 'kr-paste-norefresh');
+      const kr = new EncryptedFileKeyring(krDir);
+      await seedPasteAccount(kr, 'acct_cc_prod');
+      const before = await snap(krDir);
+      const stub = stubPasteFetch({ withRefresh: false });
+      const writers = captureWriters();
+      const stdin = controllableStdin();
+      const pending = runEnroll(
+        { command: 'enroll', provider: 'cloud-code', oauthPaste: true, account: 'acct_cc_prod', keyringDir: krDir },
+        { fetchFn: stub.fetchFn, writers, env: {}, stdin: stdin.stream, hostname: HOST },
+      );
+      stdin.push(callbackFor(await waitForFirstLine(writers)));
+      expect(await pending).toBe(EXIT_CODES.enrollmentFailed);
+      expect(allOutput(writers)).toMatch(/no refresh token/i);
+      expect(await snap(krDir)).toEqual(before);
     } finally { await cleanup(); }
   });
 });
