@@ -1,10 +1,11 @@
 /**
- * Fixture replay through the REAL mesh planner (R4-BLQ-1, amended R5-MAJ-1):
- * committed Codex bodies pass plan eligibility and serve 200; committed Muse
- * bodies fail closed with 400 (no proven Meta Chat reasoning slot — every
- * Muse fixture carries reasoning effort/summary, which `muse` no longer
- * declares). Provider I/O is faked at the attempt seam; planning, capability
- * and execution-feature filtering are real. No mocked plan.
+ * Fixture replay through the REAL mesh planner (R4-BLQ-1, amended R5-MAJ-1,
+ * reasoning slot proven 2026-11-22): committed Codex and Muse bodies pass
+ * plan eligibility and serve 200 — the Muse transport declares
+ * `reasoning-controls` and projects the documented Responses
+ * `reasoning: { effort, summary }` slot (Meta Reasoning docs; muse CLI
+ * bundle field table). Provider I/O is faked at the attempt seam; planning,
+ * capability and execution-feature filtering are real. No mocked plan.
  */
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -92,38 +93,35 @@ describe('fixture replay through the real mesh planner (R4-BLQ-1)', () => {
     expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
   });
 
-  // R5-MAJ-1: every committed Muse fixture carries reasoning effort/summary,
-  // which `muse` no longer declares (no proven Meta Chat slot) — the plan is
-  // refused before dispatch with a named capability 400, never a silent drop.
-  // R6-MAJ-1 (spec §16.7): the refusal names the cause — status AND error
-  // type AND code AND param are asserted, not just the status.
+  // Cornerstone: every committed Muse fixture rests on the reasoning
+  // controls the planner now admits for `muse`. Serving them also proves
+  // the request *reaches* dispatch (when it was refused, it failed with
+  // zero attempts).
   it.each([
-    ['muse-1.4.6-initial-a.json', '/responses'],
-    ['muse-1.4.6-initial-b.json', '/responses'],
-    ['muse-1.4.6-tool-result.json', '/responses'],
-  ] as const)('refuses %s at 400 before dispatch (unforwarded reasoning-controls)', async (file, path) => {
+    ['muse-1.4.6-initial-a.json', 'max'],
+    ['muse-1.4.6-initial-b.json', 'low'],
+    ['muse-1.4.6-tool-result.json', 'max'],
+  ] as const)('serves %s at 200, forwarding its reasoning effort and summary', async (file, effort) => {
     const f = rig();
-    const res = await f.send(path, await load(file));
-    expect(res.status).toBe(400);
-    const body = await res.json() as { error: { message: string; type: string; code: string; param: string } };
-    expect(body.error.type).toBe('invalid_request_error');
-    expect(body.error.code).toBe('unsupported_parameter');
-    expect(body.error.param).toBe('reasoning');
-    expect(f.captured).toHaveLength(0);
-    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'failed', attempts: [] }));
+    const res = await f.send('/responses', await load(file));
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, any>;
+    expect(body).toMatchObject({ object: 'response', model: 'muse-spark-1.3-contributor', status: 'completed', store: false });
+    expect(f.captured).toHaveLength(1);
+    expect(f.captured[0]!.reasoning).toMatchObject({ effort, summary: 'auto' });
+    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
   });
 
-  it.each(['muse-wonder-1.0', 'muse-wonder-full-1.0'] as const)('refuses a Responses body on %s at 400 (owner request 2026-10-13, R5-MAJ-1)', async (model) => {
+  it.each(['muse-wonder-1.0', 'muse-wonder-full-1.0'] as const)('serves a Responses body with reasoning controls on %s at 200 (owner request 2026-10-13)', async (model) => {
     const f = rig();
     const res = await f.send('/responses',
       { ...(await load('muse-1.4.6-initial-b.json')), model });
-    expect(res.status).toBe(400);
-    const body = await res.json() as { error: { message: string; type: string; code: string; param: string } };
-    expect(body.error.type).toBe('invalid_request_error');
-    expect(body.error.code).toBe('unsupported_parameter');
-    expect(body.error.param).toBe('reasoning');
-    expect(f.captured).toHaveLength(0);
-    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'failed', attempts: [] }));
+    expect(res.status).toBe(200);
+    expect(f.captured).toHaveLength(1);
+    const attempted = f.captured[0]!;
+    expect(typeof attempted.model === 'string' ? attempted.model : attempted.modelId).toBe(model);
+    expect(attempted.reasoning).toMatchObject({ effort: 'low', summary: 'auto' });
+    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
   });
 
   it.each([
