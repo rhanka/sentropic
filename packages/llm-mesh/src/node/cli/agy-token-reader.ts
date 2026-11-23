@@ -61,7 +61,10 @@ export const resolvePinnedSessionBusAddress = async (
     }
     socketPath = `${runtimeDir}/bus`;
   }
-  if (!socketPath.startsWith('/') || socketPath.includes('\0')) {
+  // The checked path and the path GDBus parses must be the same string:
+  // a %-decoded ',', ';', '%' or control char would be re-parsed as an
+  // address separator/escape in the pinned child address.
+  if (!socketPath.startsWith('/') || /[,;%\0-\x1f\x7f]/.test(socketPath)) {
     throw new AgyTokenReadError('DBUS_SESSION_BUS_ADDRESS is not a local unix:path session bus; refusing secret-tool lookup, pass --credential-stdin');
   }
   let socketStat;
