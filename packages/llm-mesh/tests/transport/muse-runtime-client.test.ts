@@ -249,8 +249,10 @@ describe('Muse runtime client (mesh-side upstream transport)', () => {
   it('projects validated reasoning { effort, summary } onto the Responses wire', async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify(completedPayload), { status: 200 }));
     const client = new MuseRuntimeClient({ fetch: fetchFn });
+    // max is documented on muse-spark-1.3, not on the contributor variant
+    // used by the shared `request` fixture (official Meta Reasoning docs).
     await client.generate({
-      ...request, reasoning: { effort: 'max', summary: 'auto' },
+      ...request, modelId: 'muse-spark-1.3', reasoning: { effort: 'max', summary: 'auto' },
     }, auth);
     const [, init] = fetchFn.mock.calls[0]!;
     expect(JSON.parse(String(init.body))).toMatchObject({
