@@ -17,6 +17,7 @@ import {
   type ParsedArgs,
 } from './enroll-args.js';
 import { runEnroll } from './enroll-command.js';
+import type { ReasoningEffort } from '../../generation.js';
 
 const KNOWN_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -67,9 +68,9 @@ export const runProbe = async (
   } catch {
     return fail(writers, EXIT_CODES.probeFailed, `account '${args.account}' credential record is corrupt`);
   }
-  // The Muse Chat wire takes no reasoning controls (the client refuses a
-  // non-empty reasoning block), so --effort is validated for forward
-  // compatibility but not forwarded.
+  // The probe forwards --effort as reasoning: { effort } on the Muse
+  // Responses wire: this executable is how the per-model/effort seat probe
+  // runs, and MuseRuntimeClient refuses unsupported pairs before any I/O.
   let adapter: import('../../adapters.js').MuseAdapter;
   try {
     const { MuseAdapter } = await import('../../adapters.js');
@@ -82,7 +83,10 @@ export const runProbe = async (
   const startedAt = Date.now();
   try {
     const response = await adapter.generate(
-      { providerId: 'muse', modelId, messages: [{ role: 'user', content: 'probe' }], maxOutputTokens: 16 },
+      {
+        providerId: 'muse', modelId, messages: [{ role: 'user', content: 'probe' }],
+        maxOutputTokens: 16, reasoning: { effort: effort as ReasoningEffort },
+      },
       {
         auth: {
           material: { type: 'account-transport', provider: 'muse', accessToken, accountId: args.account },
@@ -90,11 +94,13 @@ export const runProbe = async (
         },
       },
     );
-    // Status plus latency plus usage only; the model text stays out.
+    // Status, latency, effort, finish reason and usage only; no model text.
     writers.out(JSON.stringify({
       status: 'ok',
       latencyMs: Date.now() - startedAt,
       modelId: response.modelId,
+      effort,
+      finishReason: response.finishReason,
       ...(response.usage ? { usage: response.usage } : {}),
     }));
     return EXIT_CODES.ok;
