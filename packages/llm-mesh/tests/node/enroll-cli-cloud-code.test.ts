@@ -8,7 +8,7 @@ import { EXIT_CODES, parseArgs } from '../../src/node/cli/enroll-args.js';
 import { run } from '../../src/node/cli/enroll-cli.js';
 import { runEnroll } from '../../src/node/cli/enroll-command.js';
 import { EncryptedFileKeyring } from '../../src/node/keyring/encrypted-file-keyring.js';
-import { allOutput, captureWriters, tempDir } from './enroll-cli-testkit.js';
+import { allOutput, captureWriters, makeSessionBusSocket, tempDir } from './enroll-cli-testkit.js';
 
 const FAKE_AGY_ACCESS = 'ya29.fake-cc-access-111';
 const FAKE_AGY_REFRESH = '1//fake-cc-refresh-222';
@@ -115,14 +115,24 @@ describe('llm-mesh-enroll cloud-code core (--from-agy, --credential-stdin, --cre
       await kr.setSecret('sentropic-llm-mesh:accounts:index', JSON.stringify([accountId]));
       const keyBefore = await stat(join(krDir, '.key'));
 
+      const bus = await makeSessionBusSocket(dir);
       const fakeTool = join(dir, 'fake-secret-tool');
-      await writeFile(fakeTool, `#!/bin/sh\nprintf '%s' '${makeAgyJson()}'\n`, { mode: 0o700 });
+      await writeFile(fakeTool, [
+        '#!/bin/sh',
+        `if [ "$DBUS_SESSION_BUS_ADDRESS" != "${bus.address}" ]; then exit 7; fi`,
+        `printf '%s' '${makeAgyJson()}'`,
+        '',
+      ].join('\n'), { mode: 0o700 });
       await chmod(fakeTool, 0o700);
       const writers = captureWriters();
       const code = await runEnroll(
         { command: 'enroll', provider: 'cloud-code', fromAgy: true, account: accountId, keyringDir: krDir },
-        { fetchFn: stubEnrollFetch(), writers, env: {}, secretToolPath: fakeTool, hostname: FAKE_HOST },
+        {
+          fetchFn: stubEnrollFetch(), writers, hostname: FAKE_HOST, secretToolPath: fakeTool,
+          env: { DBUS_SESSION_BUS_ADDRESS: bus.address },
+        },
       );
+      await bus.close();
       expect(code).toBe(EXIT_CODES.ok);
       const keyAfter = await stat(join(krDir, '.key'));
       expect([keyAfter.ino, keyAfter.mtimeMs, keyAfter.size]).toEqual([keyBefore.ino, keyBefore.mtimeMs, keyBefore.size]);

@@ -1,6 +1,7 @@
 // Shared stub-fetch harness for the llm-mesh-enroll CLI tests.
 // Every secret below is fake and stays out of CLI output by contract.
 import { mkdtemp, rm } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EXIT_CODES, type CliWriters } from '../../src/node/cli/enroll-args.js';
@@ -90,6 +91,23 @@ export const tempDir = async (): Promise<{ dir: string; cleanup: () => Promise<v
 
 export const allOutput = (writers: { outLines: string[]; errLines: string[] }): string =>
   [...writers.outLines, ...writers.errLines].join('\n');
+
+/** Real same-uid unix socket standing in for the session bus (`<dir>/bus`). */
+export const makeSessionBusSocket = async (
+  dir: string,
+): Promise<{ socketPath: string; address: string; close: () => Promise<void> }> => {
+  const socketPath = join(dir, 'bus');
+  const server = createServer(() => {});
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(socketPath, () => resolve());
+  });
+  return {
+    socketPath,
+    address: `unix:path=${socketPath}`,
+    close: () => new Promise((resolve) => server.close(() => resolve())),
+  };
+};
 
 export const enrollOne = async (dir: string, email: string, label: string): Promise<string> => {
   const env = { [KEY_ENV]: PASSPHRASE };
