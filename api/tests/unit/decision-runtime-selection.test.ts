@@ -78,6 +78,17 @@ describe('decision-only runtime selection', () => {
       expectNoDispatch();
     });
 
+  it.each(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'])(
+    'never selects bare alias-only %s for app chat (explicit or inferred)', async (model) => {
+      const explicit = await resolveRuntimeSelection({ providerId: 'anthropic', model });
+      expect(explicit.model).not.toBe(model);
+      expect(explicit).toEqual({ providerId: 'anthropic', model: 'claude-sonnet-5' });
+      const inferred = await resolveRuntimeSelection({ model });
+      expect(inferred.model).not.toBe(model);
+      expect(inferred.providerId).not.toBe('anthropic');
+      expectNoDispatch();
+    });
+
   it('uses an explicit valid chat provider despite an unused marked stored default', async () => {
     vi.mocked(settingsService.getAISettings).mockResolvedValue({ ...defaults, defaultProviderId: 'muse' });
     expect(await resolveRuntimeSelection({ providerId: 'openai', model: 'gpt-4.1-nano' }))

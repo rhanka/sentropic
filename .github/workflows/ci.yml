@@ -420,6 +420,7 @@ jobs:
               - 'scripts/test-artifact-content-image.sh'
               - 'scripts/test-pgbackup-restore-isolation.sh'
               - '.github/workflows/ci.yml'
+              - '.github/workflows/no-coauthor-trailer.yml'
               - 'e2e/**'
             # Keep `api` and `ui` in sync with the API_VERSION / UI_VERSION content-sha inputs
             # in the Makefile. Those shas are the immutable image tags that publish-{api,ui}-image

@@ -15,7 +15,7 @@ import {
   type NativeCountTokensResult,
   type PreparedNativeCountTokens,
 } from '@sentropic/llm-gateway';
-import type { VerifiedRoutingSubject } from '@sentropic/llm-mesh';
+import { isGatewayAliasOnlyClaudeModelId, type VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 import { providerRegistry } from '../provider-registry';
 import { resolveProviderCredential } from '../provider-credentials';
 import {
@@ -92,7 +92,8 @@ export type GatewayCountDependencies = typeof gatewayCountDependencies;
 
 const anthropicCatalogModelIds = (): readonly string[] =>
   providerRegistry.listModels()
-    .filter((entry) => entry.providerId === 'anthropic')
+    .filter((entry) => entry.providerId === 'anthropic'
+      && !isGatewayAliasOnlyClaudeModelId(entry.modelId))
     .map((entry) => entry.modelId);
 
 const retryAfter = (headers: unknown): Record<string, string> | undefined => {

@@ -32,8 +32,10 @@ import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import type { AnthropicAdapterClient } from '../adapters.js';
 import {
+  CLAUDE_CODE_SUPPORTED_EFFORTS,
   ClaudeCliQuotaError,
   ClaudeCodeRuntimeClient,
+  resolveClaudeCodeSupportedEfforts,
   type ClaudeCodeAccessProjection,
   type ClaudeCodeCliCapabilities,
   type ClaudeCodeCliEvent,
@@ -42,6 +44,15 @@ import {
 } from '../transport/claude-code-runtime-client.js';
 import type { ClaudeCodeLineOutcome } from './claude-code-cli-wire.js';
 import { appendCappedTail, diagnoseClaudeCodeQuota, extractQuotaText, parseClaudeCodeLine, renderClaudeCodeCliPrompt } from './claude-code-cli-wire.js';
+import {
+  HEADLESS_PRINT_FLAG,
+  PROBE_MISSING_SYSTEM_PROMPT_FILENAME,
+  SYSTEM_PROMPT_FILE_FLAG,
+  isPositiveSystemPromptFileEvidence,
+  parseClaudeCodeHelpOptions,
+  validateClaudeCodeHelp,
+  type ProbeCommandResult,
+} from './claude-code-cli-probe.js';
 
 export const CLAUDE_CODE_OAUTH_ENV_VAR = 'CLAUDE_CODE_OAUTH_TOKEN';
 export const CLAUDE_CODE_STREAM_PROTOCOL = 'claude-code-stream-json-v1';
@@ -57,19 +68,9 @@ const MAX_STDOUT_LINE_CHARS = 1_048_576;
 const MAX_STDOUT_TOTAL_BYTES = 33_554_432;
 /** Probe output past this fails the probe instead of growing memory. */
 const MAX_PROBE_OUTPUT_BYTES = 65_536;
-/** Oldest qualified CLI line: every confinement flag below was verified on 2.1.x. */
+/** Oldest qualified CLI line: every confinement flag was verified on 2.1.x. */
 const MIN_CLAUDE_CODE_MAJOR = 2;
 const MIN_CLAUDE_CODE_MINOR = 1;
-const REQUIRED_CLAUDE_CODE_FLAGS = [
-  '--verbose',
-  '--output-format',
-  '--model',
-  '--effort',
-  '--system-prompt-file',
-  '--tools',
-  '--strict-mcp-config',
-  '--no-session-persistence',
-] as const;
 const STDERR_TAIL_BYTES = 8_192;
 
 export interface NodeClaudeCodeCliRunnerOptions {
@@ -84,7 +85,8 @@ const nonEmpty = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= 4096
   && !/[\0-\x1f\x7f]/.test(value);
 
-const validEffort = (value: string): boolean => /^[A-Za-z0-9-]{1,16}$/.test(value);
+const validEffort = (value: string): boolean =>
+  (CLAUDE_CODE_SUPPORTED_EFFORTS as readonly string[]).includes(value);
 
 const validModelId = (value: string): boolean =>
   /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(value) && value.length <= 256;
@@ -223,13 +225,14 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
   private readonly systemPromptFile?: string;
   private readonly timeoutMs: number;
   private readonly stderrTailBytes: number;
+  private systemPromptFileVerified = false;
 
   constructor(options: NodeClaudeCodeCliRunnerOptions = {}) {
     if (options.cliPath !== undefined && !nonEmpty(options.cliPath)) {
       throw new Error('claude CLI path must be a non-empty string');
     }
     if (options.effort !== undefined && !validEffort(options.effort)) {
-      throw new Error('claude CLI effort must match [A-Za-z0-9-]{1,16}');
+      throw new Error(`claude CLI effort must be one of: ${CLAUDE_CODE_SUPPORTED_EFFORTS.join(', ')}`);
     }
     if (options.systemPromptFile !== undefined && !nonEmpty(options.systemPromptFile)) {
       throw new Error('claude CLI system prompt file must be a non-empty string');
@@ -266,6 +269,13 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
       throw runnerError('claude CLI runner refused an invalid access projection');
     }
     if (!validModelId(request.modelId)) throw runnerError('claude CLI runner refused an invalid model id');
+    const effort = request.effort ?? this.effort;
+    const supportedEfforts = resolveClaudeCodeSupportedEfforts(request.modelId);
+    if (!supportedEfforts.includes(effort)) {
+      throw runnerError(
+        `claude CLI runner refused unsupported effort for ${request.modelId}; supported: ${supportedEfforts.join(', ')}`,
+      );
+    }
     // Tool definitions are never forwarded: the CLI runs with `--tools ""`,
     // so accepting them would silently drop caller intent. Refuse instead.
     if (request.tools !== undefined && request.tools.length > 0) {
@@ -283,12 +293,27 @@ export class NodeClaudeCodeCliRunner implements ClaudeCodeCliRunner {
     let closed = false;
     const isClosed = (): boolean => closed;
     try {
+      // `--system-prompt-file` is omitted from Claude Code 2.1.330 `--help`;
+      // when configured, require positive CLI evidence before spawning with a token.
+      if (this.systemPromptFile !== undefined && !this.systemPromptFileVerified) {
+        await verifySystemPromptFileSupport(
+          this.cliPath,
+          buildChildEnv(sandboxDir),
+          sandboxDir,
+          Math.min(this.timeoutMs, CLAUDE_CODE_RESULT_TIMEOUT_MS),
+          undefined,
+          'claude CLI runner',
+          signal,
+        );
+        if (signal.aborted) throw abortedError();
+        this.systemPromptFileVerified = true;
+      }
       // --verbose is required with -p --output-format stream-json on the 2.1
       // line; --tools "" disables every built-in (local) tool; with
       // --strict-mcp-config and no --mcp-config no MCP server can load;
       // --no-session-persistence keeps the seat run off disk.
       const args = ['-p', '--verbose', '--output-format', 'stream-json',
-        '--model', request.modelId, '--effort', this.effort,
+        '--model', request.modelId, '--effort', effort,
         '--tools', '', '--strict-mcp-config', '--no-session-persistence',
         ...(this.systemPromptFile ? ['--system-prompt-file', this.systemPromptFile] : [])];
       const env = buildChildEnv(sandboxDir, access.accessToken);
@@ -492,66 +517,113 @@ export interface ClaudeCodeCliProbeOptions {
   readonly source: string;
   readonly qualificationRef: string;
   readonly timeoutMs?: number;
+  readonly requireSystemPromptFile?: boolean;
 }
 
-/**
- * Run one probe command with a token-free allowlist env inside the sandbox;
- * never runs a workload. Output is byte-capped; stderr is drained.
- */
-const runProbeCommand = (
+const execProbeCommand = (
   cliPath: string,
   args: readonly string[],
   env: Record<string, string | undefined>,
   sandboxDir: string,
   timeoutMs: number,
-): Promise<string> => new Promise((resolve, reject) => {
+  captureStderr: boolean,
+  errorPrefix: 'claude CLI probe' | 'claude CLI runner' = 'claude CLI probe',
+  signal?: AbortSignal,
+): Promise<ProbeCommandResult> => new Promise((resolve, reject) => {
+  if (signal?.aborted) { reject(abortedError()); return; }
   let child: ChildProcess;
   try {
-    // Detached like the workload spawn so the timeout below can signal the
-    // whole group (killTree falls back to the direct child on win32).
     child = spawn(cliPath, args,
       { env: env as Record<string, string>, stdio: ['ignore', 'pipe', 'pipe'],
         cwd: sandboxDir, detached: process.platform !== 'win32' });
-  } catch {
-    reject(runnerError('claude CLI probe failed to spawn the CLI'));
-    return;
-  }
+  } catch { reject(runnerError(`${errorPrefix} failed to spawn the CLI`)); return; }
   let closed = false;
+  let settled = false;
   child.once('close', () => { closed = true; });
   const isClosed = (): boolean => closed;
   let received = 0;
-  let output = Buffer.from('');
+  let stdoutBuf = Buffer.from('');
+  let stderrBuf = Buffer.from('');
   child.stdout?.on('data', (chunk: Buffer) => {
     received += chunk.length;
-    if (received <= MAX_PROBE_OUTPUT_BYTES) output = Buffer.concat([output, chunk]);
+    if (received <= MAX_PROBE_OUTPUT_BYTES) stdoutBuf = Buffer.concat([stdoutBuf, chunk]);
   });
-  child.stderr?.on('data', () => { /* drained, never retained */ });
-  const timer = setTimeout(() => {
-    killTree(child, isClosed, 'SIGKILL');
-    destroyPipes(child);
-    reject(runnerError('claude CLI probe timed out'));
-  }, timeoutMs);
+  child.stderr?.on('data', (chunk: Buffer) => {
+    if (!captureStderr) return;
+    received += chunk.length;
+    if (received <= MAX_PROBE_OUTPUT_BYTES) stderrBuf = Buffer.concat([stderrBuf, chunk]);
+  });
+  const finish = (cb: () => void): void => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+    cb();
+  };
+  const abortWith = (error: Error): void => {
+    finish(() => { killTree(child, isClosed, 'SIGKILL'); destroyPipes(child); reject(error); });
+  };
+  const onAbort = (): void => abortWith(abortedError());
+  signal?.addEventListener('abort', onAbort, { once: true });
+  const timer = setTimeout(() => abortWith(runnerError(`${errorPrefix} timed out`)), timeoutMs);
   (timer as unknown as { unref?: () => void }).unref?.();
-  child.once('error', () => {
-    clearTimeout(timer);
-    reject(runnerError('claude CLI probe failed to run the CLI'));
-  });
-  // Resolve on `close`, not `exit`, so all stdio is drained: `exit` can fire
-  // while the last output bytes are still in flight. Buffer.concat keeps
-  // multi-byte characters split across chunks intact.
-  child.once('close', (code: number | null) => {
-    clearTimeout(timer);
-    if (code !== 0) {
-      reject(runnerError('claude CLI probe could not read the CLI'));
-      return;
-    }
-    if (received > MAX_PROBE_OUTPUT_BYTES) {
-      reject(runnerError('claude CLI probe refused an oversized CLI output'));
-      return;
-    }
-    resolve(output.toString('utf8'));
-  });
+  child.once('error', () => finish(() => reject(runnerError(`${errorPrefix} failed to run the CLI`))));
+  child.once('close', (code: number | null) => finish(() => resolve({
+    exitCode: code, stdout: stdoutBuf.toString('utf8'), stderr: stderrBuf.toString('utf8'),
+    oversized: received > MAX_PROBE_OUTPUT_BYTES,
+  })));
 });
+
+/**
+ * Run one probe command with a token-free allowlist env inside the sandbox;
+ * never runs a workload. Output is byte-capped; stderr is drained.
+ */
+const runProbeCommand = async (
+  cliPath: string,
+  args: readonly string[],
+  env: Record<string, string | undefined>,
+  sandboxDir: string,
+  timeoutMs: number,
+): Promise<string> => {
+  const result = await execProbeCommand(cliPath, args, env, sandboxDir, timeoutMs, false, 'claude CLI probe');
+  if (result.exitCode !== 0) throw runnerError('claude CLI probe could not read the CLI');
+  if (result.oversized) throw runnerError('claude CLI probe refused an oversized CLI output');
+  return result.stdout;
+};
+
+/**
+ * Establish positive, token-free evidence that the CLI accepts `--system-prompt-file`:
+ * either declared in `--help` (older 2.1) or confirmed by failing on a guaranteed-missing
+ * file path inside the sandbox (2.1.330, where `--help` hides the flag).
+ */
+const verifySystemPromptFileSupport = async (
+  cliPath: string,
+  env: Record<string, string | undefined>,
+  sandboxDir: string,
+  timeoutMs: number,
+  declaredOptions?: ReadonlyMap<string, string>,
+  errorPrefix: 'claude CLI probe' | 'claude CLI runner' = 'claude CLI probe',
+  signal?: AbortSignal,
+): Promise<void> => {
+  if (declaredOptions?.has(SYSTEM_PROMPT_FILE_FLAG)) return;
+  if (declaredOptions === undefined) {
+    const help = await execProbeCommand(cliPath, ['--help'], env, sandboxDir, timeoutMs, false, errorPrefix, signal);
+    if (help.exitCode === 0 && !help.oversized
+      && parseClaudeCodeHelpOptions(help.stdout).has(SYSTEM_PROMPT_FILE_FLAG)) {
+      return;
+    }
+  }
+  const missingPath = join(sandboxDir, PROBE_MISSING_SYSTEM_PROMPT_FILENAME);
+  const probe = await execProbeCommand(
+    cliPath,
+    [HEADLESS_PRINT_FLAG, '--tools', '', '--strict-mcp-config', '--no-session-persistence',
+      SYSTEM_PROMPT_FILE_FLAG, missingPath],
+    env, sandboxDir, timeoutMs, true, errorPrefix, signal,
+  );
+  if (!isPositiveSystemPromptFileEvidence(probe, missingPath)) {
+    throw runnerError(`${errorPrefix} found a CLI without ${SYSTEM_PROMPT_FILE_FLAG} support`);
+  }
+};
 
 /** Probe `claude --version` and `claude --help` with a token-free env; never runs a workload. */
 export const probeClaudeCodeCliCapabilities = (
@@ -576,12 +648,11 @@ export const probeClaudeCodeCliCapabilities = (
         throw runnerError('claude CLI probe requires claude 2.1 or newer');
       }
       const help = await runProbeCommand(cliPath, ['--help'], env, sandboxDir, timeoutMs);
-      const missing = REQUIRED_CLAUDE_CODE_FLAGS.filter((flag) => !help.includes(flag));
-      if (missing.length > 0) throw runnerError('claude CLI probe found a CLI missing confinement flags');
-      // Flags alone are not enough: the probe pins the stream-json value and
-      // the `-p` headless switch the runner relies on.
-      if (!help.includes('stream-json')) throw runnerError('claude CLI probe found a CLI without stream-json output');
-      if (!/(^|\s)-p(\s|,|$)/m.test(help)) throw runnerError('claude CLI probe found a CLI without headless print mode');
+      const validation = validateClaudeCodeHelp(help);
+      if (!validation.ok) throw runnerError(validation.message);
+      if (options.requireSystemPromptFile) {
+        await verifySystemPromptFileSupport(cliPath, env, sandboxDir, timeoutMs, validation.declared, 'claude CLI probe');
+      }
       return { protocol: CLAUDE_CODE_STREAM_PROTOCOL, cliVersion: `${major}.${minor}.${Number(match![3])}`,
         source: options.source, qualificationRef: options.qualificationRef };
     } finally {

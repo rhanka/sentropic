@@ -91,8 +91,9 @@ it.each([false, true])('OFF refusal names safeguards when present (%s)', async s
   expect(await response.text()).toContain(safeguards ? 'safeguards' : 'Token counting');
   expect(h.credential).not.toHaveBeenCalled(); expect(h.runtime.nativeCountTokens).not.toHaveBeenCalled();
 });
-// W folds every launch alias (N12c): `claude-opus-5-5` is unknown (404).
-it.each([['missing-fixture', 404], ['gpt-5.6-terra', 400], ['claude-opus-5-5', 404], ['claude-opus-5', 400]])('denies %s with %s before HTTP', async (model, status) => {
+// Owner rule: bare `claude-*-5-5*` ids are gateway aliases, unknown for
+// count_tokens (404) before any credential, account or HTTP call.
+it.each([['missing-fixture', 404], ['gpt-5.6-terra', 400], ['claude-opus-5-5', 404], ['claude-sonnet-5-5', 404], ['claude-haiku-5-5', 404], ['claude-opus-5-5-xhigh', 404], ['claude-opus-5', 400]])('denies %s with %s before HTTP', async (model, status) => {
   const h = await gwNativeFixture();
   expect((await h.post({ ...message, model }, {}, path)).status).toBe(status);
   expect(h.credential).not.toHaveBeenCalled(); expect(h.runtime.nativeCountTokens).not.toHaveBeenCalled();

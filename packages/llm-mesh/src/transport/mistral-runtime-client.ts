@@ -1,4 +1,5 @@
 import { getSecretAuthMaterial } from '../auth.js';
+import { getModelProfile } from '../catalog.js';
 import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from '../generation.js';
 import type { MistralAdapterClient } from '../adapters.js';
 import type { LlmMeshMessage } from '../messages.js';
@@ -99,6 +100,21 @@ export interface MistralRuntimeClientOptions {
 // runtime credential is that key as the Bearer token.
 const MISTRAL_DEFAULT_BASE_URL = 'https://api.mistral.ai';
 const MISTRAL_SERVING_PATH = '/v1/chat/completions';
+const MISTRAL_EFFORT_LADDER = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+const resolveMistralReasoningEffort = (modelId: string, effort: string | undefined): string | undefined => {
+  if (!effort || effort === 'none') return undefined;
+  const supported = getModelProfile('mistral', modelId)?.capabilities.reasoning.supportedEfforts;
+  if (!supported || supported.length === 0) return effort;
+  if (supported.includes(effort as (typeof supported)[number])) return effort;
+  const requestedIndex = MISTRAL_EFFORT_LADDER.indexOf(effort as (typeof MISTRAL_EFFORT_LADDER)[number]);
+  if (requestedIndex < 0) return supported[0];
+  for (let index = requestedIndex; index >= 0; index -= 1) {
+    const candidate = MISTRAL_EFFORT_LADDER[index]!;
+    if (supported.includes(candidate)) return candidate;
+  }
+  return supported[0];
+};
 
 // [MEASURED] api.mistral.ai enforces a strict chat message schema (live 422
 // extra_forbidden on body.messages[0].user.metadata): the gateway's canonical
@@ -271,8 +287,10 @@ export class MistralRuntimeClient implements MistralAdapterClient {
         ...(tool.strict !== undefined ? { strict: tool.strict } : {}),
       },
     }));
+    const modelId = request.modelId ?? 'mistral-small-2603';
+    const reasoningEffort = resolveMistralReasoningEffort(modelId, request.reasoning?.effort);
     const body: Record<string, unknown> = {
-      model: request.modelId ?? 'mistral-small-2603',
+      model: modelId,
       messages: request.messages.map(toWireMessage),
       ...(stream ? { stream: true } : {}),
       ...(openAiTools?.length ? { tools: openAiTools } : {}),
@@ -282,11 +300,10 @@ export class MistralRuntimeClient implements MistralAdapterClient {
       ...(request.maxOutputTokens !== undefined ? { max_tokens: request.maxOutputTokens } : {}),
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
       ...(request.topP !== undefined ? { top_p: request.topP } : {}),
-      // Proven slot: Vibe 2.26.1 itself sends reasoning_effort on this wire.
-      // 'none' means no reasoning — omit rather than send it. Summary has no
-      // Chat expression (validated upstream, never fabricated here).
-      ...(request.reasoning?.effort && request.reasoning.effort !== 'none'
-        ? { reasoning_effort: request.reasoning.effort } : {}),
+      // Proven slot: Vibe CLI sends reasoning_effort on this wire; clamp to
+      // the catalog model's declared supportedEfforts when specified and omit
+      // 'none'. Summary has no Chat expression (validated upstream).
+      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
     };
     const response = await this.fetchFn(`${this.baseUrl}${MISTRAL_SERVING_PATH}`, {
       method: 'POST',

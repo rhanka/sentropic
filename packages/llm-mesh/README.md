@@ -144,15 +144,21 @@ always takes ownership from `StartEnrollmentInput.ownerScope`.
 
 The `llm-mesh-enroll` bin enrolls seat-billed device-flow accounts
 (`muse-code` and `codex`, repeatable for N accounts), re-enrolls or creates
-`cloud-code` seats (`--from-agy` or memory-only `--credential-stdin`), and
-probes stored `muse-code` or `cloud-code` accounts. For `muse-code` and
-`codex`, `--keyring-key-env` is mandatory (32 bytes as 64 hex chars or
-44/43-char base64; passphrases refused). For `cloud-code`, `--keyring-key-env`
-is optional when the directory uses `.key`; the CLI refuses to create a `.key`
-next to existing encrypted records that lack one. `probe` is strictly read-only
-in every option combination (works on `:ro` mounts without touching directory
-bytes, mode, or mtime). stdout emits one JSON object per line; secrets and
-emails are never printed by default.
+`cloud-code` seats (`--from-agy`, memory-only `--credential-stdin`, or
+`--oauth-paste`), lists accounts read-only, and probes stored `muse-code` or
+`cloud-code` accounts. For `muse-code` and `codex`, `--keyring-key-env` is
+mandatory (32 bytes as 64 hex chars or 44/43-char base64; passphrases
+refused). For `cloud-code`, `--keyring-key-env` is optional when the
+directory uses `.key`; the CLI refuses to create a `.key` next to existing
+encrypted records that lack one. `probe` is strictly read-only in every
+option combination (works on `:ro` mounts without touching directory bytes,
+mode, or mtime) and verifies the stored account provider (and, for
+`cloud-code`, the inner account binding) before any token leaves the
+keyring. For `muse-code` probe, `--effort` is forwarded as
+`reasoning: { effort }` on the Muse Responses wire (unsupported model/effort
+pairs are refused before any I/O) and echoed, with the finish reason, in the
+probe JSON line. stdout emits one JSON object per line; secrets and emails
+are never printed by default.
 
 ```sh
 export SENTROPIC_LLM_MESH_KEYRING_KEY  # owner-held 32-byte key (hex), set in the environment
@@ -165,7 +171,7 @@ llm-mesh-enroll enroll --provider muse-code \
   --label "Immo Detection 1" \
   --keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY
 
-# 2. Probe the stored muse-code account (prints status plus latency plus usage only).
+# 2. Probe the stored account (prints status, latency, effort, finish reason, usage).
 llm-mesh-enroll probe --provider muse-code \
   --keyring-dir ~/.sentropic/immo-detection-keyring \
   --account <account-id-from-enroll> \

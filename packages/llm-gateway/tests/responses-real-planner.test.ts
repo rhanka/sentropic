@@ -1,14 +1,21 @@
 /**
  * Fixture replay through the REAL mesh planner (R4-BLQ-1, amended R5-MAJ-1):
- * committed Codex bodies pass plan eligibility and serve 200; committed Muse
- * bodies fail closed with 400 (no proven Meta Chat reasoning slot — every
- * Muse fixture carries reasoning effort/summary, which `muse` no longer
- * declares). Provider I/O is faked at the attempt seam; planning, capability
- * and execution-feature filtering are real. No mocked plan.
+ * planning, capability and execution-feature filtering are real; no mocked
+ * plan. With a canned attempt only admissible Muse pairs serve 200
+ * (initial-b `low` on the contributor; initial-a `max` re-targeted to
+ * `muse-spark-1.3`). The recorded contributor x `max` bodies pass the
+ * transport-level planner but a REAL `MuseRuntimeClient` refuses them
+ * before any Meta I/O (official Meta cap), so they must never be reported
+ * as served at 200. Through the gateway that pre-I/O refusal currently
+ * surfaces as the frozen generic 400 (no `param`): a known spec §16.7
+ * precision loss, pinned below and recorded for owner acceptance /
+ * gateway follow-up (round-2 review Finding 1, option (c)).
  */
 import { describe, expect, it, vi } from 'vitest';
 import {
   InMemoryRoutePlanner,
+  MuseRuntimeClient,
+  type AccountDirectoryPort,
   type GenerateRequest,
   type PreparedRouteAttempt,
 } from '@sentropic/llm-mesh';
@@ -25,7 +32,14 @@ const load = async (name: string): Promise<any> => {
   return JSON.parse(await readFile(new URL(`./fixtures/responses/${name}`, import.meta.url), 'utf8'));
 };
 
-const rig = () => {
+const museAuth = {
+  auth: {
+    material: { type: 'account-transport' as const, provider: 'muse' as const, accessToken: 'tok', accountId: 'acc' },
+    descriptor: { sourceType: 'account-transport' as const, accountProviderId: 'muse' as const },
+  },
+};
+
+const rig = (realMuseFetch?: unknown) => {
   const verify = vi.fn(() => ({ tenantId: 't', principalId: 'p', source: 'test', ownerScopeRef: 'enrolled:p' }));
   const captured: GenerateRequest[] = [];
   const settleRoute = vi.fn();
@@ -59,7 +73,32 @@ const rig = () => {
           enrollmentCompletedAt: '2026-08-01T00:00:00Z', readiness: 'ready' as const, revision: 'r1' },
       ];
     },
-    async prepareAttempt(): Promise<PreparedRouteAttempt> { return canned; },
+    async prepareAttempt(
+      input: Parameters<AccountDirectoryPort['prepareAttempt']>[0],
+    ): Promise<PreparedRouteAttempt> {
+      if (!realMuseFetch) return canned;
+      const client = new MuseRuntimeClient({
+        fetch: realMuseFetch as unknown as typeof fetch,
+      });
+      // Bind the planned target onto the request exactly as the production
+      // seam does (LocalAccountTransportService routeRequest: provider/model
+      // from target, target.effort overrides the caller effort), then run a
+      // REAL MuseRuntimeClient — its per-model validator decides, pre-I/O.
+      const bind = (request: GenerateRequest): GenerateRequest => ({
+        ...request,
+        providerId: input.target.providerId as GenerateRequest['providerId'],
+        modelId: input.target.modelId as GenerateRequest['modelId'],
+        ...(input.target.effort
+          ? { reasoning: { ...request.reasoning, effort: input.target.effort as never } }
+          : {}),
+      });
+      return {
+        attemptRef: 'real-muse',
+        generate: (request: GenerateRequest) => client.generate(bind(request), museAuth),
+        stream: (request: GenerateRequest) => client.stream(bind(request), museAuth),
+        async markCommitted() {}, async complete() {}, async releaseCancelled() {}, async recordOutcome() {},
+      } as unknown as PreparedRouteAttempt;
+    },
   };
   const app = createGatewayRouter({ config: { ...stubGatewayConfig,
     callerAuth: new PersonalPassthroughCallerAuth({ verifyToken: { verify }, costContextResolver: new VerifiedCostContextResolver() }),
@@ -92,38 +131,89 @@ describe('fixture replay through the real mesh planner (R4-BLQ-1)', () => {
     expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
   });
 
-  // R5-MAJ-1: every committed Muse fixture carries reasoning effort/summary,
-  // which `muse` no longer declares (no proven Meta Chat slot) — the plan is
-  // refused before dispatch with a named capability 400, never a silent drop.
-  // R6-MAJ-1 (spec §16.7): the refusal names the cause — status AND error
-  // type AND code AND param are asserted, not just the status.
-  it.each([
-    ['muse-1.4.6-initial-a.json', '/responses'],
-    ['muse-1.4.6-initial-b.json', '/responses'],
-    ['muse-1.4.6-tool-result.json', '/responses'],
-  ] as const)('refuses %s at 400 before dispatch (unforwarded reasoning-controls)', async (file, path) => {
+  // Cornerstone (planner level, canned attempt): an admissible Muse pair
+  // passes the reasoning-controls eligibility the planner now grants and
+  // *reaches* dispatch with effort/summary forwarded. Only initial-b
+  // (`low` on the contributor) qualifies as recorded; the two `max`
+  // contributor bodies are covered by the real-client refusals below.
+  it('serves muse-1.4.6-initial-b.json at 200, forwarding its reasoning effort and summary', async () => {
     const f = rig();
-    const res = await f.send(path, await load(file));
-    expect(res.status).toBe(400);
-    const body = await res.json() as { error: { message: string; type: string; code: string; param: string } };
-    expect(body.error.type).toBe('invalid_request_error');
-    expect(body.error.code).toBe('unsupported_parameter');
-    expect(body.error.param).toBe('reasoning');
-    expect(f.captured).toHaveLength(0);
-    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'failed', attempts: [] }));
+    const res = await f.send('/responses', await load('muse-1.4.6-initial-b.json'));
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, any>;
+    expect(body).toMatchObject({ object: 'response', model: 'muse-spark-1.3-contributor', status: 'completed', store: false });
+    expect(f.captured).toHaveLength(1);
+    expect(f.captured[0]!.reasoning).toMatchObject({ effort: 'low', summary: 'auto' });
+    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
   });
 
-  it.each(['muse-wonder-1.0', 'muse-wonder-full-1.0'] as const)('refuses a Responses body on %s at 400 (owner request 2026-10-13, R5-MAJ-1)', async (model) => {
+  it('serves the initial-a max body at 200 when re-targeted to muse-spark-1.3 (canned attempt)', async () => {
+    const f = rig();
+    const res = await f.send('/responses',
+      { ...(await load('muse-1.4.6-initial-a.json')), model: 'muse-spark-1.3' });
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, any>;
+    expect(body).toMatchObject({ object: 'response', model: 'muse-spark-1.3', status: 'completed', store: false });
+    expect(f.captured).toHaveLength(1);
+    expect(f.captured[0]!.reasoning).toMatchObject({ effort: 'max', summary: 'auto' });
+    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
+  });
+
+  // Real-client end-to-end truth for the recorded contributor x `max`
+  // traffic: planned, dispatched to a real MuseRuntimeClient, refused
+  // before Meta I/O. The public error is today the frozen generic 400
+  // (no `param`) — the §16.7 precision loss recorded in the header; a
+  // gateway follow-up restoring `unsupported_parameter` + `param:
+  // reasoning` must update these assertions.
+  it.each([
+    'muse-1.4.6-initial-a.json',
+    'muse-1.4.6-tool-result.json',
+  ] as const)('refuses %s at 400 before Meta I/O with a real Muse client (contributor max cap)', async (file) => {
+    const fetchFn = vi.fn(async () => new Response('{}', { status: 200 }));
+    const f = rig(fetchFn);
+    const res = await f.send('/responses', await load(file));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { type: string; code: string; param?: string } };
+    expect(body.error.type).toBe('invalid_request_error');
+    expect(body.error.code).toBe('invalid_request');
+    expect(body.error.param).toBeUndefined();
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      outcome: 'failed',
+      attempts: [expect.objectContaining({ outcome: 'invalid-request' })],
+    }));
+  });
+
+  it('refuses effort none at 400 before Meta I/O with a real Muse client', async () => {
+    const fetchFn = vi.fn(async () => new Response('{}', { status: 200 }));
+    const f = rig(fetchFn);
+    const res = await f.send('/responses', {
+      ...(await load('muse-1.4.6-initial-b.json')),
+      model: 'muse-wonder-1.0',
+      reasoning: { effort: 'none', summary: 'auto' },
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: { type: string; code: string; param?: string } };
+    expect(body.error.type).toBe('invalid_request_error');
+    expect(body.error.code).toBe('invalid_request');
+    expect(body.error.param).toBeUndefined();
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      outcome: 'failed',
+      attempts: [expect.objectContaining({ outcome: 'invalid-request' })],
+    }));
+  });
+
+  it.each(['muse-wonder-1.0', 'muse-wonder-full-1.0'] as const)('serves a Responses body with reasoning controls on %s at 200 (owner request 2026-10-13)', async (model) => {
     const f = rig();
     const res = await f.send('/responses',
       { ...(await load('muse-1.4.6-initial-b.json')), model });
-    expect(res.status).toBe(400);
-    const body = await res.json() as { error: { message: string; type: string; code: string; param: string } };
-    expect(body.error.type).toBe('invalid_request_error');
-    expect(body.error.code).toBe('unsupported_parameter');
-    expect(body.error.param).toBe('reasoning');
-    expect(f.captured).toHaveLength(0);
-    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'failed', attempts: [] }));
+    expect(res.status).toBe(200);
+    expect(f.captured).toHaveLength(1);
+    const attempted = f.captured[0]!;
+    expect(typeof attempted.model === 'string' ? attempted.model : attempted.modelId).toBe(model);
+    expect(attempted.reasoning).toMatchObject({ effort: 'low', summary: 'auto' });
+    expect(f.settleRoute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ outcome: 'success' }));
   });
 
   it.each([

@@ -278,56 +278,80 @@ describe('createLlmMesh', () => {
     expect(getModelProfile('gcp', 'google/gemini-3.8-flash@gcp')).toBeNull();
   });
 
-  it('exposes Gemini 4 Argon as a Cloud Code model copied from 3.7', () => {
+  it('exposes Gemini 4 Argon as a Cloud Code model with verified low/medium/high efforts', () => {
     const profile = getModelProfile('gemini', 'gemini-4-argon');
+    const base = getModelProfile('gemini', 'gemini-3.7-flash');
 
     expect(profile).toMatchObject({
       providerId: 'gemini', modelId: 'gemini-4-argon', label: 'Gemini 4 Argon',
       reasoningTier: 'advanced',
     });
-    expect(profile?.capabilities).toEqual(
-      getModelProfile('gemini', 'gemini-3.7-flash')?.capabilities,
-    );
+    expect(profile?.capabilities).toEqual({
+      ...base?.capabilities,
+      reasoning: { ...base?.capabilities.reasoning, supportedEfforts: ['low', 'medium', 'high'] },
+    });
     expect(getModelProfile('gcp', 'google/gemini-4-argon@gcp')).toBeNull();
   });
 
-  it('exposes Gemini 4 Carbon as a Cloud Code model copied from 3.7', () => {
+  it('exposes Gemini 4 Carbon as a Cloud Code model with verified low/medium/high efforts', () => {
     const profile = getModelProfile('gemini', 'gemini-4-carbon');
+    const base = getModelProfile('gemini', 'gemini-3.7-flash');
 
     expect(profile).toMatchObject({
       providerId: 'gemini', modelId: 'gemini-4-carbon', label: 'Gemini 4 Carbon',
       reasoningTier: 'advanced',
     });
-    expect(profile?.capabilities).toEqual(
-      getModelProfile('gemini', 'gemini-3.7-flash')?.capabilities,
-    );
+    expect(profile?.capabilities).toEqual({
+      ...base?.capabilities,
+      reasoning: { ...base?.capabilities.reasoning, supportedEfforts: ['low', 'medium', 'high'] },
+    });
     expect(getModelProfile('gcp', 'google/gemini-4-carbon@gcp')).toBeNull();
   });
 
-  it('exposes Gemini 4 Neon as a Cloud Code model copied from Argon', () => {
+  it('exposes Gemini 4 Neon as a Cloud Code model with verified low..xhigh efforts', () => {
     const profile = getModelProfile('gemini', 'gemini-4-neon');
+    const argon = getModelProfile('gemini', 'gemini-4-argon');
 
     expect(profile).toMatchObject({
       providerId: 'gemini', modelId: 'gemini-4-neon', label: 'Gemini 4 Neon',
       reasoningTier: 'advanced',
     });
-    expect(profile?.capabilities).toEqual(
-      getModelProfile('gemini', 'gemini-4-argon')?.capabilities,
-    );
+    expect(profile?.capabilities).toEqual({
+      ...argon?.capabilities,
+      reasoning: { ...argon?.capabilities.reasoning, supportedEfforts: ['low', 'medium', 'high', 'xhigh'] },
+    });
     expect(getModelProfile('gcp', 'google/gemini-4-neon@gcp')).toBeNull();
   });
 
-  it('exposes Gemini 4 Hydrogen as a Cloud Code model copied from Argon', () => {
+  it('exposes Gemini 4 Hydrogen as a Cloud Code model with verified low..xhigh efforts', () => {
     const profile = getModelProfile('gemini', 'gemini-4-hydrogen');
+    const argon = getModelProfile('gemini', 'gemini-4-argon');
 
     expect(profile).toMatchObject({
       providerId: 'gemini', modelId: 'gemini-4-hydrogen', label: 'Gemini 4 Hydrogen',
       reasoningTier: 'advanced',
     });
-    expect(profile?.capabilities).toEqual(
-      getModelProfile('gemini', 'gemini-4-argon')?.capabilities,
-    );
+    expect(profile?.capabilities).toEqual({
+      ...argon?.capabilities,
+      reasoning: { ...argon?.capabilities.reasoning, supportedEfforts: ['low', 'medium', 'high', 'xhigh'] },
+    });
     expect(getModelProfile('gcp', 'google/gemini-4-hydrogen@gcp')).toBeNull();
+  });
+
+  it.each([
+    ['claude-opus-5-5', 'Opus 5.5'],
+    ['claude-sonnet-5-5', 'Sonnet 5.5'],
+    ['claude-haiku-5-5', 'Haiku 5.5'],
+  ])('exposes real Claude 5.5 profile %s on anthropic with verified efforts', (modelId, label) => {
+    const profile = getModelProfile('anthropic', modelId);
+    expect(profile).toMatchObject({
+      providerId: 'anthropic', modelId, label, reasoningTier: 'advanced',
+    });
+    expect(profile?.capabilities.contextWindowTokens).toBe(1_000_000);
+    expect(profile?.capabilities.maxOutputTokens).toBe(128_000);
+    expect(profile?.capabilities.reasoning.supportedEfforts).toEqual([
+      'low', 'medium', 'high', 'xhigh', 'max',
+    ]);
   });
 
   it('exposes Fable 5.2 next to Fable 5.1 with their family capabilities', () => {
@@ -364,11 +388,20 @@ describe('createLlmMesh', () => {
 
   it.each(['sol', 'luna'])('exposes GPT-6 %s with explicitly inherited capabilities', (family) => {
     const profile = getModelProfile('openai', `gpt-6-${family}`);
+    const base = getModelProfile('openai', `gpt-5.6-${family}`);
     expect(profile).toMatchObject({
       providerId: 'openai', modelId: `gpt-6-${family}`, reasoningTier: 'advanced',
     });
     expect(profile?.capabilities).toEqual(
-      getModelProfile('openai', `gpt-5.6-${family}`)?.capabilities,
+      family === 'luna'
+        ? {
+            ...base?.capabilities,
+            reasoning: {
+              ...base?.capabilities.reasoning,
+              supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+            },
+          }
+        : base?.capabilities,
     );
     expect(getModelProfile('openai', 'gpt-6-terra')).toBeNull();
   });

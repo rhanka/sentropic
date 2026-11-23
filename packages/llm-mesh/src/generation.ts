@@ -19,8 +19,13 @@ export type ResponseFormat =
 
 /**
  * Reasoning effort ladder, ascending. `max` is the top rung (owner decision
- * 2026-07-25) — some upstreams expose a tier above `xhigh`; a provider that
- * does not support it should clamp to its own maximum rather than fail.
+ * 2026-07-25) — some upstreams expose a tier above `xhigh`. By default a
+ * provider that does not support a rung clamps to its own maximum rather
+ * than fail (Cloud Code). Explicit exception: the Muse Responses client
+ * refuses an unsupported effort before I/O instead of silently clamping
+ * (e.g. `max` on muse-spark-1.3-contributor or muse-spark-1.2), because
+ * its callers pin the exact rung and a silent downgrade would misreport
+ * the served effort; see catalog.ts MUSE_REASONING_EFFORTS.
  */
 export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 

@@ -123,7 +123,7 @@ describe('L1.2 StageRewriteEngine & cache-marker preservation (Claude + Muse)', 
     expect(noRewrite.plan.diagnostics[0]?.actualModelId).toBe('claude-sonnet-5');
   });
 
-  it('streams multi-turn tool_use on Muse rewrite and returns 400 on unsupported Muse reasoning effort', async () => {
+  it('streams multi-turn tool_use on Muse rewrite, forwards supported Muse effort and returns 400 on an out-of-ladder effort', async () => {
     const captured: GenerateRequest[] = [];
     const engine = new StageRewriteEngine({ stageId: 'wkst:1', rules: [{ ruleId: 'm1', matchModel: 'muse-spark-1.3-contributor', targetModel: 'muse-wonder-full-1.0' }] });
     const streamRes = await runRouteStreamFlow({
@@ -139,15 +139,29 @@ describe('L1.2 StageRewriteEngine & cache-marker preservation (Claude + Muse)', 
     for await (const frame of streamRes.stream) if ('raw' in frame) frames.push(frame.raw);
     expect(frames.join('')).toContain('read_file');
 
+    // The muse transport declares reasoning-controls and projects the
+    // Responses `reasoning: { effort }` slot, so a supported effort on the
+    // rewritten model plans instead of failing closed.
+    const prepared = await prepareRouteFlow({
+      config: { ...stubGatewayConfig, callerAuth }, routePlanner: museAndClaudePlanner(captured),
+      metering: { settleRoute() {} }, stageRewrite: engine,
+    }, {
+      wire: 'openai-chat-completions', headers: {}, authContext: { method: 'POST', url: 'http://127.0.0.1/v1/chat/completions', requestId: 'req-3' },
+      model: 'muse-spark-1.3-contributor', stream: false,
+      body: { model: 'muse-spark-1.3-contributor', reasoning_effort: 'high', messages: [{ role: 'user', content: 'think' }] },
+    });
+    expect(prepared.plan.diagnostics[0]?.actualModelId).toBe('muse-wonder-full-1.0');
+    expect(prepared.canonical.request.reasoning?.effort).toBe('high');
+
     let caught: unknown;
     try {
       await prepareRouteFlow({
         config: { ...stubGatewayConfig, callerAuth }, routePlanner: museAndClaudePlanner(captured),
         metering: { settleRoute() {} }, stageRewrite: engine,
       }, {
-        wire: 'openai-chat-completions', headers: {}, authContext: { method: 'POST', url: 'http://127.0.0.1/v1/chat/completions', requestId: 'req-3' },
+        wire: 'openai-chat-completions', headers: {}, authContext: { method: 'POST', url: 'http://127.0.0.1/v1/chat/completions', requestId: 'req-4' },
         model: 'muse-spark-1.3-contributor', stream: false,
-        body: { model: 'muse-spark-1.3-contributor', reasoning_effort: 'high', messages: [{ role: 'user', content: 'think' }] },
+        body: { model: 'muse-spark-1.3-contributor', reasoning_effort: 'ultra', messages: [{ role: 'user', content: 'think' }] },
       });
     } catch (err) { caught = err; }
     expect(toProviderShapedError('openai-chat-completions', caught).status).toBe(400);

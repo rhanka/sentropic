@@ -78,15 +78,32 @@ describe('muse provider package surface', () => {
 
     expect(wonder?.label).toBe('Muse Wonder');
     expect(wonder?.reasoningTier).toBe('advanced');
+    expect(wonder?.capabilities.reasoning.supportedEfforts).toEqual([
+      'low', 'medium', 'high', 'xhigh', 'max',
+    ]);
     expect(full?.label).toBe('Muse Wonder Full');
     expect(full?.reasoningTier).toBe('advanced');
   });
 
-  it('should expose Ember as one vision model supporting xhigh and max', () => {
+  it('should expose Ember as one vision model supporting low to max', () => {
     const ember = getModelProfile('muse', 'muse-ember-1.0');
     expect(ember?.label).toBe('Muse Ember');
     expect(ember?.capabilities.contextWindowTokens).toBe(1_000_000);
     expect(ember?.capabilities.modalities.input).toContain('image');
-    expect(ember?.capabilities.reasoning.supportedEfforts).toEqual(['xhigh', 'max']);
+    expect(ember?.capabilities.reasoning.supportedEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+  });
+
+  it('declares one effort list per Muse model in the catalog (contributor capped at xhigh)', () => {
+    // Official Meta docs: max "isn't available with muse-spark-1.3-contributor".
+    const expected: Record<string, readonly string[]> = {
+      'muse-spark-1.3': ['low', 'medium', 'high', 'xhigh', 'max'],
+      'muse-spark-1.3-contributor': ['low', 'medium', 'high', 'xhigh'],
+      'muse-wonder-1.0': ['low', 'medium', 'high', 'xhigh', 'max'],
+      'muse-ember-1.0': ['low', 'medium', 'high', 'xhigh', 'max'],
+      'muse-wonder-full-1.0': ['low', 'medium', 'high', 'xhigh', 'max'],
+    };
+    for (const [modelId, efforts] of Object.entries(expected)) {
+      expect(getModelProfile('muse', modelId as never)?.capabilities.reasoning.supportedEfforts).toEqual(efforts);
+    }
   });
 });

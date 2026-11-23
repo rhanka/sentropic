@@ -63,6 +63,25 @@ describe('Codex runtime client', () => {
     });
   });
 
+  it.each(['gpt-6-luna', 'gpt-6.2-sol'] as const)(
+    'forwards low and max reasoning effort verbatim for %s on Codex', async (modelId) => {
+      for (const effort of ['low', 'max'] as const) {
+        const fetchFn = vi.fn(async () => sseResponse([
+          { type: 'response.created', response: { id: 'response-1', model: modelId } },
+          { type: 'response.output_text.delta', delta: 'ok' },
+          { type: 'response.completed', response: { id: 'response-1', model: modelId, usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } },
+        ]));
+        await new CodexRuntimeClient({ fetch: fetchFn }).generate({
+          providerId: 'openai', modelId,
+          messages: [{ role: 'user', content: 'hello' }],
+          reasoning: { effort },
+        }, auth);
+        expect(JSON.parse(String(fetchFn.mock.calls[0]![1].body))).toMatchObject({
+          model: modelId, reasoning: { effort },
+        });
+      }
+    });
+
   it('preserves rate-limit status and Retry-After for gateway classification', async () => {
     const client = new CodexRuntimeClient({
       fetch: async () => new Response('rate limited', {

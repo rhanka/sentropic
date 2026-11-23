@@ -453,4 +453,27 @@ describe('Mistral runtime client (mesh-side upstream transport)', () => {
     expect(JSON.parse(String(noneFn.mock.calls[0]![1].body)) as Record<string, unknown>)
       .not.toHaveProperty('reasoning_effort');
   });
+
+  it.each([
+    ['mistral-large-4', 'low', 'low'],
+    ['mistral-large-4', 'medium', 'medium'],
+    ['mistral-large-4', 'high', 'high'],
+    ['mistral-large-4', 'xhigh', 'high'],
+    ['mistral-large-4', 'max', 'high'],
+    ['zai-glm-5-3', 'low', 'low'],
+    ['zai-glm-5-3', 'medium', 'low'],
+    ['zai-glm-5-3', 'high', 'high'],
+    ['zai-glm-5-3', 'xhigh', 'high'],
+    ['zai-glm-5-3', 'max', 'max'],
+  ] as const)('maps %s effort %s to wire reasoning_effort %s', async (modelId, effort, expected) => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      id: 'resp-eff', choices: [{ message: { content: 'ok' } }],
+    }), { status: 200 }));
+    await new MistralRuntimeClient({ fetch: fetchFn }).generate({
+      ...request, modelId, reasoning: { effort },
+    }, auth);
+    expect(JSON.parse(String(fetchFn.mock.calls[0]![1].body))).toMatchObject({
+      model: modelId, reasoning_effort: expected,
+    });
+  });
 });
