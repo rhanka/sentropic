@@ -1,4 +1,5 @@
 import { getSecretAuthMaterial } from '../auth.js';
+import { MUSE_REASONING_EFFORTS } from '../catalog.js';
 import type { GenerateRequest, GenerateResponse, ReasoningEffort, StreamRequest, StreamResult } from '../generation.js';
 import type { LlmMeshMessage } from '../messages.js';
 import type { MuseAdapterClient } from '../adapters.js';
@@ -31,27 +32,16 @@ export const MUSE_CLIENT_ID = 'tbh:exec';
 const MUSE_DEFAULT_BASE_URL = 'https://api.meta.ai';
 const MUSE_SERVING_PATH = '/v1/responses';
 
-// Reasoning wire [MEASURED/DOCUMENTED] 2026-11-22: the Responses body nests
-// `reasoning: { effort, summary }` — Meta Reasoning docs
-// (https://dev.meta.ai/docs/reasoning: "nest it as `reasoning.effort`"; the
-// top-level `reasoning_effort` spelling belongs to Chat Completions) and
-// the installed muse CLI bundle (muse-bin-1.4.25-R9361.1), whose request
-// field table carries `reasoning` with nested `effort`/`summary` next to
-// `max_output_tokens`/`previous_response_id`. Per-model tiers are the muse
-// provider catalog `reasoning_effort_variants` (profile `tbh`): low..max on
-// the spark-1.3 / wonder / ember ids, low..xhigh on spark-1.2. The Meta
-// provider rejects `none` (HTTP 400), so no model lists it here.
-const MUSE_LOW_TO_MAX: readonly ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-const MUSE_LOW_TO_XHIGH: readonly ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh'];
-const MUSE_REASONING_EFFORTS: Readonly<Record<string, readonly ReasoningEffort[]>> = {
-  'muse-spark-1.3': MUSE_LOW_TO_MAX,
-  'muse-spark-1.3-contributor': MUSE_LOW_TO_MAX,
-  'muse-wonder-1.0': MUSE_LOW_TO_MAX,
-  'muse-wonder-full-1.0': MUSE_LOW_TO_MAX,
-  'muse-ember-1.0': MUSE_LOW_TO_MAX,
-  'muse-spark-1.2': MUSE_LOW_TO_XHIGH,
-  'muse-spark-1.2-contributor': MUSE_LOW_TO_XHIGH,
-};
+// Reasoning wire [DOCUMENTED] 2026-11-22, re-checked 2026-11-23: the
+// Responses body nests `reasoning: { effort, summary }` — official Meta
+// Reasoning docs (https://dev.meta.ai/docs/reasoning: "nest it as
+// `reasoning.effort`"; the top-level `reasoning_effort` spelling belongs
+// to Chat Completions) and the installed muse CLI bundle
+// (muse-bin-1.4.25-R9361.1), whose request field table carries
+// `reasoning` with nested `effort`/`summary`. Per-model tiers live ONLY
+// in catalog.ts (MUSE_REASONING_EFFORTS, the single source shared with
+// the catalog supportedEfforts): official Meta docs cap
+// muse-spark-1.3-contributor below `max`, and `none` returns HTTP 400.
 const MUSE_REASONING_SUMMARIES: readonly string[] = ['auto', 'concise', 'detailed'];
 
 interface MuseWireReasoning {
@@ -84,14 +74,20 @@ const resolveMuseReasoning = (request: GenerateRequest): MuseWireReasoning | und
       `Muse Responses does not support reasoning summary "${summary}" (supported: auto, concise, detailed)`,
     );
   }
-  if (effort !== undefined) {
-    const modelId = request.modelId ?? 'muse-spark-1.3';
-    const supported = MUSE_REASONING_EFFORTS[modelId] ?? [];
-    if (!supported.includes(effort)) {
-      throw unsupportedReasoning(
-        `Muse model ${modelId} does not support reasoning effort "${effort}" (supported: ${supported.length ? supported.join(', ') : 'none'})`,
-      );
-    }
+  // Any reasoning control (effort or summary alone) requires a known
+  // model. Object.hasOwn keeps inherited keys (`constructor`, `toString`,
+  // `__proto__`) from reading through the prototype as a non-array.
+  const modelId = request.modelId ?? 'muse-spark-1.3';
+  if (!Object.hasOwn(MUSE_REASONING_EFFORTS, modelId)) {
+    throw unsupportedReasoning(
+      `Unknown Muse model ${modelId}: no reasoning efforts are supported`,
+    );
+  }
+  const supported = MUSE_REASONING_EFFORTS[modelId]!;
+  if (effort !== undefined && !supported.includes(effort)) {
+    throw unsupportedReasoning(
+      `Muse model ${modelId} does not support reasoning effort "${effort}" (supported: ${supported.join(', ')})`,
+    );
   }
   return {
     ...(effort !== undefined ? { effort } : {}),
