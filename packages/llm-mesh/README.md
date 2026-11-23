@@ -178,13 +178,24 @@ llm-mesh-enroll probe --provider muse-code \
 By default, `enroll --provider cloud-code` updates an **explicit existing**
 `--account <id>` in place and refuses unknown, removed, foreign-owner,
 external-seat, or other-provider accounts. Creating a new account requires the
-explicit `--create-account --owner-scope <ref>` flags. Commits use keyring
-compare-and-set so concurrent CLI enrollment and `LocalAccountTransportService`
-custodian refresh never clobber each other; restart long-lived daemons after
-in-place re-enrollment so they reload the new grant, and keep one active
-refresh holder per Google OAuth grant.
+explicit `--create-account --owner-scope <ref>` flags. It takes exactly one
+credential source: `--from-agy`, `--credential-stdin`, or `--oauth-paste`.
+Commits use one keyring compare-and-set (`:envelope`, `:public`, `:owner`
+when created, and the account index together) so concurrent CLI enrollment
+and `LocalAccountTransportService` custodian refresh never clobber each
+other; restart long-lived daemons after in-place re-enrollment so they reload
+the new grant, and keep one active refresh holder per Google OAuth grant.
+`llm-mesh-enroll list --keyring-dir <dir>` discovers account ids, statuses,
+and owner scopes read-only (it never reads `:envelope`).
 
 **Workstation (`--from-agy` via `/usr/bin/secret-tool`, or `--credential-stdin`)**:
+
+`--from-agy` pins `secret-tool` to a same-uid `unix:path=` session bus
+(`DBUS_SESSION_BUS_ADDRESS` or `$XDG_RUNTIME_DIR/bus`) and refuses remote or
+`unixexec:` transports. `--credential-stdin` reads bounded (64 KiB) JSON
+under a 30 s deadline and accepts a Google token response or a
+`CloudCodeEnrollmentProvider.complete()` result (non-token metadata is
+discarded); never wrap an interactive producer under `flock -- .refresh.lock`.
 
 ```sh
 # 1. Re-enroll an existing cloud-code account in place (reuses .key; requires
@@ -204,30 +215,49 @@ llm-mesh-enroll probe --provider cloud-code \
 
 Never copy a workstation `agy` refresh token to PROD: two active refresh
 holders on one Google grant risk mutual invalidation. Give PROD its **own**
-Google OAuth grant via `CloudCodeEnrollmentProvider` (`src/enrollment/cloud-code.ts`)
-in `mode: 'portal'` (`access_type=offline&prompt=consent`, pasted authorization
-code), commit it in memory over `--credential-stdin` under `/keyring/runtime/.refresh.lock`,
-verify read-only with `probe`, and restart cached Deployments:
+Google OAuth grant with `--oauth-paste`: after read-only preflight it prints
+one `{"authorizationUrl":...,"expiresAt":...}` JSON line on stdout, holds no
+keyring lock while you complete browser consent, reads the one pasted
+callback line from stdin, verifies the OAuth `state`, exchanges the code in
+memory, and commits atomically. Single-quoted `sh -c '...'` keeps pod env
+vars (`$REFRESH_OWNER_SCOPE_REF`, the keyring key var) expanding **in-pod**.
+(`CloudCodeEnrollmentProvider` is also exported from
+`@sentropic/llm-mesh/enrollment` for programmatic portal flows; its
+`complete({ enrollmentId, code, state })` enforces session expiry and state.)
 
 ```sh
-# 1. Read-only live status check on /keyring/runtime (works on :ro mounts):
-kubectl -n radar-immobilier exec deploy/radar-api -- \
+# 1. Read-only discovery + live probe on /keyring/runtime (works on :ro mounts):
+kubectl -n radar-immobilier exec deploy/radar-api -- sh -c '
+  ./node_modules/.bin/llm-mesh-enroll list \
+    --keyring-dir /keyring/runtime \
+    ${SENTROPIC_LLM_MESH_KEYRING_KEY:+--keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY}
+'
+kubectl -n radar-immobilier exec deploy/radar-api -- sh -c '
   ./node_modules/.bin/llm-mesh-enroll probe \
-    --provider cloud-code --account <account-id> \
-    --keyring-dir /keyring/runtime [--keyring-key-env <KEY_VAR>] \
+    --provider cloud-code --account "<account-id>" \
+    --keyring-dir /keyring/runtime \
+    ${SENTROPIC_LLM_MESH_KEYRING_KEY:+--keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY} \
     --model gemini-4-hydrogen --effort low
+'
 
-# 2. Obtain a dedicated PROD Google grant with a pasted authorization code
-#    (CloudCodeEnrollmentProvider start(mode:'portal') -> browser consent ->
-#    complete({ enrollmentId, code })), then stream that dedicated JSON on stdin:
-... | kubectl -n radar-immobilier exec -i deploy/radar-api -- \
-  /usr/bin/flock -w 60 /keyring/runtime/.refresh.lock \
-  ./node_modules/.bin/llm-mesh-enroll enroll \
-    --provider cloud-code --credential-stdin \
-    --account <account-id> --owner-scope "$REFRESH_OWNER_SCOPE_REF" \
-    --keyring-dir /keyring/runtime [--keyring-key-env <KEY_VAR>]
+# 2. Re-enroll in place with a DEDICATED PROD grant. Open the printed
+#    authorizationUrl as the Google seat owner, approve consent, copy the
+#    full http://127.0.0.1:1/oauth/callback?state=...&code=... URL from the
+#    browser address bar, and paste that single line, then Enter / Ctrl-D.
+#    (First-time setup: replace --account "<account-id>" with --create-account.)
+kubectl -n radar-immobilier exec -i deploy/radar-api -- sh -c '
+  exec ./node_modules/.bin/llm-mesh-enroll enroll \
+    --provider cloud-code --oauth-paste \
+    --account "<account-id>" --owner-scope "$REFRESH_OWNER_SCOPE_REF" \
+    --keyring-dir /keyring/runtime \
+    ${SENTROPIC_LLM_MESH_KEYRING_KEY:+--keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY}
+'
 
-# 3. Re-run Step 1 (probe) and restart any long-lived Deployment caching the keyring.
+# 3. Re-run Step 1 (probe). Expect {"status":"ok","modelId":"gemini-4-hydrogen",
+#    "effort":"low",...}. Cron readers pick the grant up on their next run;
+#    restart long-running Deployments that cache the keyring in memory:
+kubectl -n radar-immobilier rollout restart deploy/radar-api deploy/radar-immo-mcp
+kubectl -n radar-immobilier rollout status deploy/radar-api deploy/radar-immo-mcp
 ```
 
 A probe 402 means `billing_not_configured` on the non-seat `muse.ts`
