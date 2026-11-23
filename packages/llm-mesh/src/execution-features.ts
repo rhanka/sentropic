@@ -56,14 +56,27 @@ export const EXECUTION_FEATURES: readonly ExecutionFeature[] = [
  * reasoning items natively (it cannot enforce an explicit output ceiling —
  * no `max_output_tokens` slot, spec §16.4). The translated Chat clients
  * project named choice and parallel control with tests; Mistral
- * additionally forwards the Vibe-proven `reasoning_effort` slot. Meta has
- * no proven reasoning slot on the Chat egress (spec §16.4, R5-MAJ-1):
- * unauthenticated probes are auth-first (401 for every variant), Meta 400s
- * unknown params (`max_output_tokens` precedent), and the binary
- * `reasoningEffort` belongs to the native TBH `/responses` transport, not
- * this OpenAI-compat shim — so `muse` declares no `reasoning-controls` and
- * reasoning requests fail closed until a slot is proven by an authenticated
- * probe. `max_tokens` is projected, so `explicit-output-ceiling` holds.
+ * additionally forwards the Vibe-proven `reasoning_effort` slot. Muse
+ * serves the native Responses wire (`POST /v1/responses`, not the legacy
+ * Chat egress): `reasoning: { effort, summary }` is documented on that
+ * endpoint by the official Meta Reasoning docs and measured in the
+ * installed muse CLI request field table, so `muse` declares
+ * `reasoning-controls`. This supersedes R5-MAJ-1 only for this Responses
+ * client (spec §16.4 addendum 2026-11-23): the Chat egress still has no
+ * proven reasoning slot, no live Muse dispatch is claimed (an
+ * authenticated seat probe per model/effort remains the conductor
+ * follow-up), and an effort the served model does not support — `max`
+ * on muse-spark-1.3-contributor included — still fails closed in the
+ * client before I/O. Declaring the feature also makes the launch-alias
+ * Muse candidates dispatchable in a host wiring MuseRuntimeClient
+ * (disclosed activation, muse-routing-seam.test.ts), and makes Muse
+ * eligible again for reasoning-bearing requests the planner previously
+ * routed to other transports (non-faithful aliases — in the gateway host
+ * mostly summary-only there; every reasoning request for direct
+ * createRoutePlanner consumers). Through llm-gateway a per-model refusal
+ * currently surfaces as the generic 400 without `param` (recorded §16.7
+ * precision loss; the client error itself stays precise).
+ * `max_output_tokens` is projected, so `explicit-output-ceiling` holds.
  * Both translated clients forward the validated `strict` flag on function
  * tools (standard OpenAI function shape); a provider that rejects it fails
  * visibly as a provider 400, never as a silent drop.
@@ -74,7 +87,7 @@ const TRANSPORT_EXECUTION_FEATURES: Readonly<
   codex: ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema',
     'reasoning-context', 'custom-tools', 'verbosity'],
   muse: ['named-tool-choice', 'parallel-tool-control', 'explicit-output-ceiling',
-    'strict-schema'],
+    'strict-schema', 'reasoning-controls'],
   'mistral-vibe': ['named-tool-choice', 'parallel-tool-control', 'reasoning-controls', 'strict-schema'],
 };
 

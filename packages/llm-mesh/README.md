@@ -150,7 +150,9 @@ chars or 44/43-char base64 (a human passphrase is refused). stdout carries
 one JSON object per line, secrets never reach stdout, stderr, or error
 messages. `probe` only supports `--provider muse-code` and verifies the
 stored account provider before any token leaves the keyring; `--effort` is
-validated for forward compatibility but not forwarded on the Muse Chat wire.
+forwarded as `reasoning: { effort }` on the Muse Responses wire (unsupported
+model/effort pairs are refused before any I/O) and echoed, with the finish
+reason, in the probe JSON line.
 
 ```sh
 export SENTROPIC_LLM_MESH_KEYRING_KEY  # owner-held 32-byte key (hex), set in the environment
@@ -163,7 +165,7 @@ llm-mesh-enroll enroll --provider muse-code \
   --label "Immo Detection 1" \
   --keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY
 
-# 2. Probe the stored account (prints status plus latency plus usage only).
+# 2. Probe the stored account (prints status, latency, effort, finish reason, usage).
 llm-mesh-enroll probe --provider muse-code \
   --keyring-dir ~/.sentropic/immo-detection-keyring \
   --account <account-id-from-enroll> \
