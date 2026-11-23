@@ -1,4 +1,5 @@
 import { chmod, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -191,5 +192,31 @@ describe('agy-token-reader (strict stdin schema & thin secret-tool reader)', () 
       const raw = await readAgyFromSecretTool({ binaryPath: script, env: { XDG_RUNTIME_DIR: dir } });
       expect(parseCloudCodeCredentialPayload(raw).refreshToken).toBe(FAKE_REFRESH);
     } finally { await bus.close(); }
+  });
+
+  it('refuses percent-encoded separators that GDBus would split after the socket check', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'llm-mesh-bus-enc-'));
+    dirs.push(dir);
+    // A real same-uid socket whose file name literally contains ';': the
+    // %-decoded path passes lstat, but the pinned child address would be
+    // parsed by GDBus as two chained addresses, not this socket.
+    const trickyPath = join(dir, 'bus;tcp');
+    const server = createServer(() => {});
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(trickyPath, () => resolve());
+    });
+    const marker = join(dir, 'spawned');
+    const script = await writeScript(dir, 'secret-tool-enc', `printf spawned > '${marker}'`);
+    try {
+      const encoded = `unix:path=${dir}/bus%3btcp`;
+      const err = await readAgyFromSecretTool({
+        binaryPath: script, env: { DBUS_SESSION_BUS_ADDRESS: encoded },
+      }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(AgyTokenReadError);
+      await expect(stat(marker)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await new Promise((resolve) => server.close(() => resolve(undefined)));
+    }
   });
 });
