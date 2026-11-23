@@ -23,6 +23,16 @@ const snap = async (dir: string) => {
   return { dirMode: (await stat(dir)).mode & 0o777, files };
 };
 
+const seedOwnerless = async (kr: EncryptedFileKeyring, id: string) => {
+  await kr.setSecret(`sentropic-llm-mesh:${id}:envelope`, JSON.stringify({ accountId: id, accessToken: 'ya29.old', refreshToken: '1//old', expiresAt: '2026-11-01T00:00:00.000Z', authClientConfigVersion: 'v1.0.0' }));
+  await kr.setSecret(`sentropic-llm-mesh:${id}:public`, JSON.stringify({
+    accountId: id, accountLabel: 'Legacy Seat', providerId: 'cloud-code', status: 'reauth_required',
+    createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-10T00:00:00.000Z',
+    account: { accountId: id, ownerScopeRef: OWNER, accountLabel: 'Legacy Seat', targetProviderId: 'gemini', transportProviderId: 'cloud-code', status: 'reauth_required', metadata: { cloudaicompanionProject: PROJECT } },
+  }));
+  await kr.setSecret('sentropic-llm-mesh:accounts:index', JSON.stringify([id]));
+};
+
 const seedExpiring = async (kr: EncryptedFileKeyring, id: string) => {
   await kr.setSecret(`sentropic-llm-mesh:${id}:owner`, JSON.stringify({ v: 1, accountId: id, ownerScopeRef: OWNER }));
   await kr.setSecret(`sentropic-llm-mesh:${id}:envelope`, JSON.stringify({ accountId: id, accessToken: 'ya29.old', refreshToken: '1//old', expiresAt: new Date(Date.now() + 60_000).toISOString(), authClientConfigVersion: 'v1.0.0' }));
@@ -116,6 +126,76 @@ describe('CLI enroll vs custodian refresh compare-and-set', () => {
       expect(await snap(krDir)).toEqual(afterCustodian);
       const env = JSON.parse((await kr.getSecret('sentropic-llm-mesh:acct_cc_race2:envelope'))!) as { accessToken: string };
       expect(env.accessToken).toBe('ya29.custodian-winner');
+    } finally { await cleanup(); }
+  });
+
+  it('commits :owner creation inside the same CAS: an aborted ownerless re-enroll leaves no :owner behind', async () => {
+    const { dir, cleanup } = await tempDir();
+    try {
+      const krDir = join(dir, 'kr-cas3');
+      const kr = new EncryptedFileKeyring(krDir);
+      await seedOwnerless(kr, 'acct_cc_legacy');
+      let afterConcurrent: Awaited<ReturnType<typeof snap>> | undefined;
+      const cliFetch = (async (url: unknown) => {
+        if (String(url).includes('token')) {
+          // Concurrent writer lands first, so the CLI CAS must abort atomically.
+          await kr.setSecret('sentropic-llm-mesh:acct_cc_legacy:envelope', JSON.stringify({
+            accountId: 'acct_cc_legacy', accessToken: 'ya29.concurrent', refreshToken: '1//concurrent',
+            expiresAt: '2099-01-01T00:00:00.000Z', authClientConfigVersion: 'v1.0.0',
+          }));
+          afterConcurrent = await snap(krDir);
+          return json({ access_token: 'ya29.cli-loser', expires_in: 3600 });
+        }
+        return json({ cloudaicompanionProject: PROJECT });
+      }) as typeof fetch;
+      expect(await runEnroll(
+        { command: 'enroll', provider: 'cloud-code', credentialStdin: true, account: 'acct_cc_legacy', keyringDir: krDir },
+        { fetchFn: cliFetch, writers: captureWriters(), env: {}, readAgyToken: async () => PAYLOAD, hostname: FAKE_HOST },
+      )).toBe(EXIT_CODES.enrollmentFailed);
+      expect(await kr.getSecret('sentropic-llm-mesh:acct_cc_legacy:owner')).toBeNull();
+      expect(await snap(krDir)).toEqual(afterConcurrent);
+    } finally { await cleanup(); }
+  });
+
+  it('commits the accounts:index update inside the same CAS: a concurrent index write aborts create-account without residue', async () => {
+    const { dir, cleanup } = await tempDir();
+    try {
+      const krDir = join(dir, 'kr-cas4');
+      const kr = new EncryptedFileKeyring(krDir);
+      await kr.setSecret('sentropic-llm-mesh:accounts:index', JSON.stringify(['acct_cc_seed']));
+      let afterConcurrent: Awaited<ReturnType<typeof snap>> | undefined;
+      const cliFetch = (async (url: unknown) => {
+        if (String(url).includes('token')) {
+          await kr.setSecret('sentropic-llm-mesh:accounts:index', JSON.stringify(['acct_cc_seed', 'acct_cc_other']));
+          afterConcurrent = await snap(krDir);
+          return json({ access_token: 'ya29.new', expires_in: 3600 });
+        }
+        return json({ cloudaicompanionProject: PROJECT });
+      }) as typeof fetch;
+      expect(await runEnroll(
+        { command: 'enroll', provider: 'cloud-code', credentialStdin: true, createAccount: true, ownerScope: OWNER, keyringDir: krDir },
+        { fetchFn: cliFetch, writers: captureWriters(), env: {}, readAgyToken: async () => PAYLOAD, hostname: FAKE_HOST },
+      )).toBe(EXIT_CODES.enrollmentFailed);
+      expect(await snap(krDir)).toEqual(afterConcurrent);
+      expect(JSON.parse((await kr.getSecret('sentropic-llm-mesh:accounts:index'))!)).toEqual(['acct_cc_seed', 'acct_cc_other']);
+    } finally { await cleanup(); }
+  });
+
+  it('creates the durable :owner claim for a legacy ownerless account on successful re-enroll', async () => {
+    const { dir, cleanup } = await tempDir();
+    try {
+      const krDir = join(dir, 'kr-cas5');
+      const kr = new EncryptedFileKeyring(krDir);
+      await seedOwnerless(kr, 'acct_cc_legacy_ok');
+      const cliFetch = (async (url: unknown) => String(url).includes('token')
+        ? json({ access_token: 'ya29.new', expires_in: 3600 })
+        : json({ cloudaicompanionProject: PROJECT })) as typeof fetch;
+      expect(await runEnroll(
+        { command: 'enroll', provider: 'cloud-code', credentialStdin: true, account: 'acct_cc_legacy_ok', keyringDir: krDir },
+        { fetchFn: cliFetch, writers: captureWriters(), env: {}, readAgyToken: async () => PAYLOAD, hostname: FAKE_HOST },
+      )).toBe(EXIT_CODES.ok);
+      expect(JSON.parse((await kr.getSecret('sentropic-llm-mesh:acct_cc_legacy_ok:owner'))!))
+        .toEqual({ v: 1, accountId: 'acct_cc_legacy_ok', ownerScopeRef: OWNER });
     } finally { await cleanup(); }
   });
 });
