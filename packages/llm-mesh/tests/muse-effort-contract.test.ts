@@ -113,7 +113,7 @@ describe('muse reasoning effort contract', () => {
     for (const modelId of ['muse-unknown-9.9', 'constructor', 'toString', '__proto__']) {
       const err = await refusal(client.generate({ providerId: 'muse', modelId: modelId as never, messages: [], reasoning: { effort: 'low' } }, auth));
       expect(err).toMatchObject({ status: 400, code: 'unsupported_projection', param: 'reasoning' });
-      expect(err.message).toBe(`Unknown Muse model ${modelId}: no reasoning efforts are supported`);
+      expect(err.message).toBe(`Unknown Muse model ${modelId}: no reasoning controls are supported`);
       expect(err).not.toBeInstanceOf(TypeError);
     }
     expect(fetchFn).not.toHaveBeenCalled();
@@ -149,7 +149,7 @@ describe('muse reasoning effort contract', () => {
     expect(bodyOf(streamFetch).reasoning).toEqual({ effort: 'high', summary: 'detailed' });
     const refusedFetch = vi.fn();
     const err = await refusal(new MuseRuntimeClient({ fetch: refusedFetch }).generate({ providerId: 'muse', modelId: 'muse-unknown-9.9' as never, messages: [], reasoning: { summary: 'auto' } }, auth));
-    expect(err.message).toBe('Unknown Muse model muse-unknown-9.9: no reasoning efforts are supported');
+    expect(err.message).toBe('Unknown Muse model muse-unknown-9.9: no reasoning controls are supported');
     expect(refusedFetch).not.toHaveBeenCalled();
   });
 

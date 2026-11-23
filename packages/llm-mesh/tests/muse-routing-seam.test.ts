@@ -88,6 +88,19 @@ describe('muse launch-alias routing seam', () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
+  it('keeps a caller summary next to the alias effort override on the wire', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify(completed), { status: 200 }));
+    const { attempt, candidate } = await museAttempt(setup(fetchFn), 'claude-opus-5-5-max');
+    expect(candidate).toMatchObject({ model: 'muse-wonder-full-1.0', effort: 'max' });
+    await attempt.generate({
+      messages: [{ role: 'user', content: 'hello' }], reasoning: { summary: 'auto' },
+    });
+    expect(fetchFn).toHaveBeenCalledOnce();
+    expect(bodyOf(fetchFn)).toMatchObject({
+      model: 'muse-wonder-full-1.0', reasoning: { effort: 'max', summary: 'auto' },
+    });
+  });
+
   it('refuses slotless reasoning.enabled carried into a muse alias attempt', async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify(completed), { status: 200 }));
     const { attempt } = await museAttempt(setup(fetchFn), 'claude-opus-5-5-max');
