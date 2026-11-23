@@ -46,9 +46,12 @@ declare module 'node:fs/promises' {
     mode: number;
     size: number;
     mtimeMs: number;
+    uid: number;
+    ino: number;
     isFile(): boolean;
     isDirectory(): boolean;
     isSymbolicLink(): boolean;
+    isSocket(): boolean;
   }
   export function chmod(path: string, mode: number): Promise<void>;
   export function mkdtemp(prefix: string): Promise<string>;
@@ -167,4 +170,5 @@ declare const process: {
   env: Record<string, string | undefined>;
   platform: string;
   kill(pid: number, signal?: string): void;
+  getuid?: () => number;
 };

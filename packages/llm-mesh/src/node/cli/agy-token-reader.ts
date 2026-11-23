@@ -5,9 +5,11 @@
 // discarded stderr, and a hard wall-clock timeout.
 
 import { spawn, type ChildProcess } from 'node:child_process';
+import { lstat } from 'node:fs/promises';
 import type { ProcessReadStream } from 'node:process';
 import {
   AgyTokenReadError,
+  CREDENTIAL_STDIN_TIMEOUT_MS,
   MAX_CREDENTIAL_BYTES,
   parseCloudCodeCredentialPayload,
   readCredentialFromStdin,
@@ -16,6 +18,7 @@ import {
 
 export {
   AgyTokenReadError,
+  CREDENTIAL_STDIN_TIMEOUT_MS,
   MAX_CREDENTIAL_BYTES,
   parseCloudCodeCredentialPayload,
   readCredentialFromStdin,
@@ -30,6 +33,50 @@ const CHILD_ENV_ALLOWLIST = ['DBUS_SESSION_BUS_ADDRESS', 'XDG_RUNTIME_DIR', 'HOM
 const ABSENT_SECRET_TOOL_MSG =
   `secret-tool binary not found at ${SECRET_TOOL_PATH}; install libsecret-tools or pass --credential-stdin`;
 
+/**
+ * Pin the session bus for secret-tool to a local `unix:path=` socket owned
+ * by the current uid. GDBus would otherwise honour `tcp:`, `nonce-tcp:`,
+ * `unix:abstract=`, `;`-chained fallbacks and `unixexec:` subprocess
+ * transports from DBUS_SESSION_BUS_ADDRESS, or autolaunch `dbus-launch`
+ * when no address is set. Only `unix:path=<abs>[,guid=<hex>]` (or
+ * `$XDG_RUNTIME_DIR/bus`) is accepted; the child gets exactly
+ * `unix:path=<socket>`. Errors are static and never echo the address.
+ */
+export const resolvePinnedSessionBusAddress = async (
+  env: Record<string, string | undefined>,
+): Promise<string> => {
+  const raw = env.DBUS_SESSION_BUS_ADDRESS?.trim();
+  let socketPath: string;
+  if (raw) {
+    const match = /^unix:path=([^,;]+)(,guid=[0-9a-fA-F]+)?$/.exec(raw);
+    if (!match) {
+      throw new AgyTokenReadError('DBUS_SESSION_BUS_ADDRESS is not a local unix:path session bus; refusing secret-tool lookup, pass --credential-stdin');
+    }
+    socketPath = (match[1] as string).replace(/%([0-9a-fA-F]{2})/g,
+      (_m, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)));
+  } else {
+    const runtimeDir = env.XDG_RUNTIME_DIR?.trim().replace(/\/+$/, '');
+    if (!runtimeDir) {
+      throw new AgyTokenReadError('no session bus address available for secret-tool; pass --credential-stdin');
+    }
+    socketPath = `${runtimeDir}/bus`;
+  }
+  if (!socketPath.startsWith('/') || socketPath.includes('\0')) {
+    throw new AgyTokenReadError('DBUS_SESSION_BUS_ADDRESS is not a local unix:path session bus; refusing secret-tool lookup, pass --credential-stdin');
+  }
+  let socketStat;
+  try {
+    socketStat = await lstat(socketPath);
+  } catch {
+    throw new AgyTokenReadError('session bus socket is unavailable for secret-tool; pass --credential-stdin');
+  }
+  const uid = process.getuid?.();
+  if (!socketStat.isSocket() || (uid !== undefined && socketStat.uid !== uid)) {
+    throw new AgyTokenReadError('session bus socket is not owned by the current user; refusing secret-tool lookup, pass --credential-stdin');
+  }
+  return `unix:path=${socketPath}`;
+};
+
 const killChild = (child: ChildProcess, closed: boolean): void => {
   if (closed) return;
   if (child.pid !== undefined && process.platform !== 'win32') {
@@ -40,21 +87,22 @@ const killChild = (child: ChildProcess, closed: boolean): void => {
   try { child.stderr?.destroy(); } catch { /* gone */ }
 };
 
-export const readAgyFromSecretTool = (options: {
+export const readAgyFromSecretTool = async (options: {
   binaryPath?: string;
   env?: Record<string, string | undefined>;
   timeoutMs?: number;
-} = {}): Promise<string> => new Promise((resolve, reject) => {
+} = {}): Promise<string> => {
   const binaryPath = options.binaryPath ?? SECRET_TOOL_PATH;
   if (!options.binaryPath && process.platform !== 'linux') {
-    reject(new AgyTokenReadError('--from-agy requires Linux secret-tool; use --credential-stdin on this platform'));
-    return;
+    throw new AgyTokenReadError('--from-agy requires Linux secret-tool; use --credential-stdin on this platform');
   }
   const sourceEnv = options.env ?? process.env;
   const childEnv: Record<string, string | undefined> = {};
   for (const key of CHILD_ENV_ALLOWLIST) {
     if (sourceEnv[key] !== undefined) childEnv[key] = sourceEnv[key];
   }
+  childEnv.DBUS_SESSION_BUS_ADDRESS = await resolvePinnedSessionBusAddress(sourceEnv);
+  return new Promise((resolve, reject) => {
   let child: ChildProcess;
   try {
     child = spawn(binaryPath, SECRET_TOOL_ARGS, {
@@ -97,7 +145,9 @@ export const readAgyFromSecretTool = (options: {
   child.once('close', (code: number | null) => {
     closed = true;
     if (code !== 0) {
-      finish(new AgyTokenReadError('secret-tool lookup failed; unlock the OS keyring or pass --credential-stdin'));
+      // libsecret exits 1 both when no item matches and when the keyring
+      // is locked; name both instead of misdiagnosing a missing login.
+      finish(new AgyTokenReadError('secret-tool lookup returned no credential (missing agy login or locked OS keyring); verify agy login, unlock the OS keyring, or pass --credential-stdin'));
       return;
     }
     const raw = Buffer.concat(chunks).toString('utf8');
@@ -107,7 +157,8 @@ export const readAgyFromSecretTool = (options: {
     }
     finish(undefined, raw);
   });
-});
+  });
+};
 
 export const readCloudCodeCredential = async (options: {
   source: 'from-agy' | 'credential-stdin';
