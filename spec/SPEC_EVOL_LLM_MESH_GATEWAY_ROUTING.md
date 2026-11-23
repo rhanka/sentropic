@@ -1731,6 +1731,8 @@ single mesh table (`MUSE_REASONING_EFFORTS`). The authenticated-probe
 part of the gate is NOT discharged: no live Muse reasoning dispatch is
 claimed, and an authenticated seat probe per model/effort (in
 particular muse-wonder-full-1.0 at `max`) remains a conductor follow-up
+(the `llm-mesh-enroll probe` forwards `--effort` since this release, so
+the follow-up is executable; it has not been run live)
 before any live reliance; merging on documentary evidence requires
 owner acceptance on the PR before merge (not assumed here; none was
 recorded at round-2 review on 2026-11-23). Disclosed side effect:
@@ -1754,10 +1756,19 @@ recorded Muse Code 1.4.6 traffic). The client refusal is precise
 (400 `unsupported_projection`, `param: reasoning`, before I/O), but the
 gateway currently surfaces it as the frozen generic `invalid_request`
 without `param`, where base named `unsupported_parameter` +
-`reasoning` at planning time. Restoring the named field — planner
+`reasoning` at planning time. The refused pairs also now cost one
+attempt after account acquisition (a lease, a persisted outcome,
+possibly one seat-token refresh) where base refused with zero
+attempts; field-carry restores the named field only, and only planner
+effort-awareness restores the zero-attempt refusal. Restoring the
+named field — planner
 effort-awareness or gateway field-carry (the latter recommended: no
 routing change) — needs a gateway change with its own version bump and
-is deferred to a gateway follow-up; until then the generic shape is
+is deferred to a gateway follow-up, which must also correct
+`packages/llm-gateway/README.md` ("Muse reasoning controls remain
+visibly unavailable…" still states the reversed gate; that packed
+README can only change with the gateway bump); until then the generic
+shape is
 pinned by real-client gateway tests, never as a served 200.
 
 Two existing defects directly block CLI tools: both Muse and Mistral runtime
