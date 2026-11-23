@@ -1,106 +1,88 @@
-# Feature: #861 L0 shared contract and vectors
+# Feature: feat(artifacts): #861 L1 — compile selection and effective profile
 
 ## Objective
-Freeze the stable L0 contract shapes for #861 (profile/outcome/coordinator declarations, common-contract map, migration inventory, executable vectors).
+- [x] Implement spec r2 C1–C7 profile compilation and ordered command identity within L1's exclusive scope.
 
 ## Scope / Guardrails
-- Scope limited to packages/artifacts/** declaration shapes, docs, and unit vectors.
-- Spec r2 is forwarded (SHA-256 `e0bffcf0…a9a4`); the section 3.2 host API
-  names are frozen in the PR #721 fix wave, superseding L0-EXCLUDE-1.
-- Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/artifacts-861`.
-- Automated test campaigns run on dedicated environments (`ENV=test-artifacts-861`), never on root `dev`.
-- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off).
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English.
+- [x] Binding spec: `.tmp/immo-861-artifacts/spec-plan.md`, SHA-256 `e0bffcf079bddaf5fcef8b4232100b821f5efd225a7ffb92a239ea4b540ea9a4`.
+- [x] Base: `feat/artifacts-861-contracts` merged at `d41f470927c1dfd52c239f57ba3f2589723d3285` (PR #721 Sol r2 corrections and inherited main).
+- [x] Worktree: `tmp/worktrees/artifacts-861-L1`; branch `feat/artifacts-861-L1`.
+- [x] Make-only; ENV=test-artifacts-861-724 last; no Python; selective staging; authored commits under 150 lines; upstream merge preserves L0 commit identities.
+- [x] No services/ports needed for pure unit tests; no root development environment changes.
+- [x] Q0 is read-only; retain unknown/source-gap/not-covered items without extrapolation.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/l0-freeze/profile-contract.ts`
-  - `packages/artifacts/l0-freeze/commit-contract.ts`
-  - `packages/artifacts/l0-freeze/failure-contract.ts`
-  - `packages/artifacts/l0-freeze/command-identity-contract.ts`
-  - `packages/artifacts/tests/effective-profile.test.ts`
-  - `packages/artifacts/tests/commit-contract.test.ts`
-  - `packages/artifacts/docs/common-contract-map.md`
-  - `packages/artifacts/docs/migration-inventory-l0.md`
+  - `packages/artifacts/src/profile/**`
+  - `packages/artifacts/src/server/command-identity.ts`
+  - `packages/artifacts/tests/capability-profile.test.ts`
+  - `packages/artifacts/tests/command-identity.test.ts`
+  - `packages/artifacts/tests/parameters.test.ts`
   - `packages/artifacts/README.md`
-  - `packages/artifacts/package.json`
+  - `packages/artifacts/docs/**`
+  - `packages/artifacts/l0-freeze/**`
+  - `packages/artifacts/tests/commit-contract.test.ts`
+  - `packages/artifacts/tests/effective-profile.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/cluster-mesh/**`
-  - `packages/mcp-platform/**`
-  - `packages/mcp-auth/**`
   - `.github/workflows/**`
   - `.track/**`
+  - `packages/artifacts/src/http.ts`
+  - `packages/artifacts/src/mcp-core.ts`
+  - `packages/artifacts/src/mcp.ts`
+  - `packages/artifacts/src/server/commit/**`
+  - `packages/artifacts/package.json`
+  - `package-lock.json`
+  - `packages/cluster-mesh/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
-  - `.github/workflows/**`
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+  - `plan/**`
+- [x] Exception process: record BR861-L1-EXn reason, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
-- [x] L0-EXCLUDE-1 (superseded): spec r2 forwarded; section 3.2 host API names frozen in the PR #721 fix wave
-- [ ] L0-Q0 (attention): i-cond Q0 inventory (due 22 Oct 12:00 Toronto) not yet forwarded; integrate on arrival as amendment without changing frozen shapes unless r2 requires it. Q0-dependent qualification (trusted domains, canonical actor mapping) is NOT part of the frozen contract until the pinned receipt lands
-- [x] L0-R2 (addressed): PR #721 Sol r1 findings fixed in this wave — P1-1 host/transaction freeze, P1-2 outcome variants, P1-3 surrogate rejection, P1-4 key/scope vectors, P1-5 integration train, P2-1 CR-1..CR-5 map
-- [x] L0-CI (acknowledge): CI run 39720063546 failed on the 0.2.0-rc.1 package.json bump (probe version equality, mesh eresolve against frozen range); L0 restructured to docs plus vectors plus l0-freeze with no src or version change, bump deferred to L1
+- [x] BR861-EX2: owner requests merging the actual L0 origin head, including inherited main merges (Engram G1, L5 manifests and dependency fixes). Temporary allowed paths authorized inherited merge changes only and were removed after the merge; L1 authored no edits there. Impact: preserve upstream history and corrected contracts. Rollback: revert this merge as a unit.
+- [x] acknowledge L1-VERSION: corrected L0 assigns serial pack-only dev.N versions and lock updates to the integration owner; no L1 manifest change.
+- [x] BR861-L1-EX1: owner explicitly requested merging PR #721 L0-fix commits; added inherited docs/declarations/vector paths above for this merge only. Impact: corrected upstream contract evidence, no L1 edits to those files. Rollback: revert the merge as a unit.
+- [x] acknowledge L1-API: L0 freezes shapes only; r2 supplies public names. L6 exports and wires L1 modules.
+- [x] acknowledge L1-MIGRATION: path reconciliation notes live in the allowed profile directory; L6 consolidates migration docs.
+- [ ] attention L1-DOMAIN: Q0 has no qualified complete actor domain. L6 must bind actual verified subjects; ambiguous delimited domains fail construction without changing historical keys.
+- [x] acknowledge L1-CI: historical run 39836233948 passed validate-artifacts but hit DOMPurify image audits; the actual L0 head now includes main's dependency remediation. Current owner acceptance is validate-artifacts plus typecheck/lint only; external AI/e2e failures from retired OpenAI gpt-4.1-nano are excluded from this update.
+- [x] acknowledge L1-CI-WIRING: automatic PR CI targets main only; dispatched ci.yml on the L1 ref with bootstrap_publish_target=none. enforce-package-bump is skipped by that workflow event, so its required pre-integration reservation remains open.
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- [x] No AI tests or flaky allowance in L1.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + rebase** (single declaration-freeze lot; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: L0 is a single declaration-freeze lot with no parallel implementation workstreams. No cherry-picks onward: topics target `feat/immo-861-integration` (r2 §6.1) and the integrator rebases/merges; L1/L2/L3 merge the updated L0 into their branches. The conductor retargets PR #721 there before merge.
+- [x] Multi-branch: L1 parallels L2/L3; no changes to their files.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in L0; no UAT checkpoints apply.
+- [x] No UI change; transport/process UAT belongs to L6/L8.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read rules/MASTER.md, rules/workflow.md, spec-plan.md L0 row plus sections 1-5, REQUEST-i-cond.md.
-  - [x] Worktree tmp/worktrees/artifacts-861 on branch feat/artifacts-861-contracts from origin/main verified.
-  - [x] ENV mapping: unit/typecheck/lint on ENV=test-artifacts-861 last argument; no services started in L0.
-  - [x] Ports: no ports needed (no services in L0; declaration docs plus unit vectors only).
-  - [x] Confirm scope and guardrails; public host API names excluded until spec r2.
-  - [x] Validate scope boundaries with make scope-check before each commit.
-- [x] **Lot 1 — Declaration shapes (stable only, no host API names)**
-  - [x] packages/artifacts/l0-freeze/profile-contract.ts: selection plus effective-profile shapes, Radar four-tool subset, C4 bounds as frozen data plus validators.
-  - [x] packages/artifacts/l0-freeze/command-identity-contract.ts: effective-command plus command-identity shapes, codec version, derivation-binding shape (algorithm reference only, no new API name).
-  - [x] packages/artifacts/l0-freeze/commit-contract.ts: invocation-context, authorization-decision, coordinator-requirement shapes plus finalization protocol order as frozen types.
-  - [x] packages/artifacts/l0-freeze/failure-contract.ts: outcome plus failure shapes, category-to-public mapping table, commit states.
-  - [x] Lot gate:
-    - [x] make typecheck-artifacts ENV=test-artifacts-861 last
-    - [x] make lint-artifacts ENV=test-artifacts-861 last
-- [x] **Lot 2 — Common-contract map without runtime cycle**
-  - [x] packages/artifacts/docs/common-contract-map.md: capability, publication-condition, commitment, manifest, page reuse table plus boundaries (no registered module, scope mapping needs trusted host mapping, mesh export lives in L7, no mesh runtime dep from artifacts).
-  - [x] No import of @sentropic/cluster-mesh from packages/artifacts/src or tests.
-  - [x] Lot gate:
-    - [x] grep verifies no cluster-mesh import in packages/artifacts/src and new tests
-- [x] **Lot 3 — Migration inventory and vectors**
-  - [x] packages/artifacts/docs/migration-inventory-l0.md: declaration changes per ask, migration guide stubs, legacy-record quarantine rule, Radar pilot-state inputs awaited (Q0).
-  - [x] packages/artifacts/tests/effective-profile.test.ts: frozen selection plus bounds vectors (pure, no DB/S3, no app.handle).
-  - [x] packages/artifacts/tests/commit-contract.test.ts: frozen failure-mapping plus finalization-order vectors (pure, no DB/S3, no app.handle).
-  - [x] No integration tests; no mocked provider success.
-  - [x] Lot gate:
-    - [x] make test-artifacts ENV=test-artifacts-861 last (unit only: 27 files, 216 tests passed)
-    - [x] make scope-check before each commit
-- [ ] **Lot 4 — Release reservation and PR**
-  - [x] Reserve pack-only 0.2.0-dev.N versions on feat/immo-861-integration (integration owner, serial; frozen mesh range until L7; no package.json bump, no rc, no registry publication).
-  - [x] Update packages/artifacts/README.md with L0 contract line pointer.
-  - [x] Atomic commits via make commit MSG only, each under 150 lines, git add selective files only.
-  - [x] Push branch and open DRAFT PR feat(artifacts): #861 L0 shared contract and vectors.
-  - [x] CI green; do not merge.
+- [x] Baseline: read rules, template, r2, request and Q0; verify hashes and mechanical branch check.
+- [x] Profile: immutable selection, schemas, semantic rules, defaults, limits and revision-aware digest.
+- [x] Validation: closed arguments/files, Unicode, path/MIME/byte budgets, keys and envelopes.
+- [x] Identity: trusted derivation, ordered codec, deep command snapshot and forced provenance.
+- [x] Added command-identity.test.ts regressions for Radar vectors, ordered files, authority domains and snapshots.
+- [x] Added parameters.test.ts regressions for closed inputs, decoded budgets, paths, Unicode keys and envelopes.
+- [x] Baseline receipt: all 22 new cases fail on missing L1 contracts; four existing parameter cases pass (tmp/l1-evidence/baseline.log).
+- [x] Implemented platform-free profile contracts and JSON snapshot/ordered codec primitives.
+- [x] Generated schemas from explicit Radar defaults/limits and documented path reconciliation/domain qualification.
+- [x] Hardened composition against inconsistent bounds and derivation limits; verified 32 files and full decoded byte-array boundary.
+- [x] Tests: all final 22 new cases fail against archived L0 source; all 26 focused and 238 package unit cases pass on L1. Receipts: tmp/l1-evidence/baseline-final.json, unit.log, test-sha256.txt.
+- [x] Gates: CI make typecheck-artifacts, lint-artifacts, test-artifacts and integration/pack/probe pass; mechanical scope-check before every commit.
+- [x] Local gates: lint-artifacts and final cached-toolchain typecheck/238 unit tests pass; local test-artifacts temporary npm install stalled and was stopped after the exact CI gate passed.
+- [x] Delivery: pushed feat/artifacts-861-L1; DRAFT PR #724 against feat/artifacts-861-contracts; no merge.
+- [x] Astra P2-1: reproduce missing semantic budget acceptance; require every operation limit/default before schema generation; retain one-byte success and overflow refusal.
+- [x] Astra P2-2: reproduce invalid_request on primitive prototype-named entries; remove the schema ban; verify own-data snapshots, unchanged prototypes and distinct command hashes.
+- [x] Merge PR #721 L0-fix wave at d4bd43b3; preserve L1 branch plan and all upstream code unchanged; no .track delta on either side.
+- [x] Reconcile L0 selectedCapabilities input/inherited compiled fields and selection httpStatus/variant; both new shape regressions fail before adaptation. Preserve actorId authority, callable trusted derivation, Unicode and envelope semantics.
+- [x] Scope gates only per owner: validate-artifacts with typecheck/lint; retain integration-owner version reservations and no PR merge.
+- [x] Merge actual L0 origin d41f470927c1dfd52c239f57ba3f2589723d3285, adapt compiled validators and canonical command fixtures, and preserve Astra r1 fixes.
+- [x] L0 merge: preserve corrected participant/coordinator operations, ordinary/operational outcomes, frozen command fixtures and release handoff unchanged; only BRANCH.md conflicts, resolved to the L1 scope. No .track change against either parent.
+- [x] Align command hash body with corrected L0 golden fixtures (forced payload provenance); encode integer-like object keys in UTF-16 order. Baseline container probe reproduced the numeric-key digest mismatch; retain manifest digests and Astra r1 regressions.
+- [x] Wire L0 compiled semantic validators to immutable profile schemas and the trusted command factory; distinguish ordinary entry failures from operational selection failures.
+- [x] Current-wave checks: mechanical branch/scope PASS; L0 freeze and actual L1-to-L0 type assignments PASS; make typecheck-artifacts test-artifacts lint-artifacts PASS (271 unit tests). Final-head validate-artifacts CI reported in delivery handoff.
+- [x] Track containment condition: merge and both parents share events.jsonl blob e64ba59336cb10ef72bc89d5fab7c0e96b9662a9; no Track delta or loss, no repair.
