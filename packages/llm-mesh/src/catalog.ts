@@ -309,8 +309,15 @@ const modelCapabilities = (
 // `max` in Muse. A local muse catalog cache listing a contributor
 // max variant does not override that primary source. `none` returns
 // HTTP 400 on Wonder/Spark/Ember, so no row lists it; upstream `minimal`
-// is outside the mesh ReasoningEffort ladder. The spark-1.2 rows serve
+// is outside the mesh ReasoningEffort ladder. The spark-1.2 `xhigh`
+// ceiling is NOT from those docs (they give no range for 1.2): it comes
+// from the local muse provider catalog cache (schema 3, source
+// `provider_catalog`, profile `tbh`), whose `reasoning_effort_variants`
+// for both spark-1.2 ids run minimal..xhigh. The spark-1.2 rows serve
 // direct MuseRuntimeClient callers (no mesh catalog profile for 1.2).
+// Frozen below: this public table is shared by reference with every Muse
+// profile's supportedEfforts, so a consumer mutation must never be able
+// to widen the wire validator process-wide.
 const MUSE_LOW_TO_MAX: readonly ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 const MUSE_LOW_TO_XHIGH: readonly ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh'];
 export const MUSE_REASONING_EFFORTS: Readonly<Record<string, readonly ReasoningEffort[]>> = {
@@ -322,6 +329,9 @@ export const MUSE_REASONING_EFFORTS: Readonly<Record<string, readonly ReasoningE
   'muse-spark-1.2': MUSE_LOW_TO_XHIGH,
   'muse-spark-1.2-contributor': MUSE_LOW_TO_XHIGH,
 };
+Object.freeze(MUSE_LOW_TO_MAX);
+Object.freeze(MUSE_LOW_TO_XHIGH);
+Object.freeze(MUSE_REASONING_EFFORTS);
 
 const museModelCapabilities = (modelId: string): ModelCapabilities => {
   const base = modelCapabilities('muse', 'advanced', { vision: true });

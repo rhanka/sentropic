@@ -44,6 +44,11 @@ const MUSE_SERVING_PATH = '/v1/responses';
 // muse-spark-1.3-contributor below `max`, and `none` returns HTTP 400.
 const MUSE_REASONING_SUMMARIES: readonly string[] = ['auto', 'concise', 'detailed'];
 
+// Mesh ladder rungs (generation.ts ReasoningEffort). Meta also serves
+// `minimal` upstream, so a value outside this list is refused as a
+// ladder limitation of this package, never as a model limitation.
+const MESH_REASONING_EFFORT_LADDER: readonly string[] = ['none', 'low', 'medium', 'high', 'xhigh', 'max'];
+
 interface MuseWireReasoning {
   effort?: ReasoningEffort;
   summary?: string;
@@ -85,9 +90,9 @@ const resolveMuseReasoning = (request: GenerateRequest): MuseWireReasoning | und
   }
   const supported = MUSE_REASONING_EFFORTS[modelId]!;
   if (effort !== undefined && !supported.includes(effort)) {
-    throw unsupportedReasoning(
-      `Muse model ${modelId} does not support reasoning effort "${effort}" (supported: ${supported.join(', ')})`,
-    );
+    throw unsupportedReasoning(MESH_REASONING_EFFORT_LADDER.includes(effort)
+      ? `Muse model ${modelId} does not support reasoning effort "${effort}" (supported: ${supported.join(', ')})`
+      : `Muse reasoning effort "${effort}" is outside the mesh ReasoningEffort ladder (supported by ${modelId}: ${supported.join(', ')})`);
   }
   return {
     ...(effort !== undefined ? { effort } : {}),
