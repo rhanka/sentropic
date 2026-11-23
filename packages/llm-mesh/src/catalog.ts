@@ -5,6 +5,7 @@ import {
   type ProviderCapabilities,
 } from './capabilities.js';
 import type { AccountTransportProviderId, TokenAuthSourceType } from './auth.js';
+import type { ReasoningEffort } from './generation.js';
 import {
   type KnownModelId,
   type ModelId,
@@ -225,10 +226,12 @@ export const providerProfiles = {
     }),
   },
   // Meta Muse (Muse Code 1.3): agentic coding model served via the `muse`
-  // account transport (CLI login import) or MUSE_API_KEY. Wire shape is
-  // unverified: structured output stays at the conservative
-  // `tool-input-schema` (partial) template until the transport proves the
-  // wire.
+  // account transport (CLI login import) or MUSE_API_KEY. The account
+  // transport serves the native Responses wire (`POST /v1/responses`):
+  // reasoning nests as `reasoning: { effort, summary }` per the official
+  // Meta Reasoning docs (see MUSE_REASONING_EFFORTS); no live dispatch is
+  // claimed here. Structured output stays at the conservative
+  // `tool-input-schema` (partial) template.
   muse: {
     providerId: 'muse',
     family: 'meta',
@@ -295,6 +298,48 @@ const modelCapabilities = (
         : 'unknown',
   },
 });
+
+// Single source of truth for Muse reasoning efforts in this package: the
+// catalog profiles below and MuseRuntimeClient both read this map, so the
+// declared supportedEfforts can never drift from the wire validator.
+// Official Meta Reasoning docs (https://dev.meta.ai/docs/reasoning,
+// re-checked 2026-11-23): `max` is supported by muse-wonder-1.0,
+// muse-spark-1.3 and muse-ember-1.0, and "isn't available with
+// muse-spark-1.3-contributor"; Muse docs add Muse Wonder Full at
+// `max` in Muse. A local muse catalog cache listing a contributor
+// max variant does not override that primary source. `none` returns
+// HTTP 400 on Wonder/Spark/Ember, so no row lists it; upstream `minimal`
+// is outside the mesh ReasoningEffort ladder. The spark-1.2 `xhigh`
+// ceiling is NOT from those docs (they give no range for 1.2): it comes
+// from the local muse provider catalog cache (schema 3, source
+// `provider_catalog`, profile `tbh`), whose `reasoning_effort_variants`
+// for both spark-1.2 ids run minimal..xhigh. The spark-1.2 rows serve
+// direct MuseRuntimeClient callers (no mesh catalog profile for 1.2).
+// Frozen below: this public table is shared by reference with every Muse
+// profile's supportedEfforts, so a consumer mutation must never be able
+// to widen the wire validator process-wide.
+const MUSE_LOW_TO_MAX: readonly ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+const MUSE_LOW_TO_XHIGH: readonly ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh'];
+export const MUSE_REASONING_EFFORTS: Readonly<Record<string, readonly ReasoningEffort[]>> = {
+  'muse-spark-1.3': MUSE_LOW_TO_MAX,
+  'muse-spark-1.3-contributor': MUSE_LOW_TO_XHIGH,
+  'muse-wonder-1.0': MUSE_LOW_TO_MAX,
+  'muse-wonder-full-1.0': MUSE_LOW_TO_MAX,
+  'muse-ember-1.0': MUSE_LOW_TO_MAX,
+  'muse-spark-1.2': MUSE_LOW_TO_XHIGH,
+  'muse-spark-1.2-contributor': MUSE_LOW_TO_XHIGH,
+};
+Object.freeze(MUSE_LOW_TO_MAX);
+Object.freeze(MUSE_LOW_TO_XHIGH);
+Object.freeze(MUSE_REASONING_EFFORTS);
+
+const museModelCapabilities = (modelId: string): ModelCapabilities => {
+  const base = modelCapabilities('muse', 'advanced', { vision: true });
+  return {
+    ...base,
+    reasoning: { ...base.reasoning, supportedEfforts: MUSE_REASONING_EFFORTS[modelId] },
+  };
+};
 
 export const modelProfiles = [
   {
@@ -780,7 +825,7 @@ export const modelProfiles = [
     label: 'Muse Spark 1.3',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
+    capabilities: museModelCapabilities('muse-spark-1.3'),
   },
   {
     // Discounted contributor tier (content may improve the product).
@@ -790,7 +835,7 @@ export const modelProfiles = [
     label: 'Muse Spark 1.3 Contributor',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
+    capabilities: museModelCapabilities('muse-spark-1.3-contributor'),
   },
   {
     // Owner request 2026-10-13: `muse-wonder-1.0` is the exact model id from
@@ -800,13 +845,7 @@ export const modelProfiles = [
     label: 'Muse Wonder',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: {
-      ...modelCapabilities('muse', 'advanced', { vision: true }),
-      reasoning: {
-        ...modelCapabilities('muse', 'advanced', { vision: true }).reasoning,
-        supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
-      },
-    },
+    capabilities: museModelCapabilities('muse-wonder-1.0'),
   },
   {
     providerId: 'muse',
@@ -815,12 +854,9 @@ export const modelProfiles = [
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: {
-      ...modelCapabilities('muse', 'advanced', { vision: true }),
+      ...museModelCapabilities('muse-ember-1.0'),
       contextWindowTokens: 1_000_000,
-      reasoning: {
-        ...modelCapabilities('muse', 'advanced').reasoning,
-        supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
-      },
+
     },
   },
   {
@@ -831,7 +867,7 @@ export const modelProfiles = [
     label: 'Muse Wonder Full',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('muse', 'advanced', { vision: true }),
+    capabilities: museModelCapabilities('muse-wonder-full-1.0'),
   },
 ] as const satisfies readonly ModelProfile[];
 

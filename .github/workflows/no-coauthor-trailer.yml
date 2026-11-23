@@ -1,0 +1,20 @@
+name: no co-author trailer
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited, reopened]
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    uses: rhanka/h2a/.github/workflows/no-coauthor-trailer.yml@43038a55d4acdb497c06a1973c880922e134398c
+    with:
+      check-pr-body: true
+      allowed-author-email: fabien.antoine@m4x.org
+      require-name: ""
+      allowed-github-actor: rhanka
+      allowed-bot-identities: "dependabot[bot],github-actions[bot]"

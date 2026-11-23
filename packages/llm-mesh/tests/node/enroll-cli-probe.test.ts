@@ -75,6 +75,57 @@ describe('llm-mesh-enroll probe (muse-wonder-1.0)', () => {
     }
   });
 
+  it('forwards --effort as reasoning.effort and echoes effort plus finishReason', async () => {
+    const { dir, cleanup } = await tempDir();
+    try {
+      const accountId = await enrollOne(dir);
+      let wireBody: Record<string, unknown> = {};
+      const fetchFn = (async (_url: unknown, init?: { body?: unknown }) => {
+        wireBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(JSON.stringify({
+          id: 'resp-probe-max', output_text: 'probe-secret-text',
+          usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 },
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }) as typeof fetch;
+      const writers = captureWriters();
+      const code = await runProbe(
+        {
+          command: 'probe', provider: 'muse-code', keyringDir: dir, keyringKeyEnv: KEY_ENV,
+          account: accountId, model: 'muse-wonder-full-1.0', effort: 'max',
+        },
+        { fetchFn, writers, env },
+      );
+      expect(code).toBe(EXIT_CODES.ok);
+      expect(wireBody.reasoning).toEqual({ effort: 'max' });
+      expect(wireBody).not.toHaveProperty('reasoning_effort');
+      const result = JSON.parse(writers.outLines[0] as string) as Record<string, unknown>;
+      expect(result).toMatchObject({ status: 'ok', effort: 'max', finishReason: 'stop' });
+      expect(allOutput(writers)).not.toContain('probe-secret-text');
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('refuses contributor max before any serving fetch', async () => {
+    const { dir, cleanup } = await tempDir();
+    try {
+      const accountId = await enrollOne(dir);
+      const { fetchFn, calls } = stubServingFetch(200, { output_text: 'hi' });
+      const writers = captureWriters();
+      const code = await runProbe(
+        {
+          command: 'probe', provider: 'muse-code', keyringDir: dir, keyringKeyEnv: KEY_ENV,
+          account: accountId, model: 'muse-spark-1.3-contributor', effort: 'max',
+        },
+        { fetchFn, writers, env },
+      );
+      expect(code).toBe(EXIT_CODES.probeFailed);
+      expect(calls).toHaveLength(0);
+    } finally {
+      await cleanup();
+    }
+  });
+
   it('maps a 402 to billing_not_configured on the non-seat path', async () => {
     const { dir, cleanup } = await tempDir();
     try {
