@@ -16,7 +16,7 @@ export const probeCloudCode = async (
   fetchFn: typeof fetch,
   writers: CliWriters,
 ): Promise<number> => {
-  const accountId = args.account!;
+  const accountId = args.account!.trim();
   let raw: string | null;
   let publicRaw: string | null;
   let removedRaw: string | null;
@@ -36,16 +36,24 @@ export const probeCloudCode = async (
   let accountStatus = '';
   try {
     const record = JSON.parse(publicRaw) as {
+      accountId?: unknown;
       providerId?: unknown;
       status?: unknown;
       removalBarrierRef?: unknown;
       account?: {
+        accountId?: unknown;
         status?: unknown;
         ownerScopeRef?: unknown;
         transportProviderId?: unknown;
         metadata?: { cloudaicompanionProject?: unknown };
       };
     };
+    // Fail closed on swapped/miswritten records: never dispatch a token
+    // whose stored records are not bound to the requested account.
+    if (record.accountId !== accountId
+      || (record.account?.accountId !== undefined && record.account.accountId !== accountId)) {
+      return fail(writers, EXIT_CODES.probeFailed, `account '${accountId}' credential record is corrupt`);
+    }
     if (record.providerId !== 'cloud-code' || (record.account?.transportProviderId !== undefined && record.account.transportProviderId !== 'cloud-code')) {
       throw new Error('bad provider');
     }
@@ -65,7 +73,8 @@ export const probeCloudCode = async (
   }
   let accessToken: string;
   try {
-    const envelope = JSON.parse(raw) as { accessToken?: unknown };
+    const envelope = JSON.parse(raw) as { accountId?: unknown; accessToken?: unknown };
+    if (envelope.accountId !== accountId) throw new Error('bad binding');
     if (typeof envelope.accessToken !== 'string' || !envelope.accessToken) throw new Error('bad');
     accessToken = envelope.accessToken;
   } catch {

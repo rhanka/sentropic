@@ -46,6 +46,55 @@ const seed = async (kr: EncryptedFileKeyring, id: string, status = 'active', rem
   if (removed) await kr.setSecret(`sentropic-llm-mesh:${id}:removed`, JSON.stringify({ v: 1, accountId: id, ownerScopeRef: OWNER, removedAt: '2026-11-11T00:00:00.000Z' }));
 };
 
+const seedMisbound = async (kr: EncryptedFileKeyring, id: string, wrong: 'public' | 'inner' | 'envelope') => {
+  const other = 'acct_cc_other';
+  await kr.setSecret(`sentropic-llm-mesh:${id}:owner`, JSON.stringify({ v: 1, accountId: id, ownerScopeRef: OWNER }));
+  await kr.setSecret(`sentropic-llm-mesh:${id}:envelope`, JSON.stringify({
+    accountId: wrong === 'envelope' ? other : id, accessToken: 'ya29.probe-secret', refreshToken: '1//r',
+    expiresAt: '2099-01-01T00:00:00.000Z', authClientConfigVersion: 'v1.0.0',
+  }));
+  await kr.setSecret(`sentropic-llm-mesh:${id}:public`, JSON.stringify({
+    accountId: wrong === 'public' ? other : id, providerId: 'cloud-code', status: 'active',
+    createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-10T00:00:00.000Z',
+    account: {
+      accountId: wrong === 'inner' ? other : id, ownerScopeRef: OWNER, targetProviderId: 'gemini',
+      transportProviderId: 'cloud-code', status: 'active', metadata: { cloudaicompanionProject: PROJECT },
+    },
+  }));
+};
+
+describe('llm-mesh-enroll probe --provider cloud-code account binding', () => {
+  it('fails closed before any fetch when :public or :envelope is bound to another account, and trims --account', async () => {
+    const { dir, cleanup } = await tempDir();
+    try {
+      const krDir = join(dir, 'kr-bind');
+      const kr = new EncryptedFileKeyring(krDir, deriveKeyringMasterKey(PASSPHRASE));
+      await seedMisbound(kr, 'acct_cc_bad_public', 'public');
+      await seedMisbound(kr, 'acct_cc_bad_inner', 'inner');
+      await seedMisbound(kr, 'acct_cc_bad_env', 'envelope');
+      await seed(kr, 'acct_cc_ok', 'active');
+      await sleep(25);
+      const before = await snap(krDir);
+      let fetches = 0;
+      const countingFetch = (async (...a: Parameters<typeof fetch>) => {
+        fetches += 1;
+        return stubProbeFetch(200)(...a);
+      }) as typeof fetch;
+      const probeId = (account: string) => runProbe(
+        { command: 'probe', provider: 'cloud-code', keyringDir: krDir, account, model: 'gemini-4-hydrogen', effort: 'low', keyringKeyEnv: KEY_ENV },
+        { fetchFn: countingFetch, writers: captureWriters(), env: envWithKey },
+      );
+      expect(await probeId('acct_cc_bad_public')).toBe(EXIT_CODES.probeFailed);
+      expect(await probeId('acct_cc_bad_inner')).toBe(EXIT_CODES.probeFailed);
+      expect(await probeId('acct_cc_bad_env')).toBe(EXIT_CODES.probeFailed);
+      expect(fetches).toBe(0);
+      expect(await probeId('  acct_cc_ok  ')).toBe(EXIT_CODES.ok);
+      expect(fetches).toBeGreaterThan(0);
+      expect(await snap(krDir)).toEqual(before);
+    } finally { await cleanup(); }
+  });
+});
+
 describe('llm-mesh-enroll probe --provider cloud-code read-only invariance', () => {
   it('writes nothing across .key and --keyring-key-env combinations (bytes, mode, mtime)', async () => {
     const { dir, cleanup } = await tempDir();
