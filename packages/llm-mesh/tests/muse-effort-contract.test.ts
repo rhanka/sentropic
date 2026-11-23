@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MuseRuntimeClient } from '../src/transport/muse-runtime-client.js';
 import { transportSupportsExecutionFeatures } from '../src/execution-features.js';
+import { getModelProfile, MUSE_REASONING_EFFORTS } from '../src/catalog.js';
 
 // Wire evidence (no credentials): Meta Reasoning docs nest the Responses
 // control as `reasoning: { "effort": ... }` (`reasoning_effort` is the Chat
@@ -11,7 +12,12 @@ import { transportSupportsExecutionFeatures } from '../src/execution-features.js
 // catalog cache listing a contributor max variant does not override that
 // primary source, so contributor stays low..xhigh here. The muse CLI
 // bundle (muse-bin-1.4.25-R9361.1) carries `reasoning` with nested
-// `effort`/`summary`; muse-spark-1.2 tiers go only up to `xhigh`.
+// `effort`/`summary`. The muse-spark-1.2 `xhigh` ceiling comes from the
+// local provider catalog cache (schema 3, `provider_catalog`, profile
+// `tbh`: `reasoning_effort_variants` minimal..xhigh), not the Meta docs,
+// which give no range for 1.2. Upstream `minimal` exists on Meta models
+// but is outside the mesh `ReasoningEffort` ladder, so its refusal is
+// worded as a ladder refusal, never as a model limitation.
 const auth = { auth: { material: { type: 'account-transport' as const, provider: 'muse' as const, accessToken: 'secret-muse-token', accountId: 'acct_muse_1' }, descriptor: { sourceType: 'account-transport' as const, accountProviderId: 'muse' as const } } };
 const LOW_TO_MAX = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 const LOW_TO_XHIGH = ['low', 'medium', 'high', 'xhigh'] as const;
@@ -102,7 +108,7 @@ describe('muse reasoning effort contract', () => {
     for (const effort of ['minimal', 'ultra', 'bogus']) {
       const err = await refusal(client.generate({ providerId: 'muse', modelId: 'muse-wonder-1.0', messages: [], reasoning: { effort: effort as never } }, auth));
       expect(err).toMatchObject({ status: 400, code: 'unsupported_projection', param: 'reasoning' });
-      expect(err.message).toBe(`Muse model muse-wonder-1.0 does not support reasoning effort "${effort}" (supported: low, medium, high, xhigh, max)`);
+      expect(err.message).toBe(`Muse reasoning effort "${effort}" is outside the mesh ReasoningEffort ladder (supported by muse-wonder-1.0: low, medium, high, xhigh, max)`);
     }
     for (const modelId of ['muse-unknown-9.9', 'constructor', 'toString', '__proto__']) {
       const err = await refusal(client.generate({ providerId: 'muse', modelId: modelId as never, messages: [], reasoning: { effort: 'low' } }, auth));
@@ -145,5 +151,24 @@ describe('muse reasoning effort contract', () => {
     const err = await refusal(new MuseRuntimeClient({ fetch: refusedFetch }).generate({ providerId: 'muse', modelId: 'muse-unknown-9.9' as never, messages: [], reasoning: { summary: 'auto' } }, auth));
     expect(err.message).toBe('Unknown Muse model muse-unknown-9.9: no reasoning efforts are supported');
     expect(refusedFetch).not.toHaveBeenCalled();
+  });
+
+  // Last on purpose: on unfrozen code the attempted push below would widen
+  // the shared array for the rest of this file.
+  it('freezes the single effort table so no consumer can widen the validator', async () => {
+    expect(Object.isFrozen(MUSE_REASONING_EFFORTS)).toBe(true);
+    for (const efforts of Object.values(MUSE_REASONING_EFFORTS)) {
+      expect(Object.isFrozen(efforts)).toBe(true);
+    }
+    const contributor = MUSE_REASONING_EFFORTS['muse-spark-1.3-contributor']!;
+    expect(getModelProfile('muse', 'muse-spark-1.3-contributor' as never)
+      ?.capabilities.reasoning.supportedEfforts).toBe(contributor);
+    expect(() => { (contributor as unknown as string[]).push('max'); }).toThrow(TypeError);
+    expect(contributor).toEqual(['low', 'medium', 'high', 'xhigh']);
+    const fetchFn = vi.fn();
+    const err = await refusal(new MuseRuntimeClient({ fetch: fetchFn }).generate(
+      { providerId: 'muse', modelId: 'muse-spark-1.3-contributor', messages: [], reasoning: { effort: 'max' } }, auth));
+    expect(err.message).toBe('Muse model muse-spark-1.3-contributor does not support reasoning effort "max" (supported: low, medium, high, xhigh)');
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 });
