@@ -1262,8 +1262,12 @@ thin data plane).
   (`/v1/chat/completions`, e.g. the api `MuseProviderRuntime`) still has
   no proven reasoning slot and is unchanged. On the Responses client a
   request carrying an unsupported reasoning effort/summary is refused
-  before I/O with a named 400, never served with the effort silently
-  dropped or clamped.
+  before I/O with a precise mesh 400 (`unsupported_projection`,
+  `param: reasoning`), never served with the effort silently dropped or
+  clamped. Through `llm-gateway` that refusal currently surfaces as the
+  frozen generic 400 without `param` (recorded §16.7 precision loss —
+  see the §16.4 addendum below; gateway follow-up and owner acceptance
+  required before merge).
 - Effort mapping: one per-model effort table exists in mesh, in
   `packages/llm-mesh/src/catalog.ts` (`MUSE_REASONING_EFFORTS`, the single
   source for both the catalog `supportedEfforts` and the
@@ -1271,8 +1275,13 @@ thin data plane).
   (https://dev.meta.ai/docs/reasoning, re-checked 2026-11-23): `max` on
   `muse-spark-1.3`, `muse-wonder-1.0`, `muse-wonder-full-1.0` (Muse
   Code) and `muse-ember-1.0`; `max` "isn't available with
-  muse-spark-1.3-contributor", so contributor and the spark-1.2 ids cap
-  at `xhigh`; `none` returns HTTP 400 and is in no row. The canonical
+  muse-spark-1.3-contributor", so contributor caps at `xhigh`. The
+  spark-1.2 ids also cap at `xhigh`, per the local provider catalog
+  cache (schema 3, `provider_catalog`, profile `tbh`, variants
+  minimal..xhigh) — the Meta docs give no 1.2 range. The exported table
+  and its arrays are frozen; `none` returns HTTP 400 and is in no row.
+  Out-of-ladder values (`minimal`, `ultra`) refuse as mesh-ladder
+  limitations, not model limitations. The canonical
   `reasoning.effort` is validated at the Responses ingress, forwarded as
   nested `reasoning: { effort, summary }` on the Responses wire only
   (never top-level `reasoning_effort`, the Chat Completions spelling),
@@ -1283,7 +1292,9 @@ thin data plane).
 - Covered by `packages/llm-mesh/tests/muse.test.ts` (4-model surface),
   `routing-targets.test.ts` (Wonder resolution), and the real-planner
   replay (`packages/llm-gateway/tests/responses-real-planner.test.ts`:
-  a Responses body on each Wonder id serves 200 with usage preserved).
+  admissible bodies serve 200 with usage preserved; contributor x
+  `max` and `none` refuse at 400 before Meta I/O behind a real
+  `MuseRuntimeClient`, today with the generic gateway envelope).
 
 ### 14.5 Runtime status and enrollment proofs
 
@@ -1720,14 +1731,34 @@ single mesh table (`MUSE_REASONING_EFFORTS`). The authenticated-probe
 part of the gate is NOT discharged: no live Muse reasoning dispatch is
 claimed, and an authenticated seat probe per model/effort (in
 particular muse-wonder-full-1.0 at `max`) remains a conductor follow-up
-before any live reliance; owner acceptance of documentary evidence for
-merge is recorded on the PR, not assumed here. Disclosed side effect:
+before any live reliance; merging on documentary evidence requires
+owner acceptance on the PR before merge (not assumed here; none was
+recorded at round-2 review on 2026-11-23). Disclosed side effect:
 declaring `reasoning-controls` and projecting the slot activates the
 launch-alias Muse candidates (`MUSE_ROUTE_EFFORT`, default Spark
 contributor tier, BR75-Q3) in hosts wiring `MuseRuntimeClient` —
 previously every such candidate died before I/O; the seam is pinned by
 `packages/llm-mesh/tests/muse-routing-seam.test.ts`, and `max` aliases
 routed to the contributor fail closed before I/O under the cap above.
+The declaration also makes Muse eligible again for reasoning-bearing
+requests the planner previously routed away from Muse to other
+transports (non-faithful aliases; in the gateway host mostly
+summary-only requests there, while direct `createRoutePlanner`
+consumers see the shift for every reasoning request; a newly enrolled
+Muse seat then ranks first by enrollment recency and the seam replaces
+the caller effort with the alias effort). Known §16.7 deviation,
+recorded for the same owner acceptance: support is per model while the
+flag is per transport, so the planner admits pairs the client always
+refuses (`none` on any Muse model; `max` on the contributor — the
+recorded Muse Code 1.4.6 traffic). The client refusal is precise
+(400 `unsupported_projection`, `param: reasoning`, before I/O), but the
+gateway currently surfaces it as the frozen generic `invalid_request`
+without `param`, where base named `unsupported_parameter` +
+`reasoning` at planning time. Restoring the named field — planner
+effort-awareness or gateway field-carry (the latter recommended: no
+routing change) — needs a gateway change with its own version bump and
+is deferred to a gateway follow-up; until then the generic shape is
+pinned by real-client gateway tests, never as a served 200.
 
 Two existing defects directly block CLI tools: both Muse and Mistral runtime
 clients currently return `toolCalls: []` and stream text only. Fix their

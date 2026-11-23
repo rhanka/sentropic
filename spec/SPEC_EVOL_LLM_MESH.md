@@ -824,8 +824,10 @@ Normative detail lives in `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16.3/§
   `explicit-output-ceiling`, `strict-schema`, `reasoning-controls` on Muse — the last per the
   §16.4 addendum 2026-11-23 in `SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`, which supersedes
   R5-MAJ-1 for the native Responses client only (Chat egress unchanged, no live dispatch
-  claimed; per-model efforts in the single `MUSE_REASONING_EFFORTS` table, contributor
-  capped at `xhigh` per official Meta docs);
+  claimed; per-model efforts in the single frozen `MUSE_REASONING_EFFORTS` table,
+  contributor capped at `xhigh` per official Meta docs, spark-1.2 capped at `xhigh`
+  per the local provider catalog cache; the gateway §16.7 precision loss for per-model
+  refusals and the owner-acceptance-before-merge gate are recorded in that addendum);
   named/parallel tool control, `reasoning-controls`, `strict-schema` on Mistral Vibe) with
   fail-closed planning/quoting eligibility (`transportSupportsExecutionFeatures`).
 - Muse Wonder (`muse-wonder-1.0`) + Wonder Full (`muse-wonder-full-1.0`): catalog entries,
