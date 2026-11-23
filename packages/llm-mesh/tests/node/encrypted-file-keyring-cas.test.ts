@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, readdir, rm, stat, unlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -128,5 +128,27 @@ describe('EncryptedFileKeyring read-only explicit key, no rogue .key, and CAS', 
       vi.resetModules();
     }
     expect(await snapshotBytes(dir)).toEqual(beforeFail);
+  });
+
+  it('breaks a stale .keyring.lock but never steals a fresh one', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'llm-mesh-kr-lock-'));
+    dirs.push(dir);
+    const kr = new EncryptedFileKeyring(dir, KEY_BUF);
+    await kr.setSecret('k:lock', 'v1');
+    const lockPath = join(dir, '.keyring.lock');
+
+    await writeFile(lockPath, '1', { mode: 0o600 });
+    const stale = new Date(Date.now() - 31_000);
+    await utimes(lockPath, stale, stale);
+    await expect(kr.compareAndSetSecret('k:lock', 'v1', 'v2')).resolves.toBe(true);
+    expect(await kr.getSecret('k:lock')).toBe('v2');
+    await expect(stat(lockPath)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect((await readdir(dir)).filter((n) => n.includes('.stale.'))).toEqual([]);
+
+    await writeFile(lockPath, '1', { mode: 0o600 });
+    await expect(kr.compareAndSetSecret('k:lock', 'v2', 'v3')).rejects.toThrow(/lock acquisition timed out/i);
+    expect(await readFile(lockPath, 'utf8')).toBe('1');
+    await unlink(lockPath);
+    expect(await kr.getSecret('k:lock')).toBe('v2');
   });
 });

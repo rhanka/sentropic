@@ -287,7 +287,21 @@ export class EncryptedFileKeyring implements KeyringAdapter {
         if (!isErrorCode(error, 'EEXIST')) throw error;
         const lockStat = await stat(lockPath).catch(() => null);
         if (lockStat && Date.now() - lockStat.mtimeMs > 30_000) {
-          await this.unlinkIfPresent(lockPath);
+          // Break the stale lock by atomically renaming it aside: only one
+          // contender can evict a given lock inode, so a slower waiter can
+          // never unlink a fresh lock the faster waiter just created.
+          const stalePath = `${lockPath}.stale.${randomBytes(8).toString('hex')}`;
+          try {
+            await rename(lockPath, stalePath);
+            const evicted = await stat(stalePath).catch(() => null);
+            if (evicted && evicted.ino !== lockStat.ino) {
+              // A fresh lock was created after our stat; restore it.
+              try { await link(stalePath, lockPath); } catch { /* another lock won */ }
+            }
+            await this.unlinkIfPresent(stalePath);
+          } catch (renameError) {
+            if (!isErrorCode(renameError, 'ENOENT')) throw renameError;
+          }
           continue;
         }
         if (Date.now() >= deadline) {
