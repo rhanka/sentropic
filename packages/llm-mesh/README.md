@@ -269,26 +269,29 @@ during browser consent; the import Job alone holds
 
 ```sh
 # P0. Prerequisites (once, owner-approved).
-#  - Publish @sentropic/llm-mesh@0.38.11. In radar-immobilier, bump
-#    api/package.json to
+#  - Only for in-cluster use (NOT required for path A below): publish
+#    @sentropic/llm-mesh@0.38.11, bump radar-immobilier api/package.json to
 #      "@sentropic/llm-mesh-refresh": "npm:@sentropic/llm-mesh@0.38.11"
-#    build, deploy, and note the immutable image digest
-#    ghcr.io/rhanka/radar-api@sha256:<digest>. Until that image is live,
-#    `list`, `--oauth-paste` and `probe --provider cloud-code` do not exist
+#    build and deploy. That upgrade is needed only for in-cluster
+#    `list` / `probe --provider cloud-code` and for a CAS-aware
+#    radar-refresh-pv custodian. Until that image is live, `list`,
+#    `--oauth-paste` and `probe --provider cloud-code` do not exist
 #    in the PROD image (it carries llm-mesh 0.38.4 for the refresh alias)
 #    and the radar-refresh-pv custodian is not CAS-aware, so
-#    .refresh.lock is the only serialization guard.
-#  - In pods, call the bin by absolute path (containers run in
-#    /workspace/api, while node_modules sits at /workspace):
-#      /workspace/node_modules/.bin/llm-mesh-enroll
-#    Check `... llm-mesh-enroll help` first: the usage must list
-#    `--oauth-paste`, `list` and `probe --provider cloud-code`.
-#  - The workstation llm-mesh-enroll used in A1 must be >= 0.38.11 too.
-#  - Export the PROD kubeconfig for A2: guard-prod requires KUBECONFIG
-#    to name an existing file for the radar-immobilier namespace.
+#    .refresh.lock is the only serialization guard. In pods, call the
+#    bin by absolute path /workspace/node_modules/.bin/llm-mesh-enroll
+#    (containers run in /workspace/api, while node_modules sits at
+#    /workspace) and check its help lists `--oauth-paste`, `list` and
+#    `probe --provider cloud-code`.
+#  - Required for path A: note the immutable image digest
+#    ghcr.io/rhanka/radar-api@sha256:<digest> of the deployed image
+#    (A2), keep the workstation llm-mesh-enroll at >= 0.38.11 (A1),
+#    and export the PROD kubeconfig (A2, V1): guard-prod requires
+#    KUBECONFIG to name an existing file for the radar-immobilier
+#    namespace.
 export KUBECONFIG=<path-to-prod-kubeconfig>
 
-# A1. Mint the dedicated PROD grant on an operator workstation.
+# A1. Mint the dedicated PROD grant on an operator workstation (owner-approved).
 umask 077
 SRC="$(mktemp -d)" # 0700, outside any git work tree
 install -m 0600 <owner-held-copy-of-the-runtime-.key> "$SRC/.key"
@@ -310,7 +313,7 @@ cat | env -u GOOGLE_OAUTH_CLIENT_SECRET -u GOOGLE_CLIENT_SECRET \
 # new accountId from the final JSON line printed by the enroll.
 llm-mesh-enroll probe --provider cloud-code --account <new-id> \
   --keyring-dir "$SRC" --model gemini-4-hydrogen --effort low
-# Read-only check before landing; expect "status":"ok".
+# Read-only live check before landing, on the fresh token; expect "status":"ok".
 ```
 
 ```sh
