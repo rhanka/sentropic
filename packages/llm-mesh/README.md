@@ -307,6 +307,51 @@ llm-mesh-enroll probe --provider cloud-code --account <new-id> \
 # Read-only check before landing; expect "status":"ok".
 ```
 
+```sh
+# A2. Land the minted account with the existing guarded import, run from
+# the radar-immobilier checkout (owner-approved; KUBECONFIG from P0).
+# run-keyring-import-prod enforces guard-prod and PROD_CONFIRM, refuses
+# while a radar-refresh-pv pod is active, and always deletes the Job,
+# its Secret and its ConfigMap and shreds the local render afterwards.
+# The import Job holds /keyring/runtime/.refresh.lock (and
+# .bootstrap.lock) for the write, byte-compares the .key, and replaces
+# the runtime cloud-code account(s) of the same owner scope with the
+# minted one; accounts of other transports are left untouched.
+RENDER="$(mktemp -d)/keyring-import.yaml" # created by the make target
+make -f deploy/k8s/refresh-cronjobs/refresh-018.mk import-keyring-account-prod \
+  IMPORT_TRANSPORT=cloud-code \
+  IMPORT_IMAGE_REF=ghcr.io/rhanka/radar-api@sha256:<digest> \
+  IMPORT_SOURCE_DIR="$SRC" IMPORT_RENDER_OUT="$RENDER" ENV=prod
+make -f deploy/k8s/refresh-cronjobs/refresh-018.mk run-keyring-import-prod \
+  IMPORT_RENDER_OUT="$RENDER" PROD_CONFIRM=1 ENV=prod
+# Only after the import reports success, destroy the workstation copy:
+shred -u "$SRC"/*.json "$SRC/.key" && rmdir "$SRC"
+
+# V1. Verify in PROD with a one-off Pod modeled on
+# deploy/k8s/refresh-cronjobs/keyring-import/job.yaml: same image
+# @sha256:<digest>, runAsUser/runAsGroup/fsGroup 1001,
+# readOnlyRootFilesystem, PVC radar-refresh-keyring at /keyring, env
+# REFRESH_OWNER_SCOPE_REF from secret radar-refresh-runtime. Start it
+# only when no radar-refresh-pv pod is active: the PVC is ReadWriteOnce
+# and a concurrent attach is an incident. Inside the Pod:
+#   test -d /keyring/runtime && test -f /keyring/runtime/.key
+#   exec 8>/keyring/runtime/.bootstrap.lock; flock -x 8
+#   chmod 00700 /keyring/runtime
+#   find -L /keyring/runtime -type f \( -name .key -o -name '*.json' \) -exec chmod 0600 {} +
+#   flock -u 8
+# fsGroup remounts can restore 0770 modes at Pod start, and the keyring
+# reads fail closed until the directory is 0700 and its files are 0600.
+# The `test` guards matter: `list` on a missing directory exits 0 with
+# no line, so empty output is a failure here, never a success.
+#   /workspace/node_modules/.bin/llm-mesh-enroll list --keyring-dir /keyring/runtime
+#   /workspace/node_modules/.bin/llm-mesh-enroll probe --provider cloud-code \
+#     --account <new-id> --keyring-dir /keyring/runtime \
+#     --model gemini-4-hydrogen --effort low
+# Expect one list line for <new-id> and a probe "status":"ok". The next
+# radar-refresh-pv run picks the account up by itself. Do NOT restart
+# deploy/radar-api or deploy/radar-immo-mcp: they mount no keyring.
+```
+
 A probe 402 means `billing_not_configured` on the non-seat `muse.ts`
 direct-key path: re-enroll a seat account with the device flow above.
 Exit codes: 0 ok, 2 usage, 3 enrollment failed, 4 account not found,
