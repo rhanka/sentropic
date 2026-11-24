@@ -154,7 +154,13 @@ encrypted records that lack one. `probe` is strictly read-only in every
 option combination (works on `:ro` mounts without touching directory bytes,
 mode, or mtime) and verifies the stored account provider (and, for
 `cloud-code`, the inner account binding) before any token leaves the
-keyring. For `muse-code` probe, `--effort` is forwarded as
+keyring. For `cloud-code`, probe then sends the stored access token
+as-is: it never refreshes it and never writes the keyring, so a 401
+(exit 6) once past the stored token's `expiresAt` — the expiry the
+enroll JSON line prints — means the access token is stale, not that
+the enrollment failed. Run the probe promptly after enrolling, on the
+fresh token, and leave renewal to the custodian refresh on acquire.
+For `muse-code` probe, `--effort` is forwarded as
 `reasoning: { effort }` on the Muse Responses wire (unsupported model/effort
 pairs are refused before any I/O) and echoed, with the finish reason, in the
 probe JSON line. stdout emits one JSON object per line; secrets and emails
