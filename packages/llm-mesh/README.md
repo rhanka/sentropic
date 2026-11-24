@@ -235,53 +235,76 @@ llm-mesh-enroll probe --provider cloud-code \
   --model gemini-4-hydrogen --effort low
 ```
 
-**Headless PROD (e.g., `/keyring/runtime`, no `agy`, no Secret Service)**:
+**Headless PROD immo (`/keyring/runtime`, no `agy`, no Secret Service)**:
+
+> Every step below (P0, A1, A2, V1) is an owner-approved PROD act. Do not
+> run any of them without explicit owner approval for that step. This
+> procedure is written from the code and the `radar-immobilier` manifests;
+> it was **not** executed end to end against PROD, so its first run is an
+> owner-supervised validation, not a routine replay.
 
 Never copy a workstation `agy` refresh token to PROD: two active refresh
 holders on one Google grant risk mutual invalidation. Give PROD its **own**
-Google OAuth grant with `--oauth-paste`: after read-only preflight it prints
-one `{"authorizationUrl":...,"expiresAt":...}` JSON line on stdout, holds no
-keyring lock while you complete browser consent, reads the one pasted
-callback line from stdin, verifies the OAuth `state`, exchanges the code in
-memory, and commits atomically. Single-quoted `sh -c '...'` keeps pod env
-vars (`$REFRESH_OWNER_SCOPE_REF`, the keyring key var) expanding **in-pod**.
+Google OAuth grant, minted with `--oauth-paste` on an operator workstation
+(browser only), then landed with the guarded keyring-import path that immo
+already operates. In PROD immo, `/keyring/runtime` is a subdirectory of PVC
+`radar-refresh-keyring` (ReadWriteOnce), mounted at `/keyring` only by the
+`radar-refresh-pv` CronJob, the keyring-import Job and the requeue Jobs.
+`deploy/radar-api` and `deploy/radar-immo-mcp` mount no keyring, set no
+`SENTROPIC_LLM_MESH_KEYRING_DIR` and no `REFRESH_OWNER_SCOPE_REF`: do not
+`kubectl exec` the enrollment into them, and do not restart them for an
+enrollment (they run `:latest` with `imagePullPolicy: Always`, so a restart
+rolls out the newest image for no keyring benefit). No keyring lock is held
+during browser consent; the import Job alone holds
+`/keyring/runtime/.refresh.lock` (with `.bootstrap.lock`) while it writes.
 (`CloudCodeEnrollmentProvider` is also exported from
 `@sentropic/llm-mesh/enrollment` for programmatic portal flows; its
 `complete({ enrollmentId, code, state })` enforces session expiry and state.)
 
 ```sh
-# 1. Read-only discovery + live probe on /keyring/runtime (works on :ro mounts):
-kubectl -n radar-immobilier exec deploy/radar-api -- sh -c '
-  ./node_modules/.bin/llm-mesh-enroll list \
-    --keyring-dir /keyring/runtime \
-    ${SENTROPIC_LLM_MESH_KEYRING_KEY:+--keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY}
-'
-kubectl -n radar-immobilier exec deploy/radar-api -- sh -c '
-  ./node_modules/.bin/llm-mesh-enroll probe \
-    --provider cloud-code --account "<account-id>" \
-    --keyring-dir /keyring/runtime \
-    ${SENTROPIC_LLM_MESH_KEYRING_KEY:+--keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY} \
-    --model gemini-4-hydrogen --effort low
-'
+# P0. Prerequisites (once, owner-approved).
+#  - Publish @sentropic/llm-mesh@0.38.11. In radar-immobilier, bump
+#    api/package.json to
+#      "@sentropic/llm-mesh-refresh": "npm:@sentropic/llm-mesh@0.38.11"
+#    build, deploy, and note the immutable image digest
+#    ghcr.io/rhanka/radar-api@sha256:<digest>. Until that image is live,
+#    `list`, `--oauth-paste` and `probe --provider cloud-code` do not exist
+#    in the PROD image (it carries llm-mesh 0.38.4 for the refresh alias)
+#    and the radar-refresh-pv custodian is not CAS-aware, so
+#    .refresh.lock is the only serialization guard.
+#  - In pods, call the bin by absolute path (containers run in
+#    /workspace/api, while node_modules sits at /workspace):
+#      /workspace/node_modules/.bin/llm-mesh-enroll
+#    Check `... llm-mesh-enroll help` first: the usage must list
+#    `--oauth-paste`, `list` and `probe --provider cloud-code`.
+#  - The workstation llm-mesh-enroll used in A1 must be >= 0.38.11 too.
+#  - Export the PROD kubeconfig for A2: guard-prod requires KUBECONFIG
+#    to name an existing file for the radar-immobilier namespace.
+export KUBECONFIG=<path-to-prod-kubeconfig>
 
-# 2. Re-enroll in place with a DEDICATED PROD grant. Open the printed
-#    authorizationUrl as the Google seat owner, approve consent, copy the
-#    full http://127.0.0.1:1/oauth/callback?state=...&code=... URL from the
-#    browser address bar, and paste that single line, then Enter / Ctrl-D.
-#    (First-time setup: replace --account "<account-id>" with --create-account.)
-kubectl -n radar-immobilier exec -i deploy/radar-api -- sh -c '
-  exec ./node_modules/.bin/llm-mesh-enroll enroll \
-    --provider cloud-code --oauth-paste \
-    --account "<account-id>" --owner-scope "$REFRESH_OWNER_SCOPE_REF" \
-    --keyring-dir /keyring/runtime \
-    ${SENTROPIC_LLM_MESH_KEYRING_KEY:+--keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY}
-'
-
-# 3. Re-run Step 1 (probe). Expect {"status":"ok","modelId":"gemini-4-hydrogen",
-#    "effort":"low",...}. Cron readers pick the grant up on their next run;
-#    restart long-running Deployments that cache the keyring in memory:
-kubectl -n radar-immobilier rollout restart deploy/radar-api deploy/radar-immo-mcp
-kubectl -n radar-immobilier rollout status deploy/radar-api deploy/radar-immo-mcp
+# A1. Mint the dedicated PROD grant on an operator workstation.
+umask 077
+SRC="$(mktemp -d)" # 0700, outside any git work tree
+install -m 0600 <owner-held-copy-of-the-runtime-.key> "$SRC/.key"
+# The import Job byte-compares this .key with the runtime one, and $SRC
+# must hold no other account: the import refuses unless exactly one
+# cloud-code account with the runtime owner scope is found. Take that
+# owner scope verbatim from the PROD secret radar-refresh-runtime key
+# REFRESH_OWNER_SCOPE_REF (as held by the owner); never guess it.
+# `cat |` gives the CLI the non-TTY stdin --oauth-paste requires.
+cat | env -u GOOGLE_OAUTH_CLIENT_SECRET -u GOOGLE_CLIENT_SECRET \
+  llm-mesh-enroll enroll --provider cloud-code --oauth-paste \
+  --create-account --owner-scope '<exact REFRESH_OWNER_SCOPE_REF value>' \
+  --keyring-dir "$SRC"
+# Open the printed authorizationUrl as the PROD Google seat owner,
+# consent, then paste the full callback line
+# http://127.0.0.1:1/oauth/callback?state=...&code=... and press Enter
+# (the reader returns at that newline; Ctrl-D then closes `cat`).
+# Consent must complete within the 5-minute paste deadline. Record the
+# new accountId from the final JSON line printed by the enroll.
+llm-mesh-enroll probe --provider cloud-code --account <new-id> \
+  --keyring-dir "$SRC" --model gemini-4-hydrogen --effort low
+# Read-only check before landing; expect "status":"ok".
 ```
 
 A probe 402 means `billing_not_configured` on the non-seat `muse.ts`
