@@ -5,19 +5,20 @@
 // generate through MuseAdapter/MuseRuntimeClient. stdout is a machine
 // contract (one JSON object per line); secrets never printed.
 
-import { EncryptedFileKeyring } from '../keyring/encrypted-file-keyring.js';
 import {
   defaultWriters,
   EXIT_CODES,
   fail,
+  openKeyringForCli,
   parseArgs,
-  resolveMasterKey,
   usageText,
   type EnrollCliDeps,
   type ParsedArgs,
 } from './enroll-args.js';
 import { runEnroll } from './enroll-command.js';
 import type { ReasoningEffort } from '../../generation.js';
+import { runList } from './list-accounts.js';
+import { probeCloudCode } from './probe-cloud-code.js';
 
 const KNOWN_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -28,8 +29,11 @@ export const runProbe = async (
   const writers = deps.writers ?? defaultWriters();
   const env = deps.env ?? process.env;
   const fetchFn = deps.fetchFn ?? fetch;
-  if (args.provider !== 'muse-code') {
-    return fail(writers, EXIT_CODES.usage, `provider '${args.provider}' has no probe; only 'muse-code' is probed`);
+  if (args.missingValueFlags?.length) {
+    return fail(writers, EXIT_CODES.usage, `flag '--${args.missingValueFlags[0]}' requires a non-empty value`);
+  }
+  if (args.provider !== 'muse-code' && args.provider !== 'cloud-code') {
+    return fail(writers, EXIT_CODES.usage, `provider '${args.provider}' has no probe; expected 'muse-code' or 'cloud-code'`);
   }
   if (!args.keyringDir) return fail(writers, EXIT_CODES.usage, 'missing --keyring-dir <dir>');
   if (!args.account) return fail(writers, EXIT_CODES.usage, 'missing --account <id>');
@@ -37,9 +41,12 @@ export const runProbe = async (
   if (!KNOWN_EFFORTS.has(effort)) {
     return fail(writers, EXIT_CODES.usage, `unknown --effort '${effort}'`);
   }
-  const resolved = resolveMasterKey(args.keyringKeyEnv, env);
-  if (!resolved.key) return fail(writers, EXIT_CODES.keyringKey, resolved.error ?? 'key error');
-  const keyring = new EncryptedFileKeyring(args.keyringDir, resolved.key);
+  const opened = openKeyringForCli(args.provider, args.keyringDir, args.keyringKeyEnv, env);
+  if (!opened.keyring) return fail(writers, EXIT_CODES.keyringKey, opened.error ?? 'key error');
+  const { keyring } = opened;
+  if (args.provider === 'cloud-code') {
+    return probeCloudCode(args, effort, keyring, fetchFn, writers);
+  }
   let raw: string | null;
   let publicRaw: string | null;
   try {
@@ -133,5 +140,6 @@ export const run = async (argv: string[], deps: EnrollCliDeps = {}): Promise<num
     return EXIT_CODES.ok;
   }
   if (args.command === 'enroll') return runEnroll(args, deps);
+  if (args.command === 'list') return runList(args, deps);
   return runProbe(args, deps);
 };

@@ -251,10 +251,12 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     }
 
     let code: string;
+    let callbackState: string | undefined;
     if (entry.loopback) {
       try {
         const res = await entry.loopback.waitForCallback();
         code = res.code;
+        callbackState = res.state;
       } finally {
         await entry.loopback.close();
       }
@@ -262,7 +264,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
       throw new Error('No loopback server active for waitForCallback');
     }
 
-    const cred = await this.complete({ enrollmentId, code });
+    const cred = await this.complete({ enrollmentId, code, state: callbackState });
     const meta = await this.resolve(cred);
 
     return {
@@ -289,6 +291,15 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     }
     if (entry.state.cancelledAt) {
       throw new Error(`Enrollment session ${input.enrollmentId} was cancelled`);
+    }
+    if (!(Date.now() < Date.parse(entry.state.expiresAt))) {
+      throw new Error(`Enrollment session ${input.enrollmentId} has expired`);
+    }
+    // The loopback server already validated the callback state; every
+    // other (portal / pasted) completion must present it. A state given
+    // on any path is always verified. State values are never echoed.
+    if ((input.state !== undefined || !entry.loopback) && input.state !== entry.state.pkceState) {
+      throw new Error('OAuth state mismatch for enrollment session');
     }
 
     entry.state.consumedAt = new Date().toISOString();

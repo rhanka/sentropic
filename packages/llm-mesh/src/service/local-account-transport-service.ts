@@ -197,6 +197,13 @@ const POLL_ENROLLMENT_SERVING_IDS: Readonly<Record<string, readonly [string, str
   'mistral-vibe': ['mistral', 'mistral-vibe'],
 };
 
+class ExternalCredentialConflictError extends Error {
+  constructor() {
+    super('Account credential updated concurrently in keyring');
+    this.name = 'ExternalCredentialConflictError';
+  }
+}
+
 export class LocalAccountTransportService {
   private static readonly accountIndexKey = 'sentropic-llm-mesh:accounts:index';
   private readonly coordinator: InMemoryAccountTransportCoordinator;
@@ -204,6 +211,9 @@ export class LocalAccountTransportService {
   private readonly credentialVersions = new Map<string, string>();
   private readonly refreshInFlight = new Map<string, Promise<PreparedCredential>>();
   private readonly publicWrites = new Map<string, Promise<void>>();
+  private readonly persistedPublicRaw = new Map<string, string>();
+  private readonly persistedEnvelopeRaw = new Map<string, string>();
+  private readonly attemptedFenceRaw = new Map<string, string>();
   private readonly accountRemovalBarrierRefs = new Map<string, string>();
   private readonly claimedOwnerScopes = new Map<string, string>();
   /** enrollmentId → providerId, so poll completion reaches the owning provider. */
@@ -1002,6 +1012,8 @@ export class LocalAccountTransportService {
         this.accountsMap.delete(id);
         this.credentialVersions.delete(id);
         this.accountRemovalBarrierRefs.delete(id);
+        this.persistedPublicRaw.delete(id);
+        this.persistedEnvelopeRaw.delete(id);
       }
       throw new Error(duplicate ? 'This Claude credential is already enrolled'
         : 'Claude enrollment could not be saved; reauthenticate');
@@ -1084,6 +1096,8 @@ export class LocalAccountTransportService {
     this.credentialIssuedAtMs.delete(accountId);
     this.accountRemovalBarrierRefs.delete(accountId);
     this.museDeviceGrants.delete(accountId);
+    this.persistedPublicRaw.delete(accountId);
+    this.persistedEnvelopeRaw.delete(accountId);
     await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:envelope`);
     await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:public`);
     await this.keyring.deleteSecret(this.seatRecordKey(accountId));
@@ -1401,6 +1415,8 @@ export class LocalAccountTransportService {
     const refreshPromise = (async () => {
       const account = this.accountsMap.get(input.accountId);
       let requestMayHaveBeenSent = false;
+      let externalConflict = false;
+      let refreshCas: { expectedPublicRaw: string; expectedEnvelopeRaw: string | null } | undefined;
       try {
         // L1 (a): a mesh-managed device-flow Muse grant refreshes through
         // the muse-code device provider with its stored refresh token,
@@ -1418,13 +1434,27 @@ export class LocalAccountTransportService {
         if (account?.status === 'reauth_required') throw new Error('Reauthentication required');
         // Fence persisted grants before a potentially rotating request. A crash or
         // storage outage afterwards must not make a restart replay the old token.
-        const record = await this.readPublicRecord(input.accountId);
-        if (record) {
+        const rawPublic = await this.keyring.getSecret(`sentropic-llm-mesh:${input.accountId}:public`);
+        const rawEnvelope = await this.keyring.getSecret(`sentropic-llm-mesh:${input.accountId}:envelope`);
+        const record = rawPublic ? this.parsePublicRecord(input.accountId, rawPublic) : null;
+        if (rawPublic && record) {
           await this.assertAccountOwnerClaim(input.accountId, account?.ownerScopeRef);
           if (await this.isAccountRemoved(input.accountId)) throw new Error('Account removed');
-          await this.writePublicRecord(input.accountId, JSON.stringify({
+          const fenceJson = JSON.stringify({
             ...record, status: 'reauth_required', account: { ...record.account, status: 'reauth_required' },
-          }));
+          });
+          this.attemptedFenceRaw.set(input.accountId, fenceJson);
+          try {
+            await this.writePublicRecord(input.accountId, fenceJson, true);
+          } catch (fenceErr) {
+            if (fenceErr instanceof ExternalCredentialConflictError) {
+              this.attemptedFenceRaw.delete(input.accountId);
+              externalConflict = true;
+            }
+            throw fenceErr;
+          }
+          this.attemptedFenceRaw.delete(input.accountId);
+          refreshCas = { expectedPublicRaw: fenceJson, expectedEnvelopeRaw: rawEnvelope };
         }
         requestMayHaveBeenSent = true;
         const withDeviceGrant = providerId === 'muse-code' && !input.museDeviceAccessToken
@@ -1465,7 +1495,7 @@ export class LocalAccountTransportService {
           accountLabel: account.accountLabel ?? undefined, providerId, status: 'active',
           createdAt: account.enrollmentCompletedAt ?? now, updatedAt: now },
         { ...refreshed, refreshToken: updated.refreshToken ?? undefined,
-          ...(persistedDeviceGrant ? { museDeviceAccessToken: persistedDeviceGrant } : {}) }, updated);
+          ...(persistedDeviceGrant ? { museDeviceAccessToken: persistedDeviceGrant } : {}) }, updated, refreshCas);
         if (await this.isAccountRemoved(input.accountId)) throw new Error('Account removed');
         Object.assign(account, updated);
         this.credentialVersions.set(input.accountId, refreshed.authClientConfigVersion);
@@ -1474,6 +1504,9 @@ export class LocalAccountTransportService {
         return { ...refreshed, refreshToken: updated.refreshToken ?? undefined,
           ...(persistedDeviceGrant ? { museDeviceAccessToken: persistedDeviceGrant } : {}) };
       } catch (error) {
+        if (externalConflict || error instanceof ExternalCredentialConflictError) {
+          throw new RefreshDeferredError();
+        }
         if ((account && !this.accountsMap.has(input.accountId))
           || await this.isAccountRemoved(input.accountId).catch(() => false)) {
           throw new AccountTransportAcquireError(`Account ${input.accountId} has been removed`, 'no_active_account');
@@ -1507,6 +1540,7 @@ export class LocalAccountTransportService {
     pub: AccountPublic,
     env: CredentialEnvelope,
     account: AccountTransportAccount,
+    cas?: { expectedPublicRaw: string; expectedEnvelopeRaw: string | null },
   ): Promise<void> {
     const removalBarrierRef = this.accountRemovalBarrierRefs.get(pub.accountId);
     await this.assertAccountOwnerClaim(pub.accountId, account.ownerScopeRef);
@@ -1524,35 +1558,74 @@ export class LocalAccountTransportService {
       account: persistedAccount,
       ...(removalBarrierRef ? { removalBarrierRef } : {}),
     };
+    const envJson = JSON.stringify(env);
+    const pubJson = JSON.stringify(publicRecord);
     await this.assertAccountOwnerClaim(pub.accountId, account.ownerScopeRef);
-    await this.keyring.setSecret(`sentropic-llm-mesh:${pub.accountId}:envelope`, JSON.stringify(env));
-    await this.assertAccountOwnerClaim(pub.accountId, account.ownerScopeRef);
-    await this.writePublicRecord(pub.accountId, JSON.stringify(publicRecord));
+    if (cas && this.keyring.compareAndSetSecrets) {
+      const committed = await this.keyring.compareAndSetSecrets([
+        { key: `sentropic-llm-mesh:${pub.accountId}:envelope`, expected: cas.expectedEnvelopeRaw, secret: envJson },
+        { key: `sentropic-llm-mesh:${pub.accountId}:public`, expected: cas.expectedPublicRaw, secret: pubJson },
+      ]);
+      if (!committed) throw new ExternalCredentialConflictError();
+      this.persistedEnvelopeRaw.set(pub.accountId, envJson);
+      this.persistedPublicRaw.set(pub.accountId, pubJson);
+    } else {
+      await this.keyring.setSecret(`sentropic-llm-mesh:${pub.accountId}:envelope`, envJson);
+      await this.assertAccountOwnerClaim(pub.accountId, account.ownerScopeRef);
+      await this.writePublicRecord(pub.accountId, pubJson);
+      this.persistedEnvelopeRaw.set(pub.accountId, envJson);
+    }
     if (await this.isAccountRemoved(pub.accountId)) {
       await this.cleanupRemovedPersistence(pub.accountId, removalBarrierRef);
       throw new Error(`Account '${pub.accountId}' has been removed`);
     }
     await this.assertAccountOwnerClaim(pub.accountId, account.ownerScopeRef);
-    const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
-    const accountIds = this.parseAccountIndex(rawIndex);
-    if (!accountIds.includes(pub.accountId)) {
-      accountIds.push(pub.accountId);
-      await this.keyring.setSecret(
-        LocalAccountTransportService.accountIndexKey,
-        JSON.stringify(accountIds),
-      );
-    }
+    await this.appendAccountIndex(pub.accountId);
     if (await this.isAccountRemoved(pub.accountId)) {
       await this.cleanupRemovedPersistence(pub.accountId, removalBarrierRef);
       throw new Error(`Account '${pub.accountId}' has been removed`);
     }
   }
 
-  private async writePublicRecord(accountId: string, value: string): Promise<void> {
+  private async appendAccountIndex(accountId: string): Promise<void> {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
+      const accountIds = this.parseAccountIndex(rawIndex);
+      if (accountIds.includes(accountId)) return;
+      accountIds.push(accountId);
+      const next = JSON.stringify(accountIds);
+      if (!this.keyring.compareAndSetSecret) {
+        await this.keyring.setSecret(LocalAccountTransportService.accountIndexKey, next);
+        return;
+      }
+      if (await this.keyring.compareAndSetSecret(LocalAccountTransportService.accountIndexKey, rawIndex, next)) {
+        return;
+      }
+    }
+    throw new ExternalCredentialConflictError();
+  }
+
+  private async writePublicRecord(
+    accountId: string,
+    value: string,
+    requireCas = false,
+  ): Promise<void> {
     // A fence must land after every earlier route write, even one already in the keyring.
     const previous = this.publicWrites.get(accountId) ?? Promise.resolve();
-    const pending = previous.catch(() => {}).then(() =>
-      this.keyring.setSecret(`sentropic-llm-mesh:${accountId}:public`, value));
+    const pending = previous.catch(() => {}).then(async () => {
+      const key = `sentropic-llm-mesh:${accountId}:public`;
+      if (requireCas && this.keyring.compareAndSetSecret) {
+        const expected = this.persistedPublicRaw.get(accountId);
+        if (expected !== undefined) {
+          const ok = await this.keyring.compareAndSetSecret(key, expected, value);
+          if (!ok) throw new ExternalCredentialConflictError();
+          this.persistedPublicRaw.set(accountId, value);
+          return;
+        }
+      }
+      await this.keyring.setSecret(key, value);
+      this.persistedPublicRaw.set(accountId, value);
+    });
     this.publicWrites.set(accountId, pending);
     try {
       await pending;
@@ -1567,6 +1640,10 @@ export class LocalAccountTransportService {
     const key = `sentropic-llm-mesh:${account.accountId}:public`;
     const raw = await this.keyring.getSecret(key);
     if (!raw) return;
+    const known = this.persistedPublicRaw.get(account.accountId);
+    const attemptedFence = restoreBeforeRequest ? this.attemptedFenceRaw.get(account.accountId) : undefined;
+    if (known !== undefined && raw !== known && raw !== attemptedFence) return;
+    if (restoreBeforeRequest) this.attemptedFenceRaw.delete(account.accountId);
     try {
       const current = JSON.parse(raw) as Partial<AccountPublicRecord>;
       if (!current.account) return;
@@ -1580,14 +1657,18 @@ export class LocalAccountTransportService {
       // Route outcomes must not clear the durable no-replay fence during rotation.
       if (!restoreBeforeRequest && this.refreshInFlight.has(account.accountId)
         && account.status !== 'reauth_required') return;
-      await this.writePublicRecord(account.accountId, JSON.stringify({
+      const nextJson = JSON.stringify({
         ...current,
         status: account.status ?? current.status,
         updatedAt: new Date().toISOString(),
         account: persistedAccount,
-      }));
+      });
+      if (restoreBeforeRequest && attemptedFence && raw === attemptedFence) {
+        this.persistedPublicRaw.set(account.accountId, raw);
+      }
+      await this.writePublicRecord(account.accountId, nextJson, true);
     } catch {
-      // A corrupt public record remains fail-closed and is not overwritten.
+      // A corrupt public record or concurrent external update remains fail-closed.
     }
   }
 
@@ -1742,9 +1823,7 @@ export class LocalAccountTransportService {
     }
   }
 
-  private async readPublicRecord(accountId: string): Promise<AccountPublicRecord | null> {
-    const raw = await this.keyring.getSecret(`sentropic-llm-mesh:${accountId}:public`);
-    if (!raw) return null;
+  private parsePublicRecord(accountId: string, raw: string): AccountPublicRecord | null {
     try {
       const record = JSON.parse(raw) as Partial<AccountPublicRecord>;
       if (
@@ -1761,6 +1840,11 @@ export class LocalAccountTransportService {
     }
   }
 
+  private async readPublicRecord(accountId: string): Promise<AccountPublicRecord | null> {
+    const raw = await this.keyring.getSecret(`sentropic-llm-mesh:${accountId}:public`);
+    return raw ? this.parsePublicRecord(accountId, raw) : null;
+  }
+
   private async restorePersistedAccounts(): Promise<void> {
     for (const accountId of [...this.accountsMap.keys()]) {
       const account = this.accountsMap.get(accountId);
@@ -1774,6 +1858,8 @@ export class LocalAccountTransportService {
       this.credentialIssuedAtMs.delete(accountId);
       this.accountRemovalBarrierRefs.delete(accountId);
       this.museDeviceGrants.delete(accountId);
+      this.persistedPublicRaw.delete(accountId);
+      this.persistedEnvelopeRaw.delete(accountId);
     }
     const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
     for (const accountId of this.parseAccountIndex(rawIndex)) {
@@ -1838,6 +1924,8 @@ export class LocalAccountTransportService {
         if (ownerClaim && ownerClaim.ownerScopeRef === restoredAccount.ownerScopeRef) {
           this.claimedOwnerScopes.set(accountId, ownerClaim.ownerScopeRef);
         }
+        this.persistedPublicRaw.set(accountId, publicRaw);
+        this.persistedEnvelopeRaw.set(accountId, envelopeRaw);
         if (migrateLegacyOwner && restoredAccount.ownerScopeRef) {
           await this.writePublicRecord(accountId, JSON.stringify({ ...publicRecord, account: restoredAccount }));
         }

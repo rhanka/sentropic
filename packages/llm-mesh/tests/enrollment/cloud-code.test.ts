@@ -14,6 +14,10 @@ import {
 } from '../../src/enrollment/cloud-code.js';
 import type { ConfigResolver } from '../../src/service/facade.js';
 
+const stateOf = (session: { kind: string; url?: string }): string =>
+  new URL(session.kind === 'authorization-url' ? (session.url as string) : 'https://invalid.test/')
+    .searchParams.get('state') as string;
+
 describe('CloudCodeEnrollmentProvider', () => {
   it('fetches and parses the account model catalogue with Antigravity headers', async () => {
     const mockFetch = vi.fn(async () => new Response(JSON.stringify({
@@ -122,7 +126,7 @@ describe('CloudCodeEnrollmentProvider', () => {
       ownerScope: 'user_123',
     });
 
-    await expect(provider.complete({ enrollmentId: session.enrollmentId, code: 'code' })).resolves
+    await expect(provider.complete({ enrollmentId: session.enrollmentId, code: 'code', state: stateOf(session) })).resolves
       .toMatchObject({ accessToken: 'access', refreshToken: 'refresh' });
   });
 
@@ -142,7 +146,7 @@ describe('CloudCodeEnrollmentProvider', () => {
       ownerScope: 'test',
     });
 
-    const completion = provider.complete({ enrollmentId: session.enrollmentId, code: 'code' });
+    const completion = provider.complete({ enrollmentId: session.enrollmentId, code: 'code', state: stateOf(session) });
     await expect(completion).rejects.toThrow('[redacted]');
     await expect(completion).rejects.not.toThrow(clientSecret);
   });
@@ -239,6 +243,7 @@ describe('CloudCodeEnrollmentProvider', () => {
     const cred = await provider.complete({
       enrollmentId: session.enrollmentId,
       code: 'test-auth-code',
+      state: stateOf(session),
     });
 
     expect(cred.accessToken).toBe('test-access-token');
@@ -321,6 +326,54 @@ describe('CloudCodeEnrollmentProvider', () => {
         code: 'code',
       }),
     ).rejects.toThrow('cancelled');
+  });
+
+  it('requires the OAuth state and a live session for non-loopback completion, before any token exchange', async () => {
+    const mockFetch = vi.fn(async () => new Response(JSON.stringify({ access_token: 'a', refresh_token: 'r' }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }));
+    const provider = new CloudCodeEnrollmentProvider({
+      clientId: 'test-client-id', clientSecret: 'test-client-secret',
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+    const startPortal = () => provider.start({
+      configRef: 'default', mode: 'portal',
+      redirectUri: 'http://127.0.0.1:1/oauth/callback', ownerScope: 'test',
+    });
+
+    const noState = await startPortal();
+    await expect(provider.complete({ enrollmentId: noState.enrollmentId, code: 'fake-code' }))
+      .rejects.toThrow(/state/i);
+
+    const wrongState = await startPortal();
+    const wrong = await provider.complete({
+      enrollmentId: wrongState.enrollmentId, code: 'fake-code', state: 'attacker-supplied-state',
+    }).catch((e: unknown) => e);
+    expect(wrong).toBeInstanceOf(Error);
+    expect((wrong as Error).message).toMatch(/state/i);
+    expect((wrong as Error).message).not.toContain('attacker-supplied-state');
+    expect((wrong as Error).message).not.toContain(stateOf(wrongState));
+
+    const expired = await startPortal();
+    const realNow = Date.now;
+    vi.spyOn(Date, 'now').mockReturnValue(realNow() + 16 * 60_000);
+    try {
+      await expect(provider.complete({
+        enrollmentId: expired.enrollmentId, code: 'fake-code', state: stateOf(expired),
+      })).rejects.toThrow(/expired/i);
+    } finally { vi.mocked(Date.now).mockRestore(); }
+    expect(mockFetch).not.toHaveBeenCalled();
+
+    const ok = await startPortal();
+    await expect(provider.complete({
+      enrollmentId: ok.enrollmentId, code: 'fake-code', state: stateOf(ok),
+    })).resolves.toMatchObject({ accessToken: 'a', refreshToken: 'r' });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('is exported from the public enrollment entrypoint', async () => {
+    const entry = await import('../../src/enrollment/index.js');
+    expect((entry as Record<string, unknown>).CloudCodeEnrollmentProvider).toBe(CloudCodeEnrollmentProvider);
   });
 });
 

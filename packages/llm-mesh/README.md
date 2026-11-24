@@ -140,24 +140,36 @@ const facade = createLlmMeshFacade({
 That migration option is only for pre-ownerScope local records. New enrollment
 always takes ownership from `StartEnrollmentInput.ownerScope`.
 
-## Device-flow enrollment CLI (`llm-mesh-enroll`)
+## Enrollment & probe CLI (`llm-mesh-enroll`)
 
 The `llm-mesh-enroll` bin enrolls seat-billed device-flow accounts
-(muse-code and codex, repeatable for N accounts) and probes muse-code seat
-accounts. The keyring key is read from the environment variable named by
-`--keyring-key-env` (never from argv): it must hold 32 bytes as 64 hex
-chars or 44/43-char base64 (a human passphrase is refused). stdout carries
-one JSON object per line, secrets never reach stdout, stderr, or error
-messages. `probe` only supports `--provider muse-code` and verifies the
-stored account provider before any token leaves the keyring; `--effort` is
-forwarded as `reasoning: { effort }` on the Muse Responses wire (unsupported
-model/effort pairs are refused before any I/O) and echoed, with the finish
-reason, in the probe JSON line.
+(`muse-code` and `codex`, repeatable for N accounts), re-enrolls or creates
+`cloud-code` seats (`--from-agy`, memory-only `--credential-stdin`, or
+`--oauth-paste`), lists accounts read-only, and probes stored `muse-code` or
+`cloud-code` accounts. For `muse-code` and `codex`, `--keyring-key-env` is
+mandatory (32 bytes as 64 hex chars or 44/43-char base64; passphrases
+refused). For `cloud-code`, `--keyring-key-env` is optional when the
+directory uses `.key`; the CLI refuses to create a `.key` next to existing
+encrypted records that lack one. `probe` is strictly read-only in every
+option combination (works on `:ro` mounts without touching directory bytes,
+mode, or mtime) and verifies the stored account provider (and, for
+`cloud-code`, the inner account binding) before any token leaves the
+keyring. For `cloud-code`, probe then sends the stored access token
+as-is: it never refreshes it and never writes the keyring, so a 401
+(exit 6) once past the stored token's `expiresAt` — the expiry the
+enroll JSON line prints — means the access token is stale, not that
+the enrollment failed. Run the probe promptly after enrolling, on the
+fresh token, and leave renewal to the custodian refresh on acquire.
+For `muse-code` probe, `--effort` is forwarded as
+`reasoning: { effort }` on the Muse Responses wire (unsupported model/effort
+pairs are refused before any I/O) and echoed, with the finish reason, in the
+probe JSON line. stdout emits one JSON object per line; secrets and emails
+are never printed by default.
 
 ```sh
 export SENTROPIC_LLM_MESH_KEYRING_KEY  # owner-held 32-byte key (hex), set in the environment
 
-# 1. Enroll one account (repeat with a new --label per account).
+# 1. Enroll one muse-code account (repeat with a new --label per account).
 #    The owner approves each device login on accountscenter.meta.com.
 llm-mesh-enroll enroll --provider muse-code \
   --keyring-dir ~/.sentropic/immo-detection-keyring \
@@ -172,6 +184,188 @@ llm-mesh-enroll probe --provider muse-code \
   --model muse-wonder-1.0 --effort low \
   --keyring-key-env SENTROPIC_LLM_MESH_KEYRING_KEY
 ```
+
+### Re-enrolling a `cloud-code` seat (workstation vs headless PROD)
+
+By default, `enroll --provider cloud-code` updates an **explicit existing**
+`--account <id>` in place and refuses unknown, removed, foreign-owner,
+external-seat, or other-provider accounts. Creating a new account requires the
+explicit `--create-account --owner-scope <ref>` flags. It takes exactly one
+credential source: `--from-agy`, `--credential-stdin`, or `--oauth-paste`.
+Commits use one keyring compare-and-set (`:envelope`, `:public`, `:owner`
+when created, and the account index together) so concurrent CLI enrollment
+and `LocalAccountTransportService` custodian refresh never clobber each
+other **when both sides run `@sentropic/llm-mesh` >= 0.38.11**. Against an
+older custodian (plain writes, no CAS) that guarantee does not hold: serialize
+with that deployment's own writer lock instead (for PROD immo,
+`/keyring/runtime/.refresh.lock`, held by its keyring-import Job below).
+Restart long-lived daemons after in-place re-enrollment so they reload
+the new grant, and keep one active refresh holder per Google OAuth grant.
+`--keyring-key-env` takes the environment variable **name**, never its value.
+`llm-mesh-enroll list --keyring-dir <dir>` discovers account ids, statuses,
+and owner scopes read-only (it never reads `:envelope`).
+
+**Workstation (`--from-agy` via `/usr/bin/secret-tool`, or `--credential-stdin`)**:
+
+`--from-agy` pins `secret-tool` to a same-uid `unix:path=` session bus
+(`DBUS_SESSION_BUS_ADDRESS` or `$XDG_RUNTIME_DIR/bus`) and refuses remote or
+`unixexec:` transports. Accepted limitation: `secret-tool lookup
+service gemini username antigravity` is a libsecret subset match across
+collections (first unlocked match wins; it may prompt to unlock a locked
+collection) and the Secret Service owner on that same-uid bus is not
+verified, so verify which Google identity `agy` is signed into before
+re-enrolling an account in place. `--from-agy` also reuses the `agy`
+grant itself, so `agy` and the mesh custodian become two refresh holders
+of one grant and an `agy` logout or revocation kills the mesh account:
+it is a workstation shortcut; prefer `--oauth-paste` for a dedicated
+grant, as in the PROD procedure below. `--credential-stdin` reads bounded
+(64 KiB) JSON under a 30 s deadline and accepts a Google token response
+or a `CloudCodeEnrollmentProvider.complete()` result (non-token metadata
+is discarded). Do not wrap an interactive producer under `flock` on a
+workstation keyring; in PROD immo every keyring writer instead holds
+`/keyring/runtime/.refresh.lock` (see below). Run the CLI without ambient
+`GOOGLE_OAUTH_CLIENT_SECRET` / `GOOGLE_CLIENT_SECRET` in the environment:
+either variable overrides the Cloud Code client secret in token calls.
+
+```sh
+# 1. Re-enroll an existing cloud-code account in place (reuses .key; requires
+#    libsecret-tools at /usr/bin/secret-tool, or pipe JSON via --credential-stdin).
+llm-mesh-enroll enroll --provider cloud-code --from-agy \
+  --account <account-id> \
+  --keyring-dir ~/.sentropic/llm-mesh-keyring
+
+# 2. Strictly read-only live verification on mesh:gemini-4-hydrogen-low.
+llm-mesh-enroll probe --provider cloud-code \
+  --account <account-id> \
+  --keyring-dir ~/.sentropic/llm-mesh-keyring \
+  --model gemini-4-hydrogen --effort low
+```
+
+**Headless PROD immo (`/keyring/runtime`, no `agy`, no Secret Service)**:
+
+> Every step below (P0, A1, A2, V1) is an owner-approved PROD act. Do not
+> run any of them without explicit owner approval for that step. This
+> procedure is written from the code and the `radar-immobilier` manifests;
+> it was **not** executed end to end against PROD, so its first run is an
+> owner-supervised validation, not a routine replay.
+
+Never copy a workstation `agy` refresh token to PROD: two active refresh
+holders on one Google grant risk mutual invalidation. Give PROD its **own**
+Google OAuth grant, minted with `--oauth-paste` on an operator workstation
+(browser only), then landed with the guarded keyring-import path that immo
+already operates. In PROD immo, `/keyring/runtime` is a subdirectory of PVC
+`radar-refresh-keyring` (ReadWriteOnce), mounted at `/keyring` only by the
+`radar-refresh-pv` CronJob, the keyring-import Job and the requeue Jobs.
+`deploy/radar-api` and `deploy/radar-immo-mcp` mount no keyring, set no
+`SENTROPIC_LLM_MESH_KEYRING_DIR` and no `REFRESH_OWNER_SCOPE_REF`: do not
+`kubectl exec` the enrollment into them, and do not restart them for an
+enrollment (they run `:latest` with `imagePullPolicy: Always`, so a restart
+rolls out the newest image for no keyring benefit). No keyring lock is held
+during browser consent; the import Job alone holds
+`/keyring/runtime/.refresh.lock` (with `.bootstrap.lock`) while it writes.
+(`CloudCodeEnrollmentProvider` is also exported from
+`@sentropic/llm-mesh/enrollment` for programmatic portal flows; its
+`complete({ enrollmentId, code, state })` enforces session expiry and state.)
+
+```sh
+# P0. Prerequisites (once, owner-approved).
+#  - Only for in-cluster use (NOT required for path A below): publish
+#    @sentropic/llm-mesh@0.38.11, bump radar-immobilier api/package.json to
+#      "@sentropic/llm-mesh-refresh": "npm:@sentropic/llm-mesh@0.38.11"
+#    build and deploy. That upgrade is needed only for in-cluster
+#    `list` / `probe --provider cloud-code` and for a CAS-aware
+#    radar-refresh-pv custodian. Until that image is live, `list`,
+#    `--oauth-paste` and `probe --provider cloud-code` do not exist
+#    in the PROD image (it carries llm-mesh 0.38.4 for the refresh alias)
+#    and the radar-refresh-pv custodian is not CAS-aware, so
+#    .refresh.lock is the only serialization guard. In pods, call the
+#    bin by absolute path /workspace/node_modules/.bin/llm-mesh-enroll
+#    (containers run in /workspace/api, while node_modules sits at
+#    /workspace) and check its help lists `--oauth-paste`, `list` and
+#    `probe --provider cloud-code`.
+#  - Required for path A: note the immutable image digest
+#    ghcr.io/rhanka/radar-api@sha256:<digest> of the deployed image
+#    (A2), keep the workstation llm-mesh-enroll at >= 0.38.11 (A1),
+#    and export the PROD kubeconfig (A2, V1): guard-prod requires
+#    KUBECONFIG to name an existing file for the radar-immobilier
+#    namespace.
+export KUBECONFIG=<path-to-prod-kubeconfig>
+
+# A1. Mint the dedicated PROD grant on an operator workstation (owner-approved).
+umask 077
+SRC="$(mktemp -d)" # 0700, outside any git work tree
+install -m 0600 <owner-held-copy-of-the-runtime-.key> "$SRC/.key"
+# The import Job byte-compares this .key with the runtime one, and $SRC
+# must hold no other account: the import refuses unless exactly one
+# cloud-code account with the runtime owner scope is found. Take that
+# owner scope verbatim from the PROD secret radar-refresh-runtime key
+# REFRESH_OWNER_SCOPE_REF (as held by the owner); never guess it.
+# `cat |` gives the CLI the non-TTY stdin --oauth-paste requires.
+cat | env -u GOOGLE_OAUTH_CLIENT_SECRET -u GOOGLE_CLIENT_SECRET \
+  llm-mesh-enroll enroll --provider cloud-code --oauth-paste \
+  --create-account --owner-scope '<exact REFRESH_OWNER_SCOPE_REF value>' \
+  --keyring-dir "$SRC"
+# Open the printed authorizationUrl as the PROD Google seat owner,
+# consent, then paste the full callback line
+# http://127.0.0.1:1/oauth/callback?state=...&code=... and press Enter
+# (the reader returns at that newline; Ctrl-D then closes `cat`).
+# Consent must complete within the 5-minute paste deadline. Record the
+# new accountId from the final JSON line printed by the enroll.
+llm-mesh-enroll probe --provider cloud-code --account <new-id> \
+  --keyring-dir "$SRC" --model gemini-4-hydrogen --effort low
+# Read-only live check before landing, on the fresh token; expect "status":"ok".
+```
+
+```sh
+# A2. Land the minted account with the existing guarded import, run from
+# the radar-immobilier checkout (owner-approved; KUBECONFIG from P0).
+# run-keyring-import-prod enforces guard-prod and PROD_CONFIRM, refuses
+# while a radar-refresh-pv pod is active, and always deletes the Job,
+# its Secret and its ConfigMap and shreds the local render afterwards.
+# The import Job holds /keyring/runtime/.refresh.lock (and
+# .bootstrap.lock) for the write, byte-compares the .key, and replaces
+# the runtime cloud-code account(s) of the same owner scope with the
+# minted one; accounts of other transports are left untouched.
+RENDER="$(mktemp -d)/keyring-import.yaml" # created by the make target
+make -f deploy/k8s/refresh-cronjobs/refresh-018.mk import-keyring-account-prod \
+  IMPORT_TRANSPORT=cloud-code \
+  IMPORT_IMAGE_REF=ghcr.io/rhanka/radar-api@sha256:<digest> \
+  IMPORT_SOURCE_DIR="$SRC" IMPORT_RENDER_OUT="$RENDER" ENV=prod
+make -f deploy/k8s/refresh-cronjobs/refresh-018.mk run-keyring-import-prod \
+  IMPORT_RENDER_OUT="$RENDER" PROD_CONFIRM=1 ENV=prod
+# Only after the import reports success, destroy the workstation copy:
+shred -u "$SRC"/*.json "$SRC/.key" && rmdir "$SRC"
+
+# V1. Verify without starting any PROD pod (owner-approved, read-only).
+# V1.1 A2 prints the import Job log; its JSON line reads
+#   {"status":"imported","transport":"cloud-code","account":"acct-<10 hex>","replaced":[...],"accounts":<N>}
+# The pseudonym is the first 10 hex chars of sha256(accountId):
+printf '%s' '<new-id>' | sha256sum | cut -c1-10   # must equal the 10 hex chars after "acct-"
+# "replaced" lists the previous cloud-code account(s) of this owner scope ([] on a first import).
+# V1.2 No import residue (expected output: empty), then remove the empty render directory:
+kubectl --kubeconfig "$KUBECONFIG" -n radar-immobilier get job/radar-refresh-keyring-account-import \
+  secret/radar-refresh-keyring-account-import \
+  configmap/radar-refresh-keyring-import-script --ignore-not-found
+rmdir "$(dirname "$RENDER")"
+# V1.3 Observe the next scheduled radar-refresh-pv pass (logs or refresh/018/sweep/latest.json,
+# radar-immobilier docs/operator/prod-keyring-import.md Step 4): the gemini route served by
+# cloud-code resolves without no-route and the new account does not turn reauth_required.
+# V1.4 Append the mandatory entry to radar-immobilier docs/operator/manual-operations-log.md
+# (template: docs/operator/prod-keyring-import.md:122-143) with the owner GO reference.
+# Do NOT restart deploy/radar-api or deploy/radar-immo-mcp: they mount no keyring.
+```
+
+An in-cluster `list` / `probe`, if still wanted, belongs in
+`radar-immobilier` as a guarded make target next to
+`run-keyring-import-prod`: pinned digest; the
+`deploy/k8s/refresh-cronjobs/keyring-import/job.yaml` security
+context; no secret env; `kubectl run --rm -i` (no `-t`) or
+`activeDeadlineSeconds` <= 300; refusal while any keyring-PVC pod
+(`radar-refresh-pv`, `radar-refresh-requeue-abandoned`, import) is
+active or a slot is less than 15 minutes away; mode normalization
+under `.bootstrap.lock`; and the probe only before the A1 `expiresAt`
+or after a pass has refreshed the account. Any such in-cluster run
+is likewise an owner-approved PROD act.
 
 A probe 402 means `billing_not_configured` on the non-seat `muse.ts`
 direct-key path: re-enroll a seat account with the device flow above.

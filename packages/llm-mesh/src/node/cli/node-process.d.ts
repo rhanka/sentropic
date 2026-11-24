@@ -3,9 +3,14 @@
 // members declared here are available. At runtime this is the real core
 // module; the declaration is type-only and erased on emit.
 declare module 'node:process' {
+  export interface ProcessReadStream {
+    readonly isTTY?: boolean;
+    [Symbol.asyncIterator](): AsyncIterator<Buffer | string>;
+  }
   export interface ProcessWriteStream {
     write(chunk: string): void;
   }
+  export const stdin: ProcessReadStream;
   export const stdout: ProcessWriteStream;
   export const stderr: ProcessWriteStream;
   export const argv: string[];

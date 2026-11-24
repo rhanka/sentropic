@@ -86,10 +86,28 @@ export interface ProviderAdapter {
   ): AsyncIterable<ProviderEvent>;
 }
 
+export interface KeyringCasGuard {
+  key: string;
+  expected: string | null;
+}
+
+export interface KeyringCasUpdate extends KeyringCasGuard {
+  secret: string;
+}
+
 export interface KeyringAdapter {
   getSecret(key: string): Promise<string | null>;
   setSecret(key: string, secret: string): Promise<void>;
   setSecretIfAbsent?(key: string, secret: string): Promise<boolean>;
+  compareAndSetSecret?(
+    key: string,
+    expected: string | null,
+    secret: string,
+  ): Promise<boolean>;
+  compareAndSetSecrets?(
+    updates: readonly KeyringCasUpdate[],
+    guards?: readonly KeyringCasGuard[],
+  ): Promise<boolean>;
   deleteSecret(key: string): Promise<void>;
 }
 
