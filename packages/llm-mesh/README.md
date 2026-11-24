@@ -189,8 +189,13 @@ credential source: `--from-agy`, `--credential-stdin`, or `--oauth-paste`.
 Commits use one keyring compare-and-set (`:envelope`, `:public`, `:owner`
 when created, and the account index together) so concurrent CLI enrollment
 and `LocalAccountTransportService` custodian refresh never clobber each
-other; restart long-lived daemons after in-place re-enrollment so they reload
+other **when both sides run `@sentropic/llm-mesh` >= 0.38.11**. Against an
+older custodian (plain writes, no CAS) that guarantee does not hold: serialize
+with that deployment's own writer lock instead (for PROD immo,
+`/keyring/runtime/.refresh.lock`, held by its keyring-import Job below).
+Restart long-lived daemons after in-place re-enrollment so they reload
 the new grant, and keep one active refresh holder per Google OAuth grant.
+`--keyring-key-env` takes the environment variable **name**, never its value.
 `llm-mesh-enroll list --keyring-dir <dir>` discovers account ids, statuses,
 and owner scopes read-only (it never reads `:envelope`).
 
@@ -198,10 +203,23 @@ and owner scopes read-only (it never reads `:envelope`).
 
 `--from-agy` pins `secret-tool` to a same-uid `unix:path=` session bus
 (`DBUS_SESSION_BUS_ADDRESS` or `$XDG_RUNTIME_DIR/bus`) and refuses remote or
-`unixexec:` transports. `--credential-stdin` reads bounded (64 KiB) JSON
-under a 30 s deadline and accepts a Google token response or a
-`CloudCodeEnrollmentProvider.complete()` result (non-token metadata is
-discarded); never wrap an interactive producer under `flock -- .refresh.lock`.
+`unixexec:` transports. Accepted limitation: `secret-tool lookup
+service gemini username antigravity` is a libsecret subset match across
+collections (first unlocked match wins; it may prompt to unlock a locked
+collection) and the Secret Service owner on that same-uid bus is not
+verified, so verify which Google identity `agy` is signed into before
+re-enrolling an account in place. `--from-agy` also reuses the `agy`
+grant itself, so `agy` and the mesh custodian become two refresh holders
+of one grant and an `agy` logout or revocation kills the mesh account:
+it is a workstation shortcut; prefer `--oauth-paste` for a dedicated
+grant, as in the PROD procedure below. `--credential-stdin` reads bounded
+(64 KiB) JSON under a 30 s deadline and accepts a Google token response
+or a `CloudCodeEnrollmentProvider.complete()` result (non-token metadata
+is discarded). Do not wrap an interactive producer under `flock` on a
+workstation keyring; in PROD immo every keyring writer instead holds
+`/keyring/runtime/.refresh.lock` (see below). Run the CLI without ambient
+`GOOGLE_OAUTH_CLIENT_SECRET` / `GOOGLE_CLIENT_SECRET` in the environment:
+either variable overrides the Cloud Code client secret in token calls.
 
 ```sh
 # 1. Re-enroll an existing cloud-code account in place (reuses .key; requires
