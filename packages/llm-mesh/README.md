@@ -336,30 +336,36 @@ make -f deploy/k8s/refresh-cronjobs/refresh-018.mk run-keyring-import-prod \
 # Only after the import reports success, destroy the workstation copy:
 shred -u "$SRC"/*.json "$SRC/.key" && rmdir "$SRC"
 
-# V1. Verify in PROD with a one-off Pod modeled on
-# deploy/k8s/refresh-cronjobs/keyring-import/job.yaml: same image
-# @sha256:<digest>, runAsUser/runAsGroup/fsGroup 1001,
-# readOnlyRootFilesystem, PVC radar-refresh-keyring at /keyring, env
-# REFRESH_OWNER_SCOPE_REF from secret radar-refresh-runtime. Start it
-# only when no radar-refresh-pv pod is active: the PVC is ReadWriteOnce
-# and a concurrent attach is an incident. Inside the Pod:
-#   test -d /keyring/runtime && test -f /keyring/runtime/.key
-#   exec 8>/keyring/runtime/.bootstrap.lock; flock -x 8
-#   chmod 00700 /keyring/runtime
-#   find -L /keyring/runtime -type f \( -name .key -o -name '*.json' \) -exec chmod 0600 {} +
-#   flock -u 8
-# fsGroup remounts can restore 0770 modes at Pod start, and the keyring
-# reads fail closed until the directory is 0700 and its files are 0600.
-# The `test` guards matter: `list` on a missing directory exits 0 with
-# no line, so empty output is a failure here, never a success.
-#   /workspace/node_modules/.bin/llm-mesh-enroll list --keyring-dir /keyring/runtime
-#   /workspace/node_modules/.bin/llm-mesh-enroll probe --provider cloud-code \
-#     --account <new-id> --keyring-dir /keyring/runtime \
-#     --model gemini-4-hydrogen --effort low
-# Expect one list line for <new-id> and a probe "status":"ok". The next
-# radar-refresh-pv run picks the account up by itself. Do NOT restart
-# deploy/radar-api or deploy/radar-immo-mcp: they mount no keyring.
+# V1. Verify without starting any PROD pod (owner-approved, read-only).
+# V1.1 A2 prints the import Job log; its JSON line reads
+#   {"status":"imported","transport":"cloud-code","account":"acct-<10 hex>","replaced":[...],"accounts":<N>}
+# The pseudonym is the first 10 hex chars of sha256(accountId):
+printf '%s' '<new-id>' | sha256sum | cut -c1-10   # must equal the 10 hex chars after "acct-"
+# "replaced" lists the previous cloud-code account(s) of this owner scope ([] on a first import).
+# V1.2 No import residue (expected output: empty), then remove the empty render directory:
+kubectl --kubeconfig "$KUBECONFIG" -n radar-immobilier get job/radar-refresh-keyring-account-import \
+  secret/radar-refresh-keyring-account-import \
+  configmap/radar-refresh-keyring-import-script --ignore-not-found
+rmdir "$(dirname "$RENDER")"
+# V1.3 Observe the next scheduled radar-refresh-pv pass (logs or refresh/018/sweep/latest.json,
+# radar-immobilier docs/operator/prod-keyring-import.md Step 4): the gemini route served by
+# cloud-code resolves without no-route and the new account does not turn reauth_required.
+# V1.4 Append the mandatory entry to radar-immobilier docs/operator/manual-operations-log.md
+# (template: docs/operator/prod-keyring-import.md:122-143) with the owner GO reference.
+# Do NOT restart deploy/radar-api or deploy/radar-immo-mcp: they mount no keyring.
 ```
+
+An in-cluster `list` / `probe`, if still wanted, belongs in
+`radar-immobilier` as a guarded make target next to
+`run-keyring-import-prod`: pinned digest; the
+`deploy/k8s/refresh-cronjobs/keyring-import/job.yaml` security
+context; no secret env; `kubectl run --rm -i` (no `-t`) or
+`activeDeadlineSeconds` <= 300; refusal while any keyring-PVC pod
+(`radar-refresh-pv`, `radar-refresh-requeue-abandoned`, import) is
+active or a slot is less than 15 minutes away; mode normalization
+under `.bootstrap.lock`; and the probe only before the A1 `expiresAt`
+or after a pass has refreshed the account. Any such in-cluster run
+is likewise an owner-approved PROD act.
 
 A probe 402 means `billing_not_configured` on the non-seat `muse.ts`
 direct-key path: re-enroll a seat account with the device flow above.
