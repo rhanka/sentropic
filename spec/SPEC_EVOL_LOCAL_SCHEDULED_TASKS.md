@@ -70,3 +70,66 @@ This specification preserves the r3 closures of `B-5` and `m-16`–`m-24` from `
 | `h2a` local safety idioms & runtime layout | `packages/h2a/src/runtime/loop/supervisor.ts:11-36,66-82,151-183`; `packages/h2a/src/runtime/mirror/push-daemon.ts:149-166`; `packages/h2a/src/runtime/local-files/locks.ts:14-27,262-295,382-398`; `packages/h2a/src/runtime/local-files/succession-lock.ts:360-387,789-830,862-916`; `packages/h2a-runtime/src/file-lock.ts:13-16`; `packages/h2a-runtime/src/status-projection.ts`; `packages/h2a-runtime/src/index.ts:5544`; `packages/h2a/package.json:71-72,96-98`; `contrib/systemd/README.md:1-65` | `locks.ts` + `succession-lock.ts` (`classifyLiveness(..., { protocol: 'identity' })` at `:862-916`) prove fail-closed namespace- and time-namespace-aware death proof + qualified `statfs` + UID/`nlink` checks + serialized guard-lock recovery; `file-lock.ts:13-16` is explicitly best-effort (not mutual exclusion); `h2a status`/`h2a resume` live in `packages/h2a-runtime`; `h2a` bin `dist/bin.js` uses `#!/usr/bin/env node`; deployed units need `H2A_ROOT` captured explicitly. |
 
 ---
+
+## 1. Package placement and name
+
+### 1.1 Decision: new package `packages/local-scheduler` (`@sentropic/local-scheduler`)
+
+**TARGET**: Create a small, self-contained, zero-runtime-dependency TypeScript package at `packages/local-scheduler`, published to npm as **`@sentropic/local-scheduler`**, consumed directly by `@sentropic/h2a-runtime` (first consumer) and any future Sentropic workstation consumer.
+
+### 1.2 Why this placement (and why every alternative is rejected)
+
+| Candidate | Verdict | Evidence (`origin/main`) |
+|---|---|---|
+| **`@sentropic/local-scheduler` (new package in `sentropic/packages/local-scheduler`)** | **Selected** | Zero runtime deps (Node `>=22` built-ins only), honours Q-P1 ("Sentropic d'abord"), honours **D1=B** (`SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md:10`), honours `harness` tooling-only rule (`SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md:308`), honours `CLI = h2a` (`rules/MASTER.md:36` — library + internal runner, not a user-facing Sentropic CLI), and ships independently before `2027-01-10`. |
+| Inside `@sentropic/harness` | **Rejected** | Violates `packages/harness/README.md:7-8` ("Tooling-only: zero product-runtime coupling") and `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md:40,308` ("Never co-ship a runtime package with `@sentropic/harness`"). |
+| Inside `@sentropic/flow` | **Rejected** | `packages/flow/package.json:34-36` pulls `hono`; `packages/flow/src/job-queue.ts:4-13` and `processing-loop.ts:22-31` are server-side Postgres workflow orchestration; unpublished WIP (`packages/flow/README.md:3`). |
+| Inside `@sentropic/cluster-mesh` | **Rejected** | Violates **D1=B** (`spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md:10`): `h2a` local archiving must operate without importing `cluster-mesh` as a runtime requirement (`packages/cluster-mesh/src/mesh.ts:74-85`). |
+| Wait for / build inside BR-30 (`@sentropic/triggers`) | **Rejected for critical path; compatible seam** | `plan/36-BRANCH_feat-external-triggers.md:15,20-24` and `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md:267-284` scope BR-30 to multi-tenant server triggers (`TenantContext` mandatory at `:282`) dispatching `@sentropic/flow` DAGs and emitting `@sentropic/events`, blocked on BR-26 (`:15`). Waiting misses the `2027-01-10` J-14 gate. **Alignment**: `LocalTaskScheduleV1` provides a **compatible seam**; the exact mapping (including a no-tenant local mode and an idempotency key `<taskId>:<scheduledSlotIso>`) will be defined when BR-30 freezes `TriggerSource`. |
+| New user-facing CLI `@sentropic/cli` | **Rejected** | Eradicated by `rules/MASTER.md:36` (`CLI = h2a: no sentropic CLI package`). Operator verbs (`enable`/`disable`/`status`/`uninstall`) are exposed by each consumer CLI (first: `h2a archive schedule ...`). |
+
+### 1.3 Package layout and exports
+
+```text
+packages/local-scheduler/
+  package.json                 # name: "@sentropic/local-scheduler", type: "module", sideEffects: false,
+                               # files: ["dist", "README.md", "LICENSE"], engines: { "node": ">=22.0.0" }, dependencies: {}
+  tsconfig.json
+  Dockerfile.systemd-ci        # Built from $(LLM_MESH_NODE_IMAGE) + systemd, systemd-sysv, dbus-user-session (Lot S2)
+  README.md
+  LICENSE
+  src/
+    index.ts                   # Public contract, constants, errors, validation, manifest/witness/env/lock/skip I/O, health, fake adapter
+    errors.ts                  # LocalSchedulerError hierarchy + closed LocalSchedulerErrorCode union
+    contract.ts                # LocalTaskSpecV1, LocalTaskManifestV1, EnablePolicyV1, validation, allow-list & shebang check
+    env-file.ts                # Pure parseSchedulerEnvFile(text), readSchedulerEnvFile(), kill-switch evaluation
+    state-dir.ts               # resolveStateDir(), probeStateDirObservability(), readTaskManifest()
+    witness.ts                 # LocalTaskWitnessV1 schema (v1), atomic write, readTaskWitness(), skips.jsonl appender/reader
+    health.ts                  # Pure evaluateTaskHealth() dead-man / paused / interrupted / unobservable / clock-skew evaluator
+    lock.ts                    # Fail-closed single-writer lock + pidNs/timeNs + qualified statfs + guard-lock recovery + childPgid + readTaskLockSummary()
+    host-pid-guard.ts          # Linux init PID namespace proof (fail-closed under bwrap/containers)
+    log-rotator.ts             # Pure Node bounded log capture & size-based rotation (0600)
+    runner.ts                  # One-shot execution supervisor (spawn shell:false, timeout, SIGTERM->SIGKILL, witness)
+    adapter.ts                 # OsSchedulerAdapter interface + createFakeSchedulerAdapter()
+    systemd/
+      index.ts                 # SystemdUserAdapter (enable, disable, uninstall, status, linger check, --runtime mode)
+      unit-generator.ts        # Pure injection-safe .service + .timer emitter
+      systemctl.ts             # Safe execFile('systemctl'|'systemd-analyze'|'loginctl', ['--', ...]) wrappers
+  tests/
+    ...
+```
+
+Package subpath exports (`package.json` `"exports"`):
+- `@sentropic/local-scheduler`:
+  - Constants & schemas: `LOCAL_TASK_SPEC_V1`, `LOCAL_TASK_MANIFEST_V1`, `LOCAL_TASK_WITNESS_V1`, `ON_CALENDAR_PRESETS`, `ON_CALENDAR_CUSTOM_REGEX`, `BLOCKED_LOADER_ENV_VARS`.
+  - Types: `LocalTaskSpecV1`, `LocalTaskScheduleV1`, `LocalTaskCommandV1`, `LocalTaskResourcesV1`, `LocalTaskRunnerEntryV1`, `LocalTaskManifestV1`, `LocalTaskWitnessV1`, `LocalTaskSkipEntryV1`, `LocalTaskLockSummaryV1`, `LocalTaskOutcomeV1`, `LocalTaskTriggerV1`, `LocalTaskRefusalReasonV1`, `LocalTaskKillSwitchMatchV1`, `LocalTaskHealthStatus`, `EvaluateTaskHealthInput`, `LocalTaskHealthVerdict`, `StateDirObservabilityResult`, `EnablePolicyV1`, `EnableResultV1`, `DisableResultV1`, `UninstallOptionsV1`, `UninstallResultV1`, `LocalTaskStatusV1`, `SystemdRuntimeStateV1`, `OsSchedulerAdapter`, `FakeSchedulerAdapter`, `LocalSchedulerErrorCode`.
+  - Errors: `LocalSchedulerError`, `SchedulerUnavailableError`, `InvalidTaskSpecError`, `UnmanagedUnitError`, `PolicyRefusalError`, `ManifestCorruptError`, `TaskNotFoundError`, `SystemctlFailedError`.
+  - Functions: `validateTaskSpec`, `resolveStateDir`, `resolveSchedulerEnvFilePath`, `probeStateDirObservability`, `readTaskManifest`, `readTaskWitness`, `readTaskLockSummary`, `readLastSkipEntry`, `parseSchedulerEnvFile`, `readSchedulerEnvFile`, `evaluateKillSwitch`, `isTaskKillSwitchActive`, `evaluateTaskHealth`, `assertHostPidNamespace`, `createFakeSchedulerAdapter`.
+- `@sentropic/local-scheduler/systemd`:
+  - `createSystemdUserAdapter`, `renderSystemdUnits`, `probeSystemdUserAvailability`, `computeExpectedIntervalMs`.
+- `@sentropic/local-scheduler/runner`:
+  - `RunScheduledTaskOptionsV1`, `RunScheduledTaskResultV1`, `runScheduledTask`, `runScheduledTaskById`.
+
+Zero external runtime dependencies (`dependencies: {}`). `devDependencies`: `"typescript": "5.4.5"`, `"@types/node": "^22.0.0"` (aligned with Node `>=22.0.0`), `"vitest": "4.0.18"` (matching `Makefile:2361` locked CI tool versions).
+
+---
