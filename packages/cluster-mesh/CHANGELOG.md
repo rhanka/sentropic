@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.27.0
+
+- Stable release of the 0.27.0 line (`0.27.0-dev.1` to `0.27.0-dev.3`, plus
+  packaging and companion alignments since `0.26.0`). No public subpath is
+  removed or remapped.
+- Storage blob bridge contract (`./storage`, `src/storage/artifact-blob.ts`,
+  PR #1003): export `ArtifactBlobPort`, `ArtifactBlobPlacement`, `BlobKey`,
+  `BoundedBlobKeys`, `MaintainGrant`, and `ObjectBindingRef` for digest-verified
+  create-only object storage across `db`, `s3`, and `db+s3` placements; harden
+  PostgreSQL storage test fixture transaction cleanup.
+- RM-0 remote contracts (`0.27.0-dev.3`, PR #1068): export the remote assembly
+  contract, credit baseline, and WET-2.1 contract receipt from the package root
+  (`src/remote/assembly-contract.ts`, `src/remote/credit-baseline.ts`,
+  `src/remote/contract-receipt.ts`), including monotonic credit acks with
+  bounds and `recordEnds` pruning, preserved upgrade responses with route
+  precedence and lazy plugin validation, and fail-closed authority binding for
+  multi-tenant stores and the prod tier.
+- Optional peer range widening (PR #1053): widen `@sentropic/llm-gateway` from
+  `>=0.19.0 <0.24.0` to `>=0.19.0 <0.28.0` in `package.json` and
+  `src/modules/catalog.ts`, admitting gateway relay lot 1 (`0.24.0`), `0.25.0`
+  (PR #1056), and `0.26.0` without widening beyond the tested ceiling.
+- Companion train alignment in the selected packaging fixture and boundary
+  tests: `@sentropic/llm-mesh@0.38.11` (admitted by existing
+  `0.19.2 || >=0.22.0 <0.39.0`), `@sentropic/llm-gateway@0.26.0`,
+  `@sentropic/comments@0.3.3` (open/closed thread status in PR #1052 and
+  `./artifact-hono` subpath in PR #1057; admitted by existing `^0.3.0`), and
+  `@sentropic/artifacts@0.2.28` (admitted by existing `>=0.2.0 <0.3.0`). Runtime
+  dependencies are unchanged. The optional `@sentropic/engram` peer range is
+  unchanged (`>=0.22.0 <0.23.0`).
+- Extend the `comments` and `notifications` self-version ranges in
+  `src/modules/catalog.ts` to `>=0.21.0 <0.28.0` so this released leaf admits
+  itself; `0.28.0` remains refused until qualified.
+
 ## 0.27.0-dev.1
 
 - T4a storage CMF-S1 structural blob bridge contract (`storage/artifact-blob.ts`):
