@@ -19,16 +19,16 @@
   multi-tenant stores and the prod tier.
 - Optional peer range widening (PR #1053): widen `@sentropic/llm-gateway` from
   `>=0.19.0 <0.24.0` to `>=0.19.0 <0.28.0` in `package.json` and
-  `src/modules/catalog.ts`, admitting gateway relay lot 1 (`0.24.0`), `0.25.0`
-  (PR #1056), and `0.26.0` without widening beyond the tested ceiling.
+  `src/modules/catalog.ts`, admitting `0.24.0`–`0.26.0` (PR #1056, PR #1059);
+  `0.27.x` is admitted by the range but not yet qualified.
 - Companion train alignment in the selected packaging fixture and boundary
-  tests: `@sentropic/llm-mesh@0.38.11` (admitted by existing
-  `0.19.2 || >=0.22.0 <0.39.0`), `@sentropic/llm-gateway@0.26.0`,
-  `@sentropic/comments@0.3.3` (open/closed thread status in PR #1052 and
-  `./artifact-hono` subpath in PR #1057; admitted by existing `^0.3.0`), and
-  `@sentropic/artifacts@0.2.28` (admitted by existing `>=0.2.0 <0.3.0`). Runtime
-  dependencies are unchanged. The optional `@sentropic/engram` peer range is
-  unchanged (`>=0.22.0 <0.23.0`).
+  tests: `@sentropic/llm-mesh@0.38.11` (PRs #1044, #1049, #1050, #1063, #1071,
+  #1072, #1073; admitted by existing `0.19.2 || >=0.22.0 <0.39.0`),
+  `@sentropic/llm-gateway@0.26.0` (PR #1059), `@sentropic/comments@0.3.3`
+  (open/closed thread status in PR #1052 and `./artifact-hono` subpath in
+  PR #1057; admitted by existing `^0.3.0`), and `@sentropic/artifacts@0.2.28`
+  (admitted by existing `>=0.2.0 <0.3.0`). Runtime dependencies are unchanged.
+  The optional `@sentropic/engram` peer range is unchanged (`>=0.22.0 <0.23.0`).
 - Extend the `comments` and `notifications` self-version ranges in
   `src/modules/catalog.ts` to `>=0.21.0 <0.28.0` so this released leaf admits
   itself; `0.28.0` remains refused until qualified.
