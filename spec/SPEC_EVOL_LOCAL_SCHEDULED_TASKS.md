@@ -726,3 +726,104 @@ Carried directly from `DESIGN-r4.md:199-203` (verified against `bwrap --unshare-
 - Strictly isolated from the LLM gateway (`h2a` `gateway-host`, `127.0.0.1:3002`) and the central MCP bus (`h2a-mcp-central.service`): zero shared process, zero shared memory, zero sockets in `@sentropic/local-scheduler` (static guard), and kernel-enforced `RestrictAddressFamilies=AF_UNIX` blocking all TCP/UDP connections from the spawned child process.
 
 ---
+
+## 4. Consumer API for `h2a` (frozen for parallel H1 development)
+
+### 4.1 Ownership boundary and lock scope
+
+| Concern | Owner |
+|---|---|
+| Task spec validation, `systemd --user` unit generation/lifecycle, host PID guard, global/per-task/alias kill-switch & env-file parser, fail-closed single-writer **per-task** lock, child timeout/process-group signaling, log rotation, atomic `last-run.json` witness, pure dead-man/pause health evaluation, fake adapter for consumer tests | **`@sentropic/local-scheduler`** (in `sentropic`) |
+| CLI session discovery (Claude, Vibe, etc.), copy vs quarantine barriers, live-session probes, `.tar.gz` + SHA-256 verification, versioned archive index, **data-level single-writer lock on the archive repository and index**, `h2a archive scan\|run\|verify\|list\|restore`, automatic restore in `h2a resume` / `h2a run --resume`, Claude 90-day purge deadline calculation (main transcript `mtime` per `REVIEW-opus-r4.md:108-116`), disk free-space guard `min(10 Go, 5%) + session size`, user-facing CLI & banners | **`@sentropic/h2a-runtime`** (in `h2a`) |
+
+- **Lock scope guarantee**: the scheduler lock serialises runs of **one `taskId`**; data-level single-writer protection on the shared archive repository and index stays in `h2a` (so adding a future second task such as `h2a-session-archive-vibe` cannot corrupt the shared archive index).
+- **Archive repository lock requirement in `h2a`**: inspection of `h2a` `origin/main` confirms `packages/h2a-runtime/src/file-lock.ts:13-16` is **intentionally best-effort** (*"when it cannot be taken within the wait budget the caller proceeds anyway (last-writer-wins)… not mutual exclusion you may build a safety property on"*). For the archive repository and index, `h2a` MUST use a **fail-closed** lock (modelled on `packages/h2a/src/runtime/local-files/locks.ts:14-27` and `succession-lock.ts:789-830,862-916`), never `file-lock.ts`'s best-effort takeover.
+
+### 4.2 Complete normative TypeScript API & error codes
+
+The `h2a` conductor can code and test Lot H1 in parallel against these exact frozen signatures (using `createFakeSchedulerAdapter({ stateDir })` before `@sentropic/local-scheduler@0.1.0` is published):
+
+#### Error code → exit code mapping
+
+| `LocalSchedulerErrorCode` | Class | Exit code |
+|---|---|---:|
+| `INVALID_TASK_SPEC`, `INTERVAL_MISMATCH` | `InvalidTaskSpecError` | `2` |
+| `UNMANAGED_UNIT` | `UnmanagedUnitError` | `2` |
+| `MANIFEST_CORRUPT` | `ManifestCorruptError` | `2` |
+| `TASK_NOT_FOUND` | `TaskNotFoundError` | `2` |
+| `SYSTEMD_USER_UNAVAILABLE` | `SchedulerUnavailableError` | `69` |
+| `SYSTEMCTL_FAILED` | `SystemctlFailedError` | `70` |
+| `RUNNER_INTERNAL_ERROR` | *(runner `RunScheduledTaskResultV1.error` only; no error class)* | `70` |
+| `POLICY_REFUSED_SANDBOX`, `POLICY_REFUSED_ALLOWLIST`, `POLICY_REFUSED_FILE_MODE`, `POLICY_REFUSED_STATE_DIR` | `PolicyRefusalError` | `77` |
+
+```ts
+// --- @sentropic/local-scheduler (root entrypoint) ---
+
+export type LocalSchedulerErrorCode =
+  | 'SYSTEMD_USER_UNAVAILABLE'
+  | 'INVALID_TASK_SPEC'
+  | 'INTERVAL_MISMATCH'
+  | 'UNMANAGED_UNIT'
+  | 'POLICY_REFUSED_SANDBOX'
+  | 'POLICY_REFUSED_ALLOWLIST'
+  | 'POLICY_REFUSED_FILE_MODE'
+  | 'POLICY_REFUSED_STATE_DIR'
+  | 'MANIFEST_CORRUPT'
+  | 'TASK_NOT_FOUND'
+  | 'SYSTEMCTL_FAILED'
+  | 'RUNNER_INTERNAL_ERROR';
+
+export class LocalSchedulerError extends Error {
+  readonly code: LocalSchedulerErrorCode;
+  readonly exitCode: 2 | 69 | 70 | 77;
+  constructor(code: LocalSchedulerErrorCode, exitCode: 2 | 69 | 70 | 77, message: string, options?: ErrorOptions);
+}
+
+export class SchedulerUnavailableError extends LocalSchedulerError {
+  override readonly code: 'SYSTEMD_USER_UNAVAILABLE';
+  readonly reason: 'not-linux' | 'no-systemctl' | 'no-user-manager' | 'timeout';
+  override readonly exitCode: 69;
+}
+
+export class InvalidTaskSpecError extends LocalSchedulerError {
+  override readonly code: 'INVALID_TASK_SPEC' | 'INTERVAL_MISMATCH';
+  readonly field?: string;
+  override readonly exitCode: 2;
+}
+
+export class UnmanagedUnitError extends LocalSchedulerError {
+  override readonly code: 'UNMANAGED_UNIT';
+  readonly unitPath: string;
+  override readonly exitCode: 2;
+}
+
+export class PolicyRefusalError extends LocalSchedulerError {
+  override readonly code:
+    | 'POLICY_REFUSED_SANDBOX'
+    | 'POLICY_REFUSED_ALLOWLIST'
+    | 'POLICY_REFUSED_FILE_MODE'
+    | 'POLICY_REFUSED_STATE_DIR';
+  readonly refusal: LocalTaskRefusalReasonV1;
+  override readonly exitCode: 77;
+}
+
+export class ManifestCorruptError extends LocalSchedulerError {
+  override readonly code: 'MANIFEST_CORRUPT';
+  readonly manifestPath: string;
+  override readonly exitCode: 2;
+}
+
+export class TaskNotFoundError extends LocalSchedulerError {
+  override readonly code: 'TASK_NOT_FOUND';
+  readonly taskId: string;
+  override readonly exitCode: 2;
+}
+
+export class SystemctlFailedError extends LocalSchedulerError {
+  override readonly code: 'SYSTEMCTL_FAILED';
+  readonly command: readonly string[];
+  readonly stderr: string;
+  readonly rolledBack: boolean;
+  override readonly exitCode: 70;
+}
+```
