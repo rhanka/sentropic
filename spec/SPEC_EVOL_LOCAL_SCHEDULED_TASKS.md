@@ -564,3 +564,128 @@ export interface LocalTaskHealthVerdict {
   - Else if `lock === 'unreadable'`: append `"recent ticks found an unreadable lock file; if no run is active, a reboot clears it"` to `hints`.
 - For each variable `<VAR>` in `envFileProtectedOverrides` (`PATH`, `SENTROPIC_LOCAL_SCHEDULER_STATE_DIR`, `m-30`):
   - Append `"env file sets <VAR>; runner enforces constant child PATH and manifest.stateDir parity — remove <VAR> from the env file"` to `hints`.
+
+### 2.7 Exit-code semantics
+
+| Exit code | Meaning | Witness (`last-run.json`) | Systemd unit state |
+|---:|---|---|---|
+| `0` | Task succeeded, OR cleanly paused (`skipped_disabled`), OR cleanly yielded to live lock (`skipped_locked`) | `succeeded` / `skipped_disabled` *(lock holder only; `skipped_locked` goes to `skips.jsonl`)* | `inactive (dead)` (clean) |
+| `1` | Consumer child command exited non-zero | `failed` | `failed` |
+| `2` | Invalid task spec, missing task (`TASK_NOT_FOUND`), manifest validation/corrupt error, interval cross-check > 10%, unmanaged unit refusal, or invalid CLI args (`packages/harness/README.md:49-50`) | *(not written; `outcome: 'not_run'`)* | `failed` |
+| `69` | `systemd --user` manager unavailable / unsupported OS (`EX_UNAVAILABLE`) | *(adapter lifecycle refusal)* | N/A |
+| `70` | Runner internal I/O failure (`RUNNER_INTERNAL_ERROR`) or `systemctl` command failure (`SYSTEMCTL_FAILED`, `EX_SOFTWARE`) | Pre-witness lock I/O failure: not written (`not_run`, lock released if held). Post-child witness write failure: `witness: null` (child outcome preserved in `RunScheduledTaskResultV1`) | `failed` |
+| `77` | Policy/security refusal: host PID namespace failed (`sandbox`, pre-lock), command/shebang outside allow-list (`allowlist`, post-lock), unsafe mode/symlink (`file-mode`), or mismatched/invalid `stateDir` (`state-dir`, pre-lock) (`EX_NOPERM`) | Post-lock (`allowlist`, child `file-mode`): `refused_policy` (lock holder only). Pre-lock (`sandbox`): `skips.jsonl` only, **never** writes `last-run.json` or locks. Pre-lock (`state-dir`, manifest `file-mode`): not written (`not_run`). | `failed` *(diagnostic mapped in `status()`)* |
+| `124` | Execution timeout exceeded (`SIGTERM` → grace → `SIGKILL`, `timeout(1)`) | `timed_out` | `failed` |
+| `130` / `143` | Runner interrupted by `SIGINT` (`130`) or `SIGTERM` (`143`, e.g. logout/stop) | `interrupted` | `inactive (dead)` (clean via `SuccessExitStatus=130 143`) |
+
+### 2.8 Log location, format, and rotation
+
+- **Structured journal stream**: runner writes one compact JSON line per run to `stdout` (`{ v: 1, taskId, runId, trigger, outcome, durationMs, exitCode, signal, consecutiveFailures }`) captured by `systemd-journald` (`journalctl --user -u sentropic-task-<taskId>.service`).
+- **Local rotating file**: `${stateDir}/tasks/<taskId>/runs.log` (mode `0600`), written and rotated purely in Node.js (zero Python, zero `logrotate` dependency):
+  - Appends the structured JSON header line plus a bounded excerpt of child stdout/stderr (capped at `64 KiB` per run, NUL/control characters stripped, UTF-8 safe truncation mirroring `truncateOpsDetail` in `ops-job-failure-types.ts:108-114`).
+  - Rotation threshold: `maxBytes = 5 * 1024 * 1024` (5 MiB), `maxFiles = 5` (`runs.log` → `runs.log.1` … `runs.log.4`; oldest unlinked before shift). All rotated files retain mode `0600`.
+- **Contention & sandbox-refusal log**: `${stateDir}/tasks/<taskId>/skips.jsonl` (`0600`, `maxBytes = 256 KiB`, `maxFiles = 2`). Contenders and pre-lock sandbox refusals only `O_APPEND`; rotation is performed **exclusively by the lock holder at runner step 8** (`m-32(e)`).
+
+### 2.9 Resource limits
+
+Applied declaratively in the generated `.service` unit (`[Service]`):
+- `Nice=15` (default, bounds `0..19`; never negative) — **active on target host**.
+- `IOSchedulingClass=idle` (default; allowed: `'idle' | 'best-effort'`) — **best-effort only**: effective only on block devices configured with an `ioprio`-aware I/O scheduler (`bfq`/`kyber`/`mq-deadline`); has no effect on devices running the `none` scheduler (such as NVMe devices on this workstation, where the user manager delegates `cpu memory pids` only).
+- `MemoryMax=512M` (default, matching `contrib/systemd/h2a-mcp-central.service:18`; bounds `64M..4G`) — **active on target host**.
+- `CPUQuota=50%` (default; bounds `5%..100%`) — **active on target host**.
+- `TasksMax=64` (default; bounds `8..512`) — **active on target host**.
+- `UMask=0077` (fixed, non-overridable).
+
+---
+
+## 3. OS adapter (`systemd --user`)
+
+### 3.1 Unit generation and ownership marker
+
+Default unit directory: `${XDG_CONFIG_HOME ?? ~/.config}/systemd/user/` (overridable via `EnablePolicyV1.unitDir`; qualification tests use `$XDG_RUNTIME_DIR/systemd/user/` with `runtime: true`).
+- Directory permissions rule: **create with mode `0700` ONLY if absent; NEVER `chmod` an existing unit directory** (e.g. an owner's existing `0755` `~/.config/systemd/user/`). Verify existing directory is owned by `process.getuid()`, is not a symlink, and is not group- or world-writable (`(mode & 0o022) === 0`); otherwise fail closed with `PolicyRefusalError` (exit `77`).
+- Unit files (written atomically via temp file + `fsync` + `rename`, mode `0600`):
+  - `sentropic-task-<taskId>.service`
+  - `sentropic-task-<taskId>.timer`
+
+Every generated unit starts with a machine-verifiable header:
+```ini
+# Managed-By: @sentropic/local-scheduler v1
+# Task-Id: <taskId>
+# Owner: <owner>
+```
+`enable`, `disable`, and `uninstall` **refuse** (`UnmanagedUnitError`, exit `2`) to overwrite or delete any pre-existing unit file lacking matching `# Managed-By: @sentropic/local-scheduler` and `# Task-Id: <taskId>` headers.
+
+#### Reference `.service` template (`sentropic-task-<taskId>.service`)
+
+```ini
+# Managed-By: @sentropic/local-scheduler v1
+# Task-Id: h2a-session-archive
+# Owner: h2a
+[Unit]
+Description=Sentropic local scheduled task: h2a local CLI session archive (h2a-session-archive)
+After=default.target
+
+[Service]
+Type=oneshot
+KillMode=mixed
+SuccessExitStatus=130 143
+Nice=15
+IOSchedulingClass=idle
+MemoryMax=512M
+CPUQuota=50%
+TasksMax=64
+UMask=0077
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=yes
+RestrictRealtime=yes
+TimeoutStartSec=1845
+TimeoutStopSec=30
+Environment="PATH=/usr/bin:/bin"
+Environment="SENTROPIC_LOCAL_SCHEDULER_STATE_DIR=/home/user/.local/state/sentropic/local-scheduler"
+EnvironmentFile=-/home/user/.config/sentropic/local-scheduler/env
+UnsetEnvironment=NODE_OPTIONS NODE_PATH LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT
+ExecStart="/usr/bin/node" "/home/user/.npm-global/lib/node_modules/@sentropic/h2a/dist/bin.js" "archive" "_schedule-exec" "h2a-session-archive"
+StandardOutput=journal
+StandardError=journal
+```
+
+Design notes on the generated `.service`:
+- **No `[Install]` section**: triggered exclusively by its paired `.timer` (or explicit `systemctl --user start`).
+- **Zero memory footprint between runs**: `Type=oneshot` exits completely after each pass.
+- **Clean interruption exit codes (`SuccessExitStatus=130 143`)**: per `systemd.service(5)`, `Type=oneshot` does not treat signal exits (`SIGINT`/`SIGTERM`, mapped to exit `130`/`143`) as clean unless listed in `SuccessExitStatus=`. Declaring `130 143` ensures logout or `systemctl --user stop` leaves the unit `inactive (dead)` instead of `failed`.
+- **No hardcoded `SENTROPIC_TASK_TRIGGER`**: the runner reads `process.env.TRIGGER_UNIT` (set by `systemd.exec(5)` ONLY for timer-activated services), so manual `systemctl --user start` is tagged `'manual'` rather than `'systemd-timer'`.
+- **Pinned `stateDir` and `envFilePath` (`m-30` precedence guard)**: both `SENTROPIC_LOCAL_SCHEDULER_STATE_DIR` and `EnvironmentFile=-<escaped-abs-path>` are resolved once at `enable()` and stored in `manifest.json`. Because `systemd.exec(5)` lets `EnvironmentFile=` override `Environment=`, the runner independently verifies `manifest.stateDir === resolvedStateDir` at step 1 (failing closed with `POLICY_REFUSED_STATE_DIR`, exit `77` if overridden in `envFilePath`) and `status()` / §4.4 emit a hint whenever the env file defines `SENTROPIC_LOCAL_SCHEDULER_STATE_DIR` or `PATH`.
+- **Loader/runtime-injection hardening (`UnsetEnvironment=`)**: `UnsetEnvironment=NODE_OPTIONS NODE_PATH LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT` is applied by systemd as the **final** environment step *after* `EnvironmentFile=` (`systemd.exec(5)`), protecting both the runner's own Node process and the child process even if an env file tries to inject code.
+- **Why filesystem/user-namespace directives (`PrivateTmp`, `ProtectHome`, `ProtectSystem`, `PrivateUsers`) are omitted**: per `systemd.exec(5)`, enabling these directives in a per-user manager implicitly activates `PrivateUsers=`, which remaps `/proc/1` ownership away from `uid 0` (breaking host PID check #2 in §3.4) and blocks access to the owner's real `~/.claude` / `~/.vibe` session paths.
+- **Seccomp hardening without user namespaces**: `NoNewPrivileges=yes`, `RestrictAddressFamilies=AF_UNIX`, `LockPersonality=yes`, and `RestrictRealtime=yes` use kernel seccomp filters (no user namespace required). `RestrictAddressFamilies=AF_UNIX` permits `systemd-journald` and local unix-socket probes while kernel-blocking all `AF_INET`/`AF_INET6` sockets (including `127.0.0.1:3002` LLM gateway) even for the full `h2a` child binary.
+- **Graceful stop on logout/shutdown**: `KillMode=mixed` delivers `SIGTERM` to the runner main process first; `TimeoutStopSec = ceil(killGraceMs / 1000) + 15` gives the runner time to terminate `-childPgid`, persist `outcome: 'interrupted'`, and release the lock before systemd sends `SIGKILL` to any remaining cgroup processes.
+- **Constant child `PATH` (`m-30`) & canonical `ExecStart`**: `Environment="PATH=/usr/bin:/bin"` sets the default unit `PATH` and canonical `(node, script)` `ExecStart=` paths eliminate `/usr/bin/env` lookups (§6.5); because `EnvironmentFile=` can override unit `Environment=`, the runner unconditionally constructs the child's `PATH` as the constant `'/usr/bin:/bin'` (never inherited from the runner process).
+- **Unified injection-safe escaping (`m-25`)**:
+  - Every interpolated path (`EnvironmentFile=`, `Environment=`, and path tokens in `ExecStart=`) follows one strict path-sanitization rule: reject ASCII control characters, `"` and `\`; escape `%` → `%%`.
+  - **Every `ExecStart=` token — path or non-path — escapes `$` → `$$`** after the path checks (`systemd.service(5)` expands `${FOO}` in `ExecStart=` from `Environment=` and `EnvironmentFile=`), whereas `Environment=` and `EnvironmentFile=` keep `$` literal (`systemd.exec(5)`).
+  - Any `ExecStart=` argument solely equal to `;` is **rejected** (`systemd.service(5)`).
+  - Non-path `ExecStart=` argv tokens reject control characters and trailing `\`, and escape `\` → `\\`, `"` → `\"`, `%` → `%%`, and `$` → `$$` (`systemd.service(5)` / `systemd.syntax(7)`).
+  - `Environment=` and `ExecStart=` values are wrapped in `"..."`; `EnvironmentFile=-<escaped-abs-path>` additionally rejects glob metacharacters (`*`, `?`, `[`) and is emitted **unquoted** (per `systemd.exec(5)` and verified on systemd 259 `systemd-analyze verify`, `EnvironmentFile=` treats `"` literally and rejects `EnvironmentFile=-"/..."` as not absolute, while unquoted handles spaces and `%%` cleanly).
+  - `Description=` rejects `%`, `\`, and control chars; no unit value may end in `\`.
+
+#### Reference `.timer` template (`sentropic-task-<taskId>.timer`)
+
+```ini
+# Managed-By: @sentropic/local-scheduler v1
+# Task-Id: h2a-session-archive
+# Owner: h2a
+[Unit]
+Description=Timer for Sentropic local scheduled task: h2a-session-archive
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=600
+AccuracySec=60
+Unit=sentropic-task-h2a-session-archive.service
+
+[Install]
+WantedBy=timers.target
+```
