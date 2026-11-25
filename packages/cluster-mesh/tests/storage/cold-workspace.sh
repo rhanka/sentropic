@@ -25,7 +25,7 @@ node --input-type=module -e 'import { readFileSync, writeFileSync } from "node:f
   const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
   writeFileSync("/tmp/cm-tools/package.json", JSON.stringify({ private: true,
     overrides: { ai: lock.packages["node_modules/ai"].version } }));'
-# The memory peer installs from the published registry pin (@sentropic/engram@0.22.0
+# The memory peer installs from the published registry pin (@sentropic/engram@0.28.0
 # in CLUSTER_MESH_PEER_TOOLS); the committed tool lock carries its integrity.
 # Shallow keeps transitive dependents nested so an installed @sentropic/*
 # package can never shadow a workspace symlink below (a hoisted older
@@ -129,7 +129,7 @@ case "$CM_ACTION" in
       cd "$consumer"
       printf '%s\n' '{"private":true,"type":"module"}' > package.json
       node /source/scripts/ci/locked-consumer.mjs --ignore-scripts --no-audit --no-fund ./sentropic-cluster-mesh-*.tgz \
-        @sentropic/engram@0.22.0 vitest@4.1.5 pg@8.22.0 >/dev/null
+        @sentropic/engram@0.28.0 vitest@4.1.5 pg@8.22.0 >/dev/null
       # Fixture relative paths target installed declarations/runtime/assets.
       # No checkout sources are copied into this consumer.
       ln -s node_modules/@sentropic/cluster-mesh/dist src

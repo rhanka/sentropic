@@ -1,12 +1,12 @@
 # Published peer qualification
 
-The published `@sentropic/engram` 0.22.0 is pinned from npm to:
+The published `@sentropic/engram` 0.28.0 is pinned from npm to:
 
 | Field | Value |
 | --- | --- |
-| Version | `0.22.0` |
-| Integrity | `sha512-888akd0XH+ODAEU65QMLvAZLDfdgwiLlx4EiiFFy3Go+cWhLm22z48HKq2NardQ32rJm5bOIhqlwKLTnjcO+1w==` |
-| Engram source | `2bd7da41779305831b16c94f1272ab3b9d38128e` |
+| Version | `0.28.0` |
+| Integrity | `sha512-GkRvw9Bbo02lxMUKlacRIwllbKlPl3Hva+hSYoezM6+Xc/D2cn6RjkIKJM7KilGqrt87okQ4Y3RKPWass8zsgA==` |
+| Engram source | `809af68984943b76227b4d4bbfc8b7f63cfab43f` |
 
 The committed root and tool lockfiles carry the published integrity; the
 isolated qualification installs the peer from the registry pin. The frozen
@@ -40,7 +40,8 @@ PostgreSQL, stdio and HTTP cases plus static/lazy/refusal cases and a
 separate-process round trip through the shipped stdio launcher. This target
 requires the positive cases without skips and shuts down the isolated stack.
 
-The public registry now supplies engram 0.22.0. The owner instruction releases
-cluster-mesh to 0.25.0 on the published peer; the mandatory package-bump CI gate
-passes on the bumped version, and the release-train qualification tuple carries
-the published peer. No exemption is introduced here.
+The public registry now supplies engram 0.28.0 (cluster-mesh 0.27.1 widens the
+optional peer range to `>=0.22.0 <0.29.0` while preserving the `0.22.0` floor
+and qualifying `0.28.0` in the functional lanes). The mandatory package-bump CI
+gate passes on the bumped version, and the release-train qualification tuple
+carries the `0.22.0` floor. No exemption is introduced here.

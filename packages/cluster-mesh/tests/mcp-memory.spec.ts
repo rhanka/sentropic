@@ -64,14 +64,15 @@ describe('engram memory builtin', () => {
       if (state !== 'partial') expect(evaluations()).toEqual([]);
     });
 
-  it('should refuse the qualified loader before evaluating an incompatible peer', async () => {
-    tree.install('app', { name: '@sentropic/engram', version: '0.21.3',
-      exports: { './mcp-memory': { source: moduleSource('engram', []) } } });
-    await expect(loadEngramMemoryMcp(modules())).rejects.toMatchObject({
-      code: 'cluster_mesh_module_unavailable', reason: 'incompatible_version',
+  it.each(['0.21.3', '0.29.0'])(
+    'should refuse the qualified loader before evaluating an incompatible peer (%s)', async (version) => {
+      tree.install('app', { name: '@sentropic/engram', version,
+        exports: { './mcp-memory': { source: moduleSource('engram', []) } } });
+      await expect(loadEngramMemoryMcp(modules())).rejects.toMatchObject({
+        code: 'cluster_mesh_module_unavailable', reason: 'incompatible_version',
+      });
+      expect(evaluations()).toEqual([]);
     });
-    expect(evaluations()).toEqual([]);
-  });
 
   it('should refuse a split engine instance before opening a canonical store', async () => {
     const mcp = await import('@sentropic/engram/mcp-memory');
@@ -99,6 +100,7 @@ describe('engram memory builtin', () => {
     const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
     expect(ENGRAM_MEMORY_RANGE).toBe('>=0.22.0 <0.29.0');
     expect(ENGRAM_MEMORY_RANGE).toBe(manifest.peerDependencies['@sentropic/engram']);
+    expect(satisfiesRange(manifest.devDependencies['@sentropic/engram'], ENGRAM_MEMORY_RANGE)).toBe(true);
     expect(PROVIDER_CATALOG['mcp/memory'].range).toBe(ENGRAM_MEMORY_RANGE);
     expect(PROVIDER_CATALOG['engram-memory/substrate'].range).toBe(ENGRAM_MEMORY_RANGE);
     for (const v of ['0.22.0', '0.23.0', '0.27.0', '0.28.0', '0.28.9']) {

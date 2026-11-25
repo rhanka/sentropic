@@ -4,12 +4,13 @@
 
 - Widen optional `@sentropic/engram` peer range from `>=0.22.0 <0.23.0` to
   `>=0.22.0 <0.29.0` in `package.json` and `src/modules/catalog.ts`
-  (`ENGRAM_MEMORY_RANGE`), keeping the floor at `0.22.0` (cluster-mesh does
-  not use the host-storage exports added in `0.23.0`).
-- Bump `@sentropic/engram` `devDependencies` from `0.22.0` to `0.28.0` and
-  sync lockfiles. Between `0.22.0` and `0.28.0`, `memory-substrate` `.d.ts` is
-  byte-identical, `mcp-memory` has additions only, and `engram-memory/src` has
-  no diff. Runtime dependencies are unchanged.
+  (`ENGRAM_MEMORY_RANGE`, PR #1077), keeping the floor at `0.22.0` (cluster-mesh
+  does not use the host-storage exports added in `0.23.0`).
+- Bump `@sentropic/engram` `devDependencies` and functional CI peer-tool pin
+  from `0.22.0` to `0.28.0`, and sync lockfiles and committed tool locks. Between
+  `0.22.0` and `0.28.0`, `memory-substrate` `.d.ts` is byte-identical,
+  `mcp-memory` has additions only, and `engram-memory/src` has no diff. Runtime
+  dependencies are unchanged.
 
 ## 0.27.0
 
