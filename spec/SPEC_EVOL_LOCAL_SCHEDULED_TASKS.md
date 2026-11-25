@@ -1158,3 +1158,65 @@ These four points were surfaced between the r2 spec and `h2a` Lot 1 (`PR #558`) 
 - **X-4 (Single CLI entry point)**: unify `h2a archive pass` vs `h2a archive run --once|--scheduled` to one documented entry point matching the descriptor (`run ... --scheduled`).
 
 ---
+
+## 5. Optional `@sentropic/cluster-mesh` capitalisation (GATED)
+
+### 5.1 Alignment with `OpsJobFailureV1` (`origin/main`)
+
+In `packages/cluster-mesh/src/notifications/` and `api/src/services/notifications/`:
+- `ops-job-failure-types.ts:17,20,39` closes `OpsJobFailureSourceV1 = 'k8s' | 'app'`, `OpsJobFailureOutcomeV1 = 'failed' | 'succeeded' | 'heartbeat'`, and `OpsJobKindV1 = 'CronJob' | 'Job' | 'app-job'`.
+- `ops-job-failure-types.ts:27-35` already defines `'job-failed'`, `'deadline-exceeded'`, `'schedule-missed'`, `'stale'`.
+- `ops-job-failure-types.ts:57-58,90-94` and `ops-job-failure-contract.ts:52,108,142-168` enforce `source`, `eventId.startsWith(`${source}:`)`, unique `eventId` fingerprint (409 conflict on same `eventId` with different bytes), closed top-level key set (`:142-143` rejects unknown top-level fields), required lowercase `targetKey`, `jobRef.kind` (`:52` rejects unknown kinds), `runId`, and `https://`-only `links`.
+- **Dead-man watch behaviour (`incident-policy.ts:45-46,67-82`, `incident-state.ts:58-65,105-108`, `ops-sweep.ts:283-288`)**:
+  - A `succeeded` event with no prior incident state is a **no-op** (*"Never create a watch where none existed"*, `incident-policy.ts:67-82`).
+  - Only a **`heartbeat`** event opens a dormant watch (`openDormantWatch`, `incident-policy.ts:45-46`, `incident-state.ts:105-108`).
+  - `DEFAULT_OPS_NOTIFICATION_POLICY_V1.heartbeatGraceMs` is a single global `1 h` (`60 * 60 * 1000`, `incident-state.ts:58-65`), evaluated by `ops-sweep.ts:283-288` via `isOpsHeartbeatOverdue()` (`incident-schedule.ts:36-44`). Consequently, emitting a `heartbeat` for a daily task without a per-watch grace override would false-alarm `stale` after 1 hour.
+
+### 5.2 Additive extension specification (Lot S3 — gated, Option A)
+
+When opened, the extension in `@sentropic/cluster-mesh/notifications` (and `ops-sweep.ts`) is strictly **additive and backwards-compatible** (`v: 1` preserved):
+- `OpsJobFailureSourceV1 = 'k8s' | 'app' | 'local'`
+- `OpsJobKindV1 = 'CronJob' | 'Job' | 'app-job' | 'local-timer'`
+- Validator `ops-job-failure-contract.ts:52,147` updated to accept `'local'` and `'local-timer'`.
+- **Per-watch heartbeat grace override (`m-32(h)` wire-safe server-side map)**:
+  - Because `ops-job-failure-contract.ts:142-143` rejects unknown top-level fields on `OpsJobFailureV1` and `:52` rejects unknown kinds, **prefer a server-side per-source/per-watch grace map** read by `isOpsHeartbeatOverdue()` and `ops-sweep.ts:283-288` (changing nothing on the wire), defaulting to `policy.heartbeatGraceMs` (`1 h`) when absent so all existing `'k8s'`/`'app'` watches are unchanged.
+  - For local timers, set the grace to **`>= deadlineMs`** (e.g. `36 h` for a daily timer with `graceMultiplier: 1.5`), preventing 1-hour false `stale` alerts.
+  - **Mandatory rollout order (`m-32(h)`)**: deploy the **central receiver first** (accepting `'local'`, `'local-timer'`, and the server-side grace map), **then** enable the `h2a` emitter.
+- **Emitter & timing**: `h2a` (not `@sentropic/local-scheduler`, which stays 100% network-free) emits post-run events when central alerting is enabled:
+  - Outcome event for `succeeded`, `failed`, `timed_out`, `refused_policy` (never `skipped_disabled` / `skipped_locked`).
+  - **Plus**, after each completed pass (on `succeeded`, and optionally on `skipped_disabled` if the owner wants active pauses to keep the watch alive without firing), emit a **`heartbeat`** event (`eventId: local:<hostSlug>:<taskId>:<runId>:heartbeat`, `runId: witness.runId`) so central `incident-policy.ts:45-46` arms/refreshes the dormant watch and `ops-sweep.ts` detects off-host silence past `>= deadlineMs` as `reason: 'stale'`.
+- **Decoupled pure projection helper** (lives in `@sentropic/cluster-mesh/notifications`, accepts a **structural input interface** — never imports `@sentropic/local-scheduler`, preserving **D1=B**):
+  - `eventId`: `local:<hostSlug>:<taskId>:<runId>:<outcome>` for outcome events and `local:<hostSlug>:<taskId>:<runId>:heartbeat` for heartbeats (unique per emitted event; prevents 409 fingerprint conflicts at `ops-job-failure-types.ts:90-94`).
+  - `runId`: mapped directly from `witness.runId` (UUIDv4).
+  - `targetKey`: supplied from an explicit declared `h2a` config key (e.g. `opsTargetKey: 'h2a-local-archive'`, validated against `TARGET_KEY_PATTERN` at `ops-job-failure-contract.ts:153`).
+  - `jobRef`: `{ namespace: hostSlug, kind: 'local-timer', name: taskId }`.
+  - `links`: omitted (local paths are never valid `https://` URLs and must not leak workstation layout).
+  - Mapping:
+    - `outcome === 'succeeded'` → `outcome: 'succeeded'` (resolves any firing incident; paired with `heartbeat` event to arm/refresh the dormant watch)
+    - `outcome === 'timed_out'` → `outcome: 'failed'`, `reason: 'deadline-exceeded'`, `severity: 'critical'`
+    - `outcome === 'refused_policy'` → `outcome: 'failed'`, `reason: 'job-failed'`, `severity: 'critical'`
+    - `outcome === 'failed'` → `outcome: 'failed'`, `reason: 'job-failed'`, `severity: consecutiveFailures >= 2 ? 'critical' : 'warning'`
+
+### 5.3 Explicit opportunity condition ("si opportun")
+
+Lot S3 remains **GATED** and is **NOT** on the critical path to `2027-01-10`. It opens only if:
+1. The owner explicitly asks for **off-host / email / central ops alerts** for workstation scheduled tasks (beyond local `h2a status` / `h2a resume` banners); **OR**
+2. At least **two workstations or two local consumers** require centralised failure visibility in `cluster-mesh`.
+
+Multi-workstation archive catalogue / remote encrypted replication remains separately gated on `interServerDirectory` and `memoryReplication` (`packages/cluster-mesh/src/mesh.ts:82-84`) plus a dedicated encryption/data-residency decision.
+
+---
+
+## 6. Security specification
+
+| Control | Requirement | Verification |
+|---|---|---|
+| **6.1 Zero Python** | Zero `.py` files, zero Python invocations, zero Python deps in package, units, runner, or tests (owner global rule « 0 Python dans les repos et les jobs (k8s/CI) »; precedent `SPEC_EVOL_SANDBOX_NODE.md:71`; applied by this dossier to the workstation scheduled task). `python`/`python3` explicitly denylisted in command and shebang validators. | Static file/content lint + unit test asserting `python3` and `#!/usr/bin/python3` rejected. |
+| **6.2 Zero Network** | `@sentropic/local-scheduler` opens zero sockets, binds zero ports, makes zero outbound requests, and forbids both imports (`node:http`, `node:https`, `node:net`, `node:tls`, `node:dgram`, `undici`) AND network globals (`fetch`, `WebSocket`, `EventSource`, `XMLHttpRequest`) in `src/**`. Spawned children under systemd are further kernel-isolated by `RestrictAddressFamilies=AF_UNIX` (§3.1). | Static AST/import + global-identifier Vitest guard on `packages/local-scheduler/src/**` + systemd negative test asserting child TCP connect to `127.0.0.1:3002` fails. |
+| **6.3 File Modes `0700`/`0600`, shared unitDir safety & zero `/tmp`** | Every package-owned directory (`stateDir`, `locks`, `tasks/<id>`) is `0700`; every manifest, lock, quarantine, witness, `skips.jsonl`, `.tmp`, log, env file, and generated `.service`/`.timer` is `0600`. `UMask=0077` is fixed in `.service`. No files ever created in `/tmp`. For shared `~/.config/systemd/user/`, create `0700` ONLY if absent; never `chmod` an existing dir; refuse (`exit 77`) if not owned by current UID, symlinked, or `(mode & 0o022) !== 0`. Before running, runner verifies `stateDir` and `manifest.json` are owned by `process.getuid()`, not symlinks (`lstat`), and `(mode & 0o077) === 0` — else exit `77`. | Unit tests asserting modes, symlink/`0644`/`0777` manifest refusal, and existing `0755` `unitDir` preserved without `chmod` while `0775` `unitDir` refused. |
+| **6.4 No Secrets in Units, Manifests, or Witness** | Static `.service` units embed only unit-default `PATH`, `SENTROPIC_LOCAL_SCHEDULER_STATE_DIR`, `EnvironmentFile=-<escaped-abs-path>`, and `UnsetEnvironment=NODE_OPTIONS NODE_PATH LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT`. Because `EnvironmentFile=` overrides `Environment=` (`systemd.exec(5)`), the runner enforces `manifest.stateDir === resolvedStateDir` (else exit `77`, `POLICY_REFUSED_STATE_DIR`, `m-30`) and sets child `PATH` to the constant `'/usr/bin:/bin'` (never inherited, `m-30`). `command.env` lives in `manifest.json` (`0600`) only and is validated against the secret denylist (`*_TOKEN`, `*_SECRET`, `*_KEY`, `*_PASSWORD`, `*_CREDENTIAL*`, `ANTHROPIC_*`, `OPENAI_*`, `GEMINI_*`, `AWS_*`, `GITHUB_TOKEN`, `NPM_TOKEN`) and `BLOCKED_LOADER_ENV_VARS`. Child `env` is constructed from minimal base (`HOME`, `USER`, constant `PATH: '/usr/bin:/bin'`, `XDG_*`, `LANG`, `LC_ALL`) + `manifest.spec.command.env` + `envAllowlist` + declared kill-switch var names, filtered through both denylists. Availability probe uses `systemctl --user show --property=Version --value` (never `show-environment`). Witness `summary` is capped at `512` UTF-8 bytes and stripped of control chars. | Unit tests injecting `ANTHROPIC_API_KEY` / `GITHUB_TOKEN` / `NODE_OPTIONS` into parent env, env file & `command.env`, plus `PATH` & `SENTROPIC_LOCAL_SCHEDULER_STATE_DIR` override tests (`m-30`). |
+| **6.5 Command Allow-List, Shebang Guard & Loader-Env Guard** | `bin` MUST be an absolute canonical path (`realpathSync`), regular file, executable by owner, owned by current UID or `root`, not group/world-writable (`(mode & 0o022) === 0`), matched against `allowedBins`. Mandatory denylist (`sh`, `bash`, `dash`, `zsh`, `fish`, `ksh`, `csh`, `env`, `python`, `python3`, `perl`, `ruby`, `awk`, `xargs`, `sudo`, `su`, `pkexec`, `doas`, `ssh`, `curl`, `wget`). **Shebang check**: for any non-ELF file (magic `!= 0x7f 45 4c 46`), read first 256 bytes, parse `#!`, unconditionally reject `#!/usr/bin/env` and relative interpreters, and apply the denylist to the interpreter. **Node scripts**: `bin` is a Node interpreter when `realpathSync(bin) === realpathSync(process.execPath)` or `path.basename(realpathSync(bin)) === 'node'`; then `args[0]` MUST be an absolute canonical script matching `allowedScripts` (regular file, owner/root, not group/world-writable; no `-e`/`--eval`/`-p`/`--print`/`-r`/`--require`/`--import` before script). Same rule applies to `policy.runner`. **Loader-env guard**: `NODE_OPTIONS`, `NODE_PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `LD_AUDIT` are rejected at `enable()` (`InvalidTaskSpecError`), stripped from child env at run time, and cleared via `UnsetEnvironment=` in `.service`. `spawn(..., { shell: false })` only. | Negative tests for relative paths, `/bin/sh`, `python3`, `#!/usr/bin/env node`, `#!/bin/sh` wrapper script, `node -e ...`, `NODE_OPTIONS` in env file / `command.env` / `envAllowlist`, world-writable binaries/scripts, symlink swaps. |
+| **6.6 Injection-Safe Unit Generation** | Every interpolated field passes strict allow-lists; `\r`, `\n`, `\0`, and ASCII control chars are unconditionally rejected. `Description=` rejects `%` and `\`; no unit value may end in `\`. **Unified path rule** (`EnvironmentFile=`, `Environment=`, and path tokens in `ExecStart=`): reject control chars, `"` and `\`; escape `%` → `%%`; quote `Environment=` and `ExecStart=` values, while keeping `EnvironmentFile=-<escaped-abs-path>` unquoted and rejecting glob chars (`*`, `?`, `[`) per `systemd.exec(5)` / `systemd-analyze verify`. **Every `ExecStart=` token, path or not, escapes `$` → `$$` after the path checks** (`m-25`), and any `ExecStart=` argument equal to `;` is rejected (`systemd.service(5)`). `Environment=` and `EnvironmentFile=` keep `$` literal (`systemd.exec(5)`). Non-path `ExecStart=` argv tokens also escape `\` → `\\` and `"` → `\"` and are quoted. `OnCalendar=` is validated by `ON_CALENDAR_PRESETS` / `ON_CALENDAR_CUSTOM_REGEX` AND `systemd-analyze calendar --iterations=8 -- <expr>`. Every `execFile` call places `--` before variable arguments. | Adversarial tests: `daily\nExecStart=/bin/sh`, `%h`/`%u`, `%` and spaces in home/state/env-file paths (validated by `systemd-analyze verify`), glob chars in `envFilePath`, `$$` and `${X}` in script paths (`m-25`), lone `;` arg (`m-25`), `${H2A_ROOT}`, trailing `\`, leading `-` in `OnCalendar` and args, NUL bytes. |
+| **6.7 Host PID Namespace** | Cumulative 3-part Linux proof (§3.4) enforced on `enable` and at runner step 2 **before any lock operation** (never exposed as a manifest setting). Isolated namespaces (`bwrap`, containers) fail closed with exit `77`, no lock touched, `last-run.json` untouched, and one best-effort `skips.jsonl` entry (`outcome: 'refused_policy', refusal: 'sandbox'`). | Negative test under `bwrap --unshare-pid --proc /proc` (host qualification) + injected `/proc` fixture tests (CI). |
+
+---
