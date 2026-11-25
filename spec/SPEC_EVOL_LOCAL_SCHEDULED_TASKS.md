@@ -1001,3 +1001,81 @@ export function runScheduledTaskById(taskId: string, opts: RunScheduledTaskOptio
 - `resolveSchedulerEnvFilePath(env)` returns `path.join(env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'sentropic', 'local-scheduler', 'env')`.
 - `enable()` resolves both `stateDir` and `envFilePath` once, stores both in `manifest.json`, and emits `Environment="SENTROPIC_LOCAL_SCHEDULER_STATE_DIR=<escaped-abs-path>"` and `EnvironmentFile=-<escaped-abs-path>` in the `.service` unit. Because `EnvironmentFile=` overrides `Environment=` in `systemd.exec(5)` (`m-30`), the runner refuses (`outcome: 'not_run'`, exit `77`, `POLICY_REFUSED_STATE_DIR`) if `manifest.stateDir !== resolvedStateDir`, constructs child `PATH` as the constant `'/usr/bin:/bin'`, and `status()` / §4.4 emit a hint when the env file defines `PATH` or `SENTROPIC_LOCAL_SCHEDULER_STATE_DIR`.
 - Readers read the env file from `manifest.envFilePath` whenever a valid manifest is present, falling back to `resolveSchedulerEnvFilePath(env)` only when there is no valid manifest.
+
+### 4.3 Registration, dependency placement, and `h2a` descriptor
+
+- **Dependency placement**: add `"@sentropic/local-scheduler": "^0.1.0"` to **`packages/h2a-runtime/package.json`** (`dependencies`), because `h2a status` (`packages/h2a-runtime/src/status-projection.ts`), `h2a resume` (`packages/h2a-runtime/src/index.ts:5544` on `bed33a0eb990`; was `:5519` on `f025cd2d8ccf`), and CLI command routing live in `@sentropic/h2a-runtime`. Add it to `packages/h2a/package.json` ONLY if `packages/h2a` directly imports it.
+- **CLI surface exposed by `h2a`**:
+  - `h2a archive schedule enable [--calendar <expr>] [--older-than <N>d]`
+  - `h2a archive schedule disable`
+  - `h2a archive schedule status [--json]`
+  - `h2a archive schedule uninstall [--purge-state]`
+  - Hidden runner trampoline: `h2a archive _schedule-exec <taskId>`
+
+#### Canonical `h2a` registration descriptor & policy (Lot 1 — Claude Code)
+
+```ts
+import { realpathSync } from 'node:fs';
+import { createSystemdUserAdapter } from '@sentropic/local-scheduler/systemd';
+import {
+  ON_CALENDAR_PRESETS,
+  ON_CALENDAR_CUSTOM_REGEX,
+  type EnablePolicyV1,
+  type LocalTaskSpecV1,
+} from '@sentropic/local-scheduler';
+
+const nodeBin = realpathSync(process.execPath);        // e.g. '/usr/bin/node'
+const h2aBinScript = realpathSync(process.argv[1]!);   // e.g. '/home/user/.npm-global/lib/node_modules/@sentropic/h2a/dist/bin.js'
+
+const capturedEnv: Record<string, string> = {
+  H2A_ROOT: resolveActiveH2aRoot(),                    // e.g. '/home/user/src/a2a-cli' (contrib/systemd/README.md:49-50)
+  ...(process.env.CLAUDE_CONFIG_DIR ? { CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR } : {}),
+};
+
+const spec: LocalTaskSpecV1 = {
+  v: 1,
+  taskId: 'h2a-session-archive',
+  owner: 'h2a',
+  description: 'h2a local CLI session archive (conservation-only)',
+  schedule: {
+    onCalendar: calendarFlag ?? 'daily',               // validated via ON_CALENDAR_PRESETS / ON_CALENDAR_CUSTOM_REGEX
+    persistent: true,
+    randomizedDelaySec: 600,
+    accuracySec: 60,
+    graceMultiplier: 1.5,                              // 36 h dead-man window for daily
+  },
+  command: {
+    bin: nodeBin,
+    args: [
+      h2aBinScript,
+      'archive', 'run',
+      '--cli', 'claude',
+      '--older-than', olderThanFlag ?? '14d',
+      '--max-duration', '1440s',                       // soft budget = 80% of 1800s timeout (see X-2 below)
+      '--scheduled',
+    ],
+    env: capturedEnv,                                  // stored in manifest.json ONLY, never in .service unit
+  },
+  timeoutMs: 1_800_000,                                // 30 min hard cap
+  killGraceMs: 15_000,
+  killSwitchEnv: 'H2A_ARCHIVE_OFF',
+  resources: {
+    nice: 15,
+    ioSchedulingClass: 'idle',
+    memoryMax: '512M',
+    cpuQuota: '50%',
+    tasksMax: 64,
+  },
+};
+
+const policy: EnablePolicyV1 = {
+  runner: { bin: nodeBin, args: [h2aBinScript, 'archive', '_schedule-exec'] },
+  allowedBins: [nodeBin],
+  allowedScripts: [h2aBinScript],
+};
+
+const adapter = createSystemdUserAdapter();
+const result = await adapter.enable(spec, policy);
+```
+
+When Lot 2 (Mistral Vibe, `7.71 Go` raw backlog) lands, `--max-duration` at 80% of `timeoutMs` guarantees each scheduled pass makes bounded progress and exits `0` (`succeeded`) instead of tripping `timed_out`/`critical`.
