@@ -923,3 +923,81 @@ export interface FakeSchedulerAdapter extends OsSchedulerAdapter {
   getRenderedUnits(taskId: string): { readonly service: string; readonly timer: string } | null;
 }
 ```
+
+```ts
+// Pure & read-side functions exported from '@sentropic/local-scheduler':
+export function resolveStateDir(env?: NodeJS.ProcessEnv): string;
+export function resolveSchedulerEnvFilePath(env?: NodeJS.ProcessEnv): string;
+export function probeStateDirObservability(stateDir: string): StateDirObservabilityResult;
+export function readTaskManifest(stateDir: string, taskId: string): LocalTaskManifestV1 | null | 'corrupt';
+export function readTaskWitness(stateDir: string, taskId: string): LocalTaskWitnessV1 | null | 'corrupt';
+export function readTaskLockSummary(stateDir: string, taskId: string): LocalTaskLockSummaryV1 | null | 'unreadable';
+export function readLastSkipEntry(stateDir: string, taskId: string): LocalTaskSkipEntryV1 | null;
+export function parseSchedulerEnvFile(text: string): Readonly<Record<string, string>>;
+export function readSchedulerEnvFile(envFilePath?: string): Readonly<Record<string, string>> | null;
+export function evaluateKillSwitch(
+  env: Readonly<Record<string, string | undefined>>,
+  spec: Pick<LocalTaskSpecV1, 'taskId' | 'killSwitchEnv'>,
+): LocalTaskKillSwitchMatchV1 | null;
+export function isTaskKillSwitchActive(
+  env: Readonly<Record<string, string | undefined>>,
+  spec: Pick<LocalTaskSpecV1, 'taskId' | 'killSwitchEnv'>,
+): boolean;
+export function evaluateTaskHealth(input: EvaluateTaskHealthInput): LocalTaskHealthVerdict;
+export function validateTaskSpec(spec: unknown): LocalTaskSpecV1;
+export function assertHostPidNamespace(): void;
+export function createFakeSchedulerAdapter(opts?: {
+  readonly clock?: () => string;
+  readonly stateDir?: string;
+  readonly envFilePath?: string;
+}): FakeSchedulerAdapter;
+
+// --- @sentropic/local-scheduler/systemd ---
+export function createSystemdUserAdapter(opts?: { readonly stateDir?: string; readonly envFilePath?: string }): OsSchedulerAdapter;
+export function renderSystemdUnits(manifest: Omit<LocalTaskManifestV1, 'units'>): {
+  readonly service: string;
+  readonly timer: string;
+  readonly serviceSha256: string;
+  readonly timerSha256: string;
+};
+export function probeSystemdUserAvailability(): Promise<
+  | { readonly available: true; readonly systemdVersion: string }
+  | { readonly available: false; readonly reason: 'not-linux' | 'no-systemctl' | 'no-user-manager' | 'timeout'; readonly detail: string }
+>;
+export function computeExpectedIntervalMs(onCalendar: string): Promise<number>;
+
+// --- @sentropic/local-scheduler/runner ---
+export interface RunScheduledTaskOptionsV1 {
+  readonly allowedBins: readonly string[];
+  readonly allowedScripts?: readonly string[];
+  readonly stateDir?: string;
+  readonly env?: NodeJS.ProcessEnv;
+}
+
+export interface RunScheduledTaskResultV1 {
+  readonly outcome: LocalTaskOutcomeV1 | 'skipped_locked' | 'not_run';
+  readonly exitCode: 0 | 1 | 2 | 70 | 77 | 124 | 130 | 143;
+  /** Populated whenever the lock holder wrote last-run.json; null on skipped_locked, pre-lock sandbox refusal, not_run, or post-child witness write failure. */
+  readonly witness: LocalTaskWitnessV1 | null;
+  /** Always set when outcome === 'not_run', and set on refused_policy / RUNNER_INTERNAL_ERROR (exit 70). */
+  readonly error?: { readonly code: LocalSchedulerErrorCode; readonly message: string };
+}
+
+/** Never rejects: all validation, manifest, policy, and I/O failures resolve to a structured RunScheduledTaskResultV1 (pre-witness lock I/O failure → not_run exit 70; post-child write failure → child outcome, exit 70, witness: null, RUNNER_INTERNAL_ERROR). */
+export function runScheduledTask(manifest: LocalTaskManifestV1, opts: RunScheduledTaskOptionsV1): Promise<RunScheduledTaskResultV1>;
+/** Never rejects: resolves to outcome: 'not_run' (exit 2/70/77) if manifest is missing, corrupt, unreadable, or fails pre-witness lock/stateDir checks. */
+export function runScheduledTaskById(taskId: string, opts: RunScheduledTaskOptionsV1): Promise<RunScheduledTaskResultV1>;
+```
+
+**Fake adapter contract (`createFakeSchedulerAdapter`)**:
+- Creates `stateDir` (`0700`) at construction (`m-32(c)`), so `not_installed` is reachable in consumer tests run inside a container (otherwise `probeStateDirObservability` returns `unobservable` for an absent directory there).
+- When constructed with `{ stateDir }` (and optional `envFilePath`, defaulting to `path.join(stateDir, 'env')`), `enable()`, `disable()`, `uninstall()`, `setWitness()`, and `setPersistedEnvFile()` **write real files to disk using the production writers** (`manifest.json`, `last-run.json`, env file).
+- Fake `status()` uses the same `probeStateDirObservability`, `readTaskLockSummary`, `readLastSkipEntry`, and env-file override detection as production `SystemdUserAdapter.status()` (`m-32(c)`).
+- Consequently, consumer read paths (`readTaskManifest`, `readTaskWitness`, `readTaskLockSummary`, `readLastSkipEntry`, `readSchedulerEnvFile`, `probeStateDirObservability`) in tests observe the exact state mutated by the fake adapter.
+- The fake adapter skips **only** `systemd --user` invocations and the host PID namespace guard; all validation, allow-list, shebang, dangerous-env, unit rendering, and health-evaluation logic executes identically to production.
+
+**State-directory and env-file pinning rules**:
+- `resolveStateDir(env)` returns `env.SENTROPIC_LOCAL_SCHEDULER_STATE_DIR` if non-empty, else `path.join(env.XDG_STATE_HOME || path.join(os.homedir(), '.local', 'state'), 'sentropic', 'local-scheduler')`.
+- `resolveSchedulerEnvFilePath(env)` returns `path.join(env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'sentropic', 'local-scheduler', 'env')`.
+- `enable()` resolves both `stateDir` and `envFilePath` once, stores both in `manifest.json`, and emits `Environment="SENTROPIC_LOCAL_SCHEDULER_STATE_DIR=<escaped-abs-path>"` and `EnvironmentFile=-<escaped-abs-path>` in the `.service` unit. Because `EnvironmentFile=` overrides `Environment=` in `systemd.exec(5)` (`m-30`), the runner refuses (`outcome: 'not_run'`, exit `77`, `POLICY_REFUSED_STATE_DIR`) if `manifest.stateDir !== resolvedStateDir`, constructs child `PATH` as the constant `'/usr/bin:/bin'`, and `status()` / §4.4 emit a hint when the env file defines `PATH` or `SENTROPIC_LOCAL_SCHEDULER_STATE_DIR`.
+- Readers read the env file from `manifest.envFilePath` whenever a valid manifest is present, falling back to `resolveSchedulerEnvFilePath(env)` only when there is no valid manifest.
