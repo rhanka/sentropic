@@ -1079,3 +1079,82 @@ const result = await adapter.enable(spec, policy);
 ```
 
 When Lot 2 (Mistral Vibe, `7.71 Go` raw backlog) lands, `--max-duration` at 80% of `timeoutMs` guarantees each scheduled pass makes bounded progress and exits `0` (`succeeded`) instead of tripping `timed_out`/`critical`.
+
+### 4.4 Exact `h2a` wiring call sequences
+
+1. **`h2a archive schedule enable|disable|status|uninstall`**:
+   - Instantiate `adapter = injectedAdapter ?? createSystemdUserAdapter()` (accepting `FakeSchedulerAdapter` in tests).
+   - `enable`: pre-validate `--calendar` against `ON_CALENDAR_PRESETS` / `ON_CALENDAR_CUSTOM_REGEX`, construct `spec` + `policy` above → `await adapter.enable(spec, policy)` → print confirmation + `result.lingerNotice` if `lingerEnabled === false`. On `LocalSchedulerError`, print `err.message` to `stderr` and set `process.exitCode = err.exitCode` (`2` / `69` / `70` / `77`).
+   - `disable`: `await adapter.disable('h2a-session-archive')` (handles `TaskNotFoundError` exit `2`).
+   - `status [--json]`: `const st = await adapter.status('h2a-session-archive')`; print JSON or human summary (including `st.systemd.execDiagnostic` if present and `st.health.hints`).
+   - `uninstall [--purge-state]`: `await adapter.uninstall('h2a-session-archive', { purgeState })`.
+2. **`h2a archive _schedule-exec <taskId>`**:
+   ```ts
+   import { realpathSync } from 'node:fs';
+   import { runScheduledTaskById } from '@sentropic/local-scheduler/runner';
+
+   const nodeBin = realpathSync(process.execPath);
+   const h2aBinScript = realpathSync(process.argv[1]!);
+   // runScheduledTaskById never rejects; pre-lock / manifest / internal errors return outcome: 'not_run' + error.
+   const res = await runScheduledTaskById(taskId, {
+     allowedBins: [nodeBin],
+     allowedScripts: [h2aBinScript],
+   });
+   if (res.error) process.stderr.write(`[local-scheduler] ${res.error.code}: ${res.error.message}\n`);
+   process.exitCode = res.exitCode; // 0 | 1 | 2 | 70 | 77 | 124 | 130 | 143
+   ```
+3. **`h2a status` (`packages/h2a-runtime/src/status-projection.ts`) & `h2a resume` (`packages/h2a-runtime/src/index.ts:5544`)**:
+   ```ts
+   import {
+     resolveStateDir, resolveSchedulerEnvFilePath, probeStateDirObservability,
+     readTaskManifest, readTaskWitness, readTaskLockSummary, readLastSkipEntry,
+     readSchedulerEnvFile, evaluateKillSwitch, evaluateTaskHealth,
+   } from '@sentropic/local-scheduler';
+
+   const stateDir = resolveStateDir(process.env);
+   const { observable } = probeStateDirObservability(stateDir);
+   const manifest = observable ? readTaskManifest(stateDir, 'h2a-session-archive') : null;
+   const witness = observable ? readTaskWitness(stateDir, 'h2a-session-archive') : null;
+   const lock = observable ? readTaskLockSummary(stateDir, 'h2a-session-archive') : null;
+   const lastSkip = observable ? readLastSkipEntry(stateDir, 'h2a-session-archive') : null;
+   const envFilePath = manifest && manifest !== 'corrupt'
+     ? manifest.envFilePath
+     : resolveSchedulerEnvFilePath(process.env);
+   const persistedEnv = readSchedulerEnvFile(envFilePath);
+   const envFileProtectedOverrides = persistedEnv
+     ? (['PATH', 'SENTROPIC_LOCAL_SCHEDULER_STATE_DIR'] as const).filter((k) => k in persistedEnv)
+     : [];
+   const specRef = manifest && manifest !== 'corrupt'
+     ? manifest.spec
+     : { taskId: 'h2a-session-archive', killSwitchEnv: 'H2A_ARCHIVE_OFF' };
+
+   const health = evaluateTaskHealth({
+     stateDirObservable: observable,
+     manifest,
+     witness,
+     persistedKillSwitch: persistedEnv ? evaluateKillSwitch(persistedEnv, specRef) : null,
+     readerEnvKillSwitch: evaluateKillSwitch(process.env, specRef),
+     lock,
+     lastSkip,
+     envFileProtectedOverrides,
+     nowIso: new Date().toISOString(),
+   });
+   ```
+   - Combine `health` with `h2a`'s own read-time checks: Claude main-transcript `mtime` purge deadline scan (`< 14` days remaining, `REVIEW-opus-r4.md:108-116`) and `~/.local/share/h2a/session-archives/alerts.json`.
+   - **Rendering rules**:
+     - `healthy` / `pending_first_run`: silent in default `h2a resume`; one compact line in `h2a status` (`archive-schedule: ok (last run 6h ago)`).
+     - `not_installed`: one compact hint in `h2a status` (`archive-schedule: not installed (run h2a archive schedule enable)`).
+     - `disabled`: terse line in `h2a status` (`archive-schedule: disabled`).
+     - `paused`: notice in `h2a status` (`archive-schedule: paused since <ts> by <var>`), upgraded to warning banner on `stderr` when `severity === 'warning'` (overdue pause).
+     - `unobservable` / `interrupted`: concise warning in `h2a status` (never silent, never false `schedule_missed`).
+     - `failing` / `schedule_missed` / `clock_skew` / `witness_corrupt`: **prominent warning/critical banner** on `stderr` in both `h2a status` and `h2a resume`, printing status, age since `lastSuccessAt`, `consecutiveFailures`, `hints`, and next action (`h2a archive schedule status` / `journalctl --user -u sentropic-task-h2a-session-archive.service`).
+
+#### Cross-lane alignment notes forwarded to the `h2a` conductor (non-gating for this spec)
+
+These four points were surfaced between the r2 spec and `h2a` Lot 1 (`PR #558`) and must be reconciled in `h2a` Lot H1 before wiring cutover:
+- **X-1 (Archive repository lock)**: `h2a` Lot 1 currently takes `archive.lock` via best-effort `file-lock.ts`; migrate it to a fail-closed lock (`local-files/locks.ts` / `succession-lock.ts`) before adding a second scheduled archive task. Until then, `@sentropic/local-scheduler`'s namespace-aware per-task lock (§2.3) is the sole fail-closed serialisation of archive passes.
+- **X-2 (`--max-duration` CLI flag)**: `h2a` Lot 1 `archive run` does not yet accept `--max-duration` (Commander rejects unknown options by default). Either add `--max-duration` in H1(a) before wiring, or omit it from the Lot 1 descriptor until implemented.
+- **X-3 (Single dead-man witness)**: Lot 1 writes its own engine `last-run.json`; designate `LocalTaskWitnessV1` as the single dead-man source for `h2a status`/`h2a resume`, reserving the engine file for archive pass statistics only.
+- **X-4 (Single CLI entry point)**: unify `h2a archive pass` vs `h2a archive run --once|--scheduled` to one documented entry point matching the descriptor (`run ... --scheduled`).
+
+---
