@@ -274,3 +274,95 @@ export interface LocalTaskManifestV1 {
 ```
 
 *Note (`m-26` host PID guard seam)*: The host PID namespace guard is **never** a manifest or public-API toggle (`requireHostPidNamespace` is absent from `LocalTaskSpecV1` and all public types). Production entry points (`runScheduledTask`, `runScheduledTaskById`, `createSystemdUserAdapter`) accept no guard-skip option and read **no** environment variable, file, or CLI flag that skips the guard. The bypass exists exclusively as a parameter of package-internal functions (e.g. `runScheduledTaskInternal(..., { hostPidGuard })` in `src/runner.ts` and its internal adapter counterpart in `src/systemd/index.ts`), never re-exported in `package.json` `"exports"`. The CI systemd lifecycle and host qualification (c) cross the systemd process boundary by allow-listing a test trampoline `policy.runner = { bin: node, args: ['<pkg>/tests/fixtures/ci-runner.mjs'] }` under `tests/` (excluded from the npm tarball via `"files"`), which imports the internal function from `dist/` and injects a passing guard (§7.1).
+
+### 2.2 Idempotency, execution order, and timeout / signal handling
+
+- Every task command MUST be **one-shot** (one bounded pass, then exit) and **idempotent** (safe to re-run after crash, reboot, interruption, or `Persistent=true` catch-up without duplicating data or corrupting state).
+- **Mandatory runner execution order** (enforces host PID isolation before any lock operation and guarantees that only the lock holder writes `last-run.json`):
+  1. **Verify `stateDir` and `manifest.json`**: check ownership and modes (`0700`/`0600`, no symlinks, owned by `process.getuid()`), validate `manifest.json`, and verify `manifest.stateDir === resolvedStateDir` (`m-30`, catching any `EnvironmentFile=` override of `SENTROPIC_LOCAL_SCHEDULER_STATE_DIR`). On failure → log one line to `stderr`, never touch locks or `last-run.json`, return `{ outcome: 'not_run', exitCode: 2 | 77, witness: null, error }` (exit `2` for `TASK_NOT_FOUND` / `MANIFEST_CORRUPT` / `INVALID_TASK_SPEC`; exit `77` for `POLICY_REFUSED_FILE_MODE` / `POLICY_REFUSED_STATE_DIR`).
+  2. **Host PID namespace guard BEFORE any lock operation** (§3.4):
+     - On failure: log one line to `stderr`, exit **`77`**.
+     - **Never** create, reclaim, or remove a lock. **Never** write `last-run.json`.
+     - If `skips.jsonl` is writable (task dir owned by `process.getuid()`, mode `0700`, not symlinked), append `{ "v": 1, "runId": "<uuid>", "at": "<UTC Z>", "pid": <pid>, "outcome": "refused_policy", "refusal": "sandbox" }` (never rotate here).
+     - Return `{ outcome: 'refused_policy', exitCode: 77, witness: null, error: { code: 'POLICY_REFUSED_SANDBOX', message } }`.
+  3. **Acquire single-writer lock** (`${stateDir}/locks/<taskId>.lock`, §2.3).
+     - If held by another live holder (or unreclaimable / undecidable) → append `{ "v": 1, "runId": "<uuid>", "at": "<UTC Z>", "pid": <pid>, "outcome": "skipped_locked" }` to `skips.jsonl` (never rotate here), do **NOT** touch `last-run.json`, emit structured JSON line to `stdout`, return `{ outcome: 'skipped_locked', exitCode: 0, witness: null }` (exit **`0`**).
+     - On lock directory or lock publication I/O failure (`m-27`) → release lock if held, return `{ outcome: 'not_run', exitCode: 70, witness: null, error: { code: 'RUNNER_INTERNAL_ERROR', message } }`.
+  4. **While holding the lock, evaluate kill-switches** (§2.4). Kill-switches run **before** the allow-list so a deliberate operator pause is cleanly recorded even when the target command binary temporarily moved or broke. If active → write `last-run.json` (`outcome: 'skipped_disabled'`, `killSwitch: { scope, name }`, preserving `lastSuccessAt`, `lastSuccessRunId`, `consecutiveFailures`), emit JSON line to `stdout`, release lock, exit **`0`**.
+  5. **While holding the lock, evaluate command allow-list, shebang check, and dangerous-env check** (§6.5). On failure → write `last-run.json` (`outcome: 'refused_policy'`, `refusal: 'allowlist' | 'file-mode'`), emit JSON line to `stdout`, release lock, exit **`77`**.
+  6. **Spawn protocol** (two-phase lock transition closing the spawn window):
+     - Immediately **before** `spawn`: atomically rewrite the lock record with `phase: 'spawning'` (same `nonce`, using the rename protocol in §2.3), updating the holder's owned `(dev, ino)`. On pre-spawn rewrite I/O failure (`m-27`), release the lock and return `{ outcome: 'not_run', exitCode: 70, witness: null, error: { code: 'RUNNER_INTERNAL_ERROR', message } }`.
+     - Build sanitized child `env` (minimal base with constant `PATH: '/usr/bin:/bin'` never inherited from the runner environment + `manifest.spec.command.env` + `envAllowlist` + declared kill-switch names, stripping all secret-shaped names and `BLOCKED_LOADER_ENV_VARS`).
+     - Call `child_process.spawn(command.bin, command.args, { shell: false, detached: true, cwd, env })` (`pgid === child.pid`).
+     - Immediately **after** `spawn`: atomically rewrite the lock record with `{ childPid: child.pid, childPgid: child.pid, phase: 'running' }` (same `nonce`, updating the holder's owned `(dev, ino)`). Start monotonic clock (`performance.now()`).
+  7. Install hard timeout timer (`timeoutMs`) and `SIGTERM`/`SIGINT` listeners:
+     - On timeout: send `SIGTERM` to `-child.pid`, wait up to `killGraceMs` (default `15_000` ms, matching `h2a-mirror-push.service:63`), then `SIGKILL` to `-child.pid` → outcome `'timed_out'`, exit **`124`**.
+     - On `SIGTERM` or `SIGINT` (e.g. user logout with `Linger=no` or `systemctl --user stop`): forward `SIGTERM` to `-child.pid`, wait up to `killGraceMs`, then `SIGKILL` to `-child.pid` → outcome `'interrupted'`, exit **`143`** (`SIGTERM`) or **`130`** (`SIGINT`), without incrementing `consecutiveFailures`.
+  8. Write `last-run.json` atomically (`0600`), append & rotate `runs.log` (`0600`), rotate `skips.jsonl` if over threshold (`m-32(e)` — lock holder only), emit one JSON summary line to `stdout`, release lock, and exit. If writing `last-run.json` fails after the child ran (`m-27`, e.g. `ENOSPC`), still release the lock and return `{ outcome: childOutcome, exitCode: 70, witness: null, error: { code: 'RUNNER_INTERNAL_ERROR', message } }`.
+- **Systemd stop/timeout coordination**: `.service` sets `KillMode=mixed`, `SuccessExitStatus=130 143`, `TimeoutStartSec = ceil((timeoutMs + killGraceMs) / 1000) + 30`, and `TimeoutStopSec = ceil(killGraceMs / 1000) + 15`. On timeout or logout stop, systemd signals the runner first (`KillMode=mixed`), letting the runner cleanly drain the child process group, persist the witness, and release the lock before systemd kills any remaining cgroup processes as a backstop.
+- **Manual "run now" rule**: whenever `systemd --user` is available, operators trigger an immediate pass via **`systemctl --user start sentropic-task-<taskId>.service`** (systemd enforces unit singleton execution and cgroup cleanup on stop). Invoking `runScheduledTask` / `runScheduledTaskById` directly is reserved for tests and systemd-less diagnostics.
+
+### 2.3 Single-writer lock (fail-closed, namespace-aware)
+
+Generalising `h2a` `packages/h2a/src/runtime/local-files/locks.ts:14-27,262-295,382-398` and `packages/h2a/src/runtime/local-files/succession-lock.ts:360-387,789-830,862-916`:
+
+- **Location**: `${stateDir}/locks/<taskId>.lock` (mode `0600`, inside `0700` directory).
+- **Lock payload (`0600` JSON)**:
+  ```json
+  {
+    "v": 1,
+    "taskId": "h2a-session-archive",
+    "pid": 41203,
+    "pidStartTime": "18492014",
+    "pidNs": "pid:[4026531836]",
+    "timeNs": "time:[4026531834]",
+    "phase": "running",
+    "childPid": 41219,
+    "childPgid": 41219,
+    "host": "workstation-01",
+    "bootId": "8f2a9c4b-...",
+    "nonce": "3b9e8f1c0a2d4e6f...",
+    "acquiredAt": "2026-12-01T03:10:00.000Z"
+  }
+  ```
+  - `bootId`: trimmed `/proc/sys/kernel/random/boot_id`.
+  - `pidStartTime`: field 22 of `/proc/self/stat` (parsed after the last `')'` to tolerate spaces/parens in `comm`; defeats PID reuse).
+  - `pidNs`: `readlinkSync('/proc/self/ns/pid')`, or `null` if unreadable (`succession-lock.ts:363-373`).
+  - `timeNs`: `readlinkSync('/proc/self/ns/time')`, or `null` if unreadable (`succession-lock.ts:379-387`).
+  - `phase`: `'acquired' | 'spawning' | 'running'`. Starts as `'acquired'` with `childPid: null, childPgid: null`; immediately before `spawn`, the holder atomically rewrites the lock with `phase: 'spawning'`; immediately after `spawn`, it atomically rewrites the lock with `childPid: child.pid, childPgid: child.pid, phase: 'running'`.
+  - **Atomic lock-record rewrite protocol**: write complete JSON with **`nonce` unchanged** to same-directory temp file (`<taskId>.lock.<pid>.<nonce>.<seq>.tmp`, `0600`) → `fsync(fd)` → `close(fd)` → `rename(tmp, lockPath)` → `fsync(locksDir)`, and record the new `(dev, ino)` as the holder's owned generation.
+- **Atomic acquisition**:
+  1. Write complete JSON (`phase: 'acquired'`, `childPid: null`, `childPgid: null`) to `<taskId>.lock.<pid>.<nonce>.tmp` (`0600`), `fsync(fd)`, `close(fd)`.
+  2. Publish via `linkSync(tmp, lockPath)` (fallback `openSync(lockPath, 'wx', 0o600)` only on `EPERM`/`EXDEV`/`ENOTSUP`), unlink `tmp`, `fsync(locksDir)`.
+- **Contention & pre-lock sandbox refusal log (`skips.jsonl`, never touches `last-run.json`)**:
+  - Non-blocking. Only the lock holder ever writes `last-run.json`.
+  - A losing contender (or a runner refused pre-lock by the host PID guard) only appends one compact JSON line (`< 4096` bytes) to `${stateDir}/tasks/<taskId>/skips.jsonl` (`0600`, bounded at `256 KiB` with single-generation rotation `skips.jsonl.1` performed exclusively by the lock holder at step 8), opened with `O_APPEND` (on Linux local filesystems, concurrent small `O_APPEND` writes are serialized by the kernel inode lock).
+  - Schema (`LocalTaskSkipEntryV1`):
+    ```ts
+    export type LocalTaskSkipEntryV1 =
+      | { readonly v: 1; readonly runId: string; readonly at: string; readonly pid: number; readonly outcome: 'skipped_locked' }
+      | { readonly v: 1; readonly runId: string; readonly at: string; readonly pid: number; readonly outcome: 'refused_policy'; readonly refusal: 'sandbox' };
+    ```
+  - A losing contender logs to `stdout` and exits `0`; a sandbox refusal logs one line to `stderr` and exits `77`.
+- **Fail-closed stale-lock reclaim rule**:
+  > Reclaim requires `lstatSync(lockPath).uid === process.geteuid()` on qualified local storage, and a strict death proof:
+  > (a) `record.bootId` and the current boot id both match `/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/` and differ (an unreadable or malformed current boot id makes (a) inapplicable); or
+  > (b) `record.host === os.hostname()` AND `record.pidNs !== null` AND `record.pidNs === currentPidNs` AND the runner is dead (`process.kill(record.pid, 0)` throws `ESRCH`; OR `/proc/<pid>/stat` state is `Z` AND `/proc/<pid>/status` reports `Threads: 1` AND field 22 is concordant under the time-namespace gate `record.timeNs !== null && record.timeNs === currentTimeNs`; OR field 22 differs from `record.pidStartTime`, counted only when `record.timeNs !== null && record.timeNs === currentTimeNs`) AND either the child group is dead (`process.kill(-record.childPgid, 0)` throws `ESRCH`) or `record.childPgid === null && record.phase === 'acquired'`.
+  >
+  > Any `process.kill(pid, 0)` error other than `ESRCH`/`EPERM`, or an unreadable `/proc/<pid>/stat` (or `/proc/<pid>/status` for `Z`) for a present PID, yields `skipped_locked`.
+  >
+  > A record with `record.phase === 'spawning'` and no `childPgid` is reclaimable only by rule (a). Every other case yields `skipped_locked`.
+  >
+  > **TTL expiry is never a proof.** A holder that is past its expected duration/timeout but alive (e.g. across a host suspend where wall clock advances while Node's `CLOCK_MONOTONIC` timer is paused), belongs to another host (`record.host !== os.hostname()`), belongs to another PID namespace (`record.pidNs !== currentPidNs`), or has an unreadable namespace (`null`) yields `skipped_locked` and is left to the dead-man alert.
+  >
+  > A lock that no rule can clear is cleared at the next boot by rule (a); the dead-man alert covers the gap; there is no force-unlock in v1.
+  - **Qualified local storage gate** (mirroring `h2a` `locks.ts:262-265`): stale reclaim is permitted ONLY on Linux filesystems whose `statfsSync(locksDir).type >>> 0` is in `{ 0xef53 (ext4), 0x58465342 (xfs), 0x9123683e (btrfs), 0xf2f52010 (f2fs) }`. On any other filesystem (NFS, SMB, FUSE, overlayfs, unknown), reclaim fails closed and returns `skipped_locked`.
+  - **Corrupt/opaque lock files**: never reclaimed by age alone. Reclaimable ONLY on qualified local storage when `st.uid === process.geteuid()` AND `st.nlink === 1` AND `predatesBoot(st)` holds (both `mtimeMs` and `ctimeMs` strictly precede a coherent `/proc/stat` `btime` cross-checked against `/proc/uptime` and initial time namespace `time:[4026531834]`, mirroring `h2a` `locks.ts:269-290`). Otherwise fail closed (`skipped_locked`).
+  - **Serialized reclaimer protocol** (mirroring `h2a` `locks.ts:382-398`):
+    1. Acquire guard lock `<taskId>.lock.reclaim` using the same exclusive `link`/`O_EXCL` protocol and the same death-proof rule (bounded recursion depth `<= 4`, so a crashed reclaimer can itself be recovered). Guard-lock records always carry `phase: 'acquired'` and `childPgid: null`, and are never rewritten (`m-32(d)`). If guard acquisition loses → return `skipped_locked`.
+    2. Inside the guard, capture and re-read `lockPath`, comparing the full identity `(nonce, dev, ino, size, mtimeMs, ctimeMs, raw bytes)` against the inspected snapshot AND re-checking `uid === geteuid()` (plus `nlink === 1` for opaque files) AND the death proof.
+    3. On **any mismatch**, release the guard and return `skipped_locked` — **never move or unlink a lock record that was not identically inspected**.
+    4. Write a private quarantine copy `<taskId>.lock.quarantine.<nonce>` (`0600`), `fsync(fd)`, `close(fd)`, `fsync(locksDir)`.
+    5. Re-verify `unchanged(lockPath, snapshot)`; if unchanged, `unlinkSync(lockPath)` and `fsync(locksDir)` (then unlink the quarantine copy after successful removal or retain on error for forensics).
+    6. Release `<taskId>.lock.reclaim` and attempt exclusive acquisition of `lockPath` once more; if another contender won the slot in between, return `skipped_locked`.
+- **Release**: holder reads `lockPath` and `lstatSync(lockPath)`, verifies `record.nonce === ownedNonce` and `(st.dev, st.ino)` match its last published generation, then unlinks `lockPath` and `fsync(locksDir)`. *(Because reclaim requires a strict namespace-aware death proof, a live holder is never reclaimed.)*
