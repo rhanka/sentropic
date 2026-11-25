@@ -448,3 +448,119 @@ export interface LocalTaskWitnessV1 {
   - Otherwise (including manual `systemctl --user start`, direct CLI invocation, or `INVOCATION_ID` unset) → `'manual'`.
   - Per `systemd.exec(5)`, `$TRIGGER_UNIT` is best-effort (coalesced triggers are reported once); `trigger` is strictly **informational** and never alters lock, witness validity, or health evaluation semantics.
 - **Duration measurement**: computed strictly from a monotonic clock (`Math.max(0, Math.round(performance.now() - startMono))`) so suspend/resume or NTP jumps never corrupt `durationMs`.
+
+### 2.6 Dead-man, pause, and failure evaluation (pure read-time function)
+
+Generalising `loopAttendance` (`h2a` `supervisor.ts:151-183`) and `isOpsHeartbeatOverdue` (`cluster-mesh` `incident-schedule.ts:36-44`), `@sentropic/local-scheduler` exports a **100% pure, zero-I/O** function called by consumers at read time:
+
+```ts
+export type LocalTaskHealthStatus =
+  | 'healthy'
+  | 'not_installed'
+  | 'unobservable'
+  | 'disabled'
+  | 'paused'
+  | 'pending_first_run'
+  | 'interrupted'
+  | 'failing'
+  | 'schedule_missed'
+  | 'clock_skew'
+  | 'witness_corrupt';
+
+export interface StateDirObservabilityResult {
+  readonly observable: boolean;
+  readonly reason?: 'absent-outside-host-namespace' | 'inaccessible' | 'not-a-directory';
+}
+
+export interface LocalTaskLockSummaryV1 {
+  readonly pid: number;
+  readonly phase: 'acquired' | 'spawning' | 'running';
+  readonly acquiredAt: string;
+}
+
+export interface EvaluateTaskHealthInput {
+  /** Whether stateDir is accessible/observable by the reader (from probeStateDirObservability). Default: true. */
+  readonly stateDirObservable?: boolean;
+  readonly manifest: LocalTaskManifestV1 | null | 'corrupt';
+  readonly witness: LocalTaskWitnessV1 | null | 'corrupt';
+  /** Parsed from manifest.envFilePath (or resolveSchedulerEnvFilePath() if no manifest) via parseSchedulerEnvFile(). */
+  readonly persistedKillSwitch?: LocalTaskKillSwitchMatchV1 | null;
+  /**
+   * Optional kill-switch detected in the READER process environment (display hint ONLY).
+   * MUST NEVER downgrade failing, schedule_missed, clock_skew, or witness_corrupt.
+   */
+  readonly readerEnvKillSwitch?: LocalTaskKillSwitchMatchV1 | null;
+  /** Optional current lock summary from readTaskLockSummary() (display hint ONLY; never alters status/severity). */
+  readonly lock?: LocalTaskLockSummaryV1 | null | 'unreadable';
+  /** Optional latest skips.jsonl entry from readLastSkipEntry() (display hint ONLY; never alters status/severity). */
+  readonly lastSkip?: LocalTaskSkipEntryV1 | null;
+  /** Protected var names ('PATH' | 'SENTROPIC_LOCAL_SCHEDULER_STATE_DIR') set in the parsed env file (display hint ONLY). */
+  readonly envFileProtectedOverrides?: readonly string[];
+  readonly nowIso: string;                    // injected clock, strict UTC ISO-8601 Z
+  readonly clockSkewToleranceMs?: number;     // default: 300_000 (5 min, matching ops-job-failure-types.ts:82)
+}
+
+export interface LocalTaskHealthVerdict {
+  readonly status: LocalTaskHealthStatus;
+  readonly severity: 'ok' | 'warning' | 'critical';
+  readonly overdueByMs?: number;
+  readonly consecutiveFailures: number;
+  readonly lastSuccessAt: string | null;
+  readonly opsReason?: 'job-failed' | 'deadline-exceeded' | 'schedule-missed' | 'stale';
+  readonly message: string;
+  /** Non-authoritative display hints (e.g. readerEnvKillSwitch, stuck lock, env-file override, install hint). */
+  readonly hints: readonly string[];
+}
+```
+
+**Normative `probeStateDirObservability(stateDir)` rule**:
+1. Attempt `lstatSync(stateDir)` + `accessSync(stateDir, R_OK)`:
+   - Exists, is a real directory (`st.isDirectory()`, not a symlink), and is readable → `{ observable: true }`.
+   - Exists but is not a directory, or is a symlink (`m-32(b)`) → `{ observable: false, reason: 'not-a-directory' }`.
+   - Fails with `ENOENT`: invoke `assertHostPidNamespace()`:
+     - Passes (real host before first `enable`) → `{ observable: true }` (reader then reports `not_installed`).
+     - Fails (sandbox/container where `~/.local/state` is not bound) → `{ observable: false, reason: 'absent-outside-host-namespace' }` (so a sandboxed reader never reports a false `not_installed`/`ok` while the host task is failing).
+   - Fails with `ENOTDIR` (a parent path component is not a directory) → `{ observable: false, reason: 'not-a-directory' }`.
+   - Fails with `EACCES`, `EPERM`, or any other error → `{ observable: false, reason: 'inaccessible' }`.
+
+**Deterministic evaluation order (fail-closed)**:
+1. **Observability**: if `stateDirObservable === false` → `status: 'unobservable'`, `severity: 'warning'`, message explaining state directory is inaccessible from this environment (e.g. unmounted inside sandbox).
+2. **Installation & manifest integrity**:
+   - If `manifest === null` → `status: 'not_installed'`, `severity: 'ok'`, hint `"task is not installed"`.
+   - If `manifest === 'corrupt'` → `status: 'witness_corrupt'`, `severity: 'critical'`, `opsReason: 'stale'`.
+3. **Administrative disable**: if `!manifest.enabled` → `status: 'disabled'`, `severity: 'ok'`.
+4. **Witness integrity**: if `witness === 'corrupt'` → `status: 'witness_corrupt'`, `severity: 'critical'`, `opsReason: 'stale'`.
+5. **Deadline & freshness reference**:
+   - `deadlineMs = Math.round(manifest.expectedIntervalMs * (manifest.spec.schedule.graceMultiplier ?? 1.5))`.
+   - `skewMs = clockSkewToleranceMs ?? 300_000`.
+   - `freshnessRefIso`: `maxIso(witness?.lastSuccessAt ?? null, manifest.enabledAt)` (so re-enabling after a long disable grants a fresh grace window from `enabledAt` rather than immediately firing `schedule_missed`).
+6. **Null witness** (`witness === null`):
+   - If `now - Date.parse(manifest.enabledAt) <= deadlineMs` → `status: 'pending_first_run'`, `severity: 'ok'`.
+   - Else → `status: 'schedule_missed'`, `severity: 'critical'`, `opsReason: 'schedule-missed'`, `overdueByMs`.
+7. **Clock-skew guard** (`supervisor.ts:177-180`):
+   - If `Date.parse(witness.finishedAt) - now > skewMs` OR (`witness.lastSuccessAt !== null` and `Date.parse(witness.lastSuccessAt) - now > skewMs`) → `status: 'clock_skew'`, `severity: 'warning'`, `opsReason: 'stale'`.
+8. **Operator pause (`witness.outcome === 'skipped_disabled'`)**:
+   - **Dead-timer check**: if `now - Date.parse(witness.finishedAt) > deadlineMs` → **fall through to step 10** (`schedule_missed`/`critical`, so a stale pause witness from a dead timer can never mask a broken unit forever).
+   - Otherwise (timer is still actively ticking and writing fresh `skipped_disabled` witnesses):
+     - `status: 'paused'`.
+     - `severity`: `'ok'` while `now - Date.parse(freshnessRefIso) <= deadlineMs`, `'warning'` after that (with `overdueByMs`).
+     - `message`: `"paused since <witness.finishedAt> by <witness.killSwitch.name>; last success <witness.lastSuccessAt ?? 'never'>"`.
+9. **Failure and interruption outcomes**:
+   - `witness.outcome === 'refused_policy'` → `status: 'failing'`, `severity: 'critical'`, `opsReason: 'job-failed'`.
+   - `witness.outcome === 'timed_out'` → `status: 'failing'`, `severity: 'critical'`, `opsReason: 'deadline-exceeded'`.
+   - `witness.outcome === 'failed'` → `status: 'failing'`, `severity: (witness.consecutiveFailures >= 2 || now - Date.parse(freshnessRefIso) > deadlineMs) ? 'critical' : 'warning'`, `opsReason: 'job-failed'` (so a single failure followed by a dead timer escalates to `'critical'` once `deadlineMs` elapses).
+   - `witness.outcome === 'interrupted'`: if `now - Date.parse(freshnessRefIso) > deadlineMs` → fall through to step 10 (`schedule_missed`/`critical`, so repeated logout interruptions cannot mask an overdue schedule); otherwise → `status: 'interrupted'`, `severity: 'warning'`, `opsReason: undefined`.
+10. **Dead-man freshness check**:
+    - If `now - Date.parse(freshnessRefIso) > deadlineMs` → `status: 'schedule_missed'`, `severity: 'critical'`, `opsReason: 'schedule-missed'`, `overdueByMs`.
+11. **Healthy**: `status: 'healthy'`, `severity: 'ok'`.
+
+**Hint rule (applied after steps 1–11, never altering `status` or `severity`)**:
+- If `readerEnvKillSwitch` is non-null: append `"reader process env sets <name>; this does not pause the systemd user timer"` to `hints`. It **never** downgrades `failing`, `schedule_missed`, `clock_skew`, or `witness_corrupt`.
+- If `persistedKillSwitch` is non-null and `status !== 'paused'` and `status !== 'disabled'`:
+  - If `status === 'schedule_missed'` (`m-32(f)`): append `"env file sets <name>, but no tick is recorded since <witness?.finishedAt ?? 'enable'>; the timer may be stopped"` to `hints`.
+  - Otherwise: append `"persisted env file sets <name>; next scheduled tick will pause"` to `hints`.
+- If `lastSkip?.outcome === 'skipped_locked'` and (`witness === null || witness === 'corrupt'` || `Date.parse(lastSkip.at) > Date.parse(witness.finishedAt)`) (`m-28(b)`):
+  - If `lock` is a `LocalTaskLockSummaryV1` object: append `"recent ticks found the lock held by pid <lock.pid> (phase <lock.phase>) since <lock.acquiredAt>; if no run is active, a reboot clears it"` to `hints`.
+  - Else if `lock === 'unreadable'`: append `"recent ticks found an unreadable lock file; if no run is active, a reboot clears it"` to `hints`.
+- For each variable `<VAR>` in `envFileProtectedOverrides` (`PATH`, `SENTROPIC_LOCAL_SCHEDULER_STATE_DIR`, `m-30`):
+  - Append `"env file sets <VAR>; runner enforces constant child PATH and manifest.stateDir parity — remove <VAR> from the env file"` to `hints`.
