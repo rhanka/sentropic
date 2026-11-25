@@ -827,3 +827,99 @@ export class SystemctlFailedError extends LocalSchedulerError {
   override readonly exitCode: 70;
 }
 ```
+
+```ts
+export interface EnablePolicyV1 {
+  /** Trampoline entry written into systemd ExecStart (bin + args + [taskId]). */
+  readonly runner: LocalTaskRunnerEntryV1;
+  /** Canonical absolute paths of allowed executables (e.g. ['/usr/bin/node']). */
+  readonly allowedBins: readonly string[];
+  /**
+   * Canonical absolute paths of allowed entry scripts when bin is a Node.js interpreter.
+   * A binary `bin` is a Node interpreter when `realpathSync(bin) === realpathSync(process.execPath)`
+   * OR `path.basename(realpathSync(bin)) === 'node'`. Mandatory whenever runner.bin or
+   * spec.command.bin is a Node interpreter (§6.5).
+   */
+  readonly allowedScripts?: readonly string[];
+  /** Default: ${XDG_CONFIG_HOME ?? ~/.config}/systemd/user. Tests use $XDG_RUNTIME_DIR/systemd/user. */
+  readonly unitDir?: string;
+  /** Default: resolveStateDir(). */
+  readonly stateDir?: string;
+  /** Default: resolveSchedulerEnvFilePath(). Resolved once at enable and pinned in manifest + unit. */
+  readonly envFilePath?: string;
+  /** When true, uses `systemctl --user --runtime enable/disable` (ephemeral qualification mode). */
+  readonly runtime?: boolean;
+}
+
+export interface EnableResultV1 {
+  readonly manifest: LocalTaskManifestV1;
+  readonly servicePath: string;
+  readonly timerPath: string;
+  readonly lingerEnabled: boolean | null;
+  readonly lingerNotice?: string;
+}
+
+export interface DisableResultV1 {
+  readonly taskId: string;
+  readonly manifest: LocalTaskManifestV1;
+}
+
+export interface UninstallOptionsV1 {
+  readonly purgeState?: boolean;
+  readonly unitDir?: string;
+  readonly stateDir?: string;
+  readonly runtime?: boolean;
+}
+
+export interface UninstallResultV1 {
+  readonly taskId: string;
+  readonly removedUnits: readonly string[];
+  readonly purgedState: boolean;
+}
+
+export interface SystemdRuntimeStateV1 {
+  readonly timerUnitFileState: string;
+  readonly timerActive: string;
+  readonly nextElapse: string | null;             // from NextElapseUSecRealtime
+  readonly lastTrigger: string | null;            // from LastTriggerUSec
+  readonly lastTriggerMonotonicUs: number | null; // from LastTriggerUSecMonotonic
+  readonly serviceActive: string;
+  readonly serviceResult: string | null;          // from Result
+  readonly execMainStatus: number | null;         // from ExecMainStatus
+  readonly execMainExitTimestamp: string | null;  // from ExecMainExitTimestamp
+  /** Set when execMainStatus === 203 (EXIT_EXEC) or 77 (allow-list refusal vs pre-lock guard/mode refusal). */
+  readonly execDiagnostic?: string;
+}
+
+export interface LocalTaskStatusV1 {
+  readonly manifest: LocalTaskManifestV1 | null | 'corrupt';
+  readonly witness: LocalTaskWitnessV1 | null | 'corrupt';
+  readonly lock?: LocalTaskLockSummaryV1 | null | 'unreadable';
+  readonly lastSkip?: LocalTaskSkipEntryV1 | null;
+  readonly health: LocalTaskHealthVerdict;
+  readonly systemd: SystemdRuntimeStateV1 | 'unavailable';
+  readonly lingerEnabled: boolean | null;
+}
+
+export interface OsSchedulerAdapter {
+  /** Writes manifest.json with enabled: true ONLY after systemctl enable --now succeeds; keeps previous manifest on SYSTEMCTL_FAILED. */
+  enable(spec: LocalTaskSpecV1, policy: EnablePolicyV1): Promise<EnableResultV1>;
+  /** Throws TaskNotFoundError (exit 2) when manifest is missing. */
+  disable(taskId: string, opts?: { readonly unitDir?: string; readonly stateDir?: string; readonly runtime?: boolean }): Promise<DisableResultV1>;
+  /** Never throws for a missing task (returns manifest: null, health.status: 'not_installed'). */
+  status(taskId: string, opts?: { readonly stateDir?: string; readonly nowIso?: string }): Promise<LocalTaskStatusV1>;
+  /** Idempotent: succeeds with removedUnits: [] if already absent; still throws UnmanagedUnitError on unmanaged files. */
+  uninstall(taskId: string, opts?: UninstallOptionsV1): Promise<UninstallResultV1>;
+}
+
+export interface FakeSchedulerAdapter extends OsSchedulerAdapter {
+  /** Test helper: writes a witness (or corrupt bytes / unlink on null) into stateDir using production writers. */
+  setWitness(taskId: string, witness: LocalTaskWitnessV1 | null | 'corrupt'): void;
+  /** Test helper: writes persisted env-file contents to envFilePath using production writers. */
+  setPersistedEnvFile(text: string): void;
+  /** Test helper: simulate systemd availability or linger state. */
+  setSystemdState(state: SystemdRuntimeStateV1 | 'unavailable', lingerEnabled?: boolean | null): void;
+  /** Test helper: inspect rendered unit texts for assertions. */
+  getRenderedUnits(taskId: string): { readonly service: string; readonly timer: string } | null;
+}
+```
