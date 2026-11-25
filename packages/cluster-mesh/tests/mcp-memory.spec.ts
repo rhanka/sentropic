@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { createEngramMemoryBuiltin } from '../src/integrations/mcp/memory.js';
 import { loadEngramMemoryMcp } from '../src/loaders/mcp/memory.js';
+import { ENGRAM_MEMORY_RANGE, PROVIDER_CATALOG } from '../src/modules/catalog.js';
 import { createModuleRegistry } from '../src/modules/registry.js';
+import { satisfiesRange } from '../src/modules/semver.js';
 import { createMcpRegistry } from '../src/mcp/registry.js';
 import type { ClusterMeshModules } from '../src/modules/contracts.js';
 import { evaluations, moduleSource, PackageTree } from './fixtures/package-tree.js';
@@ -90,5 +93,19 @@ describe('engram memory builtin', () => {
     if (!result.ok) expect(result.diagnostics[0]?.message).toContain('engine/provenance instance');
     expect(opened).toBe(0);
     expect(registry.compiled()).toBeUndefined();
+  });
+
+  it('should align the catalog engram peer range with package.json across 0.22.0..0.28.x', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    expect(ENGRAM_MEMORY_RANGE).toBe('>=0.22.0 <0.29.0');
+    expect(ENGRAM_MEMORY_RANGE).toBe(manifest.peerDependencies['@sentropic/engram']);
+    expect(PROVIDER_CATALOG['mcp/memory'].range).toBe(ENGRAM_MEMORY_RANGE);
+    expect(PROVIDER_CATALOG['engram-memory/substrate'].range).toBe(ENGRAM_MEMORY_RANGE);
+    for (const v of ['0.22.0', '0.23.0', '0.27.0', '0.28.0', '0.28.9']) {
+      expect(satisfiesRange(v, ENGRAM_MEMORY_RANGE), v).toBe(true);
+    }
+    for (const v of ['0.21.3', '0.29.0']) {
+      expect(satisfiesRange(v, ENGRAM_MEMORY_RANGE), v).toBe(false);
+    }
   });
 });
