@@ -366,3 +366,85 @@ Generalising `h2a` `packages/h2a/src/runtime/local-files/locks.ts:14-27,262-295,
     5. Re-verify `unchanged(lockPath, snapshot)`; if unchanged, `unlinkSync(lockPath)` and `fsync(locksDir)` (then unlink the quarantine copy after successful removal or retain on error for forensics).
     6. Release `<taskId>.lock.reclaim` and attempt exclusive acquisition of `lockPath` once more; if another contender won the slot in between, return `skipped_locked`.
 - **Release**: holder reads `lockPath` and `lstatSync(lockPath)`, verifies `record.nonce === ownedNonce` and `(st.dev, st.ino)` match its last published generation, then unlinks `lockPath` and `fsync(locksDir)`. *(Because reclaim requires a strict namespace-aware death proof, a live holder is never reclaimed.)*
+
+### 2.4 Kill-switch (global, per-task, and consumer alias)
+
+Generalising `H2A_LOOP_AUTOTICK_OFF` (`supervisor.ts:13`) and `H2A_MIRROR_PUSH_OFF` (`push-daemon.ts:150-166`):
+
+- **Checked variables (OR logic — evaluated in priority order; first match recorded)**:
+  1. **Global (`scope: 'global'`)**: `SENTROPIC_LOCAL_SCHEDULER_OFF`
+  2. **Per-task canonical (`scope: 'task'`)**: `SENTROPIC_TASK_<UPPER_SNAKE_TASK_ID>_OFF` (e.g. `SENTROPIC_TASK_H2A_SESSION_ARCHIVE_OFF`)
+  3. **Per-task consumer alias (`scope: 'alias'`)**: optional `spec.killSwitchEnv` (e.g. `H2A_ARCHIVE_OFF`).
+- **Evaluation rule** (identical to `push-daemon.ts:159-166`): active when defined and `value.trim().toLowerCase()` is not `""`, `"0"`, or `"false"`.
+- **Operator activation without editing units**:
+  - Immediate next-tick freeze (volatile across reboot): `systemctl --user set-environment SENTROPIC_TASK_H2A_SESSION_ARCHIVE_OFF=1`.
+  - Persistent freeze across reboots: append `SENTROPIC_TASK_H2A_SESSION_ARCHIVE_OFF=1` to the pinned env file (`manifest.envFilePath`, default `${XDG_CONFIG_HOME ?? ~/.config}/sentropic/local-scheduler/env`, mode `0600`), loaded by `EnvironmentFile=-<escaped-abs-path>` in `.service` (§3.1).
+- **Pure env-file parser (`parseSchedulerEnvFile(text: string)`)**: parses systemd `EnvironmentFile=` syntax (`#`/`;` comments, blank lines, `KEY=VALUE`, optional single/double quote stripping, no shell expansion, ignores malformed lines safely). Consumers read `manifest.envFilePath` (falling back to `resolveSchedulerEnvFilePath()` only when no valid manifest exists) via `readSchedulerEnvFile(...)` without ever shelling out to `systemctl`.
+- **Effect**: evaluated *after* acquiring the single-writer lock and *before* the allow-list check (§2.2). Runner does not spawn the child command, writes `last-run.json` with `outcome: 'skipped_disabled'` and `killSwitch: { scope, name }` (preserving `lastSuccessAt`, `lastSuccessRunId`, `consecutiveFailures`), emits one JSON log line, releases the lock, and exits **`0`**.
+
+### 2.5 Last-run witness JSON schema (`LocalTaskWitnessV1`) and evolution
+
+- **Path**: `${stateDir}/tasks/<taskId>/last-run.json` (mode `0600`).
+- **Atomic write protocol**: serialize JSON → write `${taskDir}/.last-run.<pid>.<nonce>.tmp` (`0600`) → `fsync(fd)` → `close(fd)` → `rename(tmp, lastRunPath)` → `fsync(taskDir)`.
+- **Schema (`v: 1`)**:
+
+```ts
+export const LOCAL_TASK_WITNESS_V1 = 1 as const;
+
+export type LocalTaskTriggerV1 = 'systemd-timer' | 'manual';
+
+export type LocalTaskOutcomeV1 =
+  | 'succeeded'
+  | 'failed'
+  | 'timed_out'
+  | 'interrupted'
+  | 'skipped_disabled'
+  | 'refused_policy';
+// Note: 'skipped_locked' and pre-lock 'refused_policy' (refusal: 'sandbox') are NEVER written to
+// last-run.json; they are appended to skips.jsonl only (§2.2, §2.3).
+
+export type LocalTaskRefusalReasonV1 = 'sandbox' | 'allowlist' | 'file-mode' | 'state-dir';
+
+export interface LocalTaskKillSwitchMatchV1 {
+  readonly scope: 'global' | 'task' | 'alias';
+  readonly name: string;
+}
+
+export interface LocalTaskWitnessV1 {
+  readonly v: typeof LOCAL_TASK_WITNESS_V1;
+  readonly taskId: string;
+  readonly owner: string;
+  readonly runId: string;                     // UUIDv4
+  /** Informational only (best-effort from TRIGGER_UNIT per systemd.exec(5)). */
+  readonly trigger: LocalTaskTriggerV1;
+  readonly host: string;                      // os.hostname()
+  readonly pid: number;                       // runner PID
+  readonly startedAt: string;                 // strict UTC ISO-8601 ending in 'Z'
+  readonly finishedAt: string;                // strict UTC ISO-8601 ending in 'Z'
+  readonly durationMs: number;                // >= 0 integer from monotonic performance.now()
+  readonly outcome: LocalTaskOutcomeV1;
+  readonly exitCode: number | null;           // child exit code, null if killed/not spawned
+  readonly signal: string | null;             // e.g. 'SIGTERM', 'SIGKILL', or null
+  /** Required when outcome === 'skipped_disabled'; omitted otherwise. */
+  readonly killSwitch?: LocalTaskKillSwitchMatchV1;
+  /** Required when outcome === 'refused_policy' (only 'allowlist' | 'file-mode' are ever written); omitted otherwise. */
+  readonly refusal?: 'allowlist' | 'file-mode';
+  /** 0 on succeeded; +1 on failed/timed_out/refused_policy; preserved on skipped_disabled and interrupted. */
+  readonly consecutiveFailures: number;
+  /** Preserved across failures, interruptions, and pauses for dead-man evaluation. */
+  readonly lastSuccessAt: string | null;
+  readonly lastSuccessRunId: string | null;
+  /** Optional sanitized single-line summary, <= 512 UTF-8 bytes, no secrets, no control chars. */
+  readonly summary?: string;
+  readonly logPath?: string;
+}
+```
+
+- **Schema evolution rule**:
+  - `v: 1` has a frozen closed key set: unknown keys, missing required conditional fields (`killSwitch` on `skipped_disabled`, `refusal` on `refused_policy`), invalid `refusal` values outside `'allowlist' | 'file-mode'` (e.g. `'sandbox'` or `'state-dir'`, which are never written to `last-run.json`, `m-32(g)`), invalid UTC timestamps, or negative durations are rejected as `'corrupt'`.
+  - Any future additive field **MUST** bump the schema to `v: 2`; `v: 2` readers accept both `v: 1` and `v: 2` witnesses (upgrade order: ship v2 readers before v2 writers so existing readers never flag `'corrupt'` during rollout).
+- **Trigger derivation (informational)**:
+  - `process.env.TRIGGER_UNIT` is non-empty and ends with `.timer` (set automatically by `systemd.exec(5)` on timer activation) → `'systemd-timer'`.
+  - Otherwise (including manual `systemctl --user start`, direct CLI invocation, or `INVOCATION_ID` unset) → `'manual'`.
+  - Per `systemd.exec(5)`, `$TRIGGER_UNIT` is best-effort (coalesced triggers are reported once); `trigger` is strictly **informational** and never alters lock, witness validity, or health evaluation semantics.
+- **Duration measurement**: computed strictly from a monotonic clock (`Math.max(0, Math.round(performance.now() - startMono))`) so suspend/resume or NTP jumps never corrupt `durationMs`.
