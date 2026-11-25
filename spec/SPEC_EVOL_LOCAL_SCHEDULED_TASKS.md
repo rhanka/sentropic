@@ -133,3 +133,144 @@ Package subpath exports (`package.json` `"exports"`):
 Zero external runtime dependencies (`dependencies: {}`). `devDependencies`: `"typescript": "5.4.5"`, `"@types/node": "^22.0.0"` (aligned with Node `>=22.0.0`), `"vitest": "4.0.18"` (matching `Makefile:2361` locked CI tool versions).
 
 ---
+
+## 2. The task contract
+
+### 2.1 Task specification (`LocalTaskSpecV1`) and manifest (`LocalTaskManifestV1`)
+
+Every registered task is persisted as an immutable validated manifest at `${stateDir}/tasks/<taskId>/manifest.json` (`0600`), where `stateDir` and `envFilePath` are resolved once at `enable` (`resolveStateDir()`, `resolveSchedulerEnvFilePath()`) and pinned into the generated `.service` unit (§3.1, §4.2).
+
+```ts
+export const LOCAL_TASK_SPEC_V1 = 1 as const;
+export const LOCAL_TASK_MANIFEST_V1 = 1 as const;
+
+export const ON_CALENDAR_PRESETS = ['hourly', 'daily', 'weekly', 'monthly'] as const;
+/**
+ * Strict allow-list for custom systemd OnCalendar expressions:
+ * - Presets: hourly | daily | weekly | monthly
+ * - Custom: 1..64 ASCII chars in [0-9A-Za-z*,./:~ -], no '%', no leading '-', no trailing '\'.
+ * Also verified via `systemd-analyze calendar --iterations=8 -- <expr>` at enable time.
+ */
+export const ON_CALENDAR_CUSTOM_REGEX = /^(?!-)[0-9A-Za-z*,./:~ -]{1,64}$/;
+
+/** Loader/runtime-injection env vars forbidden in command.env, envAllowlist, child env, and unit env (§6.5). */
+export const BLOCKED_LOADER_ENV_VARS = [
+  'NODE_OPTIONS',
+  'NODE_PATH',
+  'LD_PRELOAD',
+  'LD_LIBRARY_PATH',
+  'LD_AUDIT',
+] as const;
+
+export interface LocalTaskScheduleV1 {
+  /** Validated preset or strict OnCalendar expression (verified by systemd-analyze). */
+  readonly onCalendar: string;
+  /** Catch up missed runs after power-off/suspend (systemd Persistent=true). Default: true. */
+  readonly persistent: boolean;
+  /** Jitter delay in seconds (0..3600). Default: 300. */
+  readonly randomizedDelaySec?: number;
+  /** Timer coalescing window in seconds (1..3600). Default: 60. */
+  readonly accuracySec?: number;
+  /**
+   * Optional consumer cross-check for the nominal period in milliseconds (>= 60_000).
+   * Authoritative expectedIntervalMs is computed at enable time (presets: hourly=3_600_000,
+   * daily=86_400_000, weekly=604_800_000, monthly=2_678_400_000; custom: max consecutive gap
+   * over `systemd-analyze calendar --iterations=8 -- <expr>`) and stored in manifest.json.
+   * If provided here, enable rejects with InvalidTaskSpecError (exit 2) when deviation > 10%.
+   */
+  readonly expectedIntervalMs?: number;
+  /**
+   * Grace multiplier applied to manifest.expectedIntervalMs before flagging schedule_missed.
+   * Range: 1.1..5.0. Default: 1.5 (e.g. 36 h for daily, 10.5 d for weekly).
+   */
+  readonly graceMultiplier?: number;
+}
+
+export interface LocalTaskCommandV1 {
+  /**
+   * Absolute canonical path to executable binary (ELF or non-env shebang checked at enable & run).
+   * For Node.js consumers, bin MUST be a Node interpreter (e.g. process.execPath) and args[0] MUST
+   * be the canonical absolute entry script path (checked against allowedScripts; §6.5).
+   */
+  readonly bin: string;
+  /** Literal argv passed via spawn(bin, args, { shell: false }). Max 64 args, 1024 chars each. */
+  readonly args: readonly string[];
+  /** Optional absolute working directory. Defaults to $HOME. */
+  readonly cwd?: string;
+  /**
+   * Static non-secret environment variables captured at enable time and stored ONLY in
+   * manifest.json (NEVER written to .service unit files). Validated against the secret denylist,
+   * BLOCKED_LOADER_ENV_VARS, and control-char rules (§6.4, §6.5). Example: { H2A_ROOT: '/home/user/src/a2a-cli' }.
+   */
+  readonly env?: Readonly<Record<string, string>>;
+  /**
+   * Optional additional non-secret environment variable names forwarded from the runner
+   * environment when already defined in the user manager. Secret-shaped names and
+   * BLOCKED_LOADER_ENV_VARS are rejected at enable and stripped at run (§6.4, §6.5).
+   */
+  readonly envAllowlist?: readonly string[];
+}
+
+export interface LocalTaskResourcesV1 {
+  /** Scheduling niceness (0..19). Default: 15. Negative values rejected. */
+  readonly nice?: number;
+  /** I/O scheduling class (best-effort; see §2.9). Default: 'idle'. */
+  readonly ioSchedulingClass?: 'idle' | 'best-effort';
+  /** Systemd MemoryMax (e.g. '512M', '1G'; bounds 64M..4G). Default: '512M'. */
+  readonly memoryMax?: string;
+  /** Systemd CPUQuota percentage (e.g. '50%'; bounds 5%..100%). Default: '50%'. */
+  readonly cpuQuota?: string;
+  /** Maximum tasks/threads in the service cgroup (8..512). Default: 64. */
+  readonly tasksMax?: number;
+}
+
+export interface LocalTaskSpecV1 {
+  readonly v: typeof LOCAL_TASK_SPEC_V1;
+  /** Lowercase ASCII slug: /^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/ (3..64 chars). */
+  readonly taskId: string;
+  /** Consumer namespace slug: /^[a-z0-9][a-z0-9-]{0,31}$/ (e.g. 'h2a'). */
+  readonly owner: string;
+  /** Human-readable single-line label (<= 120 chars, no control chars, no '%', no '\'). */
+  readonly description: string;
+  readonly schedule: LocalTaskScheduleV1;
+  /** One-shot idempotent command invoked by the runner. */
+  readonly command: LocalTaskCommandV1;
+  /** Hard execution timeout in ms (5_000..7_200_000). Default: 900_000 (15 min). */
+  readonly timeoutMs: number;
+  /** SIGTERM-to-SIGKILL grace window in ms (1_000..60_000). Default: 15_000. */
+  readonly killGraceMs?: number;
+  /** Optional consumer-familiar kill-switch env var name (e.g. 'H2A_ARCHIVE_OFF'). */
+  readonly killSwitchEnv?: string;
+  readonly resources?: LocalTaskResourcesV1;
+}
+
+export interface LocalTaskRunnerEntryV1 {
+  /** Canonical executable invoked by systemd ExecStart (e.g. '/usr/bin/node'). */
+  readonly bin: string;
+  /** Literal argv prefix; systemd unit emits ExecStart = bin + args + [taskId]. */
+  readonly args: readonly string[];
+}
+
+export interface LocalTaskManifestV1 {
+  readonly v: typeof LOCAL_TASK_MANIFEST_V1;
+  readonly spec: LocalTaskSpecV1;
+  readonly runner: LocalTaskRunnerEntryV1;
+  readonly enabled: boolean;
+  /** UTC ISO-8601 Z when first installed (preserved across updates/re-enables). */
+  readonly installedAt: string;
+  /** UTC ISO-8601 Z of the latest enable transition (anchors dead-man after re-enable). */
+  readonly enabledAt: string;
+  /** Resolved absolute stateDir pinned into the generated .service unit. */
+  readonly stateDir: string;
+  /** Resolved absolute env-file path pinned into the generated .service unit (EnvironmentFile=-). */
+  readonly envFilePath: string;
+  /** Authoritative nominal interval in ms computed at enable time. */
+  readonly expectedIntervalMs: number;
+  readonly units: {
+    readonly serviceSha256: string;
+    readonly timerSha256: string;
+  };
+}
+```
+
+*Note (`m-26` host PID guard seam)*: The host PID namespace guard is **never** a manifest or public-API toggle (`requireHostPidNamespace` is absent from `LocalTaskSpecV1` and all public types). Production entry points (`runScheduledTask`, `runScheduledTaskById`, `createSystemdUserAdapter`) accept no guard-skip option and read **no** environment variable, file, or CLI flag that skips the guard. The bypass exists exclusively as a parameter of package-internal functions (e.g. `runScheduledTaskInternal(..., { hostPidGuard })` in `src/runner.ts` and its internal adapter counterpart in `src/systemd/index.ts`), never re-exported in `package.json` `"exports"`. The CI systemd lifecycle and host qualification (c) cross the systemd process boundary by allow-listing a test trampoline `policy.runner = { bin: node, args: ['<pkg>/tests/fixtures/ci-runner.mjs'] }` under `tests/` (excluded from the npm tarball via `"files"`), which imports the internal function from `dist/` and injects a passing guard (§7.1).
