@@ -73,7 +73,12 @@ describe('acquireTaskLock & readTaskLockSummary', () => {
     expect(readFileSync(lockPath, 'utf8')).toBe(beforeBytes);
 
     seedLock(stateDir, 't-1', { ...baseRec, pidNs: 'pid:[4026531836]', timeNs: 'time:[4026539999]' });
-    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => ({ state: 'S', startTime: '8888' }), killZero: () => 'alive' }))).toBeNull();
+    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => ({ state: 'S', startTime: '8888' }), killZero: (p) => (p > 0 ? 'alive' : 'esrch') }))).toBeNull();
+    // Positive control for B-5 #3: matching timeNs reclaims PID reuse
+    seedLock(stateDir, 't-1', { ...baseRec, pidNs: 'pid:[4026531836]', timeNs: 'time:[4026531834]' });
+    const hTimeOk = acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => ({ state: 'S', startTime: '8888' }), killZero: (p) => (p > 0 ? 'alive' : 'esrch') }));
+    expect(hTimeOk).not.toBeNull();
+    hTimeOk!.release();
 
     seedLock(stateDir, 't-1', { ...baseRec, pidNs: 'pid:[4026531836]', phase: 'spawning', childPid: null, childPgid: null });
     expect(acquireTaskLock(stateDir, 't-1', makeDeps({ killZero: () => 'esrch' }))).toBeNull();
@@ -91,10 +96,23 @@ describe('acquireTaskLock & readTaskLockSummary', () => {
     };
     seedLock(stateDir, 't-1', rec);
     expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readBootId: () => 'not-a-uuid', killZero: () => 'alive' }))).toBeNull();
-    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => ({ state: 'Z', startTime: '1111' }), readProcThreads: () => 2 }))).toBeNull();
-    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ killZero: () => 'other' }))).toBeNull();
-    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => null }))).toBeNull();
+    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => ({ state: 'Z', startTime: '1111' }), readProcThreads: () => 2, killZero: (p) => (p > 0 ? 'alive' : 'esrch') }))).toBeNull();
+    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ killZero: (p) => (p > 0 ? 'other' : 'esrch'), readProcStat: () => ({ state: 'S', startTime: '9999' }) }))).toBeNull();
+    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => null, killZero: (p) => (p > 0 ? 'alive' : 'esrch') }))).toBeNull();
     expect(acquireTaskLock(stateDir, 't-1', makeDeps({ killZero: () => 'esrch', statfsType: () => 0x794c7630 }))).toBeNull();
+
+    // Positive controls for m-31 #2, killZero 'other'->'esrch', and readable /proc/<pid>/stat
+    const hZombie1 = acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => ({ state: 'Z', startTime: '1111' }), readProcThreads: () => 1, killZero: (p) => (p > 0 ? 'alive' : 'esrch') }));
+    expect(hZombie1).not.toBeNull();
+    hZombie1!.release();
+    seedLock(stateDir, 't-1', rec);
+    const hKillEsrch = acquireTaskLock(stateDir, 't-1', makeDeps({ killZero: () => 'esrch', readProcStat: () => ({ state: 'S', startTime: '9999' }) }));
+    expect(hKillEsrch).not.toBeNull();
+    hKillEsrch!.release();
+    seedLock(stateDir, 't-1', rec);
+    const hStatOk = acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => ({ state: 'S', startTime: '9999' }), killZero: (p) => (p > 0 ? 'alive' : 'esrch') }));
+    expect(hStatOk).not.toBeNull();
+    hStatOk!.release();
   });
 
   it('reclaims dead runner, Threads:1 zombie, and opaque pre-boot nlink=1 files on qualified ext4', () => {
@@ -149,7 +167,11 @@ describe('acquireTaskLock & readTaskLockSummary', () => {
     // Different host, null pidNs, null currentPidNs, null timeNs, wall-clock jump past timeout while alive, foreign uid, null statfs
     expect(acquireTaskLock(stateDir, 't-1', makeDeps({ hostname: () => 'ws-2', killZero: () => 'esrch' }))).toBeNull();
     expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readSelfPidNs: () => null, killZero: () => 'esrch' }))).toBeNull();
-    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readSelfTimeNs: () => null, readProcStat: () => ({ state: 'S', startTime: '8888' }) }))).toBeNull();
+    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readSelfTimeNs: () => null, readProcStat: () => ({ state: 'S', startTime: '8888' }), killZero: (p) => (p > 0 ? 'alive' : 'esrch') }))).toBeNull();
+    const hTimeRestored = acquireTaskLock(stateDir, 't-1', makeDeps({ readSelfTimeNs: () => 'time:[4026531834]', readProcStat: () => ({ state: 'S', startTime: '8888' }), killZero: (p) => (p > 0 ? 'alive' : 'esrch') }));
+    expect(hTimeRestored).not.toBeNull();
+    hTimeRestored!.release();
+    seedLock(stateDir, 't-1', baseRec);
     expect(acquireTaskLock(stateDir, 't-1', makeDeps({ nowMs: () => Date.parse('2026-11-26T12:00:00.000Z'), readProcStat: () => ({ state: 'S', startTime: '1111' }) }))).toBeNull();
     expect(acquireTaskLock(stateDir, 't-1', makeDeps({ geteuid: () => 65534, killZero: () => 'esrch' }))).toBeNull();
     expect(acquireTaskLock(stateDir, 't-1', makeDeps({ statfsType: () => null, killZero: () => 'esrch' }))).toBeNull();
@@ -157,7 +179,11 @@ describe('acquireTaskLock & readTaskLockSummary', () => {
     seedLock(stateDir, 't-1', { ...baseRec, pidNs: null });
     expect(acquireTaskLock(stateDir, 't-1', makeDeps({ killZero: () => 'esrch' }))).toBeNull();
     seedLock(stateDir, 't-1', { ...baseRec, timeNs: null });
-    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => ({ state: 'S', startTime: '8888' }) }))).toBeNull();
+    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => ({ state: 'S', startTime: '8888' }), killZero: (p) => (p > 0 ? 'alive' : 'esrch') }))).toBeNull();
+    seedLock(stateDir, 't-1', { ...baseRec, timeNs: 'time:[4026531834]' });
+    const hRecTimeOk = acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => ({ state: 'S', startTime: '8888' }), killZero: (p) => (p > 0 ? 'alive' : 'esrch') }));
+    expect(hRecTimeOk).not.toBeNull();
+    hRecTimeOk!.release();
     seedLock(stateDir, 't-1', { ...baseRec, bootId: 'not-a-uuid' });
     expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readBootId: () => BOOT_B, readProcStat: () => ({ state: 'S', startTime: '1111' }) }))).toBeNull();
 

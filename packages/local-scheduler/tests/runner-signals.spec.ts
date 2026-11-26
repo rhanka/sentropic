@@ -159,4 +159,44 @@ describe('runner contention, SIGTERM interruption, and log rotation', () => {
     expect(existsSync(`${skipsPath}.1`)).toBe(true);
     expect(statSync(`${skipsPath}.1`).mode & 0o777).toBe(0o600);
   }, 15_000);
+
+  it('escalates SIGKILL to process group even after direct child closes on SIGTERM (M-1)', async () => {
+    const stateDir = makeStateDir();
+    const trapPidFile = path.join(stateDir, 'trap-grandchild.pid');
+    const trapReadyFile = path.join(stateDir, 'trap-grandchild.ready');
+    const trapScript = path.join(stateDir, 'pgid-trap.mjs');
+    const gcInline = [
+      "const fs = require('node:fs');",
+      "process.on('SIGTERM', () => {});",
+      `fs.writeFileSync(${JSON.stringify(trapReadyFile)}, '1');`,
+      'setInterval(() => {}, 1000);',
+    ].join(' ');
+    writeFileSync(trapScript, [
+      'import { spawn } from "node:child_process";',
+      'import { writeFileSync } from "node:fs";',
+      `const gc = spawn(process.execPath, ["-e", ${JSON.stringify(gcInline)}], { stdio: "ignore" });`,
+      `writeFileSync(${JSON.stringify(trapPidFile)}, String(gc.pid));`,
+      'process.on("SIGTERM", () => process.exit(0));',
+      'setInterval(() => {}, 1000);',
+    ].join('\n'), { mode: 0o600 });
+    const base = {
+      v: 1 as const,
+      spec: {
+        v: 1 as const, taskId: 'sig-task', owner: 'h2a', description: 'sig trap test',
+        schedule: { onCalendar: 'daily', persistent: true },
+        command: { bin: process.execPath, args: [trapScript] }, timeoutMs: 5_000, killGraceMs: 1_000,
+      },
+      runner: { bin: process.execPath, args: [trapScript] }, enabled: true,
+      installedAt: '2026-11-25T10:00:00.000Z', enabledAt: '2026-11-25T10:00:00.000Z',
+      stateDir, envFilePath: path.join(stateDir, 'env'), expectedIntervalMs: 86_400_000,
+    };
+    const u = renderSystemdUnits(base);
+    const trapManifest: LocalTaskManifestV1 = { ...base, units: { serviceSha256: u.serviceSha256, timerSha256: u.timerSha256 } };
+    const trapRes = await runScheduledTaskInternal(trapManifest, { allowedBins: [process.execPath], allowedScripts: [trapScript], stateDir }, { hostPidGuard: () => undefined });
+    expect(trapRes).toMatchObject({ outcome: 'timed_out', exitCode: 124 });
+    expect(existsSync(trapReadyFile)).toBe(true);
+    expect(trapRes.witness?.durationMs).toBeGreaterThanOrEqual(5_900);
+    const trapGcPid = Number(readFileSync(trapPidFile, 'utf8').trim());
+    expect(() => process.kill(trapGcPid, 0)).toThrow();
+  }, 15_000);
 });

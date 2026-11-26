@@ -78,6 +78,6 @@ Implement Lot S1 of `spec/SPEC_EVOL_LOCAL_SCHEDULED_TASKS.md`: core `@sentropic/
 - [ ] **Lot 6 — r3 review fixes (PR #1079)**
   - [x] Restore `node_modules/officeparser@8.2.0` subtree in `package-lock.json` (`m-7`) across atomic `<150`-line commits.
   - [x] Fix `B-1` (`allowlist.ts` script shebang), `B-2` (`./runner` public facade), `B-3` (frozen `assertHostPidNamespace` and `probeStateDirObservability` signatures) with tests.
-  - [ ] Fix `M-1` (process-group SIGKILL escalation) and `M-2` (six negative lock tests + mutant proof) with tests.
+  - [x] Fix `M-1` (process-group SIGKILL escalation) and `M-2` (six negative lock tests + mutant proof) with tests.
   - [ ] Fix `m-1`..`m-6`, `m-8`, and low-cost nits (`n-1`, `n-2`, `n-3`, `n-5`) with tests; document `n-4` deferred to Lot S2.
   - [ ] Run Docker exit gates, push, update PR #1079 body, watch `gh pr checks 1079 --watch` until green.

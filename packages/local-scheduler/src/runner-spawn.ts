@@ -26,13 +26,42 @@ export function spawnDetachedChild(
   });
 }
 
-function terminateProcessGroup(pid: number, killGraceMs: number): ReturnType<typeof setTimeout> {
-  try { process.kill(-pid, 'SIGTERM'); } catch { /* group already exited */ }
-  const grace = setTimeout(() => {
-    try { process.kill(-pid, 'SIGKILL'); } catch { /* group already exited */ }
-  }, killGraceMs);
-  grace.unref();
-  return grace;
+function isProcessGroupAlive(pgid: number): boolean {
+  try {
+    process.kill(-pgid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code !== 'ESRCH';
+  }
+}
+
+function waitForProcessGroupExit(pgid: number, stopStartedRealMs: number, killGraceMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    let sigkillSent = false;
+    let sigkillAtMs = 0;
+    const check = (): void => {
+      if (!isProcessGroupAlive(pgid)) {
+        resolve();
+        return;
+      }
+      const now = performance.now();
+      if (!sigkillSent && now - stopStartedRealMs >= killGraceMs) {
+        sigkillSent = true;
+        sigkillAtMs = now;
+        try { process.kill(-pgid, 'SIGKILL'); } catch { /* group already exited */ }
+        if (!isProcessGroupAlive(pgid)) {
+          resolve();
+          return;
+        }
+      }
+      if (sigkillSent && now - sigkillAtMs >= 500) {
+        resolve();
+        return;
+      }
+      setTimeout(check, sigkillSent ? 10 : 20);
+    };
+    check();
+  });
 }
 
 /** Supervises a detached child process group with hard timeout and SIGTERM/SIGINT forwarding. */
@@ -60,11 +89,17 @@ export function awaitDetachedChild(
     let interruptedSignal: 'SIGINT' | 'SIGTERM' | null = null;
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
     let terminating = false;
+    let stopStartedRealMs = 0;
 
     const triggerStop = (): void => {
       if (terminating || child.pid === undefined) return;
       terminating = true;
-      graceTimer = terminateProcessGroup(child.pid, killGraceMs);
+      stopStartedRealMs = performance.now();
+      const pgid = child.pid;
+      try { process.kill(-pgid, 'SIGTERM'); } catch { /* group already exited */ }
+      graceTimer = setTimeout(() => {
+        try { process.kill(-pgid, 'SIGKILL'); } catch { /* group already exited */ }
+      }, killGraceMs);
     };
     const timeoutTimer = setTimeout(() => {
       if (!interruptedSignal) { timedOut = true; triggerStop(); }
@@ -76,11 +111,14 @@ export function awaitDetachedChild(
     process.on('SIGTERM', onSigTerm);
 
     let settled = false;
-    const settle = (code: number | null, signal: NodeJS.Signals | null, spawnErr?: string): void => {
+    const settle = async (code: number | null, signal: NodeJS.Signals | null, spawnErr?: string): Promise<void> => {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutTimer);
       if (graceTimer) clearTimeout(graceTimer);
+      if (terminating && child.pid !== undefined) {
+        await waitForProcessGroupExit(child.pid, stopStartedRealMs, killGraceMs);
+      }
       process.off('SIGINT', onSigInt);
       process.off('SIGTERM', onSigTerm);
       const durationMs = Math.max(0, Math.round(perfNow() - startMono));
@@ -99,7 +137,7 @@ export function awaitDetachedChild(
       }
     };
 
-    child.on('error', (err) => settle(null, null, err.message));
-    child.on('close', (code, signal) => settle(code, signal));
+    child.on('error', (err) => { void settle(null, null, err.message); });
+    child.on('close', (code, signal) => { void settle(code, signal); });
   });
 }
