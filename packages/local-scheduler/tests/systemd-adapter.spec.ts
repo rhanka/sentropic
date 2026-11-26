@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   InvalidTaskSpecError, ManifestCorruptError, PolicyRefusalError,
-  SchedulerUnavailableError, TaskNotFoundError, UnmanagedUnitError,
+  readTaskManifest, SchedulerUnavailableError, TaskNotFoundError, UnmanagedUnitError,
   type LocalTaskSpecV1,
 } from '../src/index.js';
 import { createSystemdUserAdapterInternal } from '../src/systemd/adapter.js';
@@ -49,6 +49,24 @@ describe('SystemdUserAdapter lifecycle, safety, rollback (m-29), and status (m-2
     };
     const adapter = createSystemdUserAdapterInternal({ stateDir, envFilePath: path.join(stateDir, 'env'), hostPidGuard: passHost, execFile, nowIso: () => '2026-11-26T00:00:00.000Z' });
     const policy = { runner: { bin: process.execPath, args: [script] }, allowedBins: [process.execPath], allowedScripts: [script], unitDir, stateDir, runtime: true };
+
+    expect((await adapter.status('never-installed-task')).health.status).toBe('not_installed');
+    await expect(adapter.status('../bad')).resolves.toMatchObject({ manifest: null, health: { status: 'not_installed' } });
+
+    const sandboxState = path.join(root, 'sb-state');
+    const sandboxUnits = path.join(root, 'sb-units');
+    const sbAdapter = createSystemdUserAdapterInternal({
+      stateDir: sandboxState,
+      envFilePath: path.join(sandboxState, 'env'),
+      hostPidGuard: () => { throw new PolicyRefusalError('POLICY_REFUSED_SANDBOX', 'sandbox', 'isolated pid ns'); },
+      execFile: async () => { throw new Error('systemctl must not run'); },
+    });
+    await expect(sbAdapter.enable(makeSpec(script), { ...policy, stateDir: sandboxState, unitDir: sandboxUnits })).rejects.toMatchObject({
+      code: 'POLICY_REFUSED_SANDBOX',
+      exitCode: 77,
+    });
+    expect(existsSync(path.join(sandboxUnits, 'sentropic-task-sd-task.service'))).toBe(false);
+    expect(existsSync(path.join(sandboxState, 'tasks', 'sd-task', 'manifest.json'))).toBe(false);
 
     const res1 = await adapter.enable(makeSpec(script), policy);
     expect(statSync(unitDir).mode & 0o777).toBe(0o755);
@@ -118,6 +136,10 @@ describe('SystemdUserAdapter lifecycle, safety, rollback (m-29), and status (m-2
     failEnable = true;
     await expect(adapter.enable(makeSpec(script, { description: 'updated desc' }), policy)).rejects.toMatchObject({ code: 'SYSTEMCTL_FAILED', rolledBack: true });
     expect(readFileSync(orig.servicePath, 'utf8')).toBe(origService);
+    expect(readTaskManifest(stateDir, 'sd-task')).toMatchObject({
+      spec: { description: 'systemd test task' },
+      units: orig.manifest.units,
+    });
 
     expect((await adapter.status('sd-task')).systemd).toMatchObject({ execMainStatus: 203, execDiagnostic: expect.stringContaining('203/EXEC') });
     showMode = '77-prelock';
@@ -145,9 +167,18 @@ describe('SystemdUserAdapter lifecycle, safety, rollback (m-29), and status (m-2
     const downAdapter = createSystemdUserAdapterInternal({
       stateDir, hostPidGuard: passHost, execFile: async () => { throw Object.assign(new Error('no dbus'), { stderr: 'Failed to connect to bus' }); },
     });
+    const downUnitDir = path.join(root, 'down-units');
+    await expect(downAdapter.enable(makeSpec(script), { ...policy, unitDir: downUnitDir })).rejects.toMatchObject({
+      code: 'SYSTEMD_USER_UNAVAILABLE',
+      exitCode: 69,
+      message: expect.stringMatching(/no-user-manager.*Failed to connect to bus.*no fallback scheduler/i),
+    });
+    expect(existsSync(path.join(downUnitDir, 'sentropic-task-sd-task.service'))).toBe(false);
     await expect(downAdapter.disable('sd-task')).rejects.toThrow(SchedulerUnavailableError);
+    await expect(downAdapter.uninstall('sd-task', { unitDir, stateDir })).rejects.toThrow(SchedulerUnavailableError);
     expect((await downAdapter.status('sd-task')).systemd).toBe('unavailable');
     writeFileSync(path.join(stateDir, 'tasks', 'sd-task', 'manifest.json'), '{bad', { mode: 0o600 });
+    await expect(adapter.enable(makeSpec(script), policy)).rejects.toThrow(ManifestCorruptError);
     await expect(adapter.disable('sd-task', { unitDir, stateDir })).rejects.toThrow(ManifestCorruptError);
     const badSymlink = path.join(root, 'sym-units');
     symlinkSync(unitDir, badSymlink);

@@ -52,9 +52,9 @@ Close carried S2 review items (`S2-5` to `S2-12`) from `.tmp/rv/local-scheduler-
   - [x] `S2-12`: add internal deps seam on `probeLingerEnabledWith` and unit test for numeric-UID fallback.
   - [x] `S2-7`: spell out `Omit<LocalTaskManifestV1, 'units'>` in `eqRender` in `tests/systemd-probes.spec.ts`.
 
-- [ ] **Lot 2 — Adapter parity & unit test gaps (`S2-5` unit cases, `S2-10`)**
-  - [ ] `S2-10`: align `createFakeSchedulerAdapter.enable` (`src/adapter.ts`) to throw `ManifestCorruptError` on corrupt previous manifest.
-  - [ ] `S2-5` (unit): test `enable` with failing `hostPidGuard`, `enable`/`uninstall` when unavailable, `status` on missing task, and failed update preserving `manifest.json` `spec.description` in `tests/systemd-adapter.spec.ts`.
+- [x] **Lot 2 — Adapter parity & unit test gaps (`S2-5` unit cases, `S2-10`)**
+  - [x] `S2-10`: align `createFakeSchedulerAdapter.enable` (`src/adapter.ts`) to throw `ManifestCorruptError` on corrupt previous manifest.
+  - [x] `S2-5` (unit): test `enable` with failing `hostPidGuard`, `enable`/`uninstall` when unavailable, `status` on missing task, and failed update preserving `manifest.json` `spec.description` in `tests/systemd-adapter.spec.ts`.
 
 - [ ] **Lot 3 — Real systemd CI rollback, stop polling & Makefile guard (`S2-5` CI, `S2-6`, `S2-11`)**
   - [ ] `S2-6`: fix `Makefile` `test-local-scheduler-systemd-ci` Python guard and add regression check in `tests/fake-adapter-static.spec.ts`.

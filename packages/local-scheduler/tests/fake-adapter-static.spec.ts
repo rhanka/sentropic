@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  createFakeSchedulerAdapter, InvalidTaskSpecError, probeStateDirObservability,
+  createFakeSchedulerAdapter, InvalidTaskSpecError, ManifestCorruptError, probeStateDirObservability,
   readLastSkipEntry, readSchedulerEnvFile, readTaskLockSummary, readTaskManifest,
   readTaskWitness, TaskNotFoundError, type LocalTaskSpecV1,
 } from '../src/index.js';
@@ -96,6 +96,9 @@ describe('createFakeSchedulerAdapter', () => {
       { runner: { bin: process.execPath, args: [shebangScript, 'archive', '_schedule-exec'] }, allowedBins: [process.execPath], allowedScripts: [shebangScript] },
     );
     expect(shebangEnabled.manifest.enabled).toBe(true);
+
+    writeFileSync(path.join(stateDir, 'tasks', 'h2a-session-archive', 'manifest.json'), '{bad', { mode: 0o600 });
+    await expect(adapter.enable(spec, policy)).rejects.toThrow(ManifestCorruptError);
   });
 });
 
