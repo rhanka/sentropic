@@ -1,8 +1,9 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createFakeSchedulerAdapter, readTaskWitness, type LocalTaskManifestV1 } from '../src/index.js';
-import { runScheduledTaskByIdInternal, runScheduledTaskInternal } from '../src/runner.js';
+import { buildSanitizedChildEnv } from '../src/runner-env.js';
+import { runScheduledTask, runScheduledTaskById, runScheduledTaskByIdInternal, runScheduledTaskInternal } from '../src/runner.js';
 import { renderSystemdUnits } from '../src/systemd/unit-generator.js';
 
 const workspaceTmpRoot = path.resolve(process.cwd(), '..', '..', '.tmp');
@@ -133,5 +134,100 @@ describe('runner integration (m-27, m-30, B-5 #2)', () => {
     });
     expect(postChild).toMatchObject({ outcome: 'succeeded', exitCode: 70, witness: null, error: { code: 'RUNNER_INTERNAL_ERROR' } });
     expect(existsSync(path.join(stateDir, 'locks', 'runner-task.lock'))).toBe(false);
+  });
+
+  it('never rejects on public entrypoints and enforces step-1 file-mode, corrupt manifest, and stateDir parity', async () => {
+    const stateDir = makeStateDir();
+    const script = path.join(stateDir, 'ok.mjs');
+    writeFileSync(script, 'process.exit(0);\n', { mode: 0o600 });
+    const m = makeManifest(stateDir, script);
+
+    await expect(runScheduledTask(m, { allowedBins: [process.execPath], allowedScripts: [script], stateDir })).resolves.toMatchObject({
+      outcome: 'refused_policy', exitCode: 77, witness: null, error: { code: 'POLICY_REFUSED_SANDBOX' },
+    });
+    await expect(runScheduledTaskById('Bad_Id', { allowedBins: [process.execPath], stateDir })).resolves.toMatchObject({
+      outcome: 'not_run', exitCode: 2, witness: null, error: { code: 'INVALID_TASK_SPEC' },
+    });
+
+    const taskDir = path.join(stateDir, 'tasks', 'runner-task');
+    mkdirSync(taskDir, { recursive: true, mode: 0o700 });
+    const manifestPath = path.join(taskDir, 'manifest.json');
+    writeFileSync(manifestPath, '{corrupt', { mode: 0o600 });
+    expect(await runScheduledTaskByIdInternal('runner-task', { allowedBins: [process.execPath], stateDir }, { hostPidGuard: passHost })).toMatchObject({
+      outcome: 'not_run', exitCode: 2, witness: null, error: { code: 'MANIFEST_CORRUPT' },
+    });
+
+    writeFileSync(manifestPath, JSON.stringify({ ...m, stateDir: path.join(stateDir, 'wrong') }), { mode: 0o600 });
+    expect(await runScheduledTaskByIdInternal('runner-task', { allowedBins: [process.execPath], stateDir }, { hostPidGuard: passHost })).toMatchObject({
+      outcome: 'not_run', exitCode: 77, witness: null, error: { code: 'POLICY_REFUSED_STATE_DIR' },
+    });
+
+    writeFileSync(manifestPath, JSON.stringify(m), { mode: 0o600 });
+    chmodSync(manifestPath, 0o644);
+    expect(await runScheduledTaskByIdInternal('runner-task', { allowedBins: [process.execPath], stateDir }, { hostPidGuard: passHost })).toMatchObject({
+      outcome: 'not_run', exitCode: 77, witness: null, error: { code: 'POLICY_REFUSED_FILE_MODE' },
+    });
+
+    rmSync(manifestPath);
+    symlinkSync(script, manifestPath);
+    expect(await runScheduledTaskByIdInternal('runner-task', { allowedBins: [process.execPath], stateDir }, { hostPidGuard: passHost })).toMatchObject({
+      outcome: 'not_run', exitCode: 77, witness: null, error: { code: 'POLICY_REFUSED_FILE_MODE' },
+    });
+
+    chmodSync(stateDir, 0o755);
+    expect(await runScheduledTaskByIdInternal('runner-task', { allowedBins: [process.execPath], stateDir }, { hostPidGuard: passHost })).toMatchObject({
+      outcome: 'not_run', exitCode: 77, witness: null, error: { code: 'POLICY_REFUSED_FILE_MODE' },
+    });
+    chmodSync(stateDir, 0o700);
+  });
+
+  it('records step-5 refusal, preserves/resets consecutiveFailures, tests global/task kill-switches and sanitized child env', async () => {
+    const stateDir = makeStateDir();
+    const script = path.join(stateDir, 'job.mjs');
+    writeFileSync(script, 'process.exit(process.argv[2] === "fail" ? 1 : 0);\n', { mode: 0o600 });
+
+    const r1 = await runScheduledTaskInternal(makeManifest(stateDir, script), { allowedBins: [process.execPath], allowedScripts: [script], stateDir }, { hostPidGuard: passHost });
+    expect(r1.witness?.consecutiveFailures).toBe(0);
+    const firstSuccessAt = r1.witness?.lastSuccessAt;
+
+    const r2 = await runScheduledTaskInternal(makeManifest(stateDir, script), { allowedBins: [process.execPath], allowedScripts: ['/other.mjs'], stateDir }, { hostPidGuard: passHost });
+    expect(r2).toMatchObject({ outcome: 'refused_policy', exitCode: 77, error: { code: 'POLICY_REFUSED_ALLOWLIST' } });
+    expect(r2.witness).toMatchObject({ outcome: 'refused_policy', refusal: 'allowlist', consecutiveFailures: 1, lastSuccessAt: firstSuccessAt });
+
+    const writableScript = path.join(stateDir, 'w.mjs');
+    writeFileSync(writableScript, 'process.exit(0);\n', { mode: 0o666 });
+    chmodSync(writableScript, 0o666);
+    const r3 = await runScheduledTaskInternal(
+      makeManifest(stateDir, writableScript),
+      { allowedBins: [process.execPath], allowedScripts: [writableScript], stateDir },
+      { hostPidGuard: passHost },
+    );
+    expect(r3).toMatchObject({ outcome: 'refused_policy', exitCode: 77, witness: { refusal: 'file-mode', consecutiveFailures: 2 } });
+
+    const ksGlobal = await runScheduledTaskInternal(
+      makeManifest(stateDir, script),
+      { allowedBins: [process.execPath], allowedScripts: [script], stateDir, env: { SENTROPIC_LOCAL_SCHEDULER_OFF: '1' } },
+      { hostPidGuard: passHost },
+    );
+    expect(ksGlobal.witness).toMatchObject({ outcome: 'skipped_disabled', killSwitch: { scope: 'global', name: 'SENTROPIC_LOCAL_SCHEDULER_OFF' }, consecutiveFailures: 2 });
+
+    const ksTask = await runScheduledTaskInternal(
+      makeManifest(stateDir, script),
+      { allowedBins: [process.execPath], allowedScripts: [script], stateDir, env: { SENTROPIC_TASK_RUNNER_TASK_OFF: 'true' } },
+      { hostPidGuard: passHost },
+    );
+    expect(ksTask.witness).toMatchObject({ outcome: 'skipped_disabled', killSwitch: { scope: 'task', name: 'SENTROPIC_TASK_RUNNER_TASK_OFF' }, consecutiveFailures: 2 });
+
+    const rOk = await runScheduledTaskInternal(makeManifest(stateDir, script), { allowedBins: [process.execPath], allowedScripts: [script], stateDir }, { hostPidGuard: passHost });
+    expect(rOk.witness?.consecutiveFailures).toBe(0);
+
+    const childEnv = buildSanitizedChildEnv(
+      { PATH: '/evil', NODE_OPTIONS: '--require=/evil.js', GITHUB_TOKEN: 'ghp_x', XDG_DATA_HOME: '/xdg/data', ALLOWED_VAR: 'ok', EXTRA: 'drop' },
+      makeManifest(stateDir, script).spec,
+    );
+    expect(childEnv).toMatchObject({ PATH: '/usr/bin:/bin', XDG_DATA_HOME: '/xdg/data', ALLOWED_VAR: 'ok', CUSTOM_FLAG: 'ok' });
+    expect(childEnv.NODE_OPTIONS).toBeUndefined();
+    expect(childEnv.GITHUB_TOKEN).toBeUndefined();
+    expect(childEnv.EXTRA).toBeUndefined();
   });
 });
