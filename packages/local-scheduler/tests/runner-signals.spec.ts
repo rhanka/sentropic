@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createFakeSchedulerAdapter, type LocalTaskManifestV1 } from '../src/index.js';
-import { rotateLogFile, truncateLogExcerpt } from '../src/log-rotator.js';
+import { appendRunLog, rotateLogFile, SKIPS_LOG_MAX_BYTES, truncateLogExcerpt } from '../src/log-rotator.js';
 import { runScheduledTaskInternal } from '../src/runner.js';
 import { renderSystemdUnits } from '../src/systemd/unit-generator.js';
 
@@ -90,5 +90,73 @@ describe('runner contention, SIGTERM interruption, and log rotation', () => {
     rotateLogFile(logPath, 100, 3);
     expect(existsSync(`${logPath}.1`)).toBe(true);
     expect(statSync(`${logPath}.1`).mode & 0o777).toBe(0o600);
+    writeFileSync(logPath, 'y'.repeat(200), { mode: 0o600 });
+    rotateLogFile(logPath, 100, 3);
+    expect(existsSync(`${logPath}.2`)).toBe(true);
+    expect(statSync(`${logPath}.2`).mode & 0o777).toBe(0o600);
+
+    const taskLog = appendRunLog(stateDir, 'sig-task', { v: 1 }, 'x'.repeat(800));
+    expect(statSync(taskLog).mode & 0o777).toBe(0o600);
   });
+
+  it('handles SIGINT -> exit 130, kills grandchild process group on timeout, and rotates skips.jsonl ONLY at step 8', async () => {
+    const stateDir = makeStateDir();
+    const script = path.join(stateDir, 'pgid.mjs');
+    const pidFile = path.join(stateDir, 'grandchild.pid');
+    writeFileSync(script, [
+      'import { spawn } from "node:child_process";',
+      'import { writeFileSync } from "node:fs";',
+      'if (process.argv[2] === "pgid") {',
+      '  const gc = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], { stdio: "ignore" });',
+      `  writeFileSync(${JSON.stringify(pidFile)}, String(gc.pid));`,
+      '  setInterval(() => {}, 1000);',
+      '} else { console.log("é".repeat(400)); setInterval(() => {}, 1000); }',
+    ].join('\n'), { mode: 0o600 });
+
+    const base = {
+      v: 1 as const,
+      spec: {
+        v: 1 as const, taskId: 'sig-task', owner: 'h2a', description: 'sig test',
+        schedule: { onCalendar: 'daily', persistent: true },
+        command: { bin: process.execPath, args: [script] }, timeoutMs: 10_000, killGraceMs: 1_000,
+      },
+      runner: { bin: process.execPath, args: [script] }, enabled: true,
+      installedAt: '2026-11-25T10:00:00.000Z', enabledAt: '2026-11-25T10:00:00.000Z',
+      stateDir, envFilePath: path.join(stateDir, 'env'), expectedIntervalMs: 86_400_000,
+    };
+    const u = renderSystemdUnits(base);
+    const manifest: LocalTaskManifestV1 = { ...base, units: { serviceSha256: u.serviceSha256, timerSha256: u.timerSha256 } };
+
+    // SIGINT -> exit 130 + witness summary <= 512 UTF-8 bytes
+    const sigTimer = setTimeout(() => { process.emit('SIGINT', 'SIGINT'); }, 150);
+    const sigRes = await runScheduledTaskInternal(manifest, { allowedBins: [process.execPath], allowedScripts: [script], stateDir }, { hostPidGuard: () => undefined });
+    clearTimeout(sigTimer);
+    expect(sigRes).toMatchObject({ outcome: 'interrupted', exitCode: 130, witness: { signal: 'SIGINT', consecutiveFailures: 0 } });
+    expect(Buffer.byteLength(sigRes.witness?.summary ?? '', 'utf8')).toBeLessThanOrEqual(512);
+
+    // Timeout kills grandchild in -pgid
+    const pgManifest: LocalTaskManifestV1 = {
+      ...base, spec: { ...base.spec, timeoutMs: 5_000, killGraceMs: 1_000, command: { bin: process.execPath, args: [script, 'pgid'] } },
+      units: { serviceSha256: u.serviceSha256, timerSha256: u.timerSha256 },
+    };
+    const pgRes = await runScheduledTaskInternal(pgManifest, { allowedBins: [process.execPath], allowedScripts: [script], stateDir }, { hostPidGuard: () => undefined });
+    expect(pgRes).toMatchObject({ outcome: 'timed_out', exitCode: 124 });
+    const gcPid = Number(readFileSync(pidFile, 'utf8').trim());
+    expect(() => process.kill(gcPid, 0)).toThrow();
+
+    // Oversized skips.jsonl is NOT rotated by sandbox refusal (step 2), IS rotated by lock holder (step 8)
+    const skipsPath = path.join(stateDir, 'tasks', 'sig-task', 'skips.jsonl');
+    writeFileSync(skipsPath, 'x'.repeat(SKIPS_LOG_MAX_BYTES + 64), { mode: 0o600 });
+    await runScheduledTaskInternal(manifest, { allowedBins: [process.execPath], allowedScripts: [script], stateDir });
+    expect(existsSync(`${skipsPath}.1`)).toBe(false);
+
+    const okManifest: LocalTaskManifestV1 = {
+      ...base, spec: { ...base.spec, command: { bin: process.execPath, args: [script], env: {} } },
+      units: { serviceSha256: u.serviceSha256, timerSha256: u.timerSha256 },
+    };
+    writeFileSync(script, 'process.exit(0);\n', { mode: 0o600 });
+    await runScheduledTaskInternal(okManifest, { allowedBins: [process.execPath], allowedScripts: [script], stateDir }, { hostPidGuard: () => undefined });
+    expect(existsSync(`${skipsPath}.1`)).toBe(true);
+    expect(statSync(`${skipsPath}.1`).mode & 0o777).toBe(0o600);
+  }, 15_000);
 });

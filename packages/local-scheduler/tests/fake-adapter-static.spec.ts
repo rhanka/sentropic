@@ -68,13 +68,30 @@ describe('createFakeSchedulerAdapter', () => {
 
     await adapter.disable('h2a-session-archive');
     expect((await adapter.status('h2a-session-archive')).health.status).toBe('disabled');
+
+    // Re-enable preserves installedAt, updates enabledAt, and emits lingerNotice when lingerEnabled=false
+    const laterAdapter = createFakeSchedulerAdapter({ stateDir, clock: () => '2026-11-26T10:00:00.000Z' });
+    const reEnabled = await laterAdapter.enable(spec, policy);
+    expect(reEnabled.manifest.installedAt).toBe('2026-11-25T10:00:00.000Z');
+    expect(reEnabled.manifest.enabledAt).toBe('2026-11-26T10:00:00.000Z');
+    expect(reEnabled.lingerNotice).toContain('loginctl enable-linger');
+
+    // Uninstall without purgeState preserves witness while removing manifest; second uninstall is idempotent
+    await adapter.uninstall('h2a-session-archive', { purgeState: false });
+    expect(readTaskManifest(stateDir, 'h2a-session-archive')).toBeNull();
+    expect(readTaskWitness(stateDir, 'h2a-session-archive')?.outcome).toBe('skipped_disabled');
+    expect((await adapter.uninstall('h2a-session-archive')).removedUnits).toEqual([]);
+
+    adapter.setSystemdState('unavailable', null);
+    expect((await adapter.status('h2a-session-archive')).systemd).toBe('unavailable');
+
     await adapter.uninstall('h2a-session-archive', { purgeState: true });
     await expect(adapter.disable('h2a-session-archive')).rejects.toThrow(TaskNotFoundError);
   });
 });
 
 describe('static architectural and packaging guards (m-26, m-32(i), §6.1, §6.2)', () => {
-  it('enforces zero Python, zero network imports/globals, and safe package exports/files', () => {
+  it('enforces zero Python, zero network imports/globals, safe package exports/files, and no /tmp writes', async () => {
     const pkgRoot = path.resolve(process.cwd());
     const allFiles = collectFiles(pkgRoot);
     expect(allFiles.some((f) => f.endsWith('.py'))).toBe(false);
@@ -86,12 +103,26 @@ describe('static architectural and packaging guards (m-26, m-32(i), §6.1, §6.2
       const text = readFileSync(file, 'utf8');
       expect(forbiddenImports.test(text), file).toBe(false);
       expect(forbiddenGlobals.test(text), file).toBe(false);
-      expect(/SKIP_HOST_PID|BYPASS_HOST_PID|NO_HOST_PID/i.test(text), file).toBe(false);
+      expect(/SKIP_HOST_PID|BYPASS_HOST_PID|NO_HOST_PID|requireHostPidNamespace/i.test(text), file).toBe(false);
+      expect(text.includes("'/tmp") || text.includes('"/tmp'), file).toBe(false);
     }
 
     const pkgJson = JSON.parse(readFileSync(path.join(pkgRoot, 'package.json'), 'utf8'));
     expect(pkgJson.dependencies).toEqual({});
     expect(pkgJson.files).toEqual(['dist', 'README.md', 'LICENSE']);
+    expect(Object.keys(pkgJson.exports)).toEqual(['.', './runner', './systemd']);
     expect(JSON.stringify(pkgJson.exports)).not.toContain('Internal');
+
+    const rootMod = await import('../src/index.js');
+    for (const sym of [
+      'validateTaskSpec', 'resolveStateDir', 'resolveSchedulerEnvFilePath', 'probeStateDirObservability',
+      'readTaskManifest', 'readTaskWitness', 'readTaskLockSummary', 'readLastSkipEntry',
+      'parseSchedulerEnvFile', 'readSchedulerEnvFile', 'evaluateKillSwitch', 'isTaskKillSwitchActive',
+      'evaluateTaskHealth', 'assertHostPidNamespace', 'createFakeSchedulerAdapter',
+    ]) {
+      expect(typeof (rootMod as Record<string, unknown>)[sym]).toBe('function');
+    }
+    const systemdMod = await import('../src/systemd/unit-generator.js');
+    expect(typeof systemdMod.renderSystemdUnits).toBe('function');
   });
 });

@@ -72,5 +72,5 @@ Implement Lot S1 of `spec/SPEC_EVOL_LOCAL_SCHEDULED_TASKS.md`: core `@sentropic/
   - [x] Expand `tests/health-env.spec.ts` (every `evaluateTaskHealth` verdict, pause ok/warning, skew, re-enable, all hints).
   - [x] Expand `tests/lock.spec.ts` (all fail-closed cases, namespace mismatch, reclaim guard, quarantine mismatch abort, release ownership, fs magics).
   - [x] Expand `tests/runner.spec.ts` (never-rejects public API, step-1 file-mode/`stateDir` parity, step-5 refusal, `consecutiveFailures`, child env sanitization).
-  - [ ] Expand `tests/runner-signals.spec.ts` and `tests/fake-adapter-static.spec.ts` (`SIGINT`, process-group timeout, step-8 `skips.jsonl` rotation, fake adapter idempotency/uninstall, static exports/guards).
+  - [x] Expand `tests/runner-signals.spec.ts` and `tests/fake-adapter-static.spec.ts` (`SIGINT`, process-group timeout, step-8 `skips.jsonl` rotation, fake adapter idempotency/uninstall, static exports/guards).
   - [ ] Re-run Docker exit gates (`typecheck`, `test`, `build`, `scope-check`) + CI guard suites, push, update PR #1079 body, watch `gh pr checks 1079 --watch` until green.
