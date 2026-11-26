@@ -95,6 +95,7 @@ export function classifyLockReclaimability(
   if (!runnerDead) {
     const pstat = deps.readProcStat(record.pid);
     if (pstat === null) return 'undecidable';
+    if (!/^\d+$/.test(record.pidStartTime) || !/^\d+$/.test(pstat.startTime)) return 'undecidable';
     if (pstat.state === 'Z') {
       runnerDead = sameTimeNs && deps.readProcThreads(record.pid) === 1 && pstat.startTime === record.pidStartTime;
     } else if (pstat.startTime !== record.pidStartTime) {

@@ -38,6 +38,7 @@ export interface LockSystemDeps {
   readonly readBootTimeMs: () => number | null;
   readonly statfsType: (dirPath: string) => number | null;
   readonly killZero: (pid: number) => 'alive' | 'esrch' | 'eperm' | 'other';
+  readonly onPublishWrite?: () => void;
 }
 
 export function parseLockRecord(rawText: string, expectedTaskId?: string): LocalTaskLockRecordV1 | null {

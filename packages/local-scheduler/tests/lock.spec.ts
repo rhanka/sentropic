@@ -2,7 +2,7 @@ import { chmodSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync,
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { acquireTaskLock, readTaskLockSummary } from '../src/lock.js';
-import { captureSnapshot, snapshotsEqual } from '../src/lock-io.js';
+import { captureSnapshot, snapshotsEqual, tryPublishExclusive } from '../src/lock-io.js';
 import type { LockSystemDeps } from '../src/lock-types.js';
 
 const workspaceTmpRoot = path.resolve(process.cwd(), '..', '..', '.tmp');
@@ -252,5 +252,64 @@ describe('acquireTaskLock & readTaskLockSummary', () => {
     seedLock(stateDir, 't-2', { ...baseRec, nonce: 'external-owner' });
     hAcq!.release();
     expect(JSON.parse(readFileSync(path.join(stateDir, 'locks', 't-2.lock'), 'utf8')).nonce).toBe('external-owner');
+  });
+
+  it('covers m-3 unknown pidStartTime, m-4 tmp/fallback cleanup, m-8 null bootId/Threads, and reclaim snapshot-mismatch abort', () => {
+    const stateDir = makeExt4StateDir();
+    const baseRec = {
+      v: 1, taskId: 't-3', pid: 4000, pidStartTime: '1111', pidNs: 'pid:[4026531836]', timeNs: 'time:[4026531834]',
+      phase: 'running', childPid: 4001, childPgid: 4001, host: 'ws-1', bootId: BOOT_A, nonce: 'n1', acquiredAt: '2026-11-25T10:00:00.000Z',
+    };
+
+    // m-3: non-decimal pidStartTime ('unknown') fails closed on same boot
+    seedLock(stateDir, 't-3', { ...baseRec, pidStartTime: 'unknown' });
+    expect(acquireTaskLock(stateDir, 't-3', makeDeps({
+      killZero: (p) => (p > 0 ? 'alive' : 'esrch'),
+      readProcStat: () => ({ state: 'S', startTime: '12345' }),
+    }))).toBeNull();
+
+    // m-8: null current bootId and unreadable /proc/<pid>/status (Threads: null) fail closed
+    seedLock(stateDir, 't-3', { ...baseRec, bootId: BOOT_B });
+    expect(acquireTaskLock(stateDir, 't-3', makeDeps({
+      readBootId: () => null,
+      killZero: (p) => (p > 0 ? 'alive' : 'esrch'),
+      readProcStat: () => ({ state: 'S', startTime: '1111' }),
+    }))).toBeNull();
+    seedLock(stateDir, 't-3', baseRec);
+    expect(acquireTaskLock(stateDir, 't-3', makeDeps({
+      readProcStat: () => ({ state: 'Z', startTime: '1111' }),
+      readProcThreads: () => null,
+      killZero: (p) => (p > 0 ? 'alive' : 'esrch'),
+    }))).toBeNull();
+
+    // m-8: snapshot-mismatch inside reclaim flow aborts cleanly without unlinking mutated lock
+    const lockPath = seedLock(stateDir, 't-3', baseRec);
+    let bootCalls = 0;
+    expect(acquireTaskLock(stateDir, 't-3', makeDeps({
+      killZero: () => 'esrch',
+      readBootId: () => {
+        bootCalls += 1;
+        if (bootCalls === 2) writeFileSync(lockPath, JSON.stringify({ ...baseRec, nonce: 'raced' }), { mode: 0o600 });
+        return BOOT_A;
+      },
+    }))).toBeNull();
+    expect(JSON.parse(readFileSync(lockPath, 'utf8')).nonce).toBe('raced');
+
+    // m-4: failed write during publication and EXDEV fallback leaves zero leftover .tmp or partial lock files
+    const locksDir = path.join(stateDir, 'locks');
+    expect(() => acquireTaskLock(stateDir, 't-clean', makeDeps({
+      onPublishWrite: () => { throw Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' }); },
+    }))).toThrow('ENOSPC');
+    expect(readdirSync(locksDir).some((f) => f.startsWith('t-clean.lock'))).toBe(false);
+
+    let writeCalls = 0;
+    expect(() => tryPublishExclusive(locksDir, path.join(locksDir, 't-fb.lock'), {
+      ...baseRec, taskId: 't-fb', pid: 5000, pidStartTime: '9999', pidNs: 'pid:[4026531836]',
+      timeNs: 'time:[4026531834]', phase: 'acquired', childPid: null, childPgid: null, nonce: 'fb1',
+    }, {
+      linkFn: () => { throw Object.assign(new Error('EXDEV'), { code: 'EXDEV' }); },
+      onWrite: () => { if (++writeCalls === 2) throw Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' }); },
+    })).toThrow('ENOSPC');
+    expect(readdirSync(locksDir).some((f) => f.startsWith('t-fb.lock'))).toBe(false);
   });
 });

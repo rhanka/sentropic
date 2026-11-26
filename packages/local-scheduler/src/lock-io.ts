@@ -30,29 +30,40 @@ export function snapshotsEqual(a: LockSnapshot, b: LockSnapshot): boolean {
   );
 }
 
-export function writeExclusiveTmp(tmpPath: string, body: string): void {
+export function writeExclusiveTmp(tmpPath: string, body: string | Buffer, onWrite?: () => void): void {
   const fd = openSync(tmpPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+  let ok = false;
   try {
+    onWrite?.();
     writeFileSync(fd, body);
     fsyncSync(fd);
+    ok = true;
   } finally {
     closeSync(fd);
+    if (!ok) {
+      try { unlinkSync(tmpPath); } catch { /* ignore cleanup failure */ }
+    }
   }
 }
 
-export function tryPublishExclusive(locksDir: string, lockPath: string, record: LocalTaskLockRecordV1): Stats | 'exists' {
+export function tryPublishExclusive(
+  locksDir: string,
+  lockPath: string,
+  record: LocalTaskLockRecordV1,
+  hooks?: { readonly onWrite?: () => void; readonly linkFn?: (existingPath: string, newPath: string) => void },
+): Stats | 'exists' {
   const tmpPath = `${lockPath}.${record.pid}.${record.nonce}.tmp`;
   const body = `${JSON.stringify(record, null, 2)}\n`;
-  writeExclusiveTmp(tmpPath, body);
   try {
+    writeExclusiveTmp(tmpPath, body, hooks?.onWrite);
     try {
-      linkSync(tmpPath, lockPath);
+      (hooks?.linkFn ?? linkSync)(tmpPath, lockPath);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'EEXIST') return 'exists';
       if (code === 'EPERM' || code === 'EXDEV' || code === 'ENOTSUP') {
         try {
-          writeExclusiveTmp(lockPath, body);
+          writeExclusiveTmp(lockPath, body, hooks?.onWrite);
         } catch (fbErr) {
           if ((fbErr as NodeJS.ErrnoException).code === 'EEXIST') return 'exists';
           throw fbErr;

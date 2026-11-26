@@ -24,11 +24,12 @@ function buildRecord(taskId: string, deps: LockSystemDeps): LocalTaskLockRecordV
 }
 function acquireInternal(locksDir: string, lockPath: string, taskId: string, deps: LockSystemDeps, depth: number): TaskLockHandle | null {
   let record = buildRecord(taskId, deps);
-  let published = tryPublishExclusive(locksDir, lockPath, record);
+  const pubHooks = deps.onPublishWrite ? { onWrite: deps.onPublishWrite } : undefined;
+  let published = tryPublishExclusive(locksDir, lockPath, record, pubHooks);
   if (published === 'exists') {
     const snap1 = captureSnapshot(lockPath, taskId);
     if (!snap1) {
-      published = tryPublishExclusive(locksDir, lockPath, record);
+      published = tryPublishExclusive(locksDir, lockPath, record, pubHooks);
     } else {
       if (classifyLockReclaimability(snap1.record, snap1.st, locksDir, deps) !== 'dead' || depth >= 4) return null;
       const guard = acquireInternal(locksDir, `${lockPath}.reclaim`, taskId, deps, depth + 1);
@@ -38,21 +39,24 @@ function acquireInternal(locksDir: string, lockPath: string, taskId: string, dep
         const snap2 = captureSnapshot(lockPath, taskId);
         if (snap2 && snapshotsEqual(snap1, snap2) && classifyLockReclaimability(snap2.record, snap2.st, locksDir, deps) === 'dead') {
           const qPath = `${lockPath}.quarantine.${record.nonce}`;
-          writeExclusiveTmp(qPath, snap2.raw.toString('utf8'));
-          fsyncDirBestEffort(locksDir);
-          const snap3 = captureSnapshot(lockPath, taskId);
-          if (snap3 && snapshotsEqual(snap1, snap3)) {
-            unlinkSync(lockPath);
+          writeExclusiveTmp(qPath, snap2.raw);
+          try {
             fsyncDirBestEffort(locksDir);
-            reclaimed = true;
+            const snap3 = captureSnapshot(lockPath, taskId);
+            if (snap3 && snapshotsEqual(snap1, snap3)) {
+              unlinkSync(lockPath);
+              fsyncDirBestEffort(locksDir);
+              reclaimed = true;
+            }
+          } finally {
+            try { unlinkSync(qPath); } catch { /* ignore quarantine cleanup */ }
           }
-          try { unlinkSync(qPath); } catch { /* ignore quarantine cleanup */ }
         }
       } finally {
         guard.release();
       }
       if (!reclaimed) return null;
-      published = tryPublishExclusive(locksDir, lockPath, record);
+      published = tryPublishExclusive(locksDir, lockPath, record, pubHooks);
     }
   }
   if (published === 'exists') return null;
