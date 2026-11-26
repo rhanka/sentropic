@@ -37,13 +37,13 @@ Implement Lot S1 of `spec/SPEC_EVOL_LOCAL_SCHEDULED_TASKS.md`: core `@sentropic/
   - [x] Verify branch `feat/local-scheduler-s1` in `tmp/cm-release-0270` from `origin/main` and disk space >= 45 GB.
   - [x] Declare `BR-LSCH-EX1a` for `Makefile` and `package-lock.json`.
 
-- [ ] **Lot 1 — Package scaffold, errors, contract, state/env/pid modules**
+- [x] **Lot 1 — Package scaffold, errors, contract, state/env/pid modules**
   - [x] Add `package.json`, `tsconfig.json`, `LICENSE`, `README.md`, `src/errors.ts`.
   - [x] Add `src/contract.ts` (types, validation, secret/loader/allowlist/shebang checks).
   - [x] Add `src/state-dir.ts`, `src/host-pid-guard.ts`, `src/env-file.ts`.
 
 - [ ] **Lot 2 — Witness, health evaluator, fail-closed lock, rotator, unit generator**
-  - [ ] Add `src/witness.ts` and pure `src/health.ts`.
+  - [x] Add `src/witness.ts` and pure `src/health.ts`.
   - [ ] Add `src/lock.ts` (namespace-aware fail-closed lock and reclaim protocol).
   - [ ] Add `src/log-rotator.ts` and `src/systemd/unit-generator.ts`.
 
