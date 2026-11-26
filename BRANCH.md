@@ -47,9 +47,9 @@ Implement Lot S1 of `spec/SPEC_EVOL_LOCAL_SCHEDULED_TASKS.md`: core `@sentropic/
   - [x] Add `src/lock.ts` (namespace-aware fail-closed lock and reclaim protocol).
   - [x] Add `src/log-rotator.ts` and `src/systemd/unit-generator.ts`.
 
-- [ ] **Lot 3 — Runner, fake adapter, entrypoint, tests**
+- [x] **Lot 3 — Runner, fake adapter, entrypoint, tests**
   - [x] Add `src/runner.ts`, `src/adapter.ts`, `src/index.ts`.
-  - [ ] Add unit, lock, runner, unit-generator, health, static, and fake-adapter tests in `tests/`.
+  - [x] Add unit, lock, runner, unit-generator, health, static, and fake-adapter tests in `tests/`.
 
 - [ ] **Lot 4 — Makefile targets, root lockfile & final verification**
   - [ ] Add `typecheck-local-scheduler`, `test-local-scheduler`, `build-local-scheduler` in `Makefile`.
