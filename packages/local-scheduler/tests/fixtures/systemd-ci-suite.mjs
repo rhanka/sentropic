@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readTaskWitness } from '../../dist/index.js';
+import { readTaskLockSummary, readTaskManifest, readTaskWitness } from '../../dist/index.js';
 import { createSystemdUserAdapterInternal } from '../../dist/systemd/adapter.js';
 import { computeExpectedIntervalMs, probeSystemdUserAvailability, renderSystemdUnits } from '../../dist/systemd/index.js';
 
@@ -78,17 +79,27 @@ try {
   await adapter.uninstall('ci-life', { unitDir, stateDir, runtime: true, purgeState: true });
   assert.equal(existsSync(path.join(stateDir, 'tasks', 'ci-life')), false);
 
-  // 3b. Real systemd-analyze + injected systemctl enable failure rollback (m-29)
+  // 3b. Real systemd-analyze + post-enable failure rollback removing real timers.target.wants symlink (m-29)
   const { defaultExecFile } = await import('../../dist/systemd/systemctl.js');
+  const rbTimerSymlink = path.join(unitDir, 'timers.target.wants', 'sentropic-task-ci-rb.timer');
+  let sawSymlinkBeforeFail = false;
   const rbAdapter = createSystemdUserAdapterInternal({
     stateDir, envFilePath, hostPidGuard: passHost,
     execFile: async (f, a, o) => {
-      if (f === 'systemctl' && a[1] === 'enable') throw Object.assign(new Error('fail'), { stderr: 'injected enable failure' });
+      if (f === 'systemctl' && a[1] === 'enable') {
+        await defaultExecFile(f, a, o);
+        sawSymlinkBeforeFail = existsSync(rbTimerSymlink);
+        throw Object.assign(new Error('fail'), { stderr: 'injected post-enable failure' });
+      }
       return defaultExecFile(f, a, o);
     },
   });
   await assert.rejects(rbAdapter.enable(makeSpec('ci-rb', [taskOk, 'ok']), makePolicy([ciRunner, taskOk], [ciRunner, taskOk])), { code: 'SYSTEMCTL_FAILED', rolledBack: true });
+  assert.equal(sawSymlinkBeforeFail, true);
+  assert.equal(existsSync(rbTimerSymlink), false);
+  assert.equal(existsSync(path.join(unitDir, 'sentropic-task-ci-rb.timer')), false);
   assert.equal(existsSync(path.join(unitDir, 'sentropic-task-ci-rb.service')), false);
+  assert.equal(existsSync(path.join(stateDir, 'tasks', 'ci-rb', 'manifest.json')), false);
 
   // 3c. Non-persistent timer enable + uninstall (clean --what=state returns NothingToClean)
   const npUnits = await adapter.enable(makeSpec('ci-np', [taskOk, 'ok'], { schedule: { onCalendar: 'daily', persistent: false } }), makePolicy([ciRunner, taskOk], [ciRunner, taskOk]));
@@ -97,10 +108,39 @@ try {
   assert.equal(existsSync(npUnits.timerPath), false);
   assert.equal(existsSync(path.join(stateDir, 'tasks', 'ci-np', 'manifest.json')), false);
 
-  // 4. SuccessExitStatus=130 143 on SIGTERM stop
+  // 3d. Real-systemd update rollback restores previous unit digests and keeps manifest unchanged (m-29)
+  const updOrig = await adapter.enable(makeSpec('ci-rb-upd', [taskOk, 'ok'], { description: 'orig ci desc' }), makePolicy([ciRunner, taskOk], [ciRunner, taskOk]));
+  const origSvcText = readFileSync(updOrig.servicePath, 'utf8');
+  const origTimerText = readFileSync(updOrig.timerPath, 'utf8');
+  const sha256 = (s) => createHash('sha256').update(s, 'utf8').digest('hex');
+  const rbUpdAdapter = createSystemdUserAdapterInternal({
+    stateDir, envFilePath, hostPidGuard: passHost,
+    execFile: async (f, a, o) => {
+      if (f === 'systemctl' && a[1] === 'restart') throw Object.assign(new Error('fail'), { stderr: 'injected restart failure' });
+      return defaultExecFile(f, a, o);
+    },
+  });
+  await assert.rejects(
+    rbUpdAdapter.enable(makeSpec('ci-rb-upd', [taskOk, 'ok'], { description: 'updated ci desc', schedule: { onCalendar: '*-*-* 05:00:00', persistent: true } }), makePolicy([ciRunner, taskOk], [ciRunner, taskOk])),
+    { code: 'SYSTEMCTL_FAILED', rolledBack: true },
+  );
+  assert.equal(readFileSync(updOrig.servicePath, 'utf8'), origSvcText);
+  assert.equal(readFileSync(updOrig.timerPath, 'utf8'), origTimerText);
+  assert.equal(sha256(readFileSync(updOrig.servicePath, 'utf8')), updOrig.manifest.units.serviceSha256);
+  assert.equal(sha256(readFileSync(updOrig.timerPath, 'utf8')), updOrig.manifest.units.timerSha256);
+  assert.equal(readTaskManifest(stateDir, 'ci-rb-upd')?.spec.description, 'orig ci desc');
+  await adapter.uninstall('ci-rb-upd', { unitDir, stateDir, runtime: true, purgeState: true });
+
+  // 4. SuccessExitStatus=130 143 on SIGTERM stop (poll lock phase === 'running' instead of fixed sleep)
   await adapter.enable(makeSpec('ci-stop', [taskOk, 'hang']), makePolicy([ciRunner, taskOk], [ciRunner, taskOk]));
   systemctl(['start', '--no-block', '--', 'sentropic-task-ci-stop.service']);
-  await new Promise((r) => setTimeout(r, 400));
+  const stopDeadline = Date.now() + 5_000;
+  while (Date.now() < stopDeadline) {
+    const lock = readTaskLockSummary(stateDir, 'ci-stop');
+    if (lock && lock !== 'unreadable' && lock.phase === 'running') break;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  assert.equal(readTaskLockSummary(stateDir, 'ci-stop')?.phase, 'running');
   systemctl(['stop', '--', 'sentropic-task-ci-stop.service']);
   const stopSt = await adapter.status('ci-stop', { stateDir });
   assert.equal(stopSt.witness?.outcome, 'interrupted');

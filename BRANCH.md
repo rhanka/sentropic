@@ -56,9 +56,9 @@ Close carried S2 review items (`S2-5` to `S2-12`) from `.tmp/rv/local-scheduler-
   - [x] `S2-10`: align `createFakeSchedulerAdapter.enable` (`src/adapter.ts`) to throw `ManifestCorruptError` on corrupt previous manifest.
   - [x] `S2-5` (unit): test `enable` with failing `hostPidGuard`, `enable`/`uninstall` when unavailable, `status` on missing task, and failed update preserving `manifest.json` `spec.description` in `tests/systemd-adapter.spec.ts`.
 
-- [ ] **Lot 3 — Real systemd CI rollback, stop polling & Makefile guard (`S2-5` CI, `S2-6`, `S2-11`)**
-  - [ ] `S2-6`: fix `Makefile` `test-local-scheduler-systemd-ci` Python guard and add regression check in `tests/fake-adapter-static.spec.ts`.
-  - [ ] `S2-5` (CI) & `S2-11`: test real `timers.target.wants` symlink removal after real `enable`, real-manager update rollback, and lock-phase polling before `stop` in `tests/fixtures/systemd-ci-suite.mjs`.
+- [x] **Lot 3 — Real systemd CI rollback, stop polling & Makefile guard (`S2-5` CI, `S2-6`, `S2-11`)**
+  - [x] `S2-6`: fix `Makefile` `test-local-scheduler-systemd-ci` Python guard and add regression check in `tests/fake-adapter-static.spec.ts`.
+  - [x] `S2-5` (CI) & `S2-11`: test real `timers.target.wants` symlink removal after real `enable`, real-manager update rollback, and lock-phase polling before `stop` in `tests/fixtures/systemd-ci-suite.mjs`.
 
 - [ ] **Lot N — Version bump & final validation**
   - [ ] Bump `packages/local-scheduler/package.json` to `0.2.1` (`enforce-package-bump`) and refresh `package-lock.json` (`make lock-root ENV=local-scheduler-fu`).
