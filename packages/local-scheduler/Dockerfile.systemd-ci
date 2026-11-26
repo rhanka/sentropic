@@ -1,0 +1,14 @@
+ARG NODE_IMAGE=node:24-bookworm-slim
+FROM ${NODE_IMAGE}
+
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    systemd systemd-sysv dbus dbus-user-session \
+  && rm -rf /var/lib/apt/lists/* \
+  && systemctl mask systemd-udevd.service systemd-udevd-kernel.socket systemd-udevd-control.socket \
+     systemd-journald-audit.socket getty@tty1.service console-getty.service \
+  && mkdir -p /home/node/.config /home/node/.local/state \
+  && chown -R node:node /home/node
+
+STOPSIGNAL SIGRTMIN+3
+CMD ["/lib/systemd/systemd"]

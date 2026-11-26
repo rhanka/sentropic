@@ -131,7 +131,7 @@ describe('runner integration (m-27, m-30, B-5 #2)', () => {
     );
     expect(toRes.outcome).toBe('timed_out');
     expect(toRes.exitCode).toBe(124);
-    expect(readTaskWitness(stateDir, 'runner-task')?.outcome).toBe('timed_out');
+    expect(readTaskWitness(stateDir, 'runner-task')).toMatchObject({ outcome: 'timed_out' });
   }, 15_000);
 
   it('handles ENOSPC injection across all 4 write points (m-27)', async () => {
@@ -159,7 +159,7 @@ describe('runner integration (m-27, m-30, B-5 #2)', () => {
     });
     expect(postLog).toMatchObject({ outcome: 'succeeded', exitCode: 70, error: { code: 'RUNNER_INTERNAL_ERROR' } });
     expect(postLog.witness).not.toBeNull();
-    expect(readTaskWitness(stateDir, 'runner-task')?.runId).toBe(postLog.witness?.runId);
+    expect(readTaskWitness(stateDir, 'runner-task')).toMatchObject({ runId: postLog.witness?.runId });
     expect(existsSync(path.join(stateDir, 'locks', 'runner-task.lock'))).toBe(false);
   });
 

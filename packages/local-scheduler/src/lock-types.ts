@@ -39,6 +39,8 @@ export interface LockSystemDeps {
   readonly statfsType: (dirPath: string) => number | null;
   readonly killZero: (pid: number) => 'alive' | 'esrch' | 'eperm' | 'other';
   readonly onPublishWrite?: () => void;
+  readonly onBeforeReclaimUnlink?: (ctx: { readonly lockPath: string; readonly quarantinePath: string }) => void;
+  readonly unlinkLockFn?: (filePath: string) => void;
 }
 
 export function parseLockRecord(rawText: string, expectedTaskId?: string): LocalTaskLockRecordV1 | null {

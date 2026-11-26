@@ -47,7 +47,7 @@ describe('createFakeSchedulerAdapter', () => {
     await expect(adapter.enable({ ...spec, schedule: { ...spec.schedule, expectedIntervalMs: 120_000 } }, policy)).rejects.toThrow(InvalidTaskSpecError);
     const enabled = await adapter.enable(spec, policy);
     expect(enabled.manifest.enabled).toBe(true);
-    expect(readTaskManifest(stateDir, 'h2a-session-archive')?.enabled).toBe(true);
+    expect(readTaskManifest(stateDir, 'h2a-session-archive')).toMatchObject({ enabled: true });
     expect(adapter.getRenderedUnits('h2a-session-archive')?.service).toContain('SuccessExitStatus=130 143');
 
     adapter.setPersistedEnvFile('H2A_ARCHIVE_OFF=1\nPATH=/bad\n');
@@ -58,7 +58,7 @@ describe('createFakeSchedulerAdapter', () => {
       outcome: 'skipped_disabled', exitCode: null, signal: null, killSwitch: { scope: 'alias', name: 'H2A_ARCHIVE_OFF' },
       consecutiveFailures: 0, lastSuccessAt: null, lastSuccessRunId: null,
     });
-    expect(readTaskWitness(stateDir, 'h2a-session-archive')?.outcome).toBe('skipped_disabled');
+    expect(readTaskWitness(stateDir, 'h2a-session-archive')).toMatchObject({ outcome: 'skipped_disabled' });
     expect(readTaskLockSummary(stateDir, 'h2a-session-archive')).toBeNull();
     expect(readLastSkipEntry(stateDir, 'h2a-session-archive')).toBeNull();
 
@@ -79,7 +79,7 @@ describe('createFakeSchedulerAdapter', () => {
     // Uninstall without purgeState preserves witness while removing manifest; second uninstall is idempotent
     await adapter.uninstall('h2a-session-archive', { purgeState: false });
     expect(readTaskManifest(stateDir, 'h2a-session-archive')).toBeNull();
-    expect(readTaskWitness(stateDir, 'h2a-session-archive')?.outcome).toBe('skipped_disabled');
+    expect(readTaskWitness(stateDir, 'h2a-session-archive')).toMatchObject({ outcome: 'skipped_disabled' });
     expect((await adapter.uninstall('h2a-session-archive')).removedUnits).toEqual([]);
 
     adapter.setSystemdState('unavailable', null);
@@ -121,6 +121,7 @@ describe('static architectural and packaging guards (m-26, m-32(i), §6.1, §6.2
     expect(pkgJson.files).toEqual(['dist', 'README.md', 'LICENSE']);
     expect(Object.keys(pkgJson.exports)).toEqual(['.', './runner', './systemd']);
     expect(pkgJson.exports['./runner']).toEqual({ types: './dist/runner-public.d.ts', import: './dist/runner-public.js' });
+    expect(pkgJson.exports['./systemd']).toEqual({ types: './dist/systemd/index.d.ts', import: './dist/systemd/index.js' });
     expect(JSON.stringify(pkgJson.exports)).not.toContain('Internal');
 
     const runnerTargetSrc = (pkgJson.exports['./runner'].import as string).replace(/^\.\/dist\//, '../src/');
@@ -136,7 +137,10 @@ describe('static architectural and packaging guards (m-26, m-32(i), §6.1, §6.2
     ]) {
       expect(typeof (rootMod as Record<string, unknown>)[sym]).toBe('function');
     }
-    const systemdMod = await import('../src/systemd/unit-generator.js');
-    expect(typeof systemdMod.renderSystemdUnits).toBe('function');
+    const systemdTargetSrc = (pkgJson.exports['./systemd'].import as string).replace(/^\.\/dist\//, '../src/');
+    const systemdMod = await import(systemdTargetSrc);
+    expect(Object.keys(systemdMod).sort()).toEqual([
+      'computeExpectedIntervalMs', 'createSystemdUserAdapter', 'probeSystemdUserAvailability', 'renderSystemdUnits',
+    ]);
   });
 });

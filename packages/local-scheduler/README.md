@@ -14,6 +14,6 @@ Generic, zero-dependency, offline local workstation task scheduler runtime for N
 
 - `@sentropic/local-scheduler` — contract, errors, validation, state/env/witness/lock/skip readers, `evaluateTaskHealth`, `assertHostPidNamespace`, `createFakeSchedulerAdapter`
 - `@sentropic/local-scheduler/runner` — never-rejecting `runScheduledTask` and `runScheduledTaskById`
-- `@sentropic/local-scheduler/systemd` — pure `renderSystemdUnits` unit generator (Lot S1; `SystemdUserAdapter` lands in Lot S2)
+- `@sentropic/local-scheduler/systemd` — `createSystemdUserAdapter`, `renderSystemdUnits`, `probeSystemdUserAvailability`, `computeExpectedIntervalMs`
 
 > **Note for consumer tests**: calling `createFakeSchedulerAdapter()` without `stateDir` resolves and creates the default user state directory (`resolveStateDir()`). Always pass an isolated temporary `stateDir` (and `envFilePath`) in tests.
