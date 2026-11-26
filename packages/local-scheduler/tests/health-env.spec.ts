@@ -124,4 +124,75 @@ describe('evaluateTaskHealth truth table', () => {
     expect(evaluateTaskHealth({ manifest: MANIFEST, witness: witness({ outcome: 'interrupted', signal: 'SIGTERM' }), nowIso: '2026-11-24T06:00:00.000Z' }).status).toBe('interrupted');
     expect(evaluateTaskHealth({ manifest: MANIFEST, witness: witness({ outcome: 'interrupted', signal: 'SIGTERM' }), nowIso: '2026-11-26T00:00:00.000Z' }).status).toBe('schedule_missed');
   });
+
+  it('covers remaining verdict, severity, re-enable reset, non-downgrade, and hint branches', () => {
+    const pausedOk = evaluateTaskHealth({
+      manifest: MANIFEST,
+      witness: witness({ outcome: 'skipped_disabled', killSwitch: { scope: 'global', name: 'SENTROPIC_LOCAL_SCHEDULER_OFF' }, finishedAt: '2026-11-24T12:00:00.000Z' }),
+      persistedKillSwitch: { scope: 'global', name: 'SENTROPIC_LOCAL_SCHEDULER_OFF' },
+      nowIso: '2026-11-25T00:00:00.000Z',
+    });
+    expect(pausedOk).toMatchObject({ status: 'paused', severity: 'ok', hints: [] });
+    expect(pausedOk.message).toContain('paused since 2026-11-24T12:00:00.000Z by SENTROPIC_LOCAL_SCHEDULER_OFF');
+
+    expect(evaluateTaskHealth({
+      manifest: MANIFEST, witness: witness({ outcome: 'refused_policy', refusal: 'allowlist', consecutiveFailures: 1, exitCode: null }),
+      nowIso: '2026-11-24T06:00:00.000Z',
+    })).toMatchObject({ status: 'failing', severity: 'critical', opsReason: 'job-failed' });
+
+    expect(evaluateTaskHealth({
+      manifest: MANIFEST, witness: witness({ outcome: 'failed', consecutiveFailures: 2, exitCode: 1 }),
+      nowIso: '2026-11-24T06:00:00.000Z',
+    })).toMatchObject({ status: 'failing', severity: 'critical', opsReason: 'job-failed' });
+
+    expect(evaluateTaskHealth({
+      manifest: MANIFEST, witness: witness({ outcome: 'succeeded' }), nowIso: '2026-11-26T00:00:00.000Z',
+    })).toMatchObject({ status: 'schedule_missed', severity: 'critical', opsReason: 'schedule-missed' });
+
+    expect(evaluateTaskHealth({
+      manifest: MANIFEST,
+      witness: witness({ finishedAt: '2026-11-24T01:05:00.000Z', lastSuccessAt: '2026-11-24T10:00:00.000Z' }),
+      nowIso: '2026-11-24T02:00:00.000Z',
+      clockSkewToleranceMs: 60_000,
+    })).toMatchObject({ status: 'clock_skew', severity: 'warning', opsReason: 'stale' });
+
+    expect(evaluateTaskHealth({
+      manifest: { ...MANIFEST, enabledAt: '2026-11-26T00:00:00.000Z' },
+      witness: witness({ finishedAt: '2026-11-20T01:05:00.000Z', lastSuccessAt: '2026-11-20T01:05:00.000Z' }),
+      nowIso: '2026-11-26T12:00:00.000Z',
+    })).toMatchObject({ status: 'healthy', severity: 'ok' });
+
+    const readerKs = { scope: 'alias' as const, name: 'H2A_ARCHIVE_OFF' };
+    for (const [st, w] of [
+      ['failing', witness({ outcome: 'failed', consecutiveFailures: 2, exitCode: 1 })],
+      ['schedule_missed', null],
+      ['clock_skew', witness()],
+      ['witness_corrupt', 'corrupt' as const],
+    ] as const) {
+      const nowIso = st === 'clock_skew' ? '2026-11-24T00:00:00.000Z' : '2026-11-26T00:00:00.000Z';
+      const v = evaluateTaskHealth({ manifest: MANIFEST, witness: w, readerEnvKillSwitch: readerKs, nowIso });
+      expect(v.status).toBe(st);
+      expect(v.hints.some((h) => h.includes('does not pause'))).toBe(true);
+    }
+
+    const unreadableLock = evaluateTaskHealth({
+      manifest: MANIFEST,
+      witness: witness({ finishedAt: '2026-11-24T01:05:00.000Z' }),
+      persistedKillSwitch: { scope: 'task', name: 'SENTROPIC_TASK_H2A_SESSION_ARCHIVE_OFF' },
+      lock: 'unreadable',
+      lastSkip: { v: 1, runId: 's2', at: '2026-11-24T02:00:00.000Z', pid: 102, outcome: 'skipped_locked' },
+      nowIso: '2026-11-24T06:00:00.000Z',
+    });
+    expect(unreadableLock.hints.some((h) => h.includes('next scheduled tick will pause'))).toBe(true);
+    expect(unreadableLock.hints.some((h) => h.includes('unreadable lock file'))).toBe(true);
+
+    const suppressedSkip = evaluateTaskHealth({
+      manifest: MANIFEST,
+      witness: witness({ finishedAt: '2026-11-24T03:00:00.000Z' }),
+      lock: { pid: 99, phase: 'running', acquiredAt: '2026-11-24T01:00:00.000Z' },
+      lastSkip: { v: 1, runId: 's3', at: '2026-11-24T02:00:00.000Z', pid: 103, outcome: 'refused_policy', refusal: 'sandbox' },
+      nowIso: '2026-11-24T06:00:00.000Z',
+    });
+    expect(suppressedSkip.hints).toEqual([]);
+  });
 });
