@@ -40,16 +40,21 @@ function acquireInternal(locksDir: string, lockPath: string, taskId: string, dep
         if (snap2 && snapshotsEqual(snap1, snap2) && classifyLockReclaimability(snap2.record, snap2.st, locksDir, deps) === 'dead') {
           const qPath = `${lockPath}.quarantine.${record.nonce}`;
           writeExclusiveTmp(qPath, snap2.raw);
+          let removeQuarantine = false;
           try {
             fsyncDirBestEffort(locksDir);
             const snap3 = captureSnapshot(lockPath, taskId);
             if (snap3 && snapshotsEqual(snap1, snap3)) {
-              unlinkSync(lockPath);
+              deps.onBeforeReclaimUnlink?.({ lockPath, quarantinePath: qPath });
+              (deps.unlinkLockFn ?? unlinkSync)(lockPath);
               fsyncDirBestEffort(locksDir);
               reclaimed = true;
             }
+            removeQuarantine = true;
           } finally {
-            try { unlinkSync(qPath); } catch { /* ignore quarantine cleanup */ }
+            if (removeQuarantine) {
+              try { unlinkSync(qPath); } catch { /* ignore quarantine cleanup */ }
+            }
           }
         }
       } finally {

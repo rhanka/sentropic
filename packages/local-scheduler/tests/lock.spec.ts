@@ -1,4 +1,4 @@
-import { chmodSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { acquireTaskLock, readTaskLockSummary } from '../src/lock.js';
@@ -48,9 +48,9 @@ describe('acquireTaskLock & readTaskLockSummary', () => {
     const stateDir = makeExt4StateDir();
     const h = acquireTaskLock(stateDir, 't-1', makeDeps());
     expect(h).not.toBeNull();
-    expect(readTaskLockSummary(stateDir, 't-1')?.phase).toBe('acquired');
+    expect(readTaskLockSummary(stateDir, 't-1')).toMatchObject({ phase: 'acquired' });
     h!.transitionToSpawning();
-    expect(readTaskLockSummary(stateDir, 't-1')?.phase).toBe('spawning');
+    expect(readTaskLockSummary(stateDir, 't-1')).toMatchObject({ phase: 'spawning' });
     h!.transitionToRunning(7777);
     const raw = JSON.parse(readFileSync(h!.lockPath, 'utf8'));
     expect(raw.phase).toBe('running');
@@ -180,6 +180,8 @@ describe('acquireTaskLock & readTaskLockSummary', () => {
     expect(acquireTaskLock(stateDir, 't-1', makeDeps({ killZero: () => 'esrch' }))).toBeNull();
     seedLock(stateDir, 't-1', { ...baseRec, timeNs: null });
     expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => ({ state: 'S', startTime: '8888' }), killZero: (p) => (p > 0 ? 'alive' : 'esrch') }))).toBeNull();
+    // R2-5: both record.timeNs and currentTimeNs null must fail closed even on startTime mismatch
+    expect(acquireTaskLock(stateDir, 't-1', makeDeps({ readSelfTimeNs: () => null, readProcStat: () => ({ state: 'S', startTime: '8888' }), killZero: (p) => (p > 0 ? 'alive' : 'esrch') }))).toBeNull();
     seedLock(stateDir, 't-1', { ...baseRec, timeNs: 'time:[4026531834]' });
     const hRecTimeOk = acquireTaskLock(stateDir, 't-1', makeDeps({ readProcStat: () => ({ state: 'S', startTime: '8888' }), killZero: (p) => (p > 0 ? 'alive' : 'esrch') }));
     expect(hRecTimeOk).not.toBeNull();
@@ -304,12 +306,62 @@ describe('acquireTaskLock & readTaskLockSummary', () => {
 
     let writeCalls = 0;
     expect(() => tryPublishExclusive(locksDir, path.join(locksDir, 't-fb.lock'), {
-      ...baseRec, taskId: 't-fb', pid: 5000, pidStartTime: '9999', pidNs: 'pid:[4026531836]',
+      ...baseRec, v: 1 as const, taskId: 't-fb', pid: 5000, pidStartTime: '9999', pidNs: 'pid:[4026531836]',
       timeNs: 'time:[4026531834]', phase: 'acquired', childPid: null, childPgid: null, nonce: 'fb1',
     }, {
       linkFn: () => { throw Object.assign(new Error('EXDEV'), { code: 'EXDEV' }); },
       onWrite: () => { if (++writeCalls === 2) throw Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' }); },
     })).toThrow('ENOSPC');
     expect(readdirSync(locksDir).some((f) => f.startsWith('t-fb.lock'))).toBe(false);
+  });
+
+  it('covers R2-2 (quarantine copy before unlink, two-reclaimer interleaving) and R2-3 (retain quarantine on unlink error)', () => {
+    const stateDir = makeExt4StateDir();
+    const deadRec = {
+      v: 1, taskId: 't-r2', pid: 4000, pidStartTime: '1111', pidNs: 'pid:[4026531836]', timeNs: 'time:[4026531834]',
+      phase: 'running', childPid: 4001, childPgid: 4001, host: 'ws-1', bootId: BOOT_A, nonce: 'dead-n1', acquiredAt: '2026-11-25T10:00:00.000Z',
+    };
+    const lockPath = seedLock(stateDir, 't-r2', deadRec);
+    const deadBytes = readFileSync(lockPath);
+    const locksDir = path.join(stateDir, 'locks');
+
+    // R2-2: quarantine copy exists (0600, exact bytes) before unlink, and a concurrent reclaimer B sees live guard and yields
+    let observedQuarantine = false;
+    let reclaimerBResult: ReturnType<typeof acquireTaskLock> = 'unset' as never;
+    const handleA = acquireTaskLock(stateDir, 't-r2', makeDeps({
+      pid: 5001,
+      killZero: () => 'esrch',
+      onBeforeReclaimUnlink: ({ lockPath: lp, quarantinePath: qp }) => {
+        expect(existsSync(lp)).toBe(true);
+        expect(existsSync(qp)).toBe(true);
+        expect(statSync(qp).mode & 0o777).toBe(0o600);
+        expect(Buffer.compare(readFileSync(qp), deadBytes)).toBe(0);
+        observedQuarantine = true;
+        reclaimerBResult = acquireTaskLock(stateDir, 't-r2', makeDeps({
+          pid: 5002,
+          killZero: (p) => (p === 5001 ? 'alive' : 'esrch'),
+          readProcStat: (p) => ({ state: 'S', startTime: p === 5001 ? '9999' : '1111' }),
+        }));
+      },
+    }));
+    expect(observedQuarantine).toBe(true);
+    expect(reclaimerBResult).toBeNull();
+    expect(handleA).not.toBeNull();
+    expect(JSON.parse(readFileSync(lockPath, 'utf8'))).toMatchObject({ pid: 5001, nonce: handleA!.nonce });
+    expect(readdirSync(locksDir).some((f) => f.includes('.quarantine.') || f.endsWith('.reclaim'))).toBe(false);
+    handleA!.release();
+
+    // R2-3: unlinkSync(lockPath) error retains the quarantine copy for forensics (spec:367)
+    seedLock(stateDir, 't-r2-err', { ...deadRec, taskId: 't-r2-err' });
+    const errLockPath = path.join(locksDir, 't-r2-err.lock');
+    const errDeadBytes = readFileSync(errLockPath);
+    expect(() => acquireTaskLock(stateDir, 't-r2-err', makeDeps({
+      killZero: () => 'esrch',
+      unlinkLockFn: () => { throw Object.assign(new Error('EIO'), { code: 'EIO' }); },
+    }))).toThrow('EIO');
+    expect(existsSync(errLockPath)).toBe(true);
+    const qFiles = readdirSync(locksDir).filter((f) => f.startsWith('t-r2-err.lock.quarantine.'));
+    expect(qFiles).toHaveLength(1);
+    expect(Buffer.compare(readFileSync(path.join(locksDir, qFiles[0])), errDeadBytes)).toBe(0);
   });
 });
