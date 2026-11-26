@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createFakeSchedulerAdapter, PolicyRefusalError, readTaskWitness, type LocalTaskManifestV1 } from '../src/index.js';
-import { buildSanitizedChildEnv } from '../src/runner-env.js';
+import { buildSanitizedChildEnv, verifyDirectManifestAndStateDir } from '../src/runner-env.js';
 import { runScheduledTask, runScheduledTaskById, runScheduledTaskByIdInternal, runScheduledTaskInternal } from '../src/runner.js';
 import { renderSystemdUnits } from '../src/systemd/unit-generator.js';
 
@@ -46,6 +46,10 @@ describe('runner integration (m-27, m-30, B-5 #2)', () => {
     const manifest = makeManifest(path.join(stateDir, 'other'), path.join(stateDir, 's.mjs'));
     const mismatch = await runScheduledTaskInternal(manifest, { allowedBins: [process.execPath], stateDir }, { hostPidGuard: passHost });
     expect(mismatch).toMatchObject({ outcome: 'not_run', exitCode: 77, witness: null, error: { code: 'POLICY_REFUSED_STATE_DIR' } });
+
+    expect(() => verifyDirectManifestAndStateDir({ ...manifest, v: 99 as 1 }, stateDir, {})).toThrow(
+      expect.objectContaining({ code: 'MANIFEST_CORRUPT', manifestPath: path.join(stateDir, 'tasks', 'runner-task', 'manifest.json') }),
+    );
   });
 
   it('refuses sandboxed runner at step 2 without touching locks or last-run.json (B-5 #2)', async () => {

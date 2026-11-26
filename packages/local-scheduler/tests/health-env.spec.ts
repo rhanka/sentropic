@@ -167,13 +167,13 @@ describe('evaluateTaskHealth truth table', () => {
       nowIso: '2026-11-26T12:00:00.000Z',
     })).toMatchObject({ status: 'healthy', severity: 'ok' });
 
-    // n-1: stale skipped_disabled before re-enable must not report "last run succeeded"
+    // n-1: stale skipped_disabled before re-enable must return healthy without claiming "last run succeeded"
     const reenabledAfterPause = evaluateTaskHealth({
       manifest: { ...MANIFEST, enabledAt: '2026-11-26T00:00:00.000Z' },
       witness: witness({ outcome: 'skipped_disabled', killSwitch: { scope: 'alias', name: 'H2A_ARCHIVE_OFF' }, finishedAt: '2026-11-20T01:05:00.000Z', lastSuccessAt: null, lastSuccessRunId: null }),
       nowIso: '2026-11-26T12:00:00.000Z',
     });
-    expect(reenabledAfterPause.status).toBe('pending_first_run');
+    expect(reenabledAfterPause.status).toBe('healthy');
     expect(reenabledAfterPause.message).not.toContain('succeeded');
 
     const readerKs = { scope: 'alias' as const, name: 'H2A_ARCHIVE_OFF' };

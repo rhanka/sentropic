@@ -114,7 +114,11 @@ export function verifyDirectManifestAndStateDir(
 ): { readonly resolvedStateDir: string; readonly verifiedManifest: LocalTaskManifestV1 } {
   const resolvedStateDir = optStateDir ?? resolveStateDir(env);
   if (!isValidTaskManifest(manifest)) {
-    throw new ManifestCorruptError(resolvedStateDir, 'Provided manifest failed schema validation');
+    const rawTaskId = (manifest as { spec?: { taskId?: unknown } } | null | undefined)?.spec?.taskId;
+    const manifestPath = typeof rawTaskId === 'string' && TASK_ID_REGEX.test(rawTaskId)
+      ? path.join(resolvedStateDir, 'tasks', rawTaskId, 'manifest.json')
+      : path.join(resolvedStateDir, 'manifest.json');
+    throw new ManifestCorruptError(manifestPath, 'Provided manifest failed schema validation');
   }
   validateTaskSpec(manifest.spec);
   if (manifest.stateDir !== resolvedStateDir) {

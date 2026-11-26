@@ -142,7 +142,7 @@ describe('runner contention, SIGTERM interruption, and log rotation', () => {
     const pgRes = await runScheduledTaskInternal(pgManifest, { allowedBins: [process.execPath], allowedScripts: [script], stateDir }, { hostPidGuard: () => undefined });
     expect(pgRes).toMatchObject({ outcome: 'timed_out', exitCode: 124 });
     const gcPid = Number(readFileSync(pidFile, 'utf8').trim());
-    expect(() => process.kill(gcPid, 0)).toThrow();
+    expect(() => process.kill(gcPid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }));
 
     // Oversized skips.jsonl is NOT rotated by sandbox refusal (step 2), IS rotated by lock holder (step 8)
     const skipsPath = path.join(stateDir, 'tasks', 'sig-task', 'skips.jsonl');
@@ -199,6 +199,6 @@ describe('runner contention, SIGTERM interruption, and log rotation', () => {
     expect(existsSync(trapReadyFile)).toBe(true);
     expect(trapRes.witness?.durationMs).toBeGreaterThanOrEqual(5_900);
     const trapGcPid = Number(readFileSync(trapPidFile, 'utf8').trim());
-    expect(() => process.kill(trapGcPid, 0)).toThrow();
+    expect(() => process.kill(trapGcPid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }));
   }, 15_000);
 });
