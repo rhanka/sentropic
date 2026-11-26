@@ -121,6 +121,7 @@ describe('static architectural and packaging guards (m-26, m-32(i), §6.1, §6.2
     expect(pkgJson.files).toEqual(['dist', 'README.md', 'LICENSE']);
     expect(Object.keys(pkgJson.exports)).toEqual(['.', './runner', './systemd']);
     expect(pkgJson.exports['./runner']).toEqual({ types: './dist/runner-public.d.ts', import: './dist/runner-public.js' });
+    expect(pkgJson.exports['./systemd']).toEqual({ types: './dist/systemd/index.d.ts', import: './dist/systemd/index.js' });
     expect(JSON.stringify(pkgJson.exports)).not.toContain('Internal');
 
     const runnerTargetSrc = (pkgJson.exports['./runner'].import as string).replace(/^\.\/dist\//, '../src/');
@@ -136,7 +137,10 @@ describe('static architectural and packaging guards (m-26, m-32(i), §6.1, §6.2
     ]) {
       expect(typeof (rootMod as Record<string, unknown>)[sym]).toBe('function');
     }
-    const systemdMod = await import('../src/systemd/unit-generator.js');
-    expect(typeof systemdMod.renderSystemdUnits).toBe('function');
+    const systemdTargetSrc = (pkgJson.exports['./systemd'].import as string).replace(/^\.\/dist\//, '../src/');
+    const systemdMod = await import(systemdTargetSrc);
+    expect(Object.keys(systemdMod).sort()).toEqual([
+      'computeExpectedIntervalMs', 'createSystemdUserAdapter', 'probeSystemdUserAvailability', 'renderSystemdUnits',
+    ]);
   });
 });
