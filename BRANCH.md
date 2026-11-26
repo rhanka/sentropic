@@ -42,9 +42,9 @@ Implement Lot S1 of `spec/SPEC_EVOL_LOCAL_SCHEDULED_TASKS.md`: core `@sentropic/
   - [x] Add `src/contract.ts` (types, validation, secret/loader/allowlist/shebang checks).
   - [x] Add `src/state-dir.ts`, `src/host-pid-guard.ts`, `src/env-file.ts`.
 
-- [ ] **Lot 2 — Witness, health evaluator, fail-closed lock, rotator, unit generator**
+- [x] **Lot 2 — Witness, health evaluator, fail-closed lock, rotator, unit generator**
   - [x] Add `src/witness.ts` and pure `src/health.ts`.
-  - [ ] Add `src/lock.ts` (namespace-aware fail-closed lock and reclaim protocol).
+  - [x] Add `src/lock.ts` (namespace-aware fail-closed lock and reclaim protocol).
   - [ ] Add `src/log-rotator.ts` and `src/systemd/unit-generator.ts`.
 
 - [ ] **Lot 3 — Runner, fake adapter, entrypoint, tests**
