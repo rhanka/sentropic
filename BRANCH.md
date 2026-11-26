@@ -38,7 +38,7 @@ Implement Lot S1 of `spec/SPEC_EVOL_LOCAL_SCHEDULED_TASKS.md`: core `@sentropic/
   - [x] Declare `BR-LSCH-EX1a` for `Makefile` and `package-lock.json`.
 
 - [ ] **Lot 1 — Package scaffold, errors, contract, state/env/pid modules**
-  - [ ] Add `package.json`, `tsconfig.json`, `LICENSE`, `README.md`, `src/errors.ts`.
+  - [x] Add `package.json`, `tsconfig.json`, `LICENSE`, `README.md`, `src/errors.ts`.
   - [ ] Add `src/contract.ts` (types, validation, secret/loader/allowlist/shebang checks).
   - [ ] Add `src/state-dir.ts`, `src/host-pid-guard.ts`, `src/env-file.ts`.
 
