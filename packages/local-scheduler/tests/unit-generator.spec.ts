@@ -29,22 +29,57 @@ function baseManifest(overrides: Partial<Omit<LocalTaskManifestV1, 'units'>> = {
 describe('renderSystemdUnits', () => {
   it('renders golden hardened .service and .timer units', () => {
     const out = renderSystemdUnits(baseManifest());
-    expect(out.service).toContain('# Managed-By: @sentropic/local-scheduler v1');
-    expect(out.service).toContain('SuccessExitStatus=130 143');
-    expect(out.service).toContain('KillMode=mixed');
-    expect(out.service).toContain('NoNewPrivileges=yes');
-    expect(out.service).toContain('RestrictAddressFamilies=AF_UNIX');
-    expect(out.service).toContain('LockPersonality=yes');
-    expect(out.service).toContain('RestrictRealtime=yes');
-    expect(out.service).toContain('TimeoutStartSec=1845');
-    expect(out.service).toContain('TimeoutStopSec=30');
-    expect(out.service).toContain('Environment="PATH=/usr/bin:/bin"');
-    expect(out.service).toContain('Environment="SENTROPIC_LOCAL_SCHEDULER_STATE_DIR=/home/user/.local/state/sentropic/local-scheduler"');
-    expect(out.service).toContain('EnvironmentFile=-/home/user/.config/sentropic/local-scheduler/env');
-    expect(out.service).toContain('UnsetEnvironment=NODE_OPTIONS NODE_PATH LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT');
-    expect(out.service).toContain('ExecStart="/usr/bin/node" "/opt/h2a/bin.js" "archive" "_schedule-exec" "h2a-session-archive"');
-    expect(out.timer).toContain('OnCalendar=daily');
-    expect(out.timer).toContain('Persistent=true');
+    expect(out.service).toBe([
+      '# Managed-By: @sentropic/local-scheduler v1',
+      '# Task-Id: h2a-session-archive',
+      '# Owner: h2a',
+      '[Unit]',
+      'Description=Sentropic local scheduled task: h2a local CLI session archive (h2a-session-archive)',
+      'After=default.target',
+      '',
+      '[Service]',
+      'Type=oneshot',
+      'KillMode=mixed',
+      'SuccessExitStatus=130 143',
+      'Nice=15',
+      'IOSchedulingClass=idle',
+      'MemoryMax=512M',
+      'CPUQuota=50%',
+      'TasksMax=64',
+      'UMask=0077',
+      'NoNewPrivileges=yes',
+      'RestrictAddressFamilies=AF_UNIX',
+      'LockPersonality=yes',
+      'RestrictRealtime=yes',
+      'TimeoutStartSec=1845',
+      'TimeoutStopSec=30',
+      'Environment="PATH=/usr/bin:/bin"',
+      'Environment="SENTROPIC_LOCAL_SCHEDULER_STATE_DIR=/home/user/.local/state/sentropic/local-scheduler"',
+      'EnvironmentFile=-/home/user/.config/sentropic/local-scheduler/env',
+      'UnsetEnvironment=NODE_OPTIONS NODE_PATH LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT',
+      'ExecStart="/usr/bin/node" "/opt/h2a/bin.js" "archive" "_schedule-exec" "h2a-session-archive"',
+      'StandardOutput=journal',
+      'StandardError=journal',
+      '',
+    ].join('\n'));
+    expect(out.timer).toBe([
+      '# Managed-By: @sentropic/local-scheduler v1',
+      '# Task-Id: h2a-session-archive',
+      '# Owner: h2a',
+      '[Unit]',
+      'Description=Timer for Sentropic local scheduled task: h2a-session-archive',
+      '',
+      '[Timer]',
+      'OnCalendar=daily',
+      'Persistent=true',
+      'RandomizedDelaySec=600',
+      'AccuracySec=60',
+      'Unit=sentropic-task-h2a-session-archive.service',
+      '',
+      '[Install]',
+      'WantedBy=timers.target',
+      '',
+    ].join('\n'));
     expect(out.serviceSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(out.timerSha256).toMatch(/^[0-9a-f]{64}$/);
   });
@@ -92,6 +127,21 @@ describe('renderSystemdUnits', () => {
     expect(() => renderSystemdUnits(baseManifest({
       runner: { bin: '/usr/bin/node', args: ['/opt/run\x00.mjs'] },
     }))).toThrow(InvalidTaskSpecError);
+
+    // m-5: renderSystemdUnits validates owner, resources, numeric bounds, and taskId directly
+    const badSpecs: Array<Partial<LocalTaskManifestV1['spec']>> = [
+      { owner: 'x\n[Service]\nExecStartPre=/bin/sh' },
+      { taskId: 'Bad_Task' },
+      { timeoutMs: 100 },
+      { killGraceMs: 100 },
+      { resources: { ioSchedulingClass: 'realtime' as unknown as 'idle' } },
+      { resources: { memoryMax: '10G' } },
+      { resources: { cpuQuota: '200%' } },
+      { resources: { nice: 99, tasksMax: 9999 } },
+    ];
+    for (const s of badSpecs) {
+      expect(() => renderSystemdUnits(baseManifest({ spec: { ...baseManifest().spec, ...s } }))).toThrow(InvalidTaskSpecError);
+    }
   });
 
   it('escapes quotes/backslashes/percent/dollar in non-path ExecStart args, supports custom resources and non-Node runner', () => {
