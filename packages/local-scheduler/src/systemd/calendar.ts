@@ -28,7 +28,7 @@ export async function computeExpectedIntervalMsWith(
     throw new InvalidTaskSpecError('INVALID_TASK_SPEC', `invalid OnCalendar expression: ${(e.stderr || e.message).trim()}`, 'schedule.onCalendar', { cause: err });
   }
   const timestamps: number[] = [];
-  for (const match of stdout.matchAll(/^\s*(?:Next elapse|Iteration #\d+):\s*(.+)$/gm)) {
+  for (const match of stdout.matchAll(/^\s*(?:Next elapse|Iter(?:ation)?\.?\s*#\d+):\s*(.+)$/gm)) {
     const ms = Date.parse(match[1].trim());
     if (Number.isFinite(ms)) timestamps.push(ms);
   }

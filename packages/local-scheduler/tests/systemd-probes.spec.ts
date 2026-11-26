@@ -32,7 +32,7 @@ describe('@sentropic/local-scheduler/systemd contract & probes (§4.2)', () => {
     expect(await computeExpectedIntervalMsWith('hourly')).toBe(3_600_000);
     const analyzeOut = [
       '  Next elapse: Thu 2026-11-26 00:00:00 UTC',
-      '  Iteration #2: Thu 2026-11-26 06:00:00 UTC',
+      '  Iter. #2: Thu 2026-11-26 06:00:00 UTC',
       '  Iteration #3: Thu 2026-11-26 12:00:00 UTC',
     ].join('\n');
     expect(await computeExpectedIntervalMsWith('*-*-* 00/6:00:00', async (_f, a) => {
