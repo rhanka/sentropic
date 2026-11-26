@@ -48,7 +48,7 @@ Implement Lot S1 of `spec/SPEC_EVOL_LOCAL_SCHEDULED_TASKS.md`: core `@sentropic/
   - [x] Add `src/log-rotator.ts` and `src/systemd/unit-generator.ts`.
 
 - [ ] **Lot 3 — Runner, fake adapter, entrypoint, tests**
-  - [ ] Add `src/runner.ts`, `src/adapter.ts`, `src/index.ts`.
+  - [x] Add `src/runner.ts`, `src/adapter.ts`, `src/index.ts`.
   - [ ] Add unit, lock, runner, unit-generator, health, static, and fake-adapter tests in `tests/`.
 
 - [ ] **Lot 4 — Makefile targets, root lockfile & final verification**
