@@ -66,7 +66,7 @@ Implement Lot S1 of `spec/SPEC_EVOL_LOCAL_SCHEDULED_TASKS.md`: core `@sentropic/
 - [ ] **Lot 5 — r2 CI registration (`BR-LSCH-EX1a'`) & full test suite coverage**
   - [x] Register `local-scheduler` in `scripts/ci/consumer-boundaries.json`, `scripts/ci/publishable-manifests.mjs` (`PACK_TARGETS`), and update CI count assertions in `scripts/ci/consumer-contracts.test.mjs` and `scripts/ci/ci-expected-results.test.mjs`.
   - [x] Add `pack-local-scheduler` in `Makefile` and `validate-local-scheduler` CI pack lane in `.github/workflows/ci.yml`.
-  - [ ] Expand `tests/contract.spec.ts` (errors, spec bounds, allowlist/shebang/symlinks, `assertHostPidNamespace`).
+  - [x] Expand `tests/contract.spec.ts` (errors, spec bounds, allowlist/shebang/symlinks, `assertHostPidNamespace`).
   - [ ] Expand `tests/unit-generator.spec.ts` (control/glob/quote/backslash/`$`/`$$` escaping, non-Node runner, timer/resources).
   - [ ] Add `tests/env-witness.spec.ts` (env-file rejections, kill-switch truth table, stateDir resolution, witness atomicity & closed v1 validation, `skips.jsonl` `O_APPEND`).
   - [ ] Expand `tests/health-env.spec.ts` (every `evaluateTaskHealth` verdict, pause ok/warning, skew, re-enable, all hints).
