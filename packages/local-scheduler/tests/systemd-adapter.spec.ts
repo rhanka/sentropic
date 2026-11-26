@@ -50,8 +50,7 @@ describe('SystemdUserAdapter lifecycle, safety, rollback (m-29), and status (m-2
     const adapter = createSystemdUserAdapterInternal({ stateDir, envFilePath: path.join(stateDir, 'env'), hostPidGuard: passHost, execFile, nowIso: () => '2026-11-26T00:00:00.000Z' });
     const policy = { runner: { bin: process.execPath, args: [script] }, allowedBins: [process.execPath], allowedScripts: [script], unitDir, stateDir, runtime: true };
 
-    expect((await adapter.status('never-installed-task')).health.status).toBe('not_installed');
-    await expect(adapter.status('../bad')).resolves.toMatchObject({ manifest: null, health: { status: 'not_installed' } });
+    await expect(adapter.status('never-installed-task')).resolves.toMatchObject({ manifest: null });
 
     const sandboxState = path.join(root, 'sb-state');
     const sandboxUnits = path.join(root, 'sb-units');
@@ -69,6 +68,8 @@ describe('SystemdUserAdapter lifecycle, safety, rollback (m-29), and status (m-2
     expect(existsSync(path.join(sandboxState, 'tasks', 'sd-task', 'manifest.json'))).toBe(false);
 
     const res1 = await adapter.enable(makeSpec(script), policy);
+    expect((await adapter.status('never-installed-task')).health.status).toBe('not_installed');
+    await expect(adapter.status('../bad')).resolves.toMatchObject({ manifest: null, health: { status: 'not_installed' } });
     expect(statSync(unitDir).mode & 0o777).toBe(0o755);
     expect(statSync(res1.servicePath).mode & 0o777).toBe(0o600);
     expect(res1.lingerEnabled).toBe(false);

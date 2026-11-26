@@ -25,7 +25,7 @@ Close carried S2 review items (`S2-5` to `S2-12`) from `.tmp/rv/local-scheduler-
   - `.github/workflows/**`
 
 ## Feedback Loop
-- `BR-LSCH-EX3` (`Makefile`, `package-lock.json`):
+- `BR87-EX1` (`BR-LSCH-EX3`, `Makefile`, `package-lock.json`):
   - Status: `acknowledge` (explicit S2 followup scope: `S2-6` Makefile Python guard fix + `enforce-package-bump` root lockfile refresh).
   - Reason: `S2-6` fixes the POSIX `set -eu` `! command -v python3` bug in `Makefile:2441` (`test-local-scheduler-systemd-ci`); modifying `packages/local-scheduler/src/**` requires bumping `packages/local-scheduler/package.json` to `0.2.1` and refreshing the `"packages/local-scheduler"` version in `package-lock.json` (`S2-3` parity).
   - Impact: `Makefile` change matches CI `global` path filter (runs full CI matrix); `package-lock.json` is a 1-line version string update (`"0.2.0"` -> `"0.2.1"`). Zero runtime impact on other packages.
@@ -60,7 +60,7 @@ Close carried S2 review items (`S2-5` to `S2-12`) from `.tmp/rv/local-scheduler-
   - [x] `S2-6`: fix `Makefile` `test-local-scheduler-systemd-ci` Python guard and add regression check in `tests/fake-adapter-static.spec.ts`.
   - [x] `S2-5` (CI) & `S2-11`: test real `timers.target.wants` symlink removal after real `enable`, real-manager update rollback, and lock-phase polling before `stop` in `tests/fixtures/systemd-ci-suite.mjs`.
 
-- [ ] **Lot N — Version bump & final validation**
-  - [ ] Bump `packages/local-scheduler/package.json` to `0.2.1` (`enforce-package-bump`) and refresh `package-lock.json` (`make lock-root ENV=local-scheduler-fu`).
-  - [ ] Run Docker gates (`ENV=local-scheduler-fu`): `typecheck-local-scheduler`, `test-local-scheduler`, `build-local-scheduler`, `pack-local-scheduler`, `test-local-scheduler-systemd-ci`, `scope-check`.
+- [x] **Lot N — Version bump & final validation**
+  - [x] Bump `packages/local-scheduler/package.json` to `0.2.1` (`enforce-package-bump`) and refresh `package-lock.json` (`make lock-root ENV=local-scheduler-fu`).
+  - [x] Run Docker gates (`ENV=local-scheduler-fu`): `typecheck-local-scheduler`, `test-local-scheduler`, `build-local-scheduler`, `pack-local-scheduler`, `test-local-scheduler-systemd-ci`, `scope-check`.
   - [ ] Remove `BRANCH.md` in final commit, push, open PR, and watch `gh pr checks` until green.
