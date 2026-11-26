@@ -49,8 +49,8 @@ test('should require manifest validation and identical installed tuples for depl
   }
 });
 
-test('should load 43 inventoried components with owning validations', () => {
-  assert.equal(boundaries.components.length, 43);
+test('should load 44 inventoried components with owning validations', () => {
+  assert.equal(boundaries.components.length, 44);
   const kinds = new Set(boundaries.components.map((row) => row.kind));
   assert.deepEqual([...kinds].sort(), ['app', 'library']);
   const missing = boundaries.components.filter((row) => row.validation === null).map((row) => row.slug);

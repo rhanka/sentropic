@@ -1,0 +1,47 @@
+{
+  "name": "@sentropic/local-scheduler",
+  "version": "0.1.0",
+  "description": "Generic local workstation task scheduler runtime with fail-closed namespace-aware locking, atomic witness persistence, pure dead-man health evaluation, and injection-safe systemd unit generation.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/local-scheduler"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./runner": {
+      "types": "./dist/runner-public.d.ts",
+      "import": "./dist/runner-public.js"
+    },
+    "./systemd": {
+      "types": "./dist/systemd/unit-generator.d.ts",
+      "import": "./dist/systemd/unit-generator.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {},
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "5.4.5",
+    "vitest": "4.0.18"
+  }
+}
