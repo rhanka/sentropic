@@ -53,6 +53,6 @@ Implement Lot S1 of `spec/SPEC_EVOL_LOCAL_SCHEDULED_TASKS.md`: core `@sentropic/
 
 - [ ] **Lot 4 — Makefile targets, root lockfile & final verification**
   - [x] Add `typecheck-local-scheduler`, `test-local-scheduler`, `build-local-scheduler` in `Makefile`.
-  - [ ] Update root `package-lock.json` via `make lock-root ENV=local-scheduler-s1`.
-  - [ ] Run `make typecheck-local-scheduler`, `make test-local-scheduler`, `make build-local-scheduler`, `make scope-check` with `ENV=local-scheduler-s1`.
+  - [x] Update root `package-lock.json` via `make lock-root ENV=local-scheduler-s1`.
+  - [x] Run `make typecheck-local-scheduler`, `make test-local-scheduler`, `make build-local-scheduler`, `make scope-check` with `ENV=local-scheduler-s1`.
   - [ ] Push, open PR, remove `BRANCH.md` before final review, watch CI checks.
