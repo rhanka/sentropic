@@ -47,6 +47,7 @@ on:
           - cluster-mesh
           - cited-source-viewer
           - artifacts
+          - local-scheduler
 
 permissions:
   contents: read
@@ -331,6 +332,7 @@ jobs:
       local_scheduler: ${{ steps.filter.outputs.local_scheduler }}
       live_speech: ${{ steps.filter.outputs.live_speech }}
       harness_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.harness_publish }}
+      local_scheduler_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.local_scheduler_publish }}
       manifest_guard: ${{ steps.filter.outputs.manifest_guard }}
       package_candidates: ${{ steps.filter.outputs.package_candidates }}
       # Publishable manifest guard context (spec section 6): JSON lists, never booleans.
@@ -727,6 +729,8 @@ jobs:
               - 'packages/live-speech/**'
             harness_publish:
               - 'packages/harness/**'
+            local_scheduler_publish:
+              - 'packages/local-scheduler/**'
             # Dedicated guard filter: never part of global, api/ui/e2e or _publish fanout.
             manifest_guard:
               - 'scripts/ci/**'
@@ -1771,6 +1775,8 @@ jobs:
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-local-scheduler ENV=test-ci-local-scheduler
+      - name: Run systemd --user lifecycle CI suite
+        run: make test-local-scheduler-systemd-ci ENV=test-ci-local-scheduler-systemd
 
   validate-live-speech:
     runs-on: ubuntu-latest
@@ -3468,6 +3474,30 @@ jobs:
         if: inputs.capacity_publish_dry_run != true
         run: make publish-harness
 
+  # Gated until owner attaches npm OIDC trusted publisher after bootstrap_publish_target=local-scheduler (BR-LSCH-EX1b).
+  publish-local-scheduler:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-local-scheduler]
+    if: >-
+      false && !cancelled() && needs.changes.result == 'success' && (needs.validate-local-scheduler.result == 'success' || (needs.validate-local-scheduler.result == 'skipped' && needs.changes.outputs.tested_tree == 'true')) && (needs.changes.outputs.local_scheduler_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=local-scheduler ENV=test-ci-capacity
+      - name: Publish Local Scheduler
+        if: inputs.capacity_publish_dry_run != true
+        run: make publish-local-scheduler
+
   # N1: cluster-mesh depends on @sentropic/events and @sentropic/contracts; wait for both.
   # Release train (BRDP-EX10): also the last link after llm-mesh and llm-gateway; an upstream
   # publisher counts as skipped only when its own `*_publish` filter is false.
@@ -3683,7 +3713,7 @@ jobs:
         run: |
           set -eu
           case "$BOOTSTRAP_TARGET" in
-            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
+            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts|local-scheduler) ;;
             *) echo "::error title=Bootstrap publish::target '${BOOTSTRAP_TARGET}' is not one explicit declared package (no 'all' bootstrap)"; exit 1 ;;
           esac
       - uses: actions/checkout@v6
@@ -3764,6 +3794,9 @@ jobs:
       - name: Bootstrap publish artifacts
         if: inputs.bootstrap_publish_target == 'artifacts'
         run: make publish-artifacts-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish local-scheduler
+        if: inputs.bootstrap_publish_target == 'local-scheduler'
+        run: make publish-local-scheduler-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Qualify bootstrap-published cluster-mesh
         if: inputs.bootstrap_publish_target == 'cluster-mesh'
         run: |
@@ -4017,7 +4050,7 @@ jobs:
       publish-cowork-bridge, publish-oauth-verify, publish-mcp-auth, publish-mcp-platform,
       publish-artifacts, publish-auth-hono, publish-auth-client, publish-auth-ui,
       publish-cowork-desktop, publish-contracts, publish-events, publish-chat-core,
-      publish-chat-server, publish-comments, publish-flow, publish-harness,
+      publish-chat-server, publish-comments, publish-flow, publish-harness, publish-local-scheduler,
       bootstrap-publish]
     steps:
       - uses: actions/checkout@v6

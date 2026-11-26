@@ -121,6 +121,7 @@ test('should run E2E beside API quality checks while retaining promotion barrier
 
 test('should allow unrelated npm releases when another package fails', () => {
   const train = new Set(['publish-llm-mesh', 'publish-llm-gateway', 'publish-cluster-mesh']);
+  const gated = new Set(['publish-local-scheduler']);
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (!name.startsWith('publish-') || name.endsWith('-image') || train.has(name)) continue;
     const own = name.replace('publish-', 'validate-');
@@ -131,7 +132,7 @@ test('should allow unrelated npm releases when another package fails', () => {
     const lookup = key => key === 'github.ref' ? 'refs/heads/main'
       : key.startsWith('needs.changes.outputs.') ? 'true'
       : key === 'needs.publish-oauth-verify.result' ? 'skipped' : 'success';
-    assert.equal(evaluateSelection(job.if, lookup), true, name);
+    assert.equal(evaluateSelection(job.if, lookup), !gated.has(name), name);
     assert.equal(evaluateSelection(job.if, key => key === `needs.${own}.result` ? 'failure' : lookup(key)), false, name);
     if (name === 'publish-artifacts') {
       for (const [result, changed, expected] of [
@@ -153,6 +154,7 @@ test('should exercise the real publication DAG on a branch without running regis
   const context = { changes, ref: 'refs/heads/topic', event: 'workflow_dispatch', inputs: { capacity_publish_dry_run: true } };
   const selected = workflowExpected(workflow, context).filter(row => row.selected && row.job.startsWith('publish-'));
   assert.equal(selected.length, 21);
+  assert.ok(dryRunPackages.includes('local-scheduler'));
   for (const { job: name } of selected) {
     const steps = workflow.jobs[name].steps;
     const dry = steps.find(step => step.name === 'Dry-run package publication');

@@ -1119,7 +1119,7 @@ ci-capacity-status: ## Inspect CI_RUN_ID without cancelling or retrying any job
 	@gh run view $(CI_RUN_ID) --repo rhanka/sentropic --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,jobs --jq '{databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,pendingOrFailed: [.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | {databaseId,name,status,conclusion,startedAt,completedAt}]}'
 .PHONY: ci-capacity-publish-dry-run
 ci-capacity-publish-dry-run: ## Exercise a publisher's real guarded pack without registry writes
-	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
+	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness|local-scheduler) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
 	@$(MAKE) --no-print-directory pack-$(PACKAGE) MANIFEST_REPORT_DIR=tmp/ci-capacity/publish-$(PACKAGE) ENV=$(ENV)
 	@jq -n --arg package '$(PACKAGE)' --arg run "$$GITHUB_RUN_ID" --arg sha "$$GITHUB_SHA" '{package: $$package, runId: $$run, headSha: $$sha, mode: "guarded-pack-no-publication", completed: true}' | tee tmp/ci-capacity/publish-$(PACKAGE)/dry-run.json
 CI_EXPECTED_ATTEMPT ?= $(CI_RUN_ATTEMPT)
@@ -2420,6 +2420,62 @@ build-local-scheduler: ## Build @sentropic/local-scheduler dist package
 
 pack-local-scheduler: build-local-scheduler ## Validate @sentropic/local-scheduler npm package contents without publishing
 	$(call manifest_guard_pack,local-scheduler)
+
+.PHONY: test-local-scheduler-systemd-ci publish-local-scheduler publish-local-scheduler-token qualify-local-scheduler-host
+LOCAL_SCHEDULER_SYSTEMD_IMAGE ?= sentropic-local-scheduler-systemd-ci:$(ENV)
+test-local-scheduler-systemd-ci: build-local-scheduler ## Run @sentropic/local-scheduler systemd --user lifecycle suite in Docker (BR-LSCH-EX1b)
+	@docker build --build-arg NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" -f packages/local-scheduler/Dockerfile.systemd-ci -t "$(LOCAL_SCHEDULER_SYSTEMD_IMAGE)" packages/local-scheduler
+	@set -eu; cid="$$(docker run -d --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock -v "$(CURDIR):/workspace" -w /workspace/packages/local-scheduler "$(LOCAL_SCHEDULER_SYSTEMD_IMAGE)")"; \
+	trap 'docker rm -f "$$cid" >/dev/null 2>&1 || true' EXIT; \
+	for i in $$(seq 1 40); do \
+		st="$$(docker exec "$$cid" systemctl is-system-running 2>/dev/null || true)"; \
+		if [ "$$st" = running ] || [ "$$st" = degraded ]; then break; fi; \
+		sleep 0.25; \
+	done; \
+	docker exec "$$cid" systemctl start user@1000.service; \
+	for i in $$(seq 1 20); do \
+		if docker exec -u 1000:1000 -e XDG_RUNTIME_DIR=/run/user/1000 -e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus "$$cid" systemctl --user show --property=Version --value >/dev/null 2>&1; then break; fi; \
+		sleep 0.25; \
+	done; \
+	docker exec -u 1000:1000 -e HOME=/home/node -e XDG_RUNTIME_DIR=/run/user/1000 -e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus -w /workspace/packages/local-scheduler "$$cid" sh -lc 'set -eu; ! command -v python3 >/dev/null 2>&1; node tests/fixtures/systemd-ci-suite.mjs'
+
+publish-local-scheduler: build-local-scheduler ## Publish @sentropic/local-scheduler from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/local-scheduler \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(call manifest_guard_publish,local-scheduler,--access public)'
+
+publish-local-scheduler-token: build-local-scheduler ## Publish @sentropic/local-scheduler using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-local-scheduler in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/local-scheduler \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,local-scheduler,--access public --provenance=false)'
+
+qualify-local-scheduler-host: build-local-scheduler ## Opt-in host-only qualification for @sentropic/local-scheduler (BR-LSCH-EX2; never run in CI)
+	@node packages/local-scheduler/tests/fixtures/qualify-host.mjs
 
 IDP_SYNC_KUBECTL_IMAGE := registry.k8s.io/kubectl:v1.35.0@sha256:0bb95b2a450875fc8ceaea2f9987a99fe27c228846e2e00b93b65ebb0d59034e
 include deploy/ci/artifact-content/tests.mk
