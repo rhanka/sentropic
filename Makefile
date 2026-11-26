@@ -2437,7 +2437,8 @@ test-local-scheduler-systemd-ci: build-local-scheduler ## Run @sentropic/local-s
 		if docker exec -u 1000:1000 -e XDG_RUNTIME_DIR=/run/user/1000 -e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus "$$cid" systemctl --user show --property=Version --value >/dev/null 2>&1; then break; fi; \
 		sleep 0.25; \
 	done; \
-	docker exec -u 1000:1000 -e HOME=/home/node -e XDG_RUNTIME_DIR=/run/user/1000 -e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus -w /workspace/packages/local-scheduler "$$cid" sh -lc 'set -eu; ! command -v python3 >/dev/null 2>&1; node tests/fixtures/systemd-ci-suite.mjs'
+	docker exec "$$cid" sh -lc 'set -eu; rm -rf /home/node/pkg && mkdir -p /home/node/pkg && cp -a /workspace/packages/local-scheduler/package.json /workspace/packages/local-scheduler/dist /workspace/packages/local-scheduler/tests /home/node/pkg/ && chmod 0755 /home/node && chown -R 1000:1000 /home/node/pkg && chmod -R go-w /home/node/pkg'; \
+	docker exec -u 1000:1000 -e HOME=/home/node -e XDG_RUNTIME_DIR=/run/user/1000 -e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus -w /home/node/pkg "$$cid" sh -lc 'set -eu; ! command -v python3 >/dev/null 2>&1; node tests/fixtures/systemd-ci-suite.mjs'
 
 publish-local-scheduler: build-local-scheduler ## Publish @sentropic/local-scheduler from CI OIDC trusted publishing
 	@docker run --rm \
