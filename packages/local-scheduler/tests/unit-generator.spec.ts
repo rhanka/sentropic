@@ -74,5 +74,46 @@ describe('renderSystemdUnits', () => {
     expect(() => renderSystemdUnits(baseManifest({
       runner: { bin: '/usr/bin/node', args: ['/opt/run.mjs', 'bad\\'] },
     }))).toThrow(InvalidTaskSpecError);
+
+    for (const badEnvFile of ['/home/user/*.env', '/home/user/env?.txt', '/home/user/[a]/env', '/home/user/env"q', '/home/user/env\\b', 'relative/env']) {
+      expect(() => renderSystemdUnits(baseManifest({ envFilePath: badEnvFile }))).toThrow(InvalidTaskSpecError);
+    }
+    for (const badState of ['/var/lib/s\x00x', '/var/lib/s\rx', '/var/lib/s"x', '/var/lib/s\\x', 'rel/state']) {
+      expect(() => renderSystemdUnits(baseManifest({ stateDir: badState }))).toThrow(InvalidTaskSpecError);
+    }
+    for (const badCal of ['daily\rExecStart=/bin/sh', 'daily\\', 'daily%', '-custom']) {
+      expect(() => renderSystemdUnits(baseManifest({
+        spec: { ...baseManifest().spec, schedule: { onCalendar: badCal, persistent: true } },
+      }))).toThrow(InvalidTaskSpecError);
+    }
+    expect(() => renderSystemdUnits(baseManifest({
+      spec: { ...baseManifest().spec, description: 'bad\x00desc' },
+    }))).toThrow(InvalidTaskSpecError);
+    expect(() => renderSystemdUnits(baseManifest({
+      runner: { bin: '/usr/bin/node', args: ['/opt/run\x00.mjs'] },
+    }))).toThrow(InvalidTaskSpecError);
+  });
+
+  it('escapes quotes/backslashes/percent/dollar in non-path ExecStart args, supports custom resources and non-Node runner', () => {
+    const out = renderSystemdUnits(baseManifest({
+      spec: {
+        ...baseManifest().spec,
+        schedule: { onCalendar: 'hourly', persistent: false, randomizedDelaySec: 120, accuracySec: 30 },
+        resources: { nice: 5, ioSchedulingClass: 'best-effort', memoryMax: '1G', cpuQuota: '25%', tasksMax: 32 },
+      },
+      runner: { bin: '/opt/custom/runner$bin', args: ['a"b', 'c\\d', '100%x', '$FOO'] },
+    }));
+    expect(out.service).toContain('Nice=5');
+    expect(out.service).toContain('IOSchedulingClass=best-effort');
+    expect(out.service).toContain('MemoryMax=1G');
+    expect(out.service).toContain('CPUQuota=25%');
+    expect(out.service).toContain('TasksMax=32');
+    expect(out.service).toContain('ExecStart="/opt/custom/runner$$bin" "a\\"b" "c\\\\d" "100%%x" "$$FOO" "h2a-session-archive"');
+    expect(out.timer).toContain('OnCalendar=hourly');
+    expect(out.timer).toContain('Persistent=false');
+    expect(out.timer).toContain('RandomizedDelaySec=120');
+    expect(out.timer).toContain('AccuracySec=30');
+    expect(out.timer).toContain('Unit=sentropic-task-h2a-session-archive.service');
+    expect(out.timer).toContain('WantedBy=timers.target');
   });
 });
