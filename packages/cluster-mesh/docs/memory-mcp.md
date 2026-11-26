@@ -6,8 +6,8 @@ path: static catalog, explicit selection, qualified optional peer acquisition,
 then an in-process producer. Cataloging never opens a store. A missing,
 partial or incompatible engram peer refuses compilation before storage opens.
 
-This draft qualifies the published `@sentropic/engram` 0.22.0 (npm integrity
-`sha512-888akd0XH+ODAEU65QMLvAZLDfdgwiLlx4EiiFFy3Go+cWhLm22z48HKq2NardQ32rJm5bOIhqlwKLTnjcO+1w==`).
+This draft qualifies the published `@sentropic/engram` 0.28.0 (npm integrity
+`sha512-GkRvw9Bbo02lxMUKlacRIwllbKlPl3Hva+hSYoezM6+Xc/D2cn6RjkIKJM7KilGqrt87okQ4Y3RKPWass8zsgA==`).
 The published peer shares the private provenance instance across its public entries;
 see [published peer qualification](memory-mcp-candidate.md). A peer that splits
 that instance is refused before storage opens.
