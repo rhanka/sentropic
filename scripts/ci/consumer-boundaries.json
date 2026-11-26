@@ -22,6 +22,7 @@
     { "slug": "live-speech", "kind": "library", "validation": "validate-live-speech" },
     { "slug": "llm-gateway", "kind": "library", "validation": "validate-llm-gateway" },
     { "slug": "llm-mesh", "kind": "library", "validation": "validate-llm-mesh" },
+    { "slug": "local-scheduler", "kind": "library", "validation": "validate-local-scheduler" },
     { "slug": "mcp-auth", "kind": "library", "validation": "validate-mcp-auth" },
     { "slug": "mcp-broker", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },
     { "slug": "mcp-connector-airtable", "kind": "library", "validation": null, "note": "no dedicated validation job; changes select full blocking integration until one exists" },

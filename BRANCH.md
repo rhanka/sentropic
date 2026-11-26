@@ -64,7 +64,7 @@ Implement Lot S1 of `spec/SPEC_EVOL_LOCAL_SCHEDULED_TASKS.md`: core `@sentropic/
   - [ ] Push, open PR, keep `BRANCH.md` until pre-merge cleanup, watch CI checks.
 
 - [ ] **Lot 5 — r2 CI registration (`BR-LSCH-EX1a'`) & full test suite coverage**
-  - [ ] Register `local-scheduler` in `scripts/ci/consumer-boundaries.json`, `scripts/ci/publishable-manifests.mjs` (`PACK_TARGETS`), and update CI count assertions in `scripts/ci/consumer-contracts.test.mjs` and `scripts/ci/ci-expected-results.test.mjs`.
+  - [x] Register `local-scheduler` in `scripts/ci/consumer-boundaries.json`, `scripts/ci/publishable-manifests.mjs` (`PACK_TARGETS`), and update CI count assertions in `scripts/ci/consumer-contracts.test.mjs` and `scripts/ci/ci-expected-results.test.mjs`.
   - [ ] Add `pack-local-scheduler` in `Makefile` and `validate-local-scheduler` CI pack lane in `.github/workflows/ci.yml`.
   - [ ] Expand `tests/contract.spec.ts` (errors, spec bounds, allowlist/shebang/symlinks, `assertHostPidNamespace`).
   - [ ] Expand `tests/unit-generator.spec.ts` (control/glob/quote/backslash/`$`/`$$` escaping, non-Node runner, timer/resources).
