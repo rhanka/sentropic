@@ -89,6 +89,15 @@ describe('runner integration (m-27, m-30, B-5 #2)', () => {
     expect(okRes.witness?.trigger).toBe('systemd-timer');
     expect(statSync(path.join(stateDir, 'tasks', 'runner-task', 'last-run.json')).mode & 0o777).toBe(0o600);
 
+    const shebangScript = path.join(stateDir, 'h2a-bin.js');
+    writeFileSync(shebangScript, '#!/usr/bin/env node\nconsole.log("shebang-ok");\n', { mode: 0o755 });
+    const shebangRes = await runScheduledTaskInternal(
+      makeManifest(stateDir, shebangScript),
+      { allowedBins: [process.execPath], allowedScripts: [shebangScript], stateDir, env },
+      { hostPidGuard: passHost },
+    );
+    expect(shebangRes).toMatchObject({ outcome: 'succeeded', exitCode: 0 });
+
     const ksRes = await runScheduledTaskInternal(
       makeManifest(stateDir, script, { command: { bin: '/bin/sh', args: ['-c', 'true'] } }),
       { allowedBins: [process.execPath], allowedScripts: [script], stateDir, env: { ...env, RUNNER_TEST_OFF: '1' } },

@@ -107,6 +107,5 @@ export function validateAllowedExecutable(
   if (!canonicalAllowedScripts.has(canonicalScript)) {
     throw new PolicyRefusalError('POLICY_REFUSED_ALLOWLIST', 'allowlist', `${role} script is not in allowedScripts: ${canonicalScript}`);
   }
-  checkShebangSafety(canonicalScript, `${role} script`);
   return { canonicalBin, canonicalScript };
 }

@@ -3,8 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { validateAllowedExecutable } from '../src/allowlist.js';
-import { assertHostPidNamespace, type HostPidNamespaceProbes } from '../src/host-pid-guard.js';
+import { assertHostPidNamespaceWith, type HostPidNamespaceProbes } from '../src/host-pid-guard.js';
 import {
+  assertHostPidNamespace,
   InvalidTaskSpecError, LocalSchedulerError, ManifestCorruptError, PolicyRefusalError,
   SchedulerUnavailableError, SystemctlFailedError, TaskNotFoundError, UnmanagedUnitError,
   validateTaskSpec, type LocalTaskSpecV1,
@@ -59,12 +60,17 @@ describe('validateTaskSpec', () => {
 });
 
 describe('validateAllowedExecutable', () => {
-  it('accepts canonical Node binary + allowed script', () => {
+  it('accepts canonical Node binary + allowed script (including #!/usr/bin/env node entry script)', () => {
     const dir = makeTmpDir();
     const script = path.join(dir, 'entry.mjs');
     writeFileSync(script, 'console.log("ok");\n', { mode: 0o600 });
     const res = validateAllowedExecutable(process.execPath, [script, '--scheduled'], [process.execPath], [script], 'command');
     expect(res.canonicalScript).toBeDefined();
+
+    const envShebangScript = path.join(dir, 'h2a-bin.js');
+    writeFileSync(envShebangScript, '#!/usr/bin/env node\nconsole.log("ok");\n', { mode: 0o755 });
+    const envRes = validateAllowedExecutable(process.execPath, [envShebangScript, 'archive', 'run'], [process.execPath], [envShebangScript], 'command');
+    expect(envRes.canonicalScript).toBe(envShebangScript);
   });
 
   it('rejects relative paths, denylisted binaries, node -e, bad shebangs, and writable scripts', () => {
@@ -150,15 +156,20 @@ describe('error hierarchy, spec bounds & assertHostPidNamespace', () => {
     expect(() => validateTaskSpec(baseSpec({ resources: { tasksMax: 7 } }))).toThrow(InvalidTaskSpecError);
   });
 
-  it('enforces 3-part cumulative host PID namespace proof (§3.4)', () => {
+  it('enforces 3-part cumulative host PID namespace proof (§3.4) and frozen §4.2 zero-arg signature', () => {
+    type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
+    const exactSig: Equals<typeof assertHostPidNamespace, () => void> = true;
+    expect(exactSig).toBe(true);
+    expect(assertHostPidNamespace.length).toBe(0);
+
     const valid: HostPidNamespaceProbes = {
       platform: 'linux',
       readLink: () => 'pid:[4026531836]',
       statUid: () => 0,
       readText: (p) => (p.endsWith('comm') ? 'systemd\n' : '0::/init.scope\n'),
     };
-    expect(() => assertHostPidNamespace(valid)).not.toThrow();
-    expect(() => assertHostPidNamespace({ ...valid, readText: (p) => (p.endsWith('comm') ? 'init\n' : '0::/init.scope\n') })).not.toThrow();
+    expect(() => assertHostPidNamespaceWith(valid)).not.toThrow();
+    expect(() => assertHostPidNamespaceWith({ ...valid, readText: (p) => (p.endsWith('comm') ? 'init\n' : '0::/init.scope\n') })).not.toThrow();
     const badCases: HostPidNamespaceProbes[] = [
       { ...valid, platform: 'darwin' },
       { ...valid, readLink: () => { throw new Error('ENOENT'); } },
@@ -168,7 +179,7 @@ describe('error hierarchy, spec bounds & assertHostPidNamespace', () => {
       { ...valid, readText: (p) => (p.endsWith('comm') ? 'systemd\n' : '0::/user.slice/user-1000.scope\n') },
     ];
     for (const probe of badCases) {
-      expect(() => assertHostPidNamespace(probe)).toThrow(PolicyRefusalError);
+      expect(() => assertHostPidNamespaceWith(probe)).toThrow(PolicyRefusalError);
     }
   });
 });

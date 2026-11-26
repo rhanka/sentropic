@@ -8,7 +8,7 @@ import path from 'node:path';
 import { isPlainObject, validateTaskSpec } from './contract.js';
 import type { LocalTaskManifestV1 } from './contract-types.js';
 import { PolicyRefusalError } from './errors.js';
-import { assertHostPidNamespace, type HostPidNamespaceProbes } from './host-pid-guard.js';
+import { assertHostPidNamespace, assertHostPidNamespaceWith, type HostPidNamespaceProbes } from './host-pid-guard.js';
 
 export interface StateDirObservabilityResult {
   readonly observable: boolean;
@@ -30,7 +30,7 @@ export function resolveSchedulerEnvFilePath(env: NodeJS.ProcessEnv = process.env
   const xdgConfig = env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
   return path.join(xdgConfig, 'sentropic', 'local-scheduler', 'env');
 }
-export function probeStateDirObservability(
+export function probeStateDirObservabilityWith(
   stateDir: string,
   hostPidProbes?: HostPidNamespaceProbes,
 ): StateDirObservabilityResult {
@@ -43,7 +43,8 @@ export function probeStateDirObservability(
     const code = (err as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') {
       try {
-        assertHostPidNamespace(hostPidProbes);
+        if (hostPidProbes) assertHostPidNamespaceWith(hostPidProbes);
+        else assertHostPidNamespace();
         return { observable: true };
       } catch {
         return { observable: false, reason: 'absent-outside-host-namespace' };
@@ -52,6 +53,9 @@ export function probeStateDirObservability(
     if (code === 'ENOTDIR') return { observable: false, reason: 'not-a-directory' };
     return { observable: false, reason: 'inaccessible' };
   }
+}
+export function probeStateDirObservability(stateDir: string): StateDirObservabilityResult {
+  return probeStateDirObservabilityWith(stateDir);
 }
 export function verifyOwnedPrivatePath(targetPath: string, kind: 'dir' | 'file'): Stats {
   let st: Stats;

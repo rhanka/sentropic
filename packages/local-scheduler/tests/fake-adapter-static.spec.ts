@@ -87,6 +87,15 @@ describe('createFakeSchedulerAdapter', () => {
 
     await adapter.uninstall('h2a-session-archive', { purgeState: true });
     await expect(adapter.disable('h2a-session-archive')).rejects.toThrow(TaskNotFoundError);
+
+    // Canonical h2a entry script with #!/usr/bin/env node shebang is accepted by enable() (B-1)
+    const shebangScript = path.join(root, 'h2a-dist-bin.js');
+    writeFileSync(shebangScript, '#!/usr/bin/env node\nconsole.log("archive");\n', { mode: 0o755 });
+    const shebangEnabled = await adapter.enable(
+      { ...spec, command: { bin: process.execPath, args: [shebangScript, 'archive', 'run'] } },
+      { runner: { bin: process.execPath, args: [shebangScript, 'archive', '_schedule-exec'] }, allowedBins: [process.execPath], allowedScripts: [shebangScript] },
+    );
+    expect(shebangEnabled.manifest.enabled).toBe(true);
   });
 });
 
@@ -111,7 +120,12 @@ describe('static architectural and packaging guards (m-26, m-32(i), §6.1, §6.2
     expect(pkgJson.dependencies).toEqual({});
     expect(pkgJson.files).toEqual(['dist', 'README.md', 'LICENSE']);
     expect(Object.keys(pkgJson.exports)).toEqual(['.', './runner', './systemd']);
+    expect(pkgJson.exports['./runner']).toEqual({ types: './dist/runner-public.d.ts', import: './dist/runner-public.js' });
     expect(JSON.stringify(pkgJson.exports)).not.toContain('Internal');
+
+    const runnerTargetSrc = (pkgJson.exports['./runner'].import as string).replace(/^\.\/dist\//, '../src/');
+    const runnerMod = await import(runnerTargetSrc);
+    expect(Object.keys(runnerMod).sort()).toEqual(['runScheduledTask', 'runScheduledTaskById']);
 
     const rootMod = await import('../src/index.js');
     for (const sym of [

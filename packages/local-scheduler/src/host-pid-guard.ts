@@ -26,11 +26,11 @@ function sandboxRefusal(reason: string): never {
 }
 
 /**
- * Verifies the cumulative 3-part Linux host init PID namespace proof (§3.4).
- * Fails closed with PolicyRefusalError (exit 77) on any mismatch or unreadable /proc file.
+ * Verifies the cumulative 3-part Linux host init PID namespace proof (§3.4) using injected probes.
+ * Package-internal only; never exported from the public entrypoint.
  */
-export function assertHostPidNamespace(probes?: HostPidNamespaceProbes): void {
-  const p = probes ?? DEFAULT_PROBES;
+export function assertHostPidNamespaceWith(probes: HostPidNamespaceProbes): void {
+  const p = probes;
   if (p.platform !== 'linux') {
     sandboxRefusal(`unsupported platform ${p.platform}`);
   }
@@ -66,4 +66,12 @@ export function assertHostPidNamespace(probes?: HostPidNamespaceProbes): void {
   if (!cgroup.split(/\r?\n/).some((line) => line.trim() === '0::/init.scope')) {
     sandboxRefusal('/proc/1/cgroup does not contain 0::/init.scope');
   }
+}
+
+/**
+ * Verifies the cumulative 3-part Linux host init PID namespace proof (§3.4).
+ * Fails closed with PolicyRefusalError (exit 77) on any mismatch or unreadable /proc file.
+ */
+export function assertHostPidNamespace(): void {
+  assertHostPidNamespaceWith(DEFAULT_PROBES);
 }

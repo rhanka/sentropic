@@ -17,8 +17,8 @@
       "import": "./dist/index.js"
     },
     "./runner": {
-      "types": "./dist/runner.d.ts",
-      "import": "./dist/runner.js"
+      "types": "./dist/runner-public.d.ts",
+      "import": "./dist/runner-public.js"
     },
     "./systemd": {
       "types": "./dist/systemd/unit-generator.d.ts",

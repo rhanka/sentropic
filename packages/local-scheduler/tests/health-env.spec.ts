@@ -3,10 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  evaluateKillSwitch, evaluateTaskHealth, parseSchedulerEnvFile,
-  type LocalTaskManifestV1, type LocalTaskWitnessV1,
+  evaluateKillSwitch, evaluateTaskHealth, parseSchedulerEnvFile, probeStateDirObservability,
+  type LocalTaskManifestV1, type LocalTaskWitnessV1, type StateDirObservabilityResult,
 } from '../src/index.js';
-import { probeStateDirObservability } from '../src/state-dir.js';
+import { probeStateDirObservabilityWith } from '../src/state-dir.js';
 
 const tmpDirs: string[] = [];
 const makeTmp = () => { const d = mkdtempSync(path.join(os.tmpdir(), 'lsch-health-')); tmpDirs.push(d); return d; };
@@ -47,26 +47,31 @@ describe('parseSchedulerEnvFile & evaluateKillSwitch', () => {
 });
 
 describe('probeStateDirObservability', () => {
-  it('covers all 5 observability rules (m-32(b))', () => {
+  it('covers all 5 observability rules (m-32(b)) and frozen §4.2 single-arg signature', () => {
+    type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
+    const exactSig: Equals<typeof probeStateDirObservability, (stateDir: string) => StateDirObservabilityResult> = true;
+    expect(exactSig).toBe(true);
+    expect(probeStateDirObservability.length).toBe(1);
+
     const dir = makeTmp();
     const hostPass = { platform: 'linux' as const, readLink: () => 'pid:[4026531836]', statUid: () => 0, readText: (p: string) => (p.endsWith('comm') ? 'systemd\n' : '0::/init.scope\n') };
     const hostFail = { ...hostPass, readLink: () => 'pid:[4026539999]' };
-    expect(probeStateDirObservability(dir, hostFail)).toEqual({ observable: true });
-    expect(probeStateDirObservability(path.join(dir, 'missing'), hostPass)).toEqual({ observable: true });
-    expect(probeStateDirObservability(path.join(dir, 'missing'), hostFail)).toEqual({ observable: false, reason: 'absent-outside-host-namespace' });
+    expect(probeStateDirObservabilityWith(dir, hostFail)).toEqual({ observable: true });
+    expect(probeStateDirObservabilityWith(path.join(dir, 'missing'), hostPass)).toEqual({ observable: true });
+    expect(probeStateDirObservabilityWith(path.join(dir, 'missing'), hostFail)).toEqual({ observable: false, reason: 'absent-outside-host-namespace' });
 
     const regFile = path.join(dir, 'file');
     writeFileSync(regFile, 'x');
-    expect(probeStateDirObservability(regFile, hostPass)).toEqual({ observable: false, reason: 'not-a-directory' });
-    expect(probeStateDirObservability(path.join(regFile, 'child'), hostPass)).toEqual({ observable: false, reason: 'not-a-directory' });
+    expect(probeStateDirObservabilityWith(regFile, hostPass)).toEqual({ observable: false, reason: 'not-a-directory' });
+    expect(probeStateDirObservabilityWith(path.join(regFile, 'child'), hostPass)).toEqual({ observable: false, reason: 'not-a-directory' });
     const linkPath = path.join(dir, 'link');
     symlinkSync(dir, linkPath);
-    expect(probeStateDirObservability(linkPath, hostPass)).toEqual({ observable: false, reason: 'not-a-directory' });
+    expect(probeStateDirObservabilityWith(linkPath, hostPass)).toEqual({ observable: false, reason: 'not-a-directory' });
     if (process.getuid?.() !== 0) {
       const noRead = path.join(dir, 'chmod0');
       mkdirSync(noRead);
       chmodSync(noRead, 0o000);
-      expect(probeStateDirObservability(noRead, hostPass)).toEqual({ observable: false, reason: 'inaccessible' });
+      expect(probeStateDirObservabilityWith(noRead, hostPass)).toEqual({ observable: false, reason: 'inaccessible' });
       chmodSync(noRead, 0o700);
     }
   });
