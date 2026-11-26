@@ -46,11 +46,11 @@ Close carried S2 review items (`S2-5` to `S2-12`) from `.tmp/rv/local-scheduler-
   - [x] Confirm `S2-4` already resolved on `origin/main` (`173c98a184`) and `R2-8` closed at S1 merge.
   - [x] Declare `BR-LSCH-EX3` for `Makefile` (`S2-6`) and `package-lock.json` (`0.2.1`).
 
-- [ ] **Lot 1 — Probe, calendar & unavailability fixes (`S2-7`, `S2-8`, `S2-9`, `S2-12`)**
-  - [ ] `S2-8`: map `systemd-analyze` timeout to `SchedulerUnavailableError('timeout')` in `src/systemd/calendar.ts`.
-  - [ ] `S2-9`: emit actionable `SchedulerUnavailableError` message in `src/systemd/systemctl.ts` and `src/systemd/calendar.ts`.
-  - [ ] `S2-12`: add internal deps seam on `probeLingerEnabledWith` and unit test for numeric-UID fallback.
-  - [ ] `S2-7`: spell out `Omit<LocalTaskManifestV1, 'units'>` in `eqRender` in `tests/systemd-probes.spec.ts`.
+- [x] **Lot 1 — Probe, calendar & unavailability fixes (`S2-7`, `S2-8`, `S2-9`, `S2-12`)**
+  - [x] `S2-8`: map `systemd-analyze` timeout to `SchedulerUnavailableError('timeout')` in `src/systemd/calendar.ts`.
+  - [x] `S2-9`: emit actionable `SchedulerUnavailableError` message in `src/systemd/systemctl.ts` and `src/systemd/calendar.ts`.
+  - [x] `S2-12`: add internal deps seam on `probeLingerEnabledWith` and unit test for numeric-UID fallback.
+  - [x] `S2-7`: spell out `Omit<LocalTaskManifestV1, 'units'>` in `eqRender` in `tests/systemd-probes.spec.ts`.
 
 - [ ] **Lot 2 — Adapter parity & unit test gaps (`S2-5` unit cases, `S2-10`)**
   - [ ] `S2-10`: align `createFakeSchedulerAdapter.enable` (`src/adapter.ts`) to throw `ManifestCorruptError` on corrupt previous manifest.
