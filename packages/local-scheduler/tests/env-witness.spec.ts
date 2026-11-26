@@ -94,6 +94,11 @@ describe('witness atomicity, schema validation & skips.jsonl', () => {
       writeFileSync(p, JSON.stringify(payload), { mode: 0o600 });
       expect(readTaskWitness(stateDir, 'h2a-session-archive')).toBe('corrupt');
     }
+    // m-1: non-global regex must reject control char at index 0 immediately after rejecting index > 0
+    writeFileSync(p, JSON.stringify({ ...baseWitness(), summary: 'abc\x00def' }), { mode: 0o600 });
+    expect(readTaskWitness(stateDir, 'h2a-session-archive')).toBe('corrupt');
+    writeFileSync(p, JSON.stringify({ ...baseWitness(), summary: '\x00abc' }), { mode: 0o600 });
+    expect(readTaskWitness(stateDir, 'h2a-session-archive')).toBe('corrupt');
     writeFileSync(p, '{broken json', { mode: 0o600 });
     expect(readTaskWitness(stateDir, 'h2a-session-archive')).toBe('corrupt');
 

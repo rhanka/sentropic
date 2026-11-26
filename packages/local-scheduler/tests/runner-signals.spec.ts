@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createFakeSchedulerAdapter, type LocalTaskManifestV1 } from '../src/index.js';
+import { createFakeSchedulerAdapter, PolicyRefusalError, type LocalTaskManifestV1 } from '../src/index.js';
 import { appendRunLog, rotateLogFile, SKIPS_LOG_MAX_BYTES, truncateLogExcerpt } from '../src/log-rotator.js';
 import { runScheduledTaskInternal } from '../src/runner.js';
 import { renderSystemdUnits } from '../src/systemd/unit-generator.js';
@@ -147,7 +147,9 @@ describe('runner contention, SIGTERM interruption, and log rotation', () => {
     // Oversized skips.jsonl is NOT rotated by sandbox refusal (step 2), IS rotated by lock holder (step 8)
     const skipsPath = path.join(stateDir, 'tasks', 'sig-task', 'skips.jsonl');
     writeFileSync(skipsPath, 'x'.repeat(SKIPS_LOG_MAX_BYTES + 64), { mode: 0o600 });
-    await runScheduledTaskInternal(manifest, { allowedBins: [process.execPath], allowedScripts: [script], stateDir });
+    await runScheduledTaskInternal(manifest, { allowedBins: [process.execPath], allowedScripts: [script], stateDir }, {
+      hostPidGuard: () => { throw new PolicyRefusalError('POLICY_REFUSED_SANDBOX', 'sandbox', 'simulated sandbox'); },
+    });
     expect(existsSync(`${skipsPath}.1`)).toBe(false);
 
     const okManifest: LocalTaskManifestV1 = {

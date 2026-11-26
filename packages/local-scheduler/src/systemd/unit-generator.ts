@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { isNodeInterpreter } from '../allowlist.js';
-import { hasControlChars } from '../contract.js';
+import { hasControlChars, validateTaskSpec } from '../contract.js';
 import {
   BLOCKED_LOADER_ENV_VARS,
   ON_CALENDAR_CUSTOM_REGEX,
@@ -57,6 +57,7 @@ export function renderSystemdUnits(manifest: Omit<LocalTaskManifestV1, 'units'>)
   readonly timerSha256: string;
 } {
   const { spec, runner } = manifest;
+  validateTaskSpec(spec);
   rejectInvalidUnitText(spec.description, 'description');
   if (spec.description.includes('%') || spec.description.includes('\\')) {
     throw new InvalidTaskSpecError('INVALID_TASK_SPEC', 'description must not contain % or \\', 'description');

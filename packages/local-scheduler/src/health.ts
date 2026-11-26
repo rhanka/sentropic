@@ -145,5 +145,8 @@ export function evaluateTaskHealth(input: EvaluateTaskHealthInput): LocalTaskHea
       opsReason: 'schedule-missed',
     });
   }
+  if (w.outcome === 'skipped_disabled') {
+    return finish('pending_first_run', 'ok', 'awaiting first scheduled run');
+  }
   return finish('healthy', 'ok', `last run succeeded at ${w.finishedAt}`);
 }

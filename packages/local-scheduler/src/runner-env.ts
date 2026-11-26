@@ -139,6 +139,9 @@ export function verifyDirectManifestAndStateDir(
     verifyOwnedPrivatePath(taskDir, 'dir');
   } catch (err) {
     if (err instanceof LocalSchedulerError) throw err;
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new PolicyRefusalError('POLICY_REFUSED_FILE_MODE', 'file-mode', `Unsafe task directory: ${taskDir}`, { cause: err });
+    }
   }
   return { resolvedStateDir, verifiedManifest: manifest };
 }

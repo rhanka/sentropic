@@ -45,18 +45,23 @@ export function persistOutcomeAndRelease(params: {
   readonly lock: TaskLockHandle;
   readonly stdout: (s: string) => void;
   readonly beforeWitnessWrite?: () => void;
+  readonly beforeRunLogAppend?: () => void;
 }): RunScheduledTaskResultV1 {
-  const { stateDir, manifest, trigger, witness, exitCode, excerpt, error, lock, stdout, beforeWitnessWrite } = params;
+  const { stateDir, manifest, trigger, witness, exitCode, excerpt, error, lock, stdout, beforeWitnessWrite, beforeRunLogAppend } = params;
   const spec = manifest.spec;
+  let writtenWitness: LocalTaskWitnessV1 | null = null;
   try {
     beforeWitnessWrite?.();
-    const logPath = appendRunLog(stateDir, spec.taskId, {
+    const logPath = path.join(stateDir, 'tasks', spec.taskId, 'runs.log');
+    const finalWitness: LocalTaskWitnessV1 = { ...witness, logPath };
+    writeTaskWitnessAtomic(stateDir, spec.taskId, finalWitness);
+    writtenWitness = finalWitness;
+    beforeRunLogAppend?.();
+    appendRunLog(stateDir, spec.taskId, {
       v: 1, taskId: spec.taskId, runId: witness.runId, trigger, outcome: witness.outcome,
       durationMs: witness.durationMs, exitCode: witness.exitCode, signal: witness.signal,
       consecutiveFailures: witness.consecutiveFailures,
     }, excerpt);
-    const finalWitness: LocalTaskWitnessV1 = { ...witness, logPath };
-    writeTaskWitnessAtomic(stateDir, spec.taskId, finalWitness);
     rotateSkipsLog(stateDir, spec.taskId);
     stdout(`${JSON.stringify({
       v: 1, taskId: spec.taskId, runId: witness.runId, trigger, outcome: finalWitness.outcome,
@@ -67,7 +72,7 @@ export function persistOutcomeAndRelease(params: {
     return { outcome: finalWitness.outcome, exitCode, witness: finalWitness, ...(error ? { error } : {}) };
   } catch (err) {
     try { lock.release(); } catch { /* ignore */ }
-    return { outcome: witness.outcome, exitCode: 70, witness: null, error: { code: 'RUNNER_INTERNAL_ERROR', message: (err as Error).message } };
+    return { outcome: witness.outcome, exitCode: 70, witness: writtenWitness, error: { code: 'RUNNER_INTERNAL_ERROR', message: (err as Error).message } };
   }
 }
 export function acquireRunnerLock(params: {

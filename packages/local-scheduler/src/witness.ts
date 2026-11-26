@@ -49,13 +49,16 @@ const WITNESS_KEYS = new Set<string>([
   'durationMs', 'outcome', 'exitCode', 'signal', 'killSwitch', 'refusal',
   'consecutiveFailures', 'lastSuccessAt', 'lastSuccessRunId', 'summary', 'logPath',
 ]);
-const CONTROL_CHARS = /[\x00-\x1f\x7f]/g;
+const CONTROL_CHARS_GLOBAL = /[\x00-\x1f\x7f]/g;
+const CONTROL_CHARS_TEST = /[\x00-\x1f\x7f]/;
 
 export function sanitizeWitnessSummary(raw: string): string {
-  const cleaned = raw.replace(CONTROL_CHARS, ' ').trim();
-  let end = cleaned.length;
-  while (end > 0 && Buffer.byteLength(cleaned.slice(0, end), 'utf8') > 512) end -= 1;
-  return cleaned.slice(0, end);
+  const cleaned = raw.replace(CONTROL_CHARS_GLOBAL, ' ').trim();
+  const buf = Buffer.from(cleaned, 'utf8');
+  if (buf.length <= 512) return cleaned;
+  let end = 512;
+  while (end > 0 && (buf[end] & 0xc0) === 0x80) end -= 1;
+  return buf.subarray(0, end).toString('utf8');
 }
 
 export function isValidTaskWitness(raw: unknown, expectedTaskId?: string): raw is LocalTaskWitnessV1 {
@@ -79,7 +82,7 @@ export function isValidTaskWitness(raw: unknown, expectedTaskId?: string): raw i
   if (raw.outcome === 'refused_policy') {
     if (raw.refusal !== 'allowlist' && raw.refusal !== 'file-mode') return false;
   } else if (raw.refusal !== undefined) return false;
-  if (raw.summary !== undefined && (typeof raw.summary !== 'string' || CONTROL_CHARS.test(raw.summary) || Buffer.byteLength(raw.summary, 'utf8') > 512)) {
+  if (raw.summary !== undefined && (typeof raw.summary !== 'string' || CONTROL_CHARS_TEST.test(raw.summary) || Buffer.byteLength(raw.summary, 'utf8') > 512)) {
     return false;
   }
   return raw.logPath === undefined || typeof raw.logPath === 'string';

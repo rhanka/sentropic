@@ -29,6 +29,7 @@ export interface RunnerInternalDeps {
     readonly beforeLockPublish?: () => void;
     readonly beforePreSpawnRewrite?: () => void;
     readonly beforeWitnessWrite?: () => void;
+    readonly beforeRunLogAppend?: () => void;
   };
 }
 /** @internal Package-internal execution seam (never exported in package.json). */
@@ -81,7 +82,7 @@ export async function runScheduledTaskInternal(
     exitCode: RunScheduledTaskResultV1['exitCode'],
     excerpt: string,
     error?: RunScheduledTaskResultV1['error'],
-  ) => persistOutcomeAndRelease({ stateDir, manifest: verifiedManifest, trigger, witness, exitCode, excerpt, error, lock, stdout, beforeWitnessWrite: deps.hooks?.beforeWitnessWrite });
+  ) => persistOutcomeAndRelease({ stateDir, manifest: verifiedManifest, trigger, witness, exitCode, excerpt, error, lock, stdout, beforeWitnessWrite: deps.hooks?.beforeWitnessWrite, beforeRunLogAppend: deps.hooks?.beforeRunLogAppend });
   const ks = evaluateKillSwitch(env, spec);
   if (ks) {
     return finish({
@@ -119,13 +120,16 @@ export async function runScheduledTaskInternal(
   const runRes = await awaitDetachedChild(child, spec.timeoutMs, spec.killGraceMs ?? 15_000, deps.perfNow);
   const finishedAt = nowIso();
   const nextFailures = runRes.outcome === 'succeeded' ? 0 : runRes.outcome === 'interrupted' ? prevFailures : prevFailures + 1;
+  const summary = sanitizeWitnessSummary(
+    `outcome=${runRes.outcome} exitCode=${runRes.exitCode ?? 'null'}${runRes.signal ? ` signal=${runRes.signal}` : ''}`,
+  );
   return finish({
     v: 1, taskId: spec.taskId, owner: spec.owner, runId, trigger, host, pid: process.pid,
     startedAt, finishedAt, durationMs: runRes.durationMs, outcome: runRes.outcome,
     exitCode: runRes.exitCode, signal: runRes.signal, consecutiveFailures: nextFailures,
     lastSuccessAt: runRes.outcome === 'succeeded' ? finishedAt : prevSuccessAt,
     lastSuccessRunId: runRes.outcome === 'succeeded' ? runId : prevSuccessRunId,
-    ...(runRes.excerpt ? { summary: sanitizeWitnessSummary(runRes.excerpt) } : {}),
+    summary,
   }, runRes.runnerExitCode, runRes.excerpt);
 }
 export async function runScheduledTaskByIdInternal(taskId: string, opts: RunScheduledTaskOptionsV1, deps: RunnerInternalDeps = {}): Promise<RunScheduledTaskResultV1> {
