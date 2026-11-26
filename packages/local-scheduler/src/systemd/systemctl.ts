@@ -72,9 +72,13 @@ export async function probeLingerEnabledWith(execFn: ExecFileFn = defaultExecFil
   }
 }
 
-export async function runSystemctl(args: readonly string[], execFn: ExecFileFn = defaultExecFile): Promise<string> {
+export async function runSystemctl(
+  args: readonly string[],
+  execFn: ExecFileFn = defaultExecFile,
+  env?: NodeJS.ProcessEnv,
+): Promise<string> {
   try {
-    const { stdout } = await execFn('systemctl', ['--user', ...args], { timeout: 10_000 });
+    const { stdout } = await execFn('systemctl', ['--user', ...args], { timeout: 10_000, ...(env ? { env } : {}) });
     return stdout;
   } catch (err) {
     const e = err as Error & { stderr?: string };

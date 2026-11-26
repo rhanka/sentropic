@@ -41,6 +41,7 @@ describe('SystemdUserAdapter lifecycle, safety, rollback (m-29), and status (m-2
       if (file === 'systemctl' && args.includes('--property=Version')) return { stdout: '259\n', stderr: '' };
       if (file === 'loginctl') return { stdout: 'no\n', stderr: '' };
       if (file === 'systemctl' && args[1] === 'is-active') return { stdout: 'active\n', stderr: '' };
+      if (file === 'systemctl' && args[1] === 'clean') throw Object.assign(new Error('clean'), { stderr: 'Failed to clean unit: No matching resources found.' });
       if (file === 'systemd-analyze') {
         return { stdout: 'Next elapse: Thu 2026-11-26 00:00:00 UTC\nIteration #2: Fri 2026-11-27 00:00:00 UTC\n', stderr: '' };
       }
@@ -86,16 +87,20 @@ describe('SystemdUserAdapter lifecycle, safety, rollback (m-29), and status (m-2
 
     let failEnable = true;
     const cmds: string[] = [];
-    let showMode: '203' | '77-allow' | '77-prelock' = '203';
-    const execFile: ExecFileFn = async (file, args) => {
+    let showMode: '203' | '77-allow' | '77-prelock' | '77-badts' = '203';
+    const showEnvs: Array<NodeJS.ProcessEnv | undefined> = [];
+    const execFile: ExecFileFn = async (file, args, opts) => {
       cmds.push(`${file} ${args.join(' ')}`);
       if (file === 'systemctl' && args.includes('--property=Version')) return { stdout: '252\n', stderr: '' };
       if (file === 'loginctl') return { stdout: 'yes\n', stderr: '' };
       if (file === 'systemctl' && args[1] === 'enable' && failEnable) throw Object.assign(new Error('enable failed'), { stderr: 'Unit failed' });
       if (file === 'systemctl' && args[1] === 'show' && args.includes('sentropic-task-sd-task.service')) {
-        return { stdout: `ActiveState=failed\nResult=exit-code\nExecMainStatus=${showMode === '203' ? 203 : 77}\nExecMainExitTimestamp=Thu 2026-11-26 01:00:00 UTC\n`, stderr: '' };
+        showEnvs.push(opts.env);
+        const exitTs = showMode === '77-badts' ? 'Thu 2026-11-26 01:00:00 CET' : 'Thu 2026-11-26 01:00:00 UTC';
+        return { stdout: `ActiveState=failed\nResult=exit-code\nExecMainStatus=${showMode === '203' ? 203 : 77}\nExecMainExitTimestamp=${exitTs}\n`, stderr: '' };
       }
       if (file === 'systemctl' && args[1] === 'show') {
+        showEnvs.push(opts.env);
         return { stdout: 'UnitFileState=enabled\nActiveState=active\nNextElapseUSecRealtime=n/a\nLastTriggerUSec=\nLastTriggerUSecMonotonic=0\n', stderr: '' };
       }
       return { stdout: '', stderr: '' };
@@ -125,6 +130,17 @@ describe('SystemdUserAdapter lifecycle, safety, rollback (m-29), and status (m-2
     });
     showMode = '77-allow';
     expect((await adapter.status('sd-task')).systemd).toMatchObject({ execMainStatus: 77, execDiagnostic: expect.stringContaining('command refused by the allow-list (allowlist)') });
+    expect(showEnvs.every((e) => e?.TZ === 'UTC' && e?.LC_ALL === 'C')).toBe(true);
+    showMode = '77-badts';
+    expect((await adapter.status('sd-task')).systemd).toMatchObject({ execMainStatus: 77, execDiagnostic: expect.stringContaining('refused before the lock') });
+    writeTaskWitnessAtomic(stateDir, 'sd-task', {
+      v: 1, taskId: 'sd-task', owner: 'h2a', runId: 'r-77-stale', trigger: 'systemd-timer', host: 'ws', pid: 10,
+      startedAt: '2026-11-26T00:59:49.000Z', finishedAt: '2026-11-26T00:59:50.000Z', durationMs: 10,
+      outcome: 'refused_policy', exitCode: null, signal: null, refusal: 'allowlist', consecutiveFailures: 1,
+      lastSuccessAt: null, lastSuccessRunId: null,
+    });
+    showMode = '77-allow';
+    expect((await adapter.status('sd-task')).systemd).toMatchObject({ execMainStatus: 77, execDiagnostic: expect.stringContaining('refused before the lock') });
 
     const downAdapter = createSystemdUserAdapterInternal({
       stateDir, hostPidGuard: passHost, execFile: async () => { throw Object.assign(new Error('no dbus'), { stderr: 'Failed to connect to bus' }); },

@@ -90,6 +90,13 @@ try {
   await assert.rejects(rbAdapter.enable(makeSpec('ci-rb', [taskOk, 'ok']), makePolicy([ciRunner, taskOk], [ciRunner, taskOk])), { code: 'SYSTEMCTL_FAILED', rolledBack: true });
   assert.equal(existsSync(path.join(unitDir, 'sentropic-task-ci-rb.service')), false);
 
+  // 3c. Non-persistent timer enable + uninstall (clean --what=state returns NothingToClean)
+  const npUnits = await adapter.enable(makeSpec('ci-np', [taskOk, 'ok'], { schedule: { onCalendar: 'daily', persistent: false } }), makePolicy([ciRunner, taskOk], [ciRunner, taskOk]));
+  await adapter.uninstall('ci-np', { unitDir, stateDir, runtime: true, purgeState: false });
+  assert.equal(existsSync(npUnits.servicePath), false);
+  assert.equal(existsSync(npUnits.timerPath), false);
+  assert.equal(existsSync(path.join(stateDir, 'tasks', 'ci-np', 'manifest.json')), false);
+
   // 4. SuccessExitStatus=130 143 on SIGTERM stop
   await adapter.enable(makeSpec('ci-stop', [taskOk, 'hang']), makePolicy([ciRunner, taskOk], [ciRunner, taskOk]));
   systemctl(['start', '--no-block', '--', 'sentropic-task-ci-stop.service']);

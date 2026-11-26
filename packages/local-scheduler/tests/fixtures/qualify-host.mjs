@@ -52,7 +52,7 @@ try {
   const spec = { v: 1, taskId, owner: 'qual', description: 'host qual task', schedule: { onCalendar: 'daily', persistent: true }, command: { bin: nodeBin, args: [taskOk, 'tcp-probe'] }, timeoutMs: 30_000 };
   const policy = { runner: { bin: nodeBin, args: [prodRunner, taskOk] }, allowedBins: [nodeBin], allowedScripts: [prodRunner, taskOk], unitDir, stateDir, envFilePath: path.join(workDir, 'env'), runtime: true };
   await adapter.enable(spec, policy);
-  const bwrapRes = spawnSync('bwrap', ['--ro-bind', '/', '/', '--proc', '/proc', '--dev', '/dev', '--unshare-pid', '--die-with-parent', nodeBin, prodRunner, taskOk, taskId], { env: { ...process.env, SENTROPIC_LOCAL_SCHEDULER_STATE_DIR: stateDir }, encoding: 'utf8' });
+  const bwrapRes = spawnSync('bwrap', ['--ro-bind', '/', '/', '--bind', workDir, workDir, '--proc', '/proc', '--dev', '/dev', '--unshare-pid', '--die-with-parent', nodeBin, prodRunner, taskOk, taskId], { env: { ...process.env, SENTROPIC_LOCAL_SCHEDULER_STATE_DIR: stateDir }, encoding: 'utf8' });
   assert.equal(bwrapRes.status, 77);
   assert.equal(existsSync(path.join(stateDir, 'locks', `${taskId}.lock`)), false);
   assert.equal(readTaskWitness(stateDir, taskId), null);
@@ -62,8 +62,9 @@ try {
   const lockHandle = acquireTaskLock(stateDir, taskId);
   assert.ok(lockHandle);
   const lockBytesBefore = readFileSync(lockHandle.lockPath);
-  const bwrapContender = spawnSync('bwrap', ['--ro-bind', '/', '/', '--proc', '/proc', '--dev', '/dev', '--unshare-pid', '--die-with-parent', nodeBin, ciRunner, taskOk, taskId], { env: { ...process.env, SENTROPIC_LOCAL_SCHEDULER_STATE_DIR: stateDir }, encoding: 'utf8' });
+  const bwrapContender = spawnSync('bwrap', ['--ro-bind', '/', '/', '--bind', workDir, workDir, '--proc', '/proc', '--dev', '/dev', '--unshare-pid', '--die-with-parent', nodeBin, ciRunner, taskOk, taskId], { env: { ...process.env, SENTROPIC_LOCAL_SCHEDULER_STATE_DIR: stateDir }, encoding: 'utf8' });
   assert.equal(bwrapContender.status, 0);
+  assert.equal(readLastSkipEntry(stateDir, taskId)?.outcome, 'skipped_locked');
   assert.equal(Buffer.compare(readFileSync(lockHandle.lockPath), lockBytesBefore), 0);
   lockHandle.release();
 
@@ -71,6 +72,7 @@ try {
   execFileSync('systemctl', ['--user', 'start', '--', `sentropic-task-${taskId}.service`], { encoding: 'utf8' });
   assert.equal(readTaskWitness(stateDir, taskId)?.outcome, 'succeeded');
 
+  assert.deepEqual(snapshotDirHashes(userSystemdDir), beforeHashes, '~/.config/systemd/user/ must remain unchanged');
   const receipt = {
     schema: 1, qualifiedAt: new Date().toISOString(), host: os.hostname(), taskId,
     systemdVersion: execFileSync('systemctl', ['--user', 'show', '--property=Version', '--value'], { encoding: 'utf8' }).trim(),

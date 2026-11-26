@@ -13,7 +13,7 @@ import {
   resolveSchedulerEnvFilePath, resolveStateDir, writeFileAtomicPrivate,
 } from '../state-dir.js';
 import { readLastSkipEntry, readTaskWitness } from '../witness.js';
-import { isNotLoadedError, querySystemdRuntime, TASK_ID_REGEX } from './runtime-query.js';
+import { isBenignCleanError, isNotLoadedError, querySystemdRuntime, TASK_ID_REGEX } from './runtime-query.js';
 import { computeExpectedIntervalMsWith } from './calendar.js';
 import { defaultExecFile, probeLingerEnabledWith, requireSystemdUserAvailable, runSystemctl, type ExecFileFn } from './systemctl.js';
 import { assertManagedUnitIfPresent, defaultUnitDir, ensureSafeUnitDir, removeUnitsAndTaskState, rollbackEnableUnits, unitPaths } from './unit-files.js';
@@ -135,7 +135,7 @@ export function createSystemdUserAdapterInternal(deps: SystemdAdapterInternalDep
       const disArgs = uninstallOpts?.runtime ? ['disable', '--now', '--runtime', '--', timerName] : ['disable', '--now', '--', timerName];
       await runSystemctl(disArgs, execFn).catch((e) => { if (!isNotLoadedError(e)) throw e; });
       await runSystemctl(['stop', '--', serviceName], execFn).catch((e) => { if (!isNotLoadedError(e)) throw e; });
-      await runSystemctl(['clean', '--what=state', '--', timerName], execFn).catch((e) => { if (!isNotLoadedError(e)) throw e; });
+      await runSystemctl(['clean', '--what=state', '--', timerName], execFn).catch((e) => { if (!isBenignCleanError(e)) throw e; });
       const removedUnits = removeUnitsAndTaskState(paths, targetDir, taskId, uninstallOpts?.purgeState);
       await runSystemctl(['daemon-reload'], execFn).catch(() => {});
       await runSystemctl(['reset-failed', '--', serviceName, timerName], execFn).catch(() => {});
