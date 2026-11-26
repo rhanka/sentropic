@@ -59,8 +59,9 @@ export async function requireSystemdUserAvailable(execFn: ExecFileFn = defaultEx
 export async function probeLingerEnabledWith(execFn: ExecFileFn = defaultExecFile, user?: string): Promise<boolean | null> {
   let targetUser = user;
   if (!targetUser) {
-    try { targetUser = os.userInfo().username; } catch { targetUser = process.env.USER; }
+    try { targetUser = os.userInfo().username; } catch { targetUser = undefined; }
   }
+  if (!targetUser) targetUser = process.env.USER || process.env.LOGNAME || (process.getuid ? String(process.getuid()) : undefined);
   if (!targetUser) return null;
   try {
     const { stdout } = await execFn('loginctl', ['show-user', '--property=Linger', '--value', '--', targetUser], { timeout: 5_000 });

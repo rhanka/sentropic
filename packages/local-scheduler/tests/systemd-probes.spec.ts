@@ -5,7 +5,7 @@ import {
   computeExpectedIntervalMs, createSystemdUserAdapter,
   probeSystemdUserAvailability, renderSystemdUnits,
 } from '../src/systemd/index.js';
-import { probeSystemdUserAvailabilityWith } from '../src/systemd/systemctl.js';
+import { probeLingerEnabledWith, probeSystemdUserAvailabilityWith } from '../src/systemd/systemctl.js';
 
 describe('@sentropic/local-scheduler/systemd contract & probes (§4.2)', () => {
   it('verifies frozen §4.2 signatures via Equals<> and probes systemd availability/intervals', async () => {
@@ -42,5 +42,10 @@ describe('@sentropic/local-scheduler/systemd contract & probes (§4.2)', () => {
     await expect(computeExpectedIntervalMsWith('*:*:00', async () => ({
       stdout: 'Next elapse: Thu 2026-11-26 00:00:00 UTC\nIteration #2: Thu 2026-11-26 00:00:30 UTC\n', stderr: '',
     }))).rejects.toThrow(InvalidTaskSpecError);
+
+    expect(await probeLingerEnabledWith(async (_f, a) => {
+      expect(a.slice(0, 4)).toEqual(['show-user', '--property=Linger', '--value', '--']);
+      return { stdout: 'no\n', stderr: '' };
+    })).toBe(false);
   });
 });
