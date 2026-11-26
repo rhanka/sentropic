@@ -63,7 +63,7 @@ Implement Lot S1 of `spec/SPEC_EVOL_LOCAL_SCHEDULED_TASKS.md`: core `@sentropic/
   - [x] Run `make typecheck-local-scheduler`, `make test-local-scheduler`, `make build-local-scheduler`, `make scope-check` with `ENV=local-scheduler-s1`.
   - [ ] Push, open PR, keep `BRANCH.md` until pre-merge cleanup, watch CI checks.
 
-- [ ] **Lot 5 — r2 CI registration (`BR-LSCH-EX1a'`) & full test suite coverage**
+- [x] **Lot 5 — r2 CI registration (`BR-LSCH-EX1a'`) & full test suite coverage**
   - [x] Register `local-scheduler` in `scripts/ci/consumer-boundaries.json`, `scripts/ci/publishable-manifests.mjs` (`PACK_TARGETS`), and update CI count assertions in `scripts/ci/consumer-contracts.test.mjs` and `scripts/ci/ci-expected-results.test.mjs`.
   - [x] Add `pack-local-scheduler` in `Makefile` and `validate-local-scheduler` CI pack lane in `.github/workflows/ci.yml`.
   - [x] Expand `tests/contract.spec.ts` (errors, spec bounds, allowlist/shebang/symlinks, `assertHostPidNamespace`).
@@ -73,4 +73,4 @@ Implement Lot S1 of `spec/SPEC_EVOL_LOCAL_SCHEDULED_TASKS.md`: core `@sentropic/
   - [x] Expand `tests/lock.spec.ts` (all fail-closed cases, namespace mismatch, reclaim guard, quarantine mismatch abort, release ownership, fs magics).
   - [x] Expand `tests/runner.spec.ts` (never-rejects public API, step-1 file-mode/`stateDir` parity, step-5 refusal, `consecutiveFailures`, child env sanitization).
   - [x] Expand `tests/runner-signals.spec.ts` and `tests/fake-adapter-static.spec.ts` (`SIGINT`, process-group timeout, step-8 `skips.jsonl` rotation, fake adapter idempotency/uninstall, static exports/guards).
-  - [ ] Re-run Docker exit gates (`typecheck`, `test`, `build`, `scope-check`) + CI guard suites, push, update PR #1079 body, watch `gh pr checks 1079 --watch` until green.
+  - [x] Re-run Docker exit gates (`typecheck`, `test`, `build`, `scope-check`) + CI guard suites, push, update PR #1079 body, watch `gh pr checks 1079 --watch` until green.
