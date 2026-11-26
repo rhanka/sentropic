@@ -8,7 +8,6 @@ import { createSystemdUserAdapterInternal } from '../../dist/systemd/adapter.js'
 import { computeExpectedIntervalMs, probeSystemdUserAvailability, renderSystemdUnits } from '../../dist/systemd/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const pkgRoot = path.resolve(here, '..', '..');
 const nodeBin = realpathSync(process.execPath);
 const ciRunner = realpathSync(path.join(here, 'ci-runner.mjs'));
 const prodRunner = realpathSync(path.join(here, 'prod-runner.mjs'));
@@ -16,7 +15,8 @@ const taskOk = realpathSync(path.join(here, 'task-ok.mjs'));
 const unitDir = path.join(process.env.XDG_RUNTIME_DIR, 'systemd', 'user');
 mkdirSync(unitDir, { recursive: true, mode: 0o700 });
 
-const tmpBase = path.join(pkgRoot, '..', '..', '.tmp');
+// HOME (/home/node in systemd-ci container) is owned by uid 1000; /workspace may belong to a different host UID on CI runners.
+const tmpBase = path.join(process.env.HOME ?? '/tmp', '.tmp');
 mkdirSync(tmpBase, { recursive: true, mode: 0o700 });
 const workDir = mkdtempSync(path.join(tmpBase, 'lsch-sdci-'));
 chmodSync(workDir, 0o700);
