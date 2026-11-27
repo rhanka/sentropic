@@ -674,7 +674,11 @@ jobs:
             comments_publish:
               - 'packages/comments/**'
             skills:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
               - 'packages/skills/**'
+              - '.github/workflows/ci.yml'
             events:
               - 'Makefile'
               - 'package.json'
@@ -1640,6 +1644,10 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Typecheck Skills
+        run: make typecheck-skills
+      - name: Test Skills
+        run: make test-skills ENV=test-ci-skills
       - name: Pack Skills
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
