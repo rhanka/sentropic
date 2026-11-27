@@ -18,10 +18,10 @@
     "@sentropic/track": "0.91.1",
     "@hono/node-server": "2.1.6",
     "svelte": "^5.55.7",
-    "mermaid": "^11.15.0",
+    "mermaid": "^11.16.1",
     "uuid": "^11.1.1",
     "ws": "^8.21.0",
-    "fast-uri": "^3.1.7",
+    "fast-uri": "^3.1.9",
     "linkify-it": "^5.0.2",
     "markdown-it": "14.3.3",
     "follow-redirects": "1.16.3",
@@ -31,8 +31,10 @@
     "brace-expansion": "^5.0.8",
     "minimatch": "^10.2.5",
     "glob": "^11.1.0",
-    "ip-address": "^10.3.1",
+    "ip-address": "^10.7.6",
     "source-map-js": "1.2.2",
+    "fast-copy": "^3.1.0",
+    "postcss-selector-parser": "^7.1.7",
     "@sentropic/engram@0.28.0": {
       "officeparser": "8.2.0"
     }
