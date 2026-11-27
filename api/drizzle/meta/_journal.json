@@ -316,6 +316,13 @@
       "when": 1793250000000,
       "tag": "0048_canvas_live_h2",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1794000000000,
+      "tag": "0049_oauth_clients_magic_link_sign_in",
+      "breakpoints": true
     }
   ]
 }

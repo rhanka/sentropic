@@ -157,6 +157,17 @@ export const federationFlowStates = pgTable('federation_flow_states', {
   expiresAtIdx: index('federation_flow_states_expires_at_idx').on(table.expiresAt),
 }));
 
+// Server-side OAuth/returnUrl continuation bound to a magic-link token hash.
+// Never exposed in the emailed URL; consumed once when the link is verified.
+export const magicLinkContinuations = pgTable('magic_link_continuations', {
+  tokenHash: text('token_hash').primaryKey(),
+  continuationUrl: text('continuation_url').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  expiresAtIdx: index('magic_link_continuations_expires_at_idx').on(table.expiresAt),
+}));
+
 export const oauthClients = pgTable('oauth_clients', {
   id: text('id').primaryKey(),
   clientId: text('client_id').notNull().unique(),
@@ -185,6 +196,8 @@ export const oauthClients = pgTable('oauth_clients', {
   allowedUserIds: text('allowed_user_ids').array().notNull().default(sql`'{}'`),
   // A1: false = a user with no approved tenant membership may keep a tenant-less consent (no `tid`).
   requireTenant: boolean('require_tenant').notNull().default(true),
+  // Per-client policy: true = show one-click e-mail magic-link sign-in as primary flow on IdP login.
+  magicLinkSignIn: boolean('magic_link_sign_in').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
