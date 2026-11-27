@@ -4,7 +4,11 @@
   import type { AuthUiSession } from '@sentropic/auth-ui';
   import { locale } from '$lib/locale';
   import { createIdpAuthTransport, resolveAuthUiLabels } from '$lib/auth-transport';
-  import { resolveOAuthAuthorizeContinuationUrl } from '$lib/oauth-transport';
+  import {
+    buildAuthForwardQuery,
+    resolveOAuthAuthorizeContinuationUrl,
+    resolveSafeReturnUrl,
+  } from '$lib/oauth-transport';
 
   const transport = createIdpAuthTransport();
   let labels = $derived(resolveAuthUiLabels($locale));
@@ -13,17 +17,18 @@
   // (→ presetEmail) and `sentropic_invite_token` (→ presetVerificationToken) as plain params,
   // with the sealed OAuth request in `continue`. A valid invite is proof-of-email → skip the
   // email-code step (`skipEmailVerification`).
-  const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const initialSearch = typeof window !== 'undefined' ? window.location.search : '';
+  const params = new URLSearchParams(initialSearch);
   const presetEmail = params.get('login_hint') ?? undefined;
   const presetVerificationToken = params.get('sentropic_invite_token') ?? undefined;
   const skipEmailVerification = Boolean(presetVerificationToken);
+  const loginHref = `/auth/login${buildAuthForwardQuery(initialSearch)}`;
 
   // BR-39e Lot 6 (D17) — social federation. Same start route as login; on an unknown provider
   // identity this enrolls a new account (auto-link into a non-credentialed shell per D7/D8 for
   // Google). Forwarding the query preserves the OAuth `continue` so invited RP flows resume.
-  const federationQuery = typeof window !== 'undefined' ? window.location.search : '';
   const federationProviders = [
-    { id: 'google', label: 'Google', startHref: `/api/v1/auth/federation/google/start${federationQuery}` },
+    { id: 'google', label: 'Google', startHref: `/api/v1/auth/federation/google/start${initialSearch}` },
   ];
 
   async function handleRegistered(_session: AuthUiSession): Promise<void> {
@@ -34,8 +39,9 @@
       window.location.assign(resolveOAuthAuthorizeContinuationUrl(oauthContinuation));
       return;
     }
+    const returnUrl = resolveSafeReturnUrl(params.get('returnUrl'));
     setTimeout(() => {
-      void goto('/auth/signed-in');
+      void goto(returnUrl);
     }, 2000);
   }
 </script>
@@ -50,7 +56,7 @@
     {federationProviders}
     onRegistered={handleRegistered}
   >
-    <a slot="login-link" href="/auth/login" class="font-medium text-primary hover:opacity-80">
+    <a slot="login-link" href={loginHref} class="font-medium text-primary hover:opacity-80">
       {labels.registerAlreadyHaveAccount}
     </a>
   </AuthRegister>

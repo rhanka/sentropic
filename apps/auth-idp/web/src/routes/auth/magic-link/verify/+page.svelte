@@ -5,6 +5,7 @@
   import type { AuthUiSession } from '@sentropic/auth-ui';
   import { locale } from '$lib/locale';
   import { createIdpAuthTransport, resolveAuthUiLabels } from '$lib/auth-transport';
+  import { resolveSafeReturnUrl } from '$lib/oauth-transport';
 
   const transport = createIdpAuthTransport();
   let labels = $derived(resolveAuthUiLabels($locale));
@@ -17,7 +18,11 @@
     // Session cookie is set same-origin by @sentropic/auth-hono.
   }
 
-  function handleRedirect(): void {
+  function handleRedirect(session: AuthUiSession): void {
+    if (session.continueUrl) {
+      window.location.assign(resolveSafeReturnUrl(session.continueUrl));
+      return;
+    }
     void goto('/auth/signed-in');
   }
 </script>
@@ -27,6 +32,7 @@
     {transport}
     {labels}
     {tokenSource}
+    redirectDelayMs={0}
     onVerified={handleVerified}
     onRedirect={handleRedirect}
   >
