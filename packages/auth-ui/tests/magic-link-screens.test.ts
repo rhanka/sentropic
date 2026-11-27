@@ -11,12 +11,17 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 let renderLoginComponent: (props: Record<string, unknown>) => string;
 let renderVerifyComponent: (props: Record<string, unknown>) => string;
 
-const compileSvelteServer = async (entryPath: string): Promise<(props: Record<string, unknown>) => string> => {
+const compileMagicLinkComponents = async (): Promise<{
+  renderLogin: (props: Record<string, unknown>) => string;
+  renderVerify: (props: Record<string, unknown>) => string;
+}> => {
   const output = await build({
     stdin: {
       contents: `import { render } from 'svelte/server';
-        import Component from '${entryPath}';
-        export default props => render(Component, { props }).body;`,
+        import AuthLogin from './src/components/AuthLogin.svelte';
+        import AuthMagicLinkVerify from './src/components/AuthMagicLinkVerify.svelte';
+        export const renderLogin = props => render(AuthLogin, { props }).body;
+        export const renderVerify = props => render(AuthMagicLinkVerify, { props }).body;`,
       resolveDir: root,
     },
     bundle: true,
@@ -40,13 +45,14 @@ const compileSvelteServer = async (entryPath: string): Promise<(props: Record<st
   const mod = await import(
     /* @vite-ignore */ `data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`
   );
-  return mod.default;
+  return { renderLogin: mod.renderLogin, renderVerify: mod.renderVerify };
 };
 
 beforeAll(async () => {
-  renderLoginComponent = await compileSvelteServer('./src/components/AuthLogin.svelte');
-  renderVerifyComponent = await compileSvelteServer('./src/components/AuthMagicLinkVerify.svelte');
-});
+  const compiled = await compileMagicLinkComponents();
+  renderLoginComponent = compiled.renderLogin;
+  renderVerifyComponent = compiled.renderVerify;
+}, 60_000);
 
 describe('AuthLogin magicLinkSignIn mode', () => {
   it('renders the primary magic-link email form in French without WebAuthn or 6-digit registration', () => {
