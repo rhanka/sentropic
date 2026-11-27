@@ -33,6 +33,11 @@ export interface OauthClientRecord {
    * `resource` (any value ⇒ `invalid_target`). Mirrors `ServiceClientRecord.resourceIndicators`.
    */
   resourceIndicators?: string[];
+  /**
+   * Per-client policy: true = IdP login screen prioritizes one-click e-mail magic-link sign-in
+   * instead of WebAuthn or 6-digit-code registration. Default off (false).
+   */
+  magicLinkSignIn?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
