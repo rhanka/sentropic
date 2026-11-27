@@ -5,7 +5,7 @@ import {
   computeExpectedIntervalMs, createSystemdUserAdapter,
   probeSystemdUserAvailability, renderSystemdUnits,
 } from '../src/systemd/index.js';
-import { probeLingerEnabledWith, probeSystemdUserAvailabilityWith, requireSystemdUserAvailable } from '../src/systemd/systemctl.js';
+import { formatUnavailableMessage, probeLingerEnabledWith, probeSystemdUserAvailabilityWith, requireSystemdUserAvailable } from '../src/systemd/systemctl.js';
 
 describe('@sentropic/local-scheduler/systemd contract & probes (§4.2)', () => {
   it('verifies frozen §4.2 signatures via Equals<> and probes systemd availability/intervals', async () => {
@@ -43,13 +43,40 @@ describe('@sentropic/local-scheduler/systemd contract & probes (§4.2)', () => {
       stdout: 'Next elapse: Thu 2026-11-26 00:00:00 UTC\nIteration #2: Thu 2026-11-26 00:00:30 UTC\n', stderr: '',
     }))).rejects.toThrow(InvalidTaskSpecError);
     await expect(computeExpectedIntervalMsWith('*-*-* 00/6:00:00', async () => {
+      throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+    })).rejects.toMatchObject({
+      code: 'SYSTEMD_USER_UNAVAILABLE',
+      reason: 'no-systemctl',
+      message: expect.stringMatching(/systemd-analyze binary not found.*no fallback scheduler.*Install systemd/i),
+    });
+    await expect(computeExpectedIntervalMsWith('*-*-* 00/6:00:00', async () => {
       throw Object.assign(new Error('timeout'), { killed: true });
-    })).rejects.toMatchObject({ code: 'SYSTEMD_USER_UNAVAILABLE', reason: 'timeout', exitCode: 69 });
+    })).rejects.toMatchObject({
+      code: 'SYSTEMD_USER_UNAVAILABLE',
+      reason: 'timeout',
+      exitCode: 69,
+      message: expect.stringMatching(/systemd-analyze calendar timed out.*no fallback scheduler.*responsive/i),
+    });
     await expect(computeExpectedIntervalMsWith('*-*-* 00/6:00:00', async () => {
       throw Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' });
     })).rejects.toBeInstanceOf(SchedulerUnavailableError);
 
+    expect(formatUnavailableMessage('not-linux', 'unsupported platform: darwin')).toMatch(/not-linux.*no fallback scheduler.*Linux host/i);
     if (process.platform === 'linux') {
+      await expect(requireSystemdUserAvailable(async () => {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      })).rejects.toMatchObject({
+        code: 'SYSTEMD_USER_UNAVAILABLE',
+        reason: 'no-systemctl',
+        message: expect.stringMatching(/no-systemctl.*no fallback scheduler.*Install systemd/i),
+      });
+      await expect(requireSystemdUserAvailable(async () => {
+        throw Object.assign(new Error('timeout'), { killed: true });
+      })).rejects.toMatchObject({
+        code: 'SYSTEMD_USER_UNAVAILABLE',
+        reason: 'timeout',
+        message: expect.stringMatching(/timeout.*no fallback scheduler.*D-Bus session is responsive/i),
+      });
       await expect(requireSystemdUserAvailable(async () => {
         throw Object.assign(new Error('down'), { stderr: 'Failed to connect to bus' });
       })).rejects.toMatchObject({

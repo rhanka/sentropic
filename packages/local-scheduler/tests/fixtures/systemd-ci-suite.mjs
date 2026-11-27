@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readTaskLockSummary, readTaskManifest, readTaskWitness } from '../../dist/index.js';
@@ -88,7 +88,7 @@ try {
     execFile: async (f, a, o) => {
       if (f === 'systemctl' && a[1] === 'enable') {
         await defaultExecFile(f, a, o);
-        sawSymlinkBeforeFail = existsSync(rbTimerSymlink);
+        sawSymlinkBeforeFail = lstatSync(rbTimerSymlink, { throwIfNoEntry: false })?.isSymbolicLink() ?? false;
         throw Object.assign(new Error('fail'), { stderr: 'injected post-enable failure' });
       }
       return defaultExecFile(f, a, o);
@@ -96,7 +96,7 @@ try {
   });
   await assert.rejects(rbAdapter.enable(makeSpec('ci-rb', [taskOk, 'ok']), makePolicy([ciRunner, taskOk], [ciRunner, taskOk])), { code: 'SYSTEMCTL_FAILED', rolledBack: true });
   assert.equal(sawSymlinkBeforeFail, true);
-  assert.equal(existsSync(rbTimerSymlink), false);
+  assert.equal(lstatSync(rbTimerSymlink, { throwIfNoEntry: false }), undefined);
   assert.equal(existsSync(path.join(unitDir, 'sentropic-task-ci-rb.timer')), false);
   assert.equal(existsSync(path.join(unitDir, 'sentropic-task-ci-rb.service')), false);
   assert.equal(existsSync(path.join(stateDir, 'tasks', 'ci-rb', 'manifest.json')), false);
@@ -129,6 +129,7 @@ try {
   assert.equal(sha256(readFileSync(updOrig.servicePath, 'utf8')), updOrig.manifest.units.serviceSha256);
   assert.equal(sha256(readFileSync(updOrig.timerPath, 'utf8')), updOrig.manifest.units.timerSha256);
   assert.equal(readTaskManifest(stateDir, 'ci-rb-upd')?.spec.description, 'orig ci desc');
+  assert.match(systemctl(['show', '--property=Description', '--', 'sentropic-task-ci-rb-upd.service']), /orig ci desc/);
   await adapter.uninstall('ci-rb-upd', { unitDir, stateDir, runtime: true, purgeState: true });
 
   // 4. SuccessExitStatus=130 143 on SIGTERM stop (poll lock phase === 'running' instead of fixed sleep)

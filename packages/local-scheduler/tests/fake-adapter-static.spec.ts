@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -148,19 +148,17 @@ describe('static architectural and packaging guards (m-26, m-32(i), §6.1, §6.2
     ]);
 
     const makefilePath = path.resolve(pkgRoot, '../../Makefile');
-    if (existsSync(makefilePath)) {
-      const mk = readFileSync(makefilePath, 'utf8');
-      const guardMatch = mk.match(/test-local-scheduler-systemd-ci:[\s\S]*?(if command -v python3[\s\S]*?fi)/);
-      expect(guardMatch?.[1]).toBeTruthy();
-      const fakeBinDir = makeTmp();
-      const fakePy = path.join(fakeBinDir, 'python3');
-      writeFileSync(fakePy, '#!/bin/sh\nexit 0\n');
-      chmodSync(fakePy, 0o755);
-      const res = spawnSync('sh', ['-ec', guardMatch![1]], {
-        env: { ...process.env, PATH: `${fakeBinDir}:${process.env.PATH ?? '/usr/bin:/bin'}` },
-        encoding: 'utf8',
-      });
-      expect(res.status).toBe(1);
-    }
+    const mk = readFileSync(makefilePath, 'utf8');
+    const guardMatch = mk.match(/test-local-scheduler-systemd-ci:[\s\S]*?(if command -v python3[\s\S]*?fi)/);
+    expect(guardMatch?.[1]).toBeTruthy();
+    const fakeBinDir = makeTmp();
+    const fakePy = path.join(fakeBinDir, 'python3');
+    writeFileSync(fakePy, '#!/bin/sh\nexit 0\n');
+    chmodSync(fakePy, 0o755);
+    const res = spawnSync('sh', ['-ec', guardMatch![1]], {
+      env: { ...process.env, PATH: `${fakeBinDir}:${process.env.PATH ?? '/usr/bin:/bin'}` },
+      encoding: 'utf8',
+    });
+    expect(res.status).toBe(1);
   });
 });
