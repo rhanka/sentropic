@@ -154,6 +154,21 @@ describe('requireTenant (0022: omission preserves stored policy)', () => {
   });
 });
 
+describe('magicLinkSignIn (per-client policy)', () => {
+  it('returns null when OAUTH_CLIENT_MAGIC_LINK_SIGN_IN is omitted and parses true/false', () => {
+    expect(buildOAuthClientRegistration({ ...baseEnv }).magicLinkSignIn).toBeNull();
+    expect(buildOAuthClientRegistration({
+      ...baseEnv, OAUTH_CLIENT_MAGIC_LINK_SIGN_IN: 'true',
+    }).magicLinkSignIn).toBe(true);
+    expect(buildOAuthClientRegistration({
+      ...baseEnv, OAUTH_CLIENT_MAGIC_LINK_SIGN_IN: 'false',
+    }).magicLinkSignIn).toBe(false);
+    expect(() => buildOAuthClientRegistration({
+      ...baseEnv, OAUTH_CLIENT_MAGIC_LINK_SIGN_IN: 'enabled',
+    })).toThrow(/OAUTH_CLIENT_MAGIC_LINK_SIGN_IN/);
+  });
+});
+
 describe('resolvePolicyUpdate (F5: never wipe policy on rotation)', () => {
   const stored = { allowedUserIds: ['owner-1'], requiredAcr: 'urn:sentropic:loa:passkey-fresh' };
 
