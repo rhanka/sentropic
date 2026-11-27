@@ -11,7 +11,7 @@ export interface AuthMagicLinkVerifyProps {
   labels?: Partial<AuthUiLabels>;
   tokenSource: () => string | null | undefined;
   onVerified: (session: AuthUiSession) => void | Promise<void>;
-  onRedirect?: () => void;
+  onRedirect?: (session: AuthUiSession) => void;
   onError?: (error: AuthUiError) => void;
   redirectDelayMs?: number;
 }
