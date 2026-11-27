@@ -62,18 +62,9 @@ export const authRegisterRateLimiter = rateLimiter({
 
 export const magicLinkRateLimiter = rateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: env.MAGIC_LINK_RATE_LIMIT,
+  limit: 3,
   standardHeaders: 'draft-7',
   keyGenerator: ipKey,
-});
-
-const magicLinkEmailKeyByRequest = new WeakMap<Request, string>();
-
-export const magicLinkEmailRateLimiter = rateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: env.MAGIC_LINK_EMAIL_RATE_LIMIT,
-  standardHeaders: 'draft-7',
-  keyGenerator: (c) => magicLinkEmailKeyByRequest.get(c.req.raw) ?? ipKey(c),
 });
 
 export const oauthTokenRateLimiter = rateLimiter({
@@ -112,13 +103,6 @@ export const applyAuthRateLimiters = (app: Hono): void => {
     ? next() : authSessionRateLimiter(c, next));
   app.use('/api/v1/auth/login/*', authLoginRateLimiter);
   app.use('/api/v1/auth/register/*', authRegisterRateLimiter);
-  app.post('/api/v1/auth/magic-link/request', async (c, next) => {
-    const body = await c.req.raw.clone().json().catch(() => null) as { email?: unknown } | null;
-    if (body && typeof body.email === 'string' && body.email.trim()) {
-      magicLinkEmailKeyByRequest.set(c.req.raw, `email:${body.email.trim().toLowerCase()}`);
-    }
-    return magicLinkEmailRateLimiter(c, next);
-  });
   app.use('/api/v1/auth/magic-link/*', magicLinkRateLimiter);
   app.use('/api/v1/auth/oauth/token', oauthTokenRateLimiter);
   app.use('/api/v1/auth/oauth/introspect', oauthIntrospectRateLimiter);

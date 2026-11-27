@@ -27,6 +27,7 @@ Add a per-client `magic_link_sign_in` policy flag (default false) and end-to-end
   - `api/drizzle/0049_oauth_clients_magic_link_sign_in.sql`
   - `api/drizzle/meta/**`
   - `deploy/k8s/overlays/preprod/idp-identity-sync/client-postcondition.sql`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`

@@ -209,8 +209,6 @@ const envSchema = z.object({
   ADMIN_EMAIL: z.string().email().optional(),
   // Test Configuration
   DISABLE_RATE_LIMIT: z.string().optional(),
-  MAGIC_LINK_RATE_LIMIT: z.coerce.number().int().min(1).default(3),
-  MAGIC_LINK_EMAIL_RATE_LIMIT: z.coerce.number().int().min(1).default(3),
   // PREFERRED: comma-separated CIDRs of the reverse proxies WE operate (Traefik
   // pods, ingress LB, the ui/nginx pod). When set, `X-Forwarded-For` is walked from
   // the right skipping trusted entries — robust to a proxy that does not append, or
