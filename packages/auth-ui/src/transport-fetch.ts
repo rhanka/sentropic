@@ -11,6 +11,8 @@ import type {
   RenameCredentialInput,
   RequestEmailCodeInput,
   RequestEmailCodeResult,
+  RequestMagicLinkInput,
+  RequestMagicLinkResult,
   RevokeCredentialInput,
   VerifyEmailCodeInput,
   VerifyEmailCodeResult,
@@ -141,6 +143,8 @@ export const createDefaultFetchTransport = (
       request<RequestEmailCodeResult>('/email/verify-request', { method: 'POST', body: input }),
     verifyEmailCode: (input: VerifyEmailCodeInput) =>
       request<VerifyEmailCodeResult>('/email/verify-code', { method: 'POST', body: input }),
+    requestMagicLink: (input: RequestMagicLinkInput) =>
+      request<RequestMagicLinkResult>('/magic-link/request', { method: 'POST', body: input }),
     verifyMagicLink: (input: VerifyMagicLinkInput) =>
       request<AuthUiSession>('/magic-link/verify', { method: 'POST', body: input }),
     createPasskeyRegistrationOptions: (input: CreatePasskeyRegistrationOptionsInput) =>
