@@ -16,7 +16,7 @@ import { cmLoginHandlers as loginHandlers } from './auth/cm-authentication';
 import { cmCredentialHandlers as credentialHandlers } from './auth/cm-credentials';
 import { cmEmailHandlers as emailHandlers } from './auth/cm-email';
 import { createFederationRouter } from './auth/federation';
-import { cmMagicLinkHandlers as magicLinkHandlers } from './auth/cm-magic-link';
+import { createCmMagicLinkHandlers } from './auth/cm-magic-link';
 
 
 export interface AuthPathProjection {
@@ -58,13 +58,13 @@ const AUTH_RELATIVE_PATHS = [
   '/federation/challenge/complete',
 ] as const;
 
-const identityHandlers: AuthHonoRouteHandlers = {
+const buildIdentityHandlers = (oauthAuthorizePath: string): AuthHonoRouteHandlers => ({
   ...emailHandlers,
-  ...magicLinkHandlers,
+  ...createCmMagicLinkHandlers(oauthAuthorizePath),
   ...registerHandlers,
   ...loginHandlers,
   ...credentialHandlers,
-};
+});
 
 const joinPath = (prefix: string, path: string): string =>
   `${prefix.replace(/\/$/, '')}${path}`;
@@ -90,7 +90,7 @@ export const createAuthNamespaceModule = (
 
     router.route('/', createAuthRouter({
       excludeRoutes: ['refreshSession', 'logout'],
-      handlers: identityHandlers,
+      handlers: buildIdentityHandlers(oauthAuthorizePath),
       ports: getSentropicOAuthPorts(),
       routePrefix: authPath,
       serviceName: 'auth',
