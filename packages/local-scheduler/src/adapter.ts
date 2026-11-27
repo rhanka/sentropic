@@ -51,8 +51,11 @@ export function createFakeSchedulerAdapter(opts?: {
       ensurePrivateDir(taskDir);
 
       const prev = readTaskManifest(taskStateDir, validSpec.taskId);
+      if (prev === 'corrupt') {
+        throw new ManifestCorruptError(path.join(taskDir, 'manifest.json'), `Task ${validSpec.taskId} manifest is corrupt`);
+      }
       const now = clock();
-      const installedAt = prev && prev !== 'corrupt' ? prev.installedAt : now;
+      const installedAt = prev ? prev.installedAt : now;
       const baseManifest = {
         v: 1 as const, spec: validSpec, runner: policy.runner, enabled: true,
         installedAt, enabledAt: now, stateDir: taskStateDir, envFilePath: taskEnvFilePath, expectedIntervalMs,

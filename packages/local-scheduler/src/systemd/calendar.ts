@@ -23,8 +23,21 @@ export async function computeExpectedIntervalMsWith(
       env: { ...process.env, TZ: 'UTC', LC_ALL: 'C' },
     }));
   } catch (err) {
-    const e = err as NodeJS.ErrnoException & { stderr?: string };
-    if (e.code === 'ENOENT') throw new SchedulerUnavailableError('no-systemctl', 'systemd-analyze binary not found', { cause: err });
+    const e = err as NodeJS.ErrnoException & { killed?: boolean; signal?: string; stderr?: string };
+    if (e.code === 'ENOENT') {
+      throw new SchedulerUnavailableError(
+        'no-systemctl',
+        'systemd-analyze binary not found; no fallback scheduler is used. Install systemd and run from a Linux host user session.',
+        { cause: err },
+      );
+    }
+    if (e.killed || e.code === 'ETIMEDOUT' || e.signal === 'SIGTERM') {
+      throw new SchedulerUnavailableError(
+        'timeout',
+        'systemd-analyze calendar timed out; no fallback scheduler is used. Check that the systemd --user session is responsive and retry.',
+        { cause: err },
+      );
+    }
     throw new InvalidTaskSpecError('INVALID_TASK_SPEC', `invalid OnCalendar expression: ${(e.stderr || e.message).trim()}`, 'schedule.onCalendar', { cause: err });
   }
   const timestamps: number[] = [];
