@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/local-scheduler",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Generic local workstation task scheduler runtime with fail-closed namespace-aware locking, atomic witness persistence, pure dead-man health evaluation, and injection-safe systemd unit generation.",
   "type": "module",
   "license": "MIT",

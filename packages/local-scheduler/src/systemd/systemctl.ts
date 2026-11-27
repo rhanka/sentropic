@@ -50,18 +50,48 @@ export function probeSystemdUserAvailability(): Promise<SystemdAvailability> {
   return probeSystemdUserAvailabilityWith(process.platform, defaultExecFile);
 }
 
+export function formatUnavailableMessage(
+  reason: 'not-linux' | 'no-systemctl' | 'no-user-manager' | 'timeout',
+  detail: string,
+): string {
+  const base = `systemd --user unavailable (${reason}: ${detail}); no fallback scheduler is used.`;
+  switch (reason) {
+    case 'not-linux':
+      return `${base} Run on a Linux host with an active systemd --user session.`;
+    case 'no-systemctl':
+      return `${base} Install systemd (systemctl) and run from a Linux host user session.`;
+    case 'timeout':
+      return `${base} Check that the systemd --user D-Bus session is responsive (systemctl --user status) and retry.`;
+    case 'no-user-manager':
+      return `${base} Run from an unsandboxed host login session with XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS set.`;
+  }
+}
+
 export async function requireSystemdUserAvailable(execFn: ExecFileFn = defaultExecFile): Promise<string> {
   const res = await probeSystemdUserAvailabilityWith(process.platform, execFn);
-  if (!res.available) throw new SchedulerUnavailableError(res.reason, res.detail);
+  if (!res.available) throw new SchedulerUnavailableError(res.reason, formatUnavailableMessage(res.reason, res.detail));
   return res.systemdVersion;
 }
 
-export async function probeLingerEnabledWith(execFn: ExecFileFn = defaultExecFile, user?: string): Promise<boolean | null> {
+export interface LingerProbeDeps {
+  readonly userInfo?: () => { readonly username: string };
+  readonly env?: NodeJS.ProcessEnv;
+  readonly getuid?: () => number;
+}
+
+export async function probeLingerEnabledWith(
+  execFn: ExecFileFn = defaultExecFile,
+  user?: string,
+  deps?: LingerProbeDeps,
+): Promise<boolean | null> {
   let targetUser = user;
+  const readUserInfo = deps?.userInfo ?? os.userInfo;
+  const env = deps?.env ?? process.env;
+  const getuid = deps?.getuid ?? process.getuid;
   if (!targetUser) {
-    try { targetUser = os.userInfo().username; } catch { targetUser = undefined; }
+    try { targetUser = readUserInfo().username; } catch { targetUser = undefined; }
   }
-  if (!targetUser) targetUser = process.env.USER || process.env.LOGNAME || (process.getuid ? String(process.getuid()) : undefined);
+  if (!targetUser) targetUser = env.USER || env.LOGNAME || (getuid ? String(getuid()) : undefined);
   if (!targetUser) return null;
   try {
     const { stdout } = await execFn('loginctl', ['show-user', '--property=Linger', '--value', '--', targetUser], { timeout: 5_000 });
