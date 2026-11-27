@@ -73,6 +73,43 @@ function applicationCsp(scriptHashes: readonly string[] | undefined): string {
 const SANDBOX_CSP = "sandbox";
 const SANDBOXED_MIME_TYPES = new Set(['image/svg+xml', 'application/pdf']);
 
+/** Exact `https://host[:port]` origins only: no wildcard, path, query or credentials. */
+export interface ContentExternalSources {
+  readonly frame?: readonly string[];
+  readonly media?: readonly string[];
+}
+
+function externalOrigin(value: string): string {
+  let url: URL;
+  try { url = new URL(value); } catch { throw new Error(`invalid external source origin: ${value}`); }
+  if (url.protocol !== 'https:' || url.origin !== value || url.hostname.includes('*')) {
+    throw new Error(`invalid external source origin: ${value}`);
+  }
+  return value;
+}
+
+function extendDirective(directives: string[], name: string, origins: readonly string[]): string[] {
+  if (origins.length === 0) return directives;
+  const index = directives.findIndex((entry) => entry === name || entry.startsWith(`${name} `));
+  if (index === -1) return [...directives, `${name} ${origins.join(' ')}`];
+  const values = directives[index]!.slice(name.length).trim().split(/\s+/).filter((v) => v !== '' && v !== "'none'");
+  const next = [...directives];
+  next[index] = `${name} ${[...values, ...origins.filter((origin) => !values.includes(origin))].join(' ')}`;
+  return next;
+}
+
+/** Policy with the host external sources appended; validation refuses any non-origin value. */
+export function withExternalSources(csp: string, sources: ContentExternalSources | undefined): string {
+  const frame = (sources?.frame ?? []).map(externalOrigin);
+  const media = (sources?.media ?? []).map(externalOrigin);
+  if (frame.length === 0 && media.length === 0) return csp;
+  let directives = csp.split(';').map((entry) => entry.trim()).filter((entry) => entry !== '');
+  directives = extendDirective(directives, 'frame-src', frame);
+  directives = extendDirective(directives, 'media-src', media);
+  directives = extendDirective(directives, 'img-src', media);
+  return directives.join('; ');
+}
+
 export interface ContentHeaderInput {
   mimeType: string;
   size: number;
@@ -82,6 +119,12 @@ export interface ContentHeaderInput {
   mode?: ContentMode;
   /** Per-release inline script hashes, application mode only. */
   scriptHashes?: readonly string[];
+  /**
+   * Host-configured external sources for HTML documents only (both modes):
+   * exact HTTPS origins added to `frame-src` (`frame`, replacing `'none'`)
+   * and to `media-src` + `img-src` (`media`). Every other directive is unchanged.
+   */
+  externalSources?: ContentExternalSources;
 }
 
 /** Security/cache headers for one served file (declared MIME wins). */
@@ -93,8 +136,9 @@ export function contentHeaders(input: ContentHeaderInput): Record<string, string
   const mode = input.mode ?? 'safe';
   // Workers enforce the script response's policy, not the document's CSP.
   // Cover every application asset so alternate JavaScript MIME types cannot bypass it.
-  const csp = mode === 'application' ? applicationCsp(isHtml ? input.scriptHashes : undefined)
+  const base = mode === 'application' ? applicationCsp(isHtml ? input.scriptHashes : undefined)
     : isHtml ? SAFE_HTML_CSP : undefined;
+  const csp = base !== undefined && isHtml ? withExternalSources(base, input.externalSources) : base;
   return {
     'content-type': withCharset,
     'content-length': String(input.size),

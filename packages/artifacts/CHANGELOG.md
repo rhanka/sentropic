@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.29
+
+- Add opt-in host external sources on the HTML content CSP: `ContentHeaderInput.externalSources`
+  (`frame` origins to `frame-src`, `media` origins to `media-src` and `img-src`), HTML documents
+  only, both content modes, and the exported `withExternalSources`, which refuses any value that
+  is not an exact HTTPS origin. Without the option every policy is unchanged. Additive; no new
+  export path.
+- Stays in `0.2.x` (cluster-mesh peer `>=0.2.0 <0.3.0`).
+
 ## 0.2.28
 
 - Add DB blob placement: migration `0014_db_blob_placement.sql` (`placement`, `blob_bytes`,
