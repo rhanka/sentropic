@@ -163,6 +163,11 @@ describe('IdP magic-link sign-in with server-side continuation', () => {
       body: JSON.stringify({ token }),
     });
     expect(replayRes.status).toBe(400);
+    const remaining = await db
+      .select()
+      .from(magicLinkContinuations)
+      .where(eq(magicLinkContinuations.tokenHash, sha256Hex(token)));
+    expect(remaining).toHaveLength(0);
 
     // 6. Browser navigates to continueUrl with session cookie -> resumes authorize -> consent
     const resumeRes = await idp.request(`http://localhost:9199${verifyJson.continueUrl}`, {
@@ -213,5 +218,62 @@ describe('IdP magic-link sign-in with server-side continuation', () => {
       body: JSON.stringify({ email: 'participant@example.com', returnUrl: 'https://evil.example/phish' }),
     });
     expect(rejectedReturnRes.status).toBe(400);
+  });
+
+  it('bounds continuation TTL to sealed OAuth state and flags expired continuations on late verify', async () => {
+    const t0 = new Date('2026-06-01T12:00:00.000Z').getTime();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(t0);
+      const idp = createIdpApp();
+
+      // 1. T0: authorize seals continue with 600s TTL (expires at T0 + 10 min)
+      const authorizeRes = await idp.request(buildIdpAuthorizeUrl(MAGIC_CLIENT_ID));
+      expect(authorizeRes.status).toBe(302);
+      const continuation = new URL(authorizeRes.headers.get('location') ?? '').searchParams.get('continue')!;
+      expect(continuation).toBeTruthy();
+
+      // 2. T0 + 2 min: magic-link request stores expires_at = min(mail.expiresAt, sealed.expiresAt) = T0 + 10 min
+      vi.setSystemTime(t0 + 2 * 60_000);
+      const requestRes = await idp.request('http://localhost:9199/api/v1/auth/magic-link/request', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'late-participant@example.com', continue: continuation }),
+      });
+      expect(requestRes.status).toBe(200);
+      const token = extractMagicLinkToken();
+
+      const [stored] = await db
+        .select()
+        .from(magicLinkContinuations)
+        .where(eq(magicLinkContinuations.tokenHash, sha256Hex(token)));
+      expect(stored).toBeDefined();
+      expect(stored!.expiresAt.getTime()).toBe(t0 + 10 * 60_000);
+
+      // 3. T0 + 11 min: sealed state has expired while the 10-min mail token (T0 + 12 min) is still valid
+      vi.setSystemTime(t0 + 11 * 60_000);
+      const verifyRes = await idp.request('http://localhost:9199/api/v1/auth/magic-link/verify', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      expect(verifyRes.status).toBe(200);
+      const verifyJson = (await verifyRes.json()) as {
+        continueUrl?: string;
+        continuationExpired?: boolean;
+        user?: { email?: string };
+      };
+      expect(verifyJson.user?.email).toBe('late-participant@example.com');
+      expect(verifyJson.continueUrl).toBeUndefined();
+      expect(verifyJson.continuationExpired).toBe(true);
+
+      const remaining = await db
+        .select()
+        .from(magicLinkContinuations)
+        .where(eq(magicLinkContinuations.tokenHash, sha256Hex(token)));
+      expect(remaining).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

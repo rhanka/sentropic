@@ -36,6 +36,7 @@ export interface AuthUiSession {
   refreshToken?: string;
   expiresAt?: string;
   continueUrl?: string | null;
+  continuationExpired?: boolean;
 }
 
 export interface AuthUiCredential {
