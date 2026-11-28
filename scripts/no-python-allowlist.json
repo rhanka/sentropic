@@ -1,0 +1,4 @@
+{
+  "_comment": "Exact repo-relative data file paths exempted from the SJ-0s no-Python guard. Empty on origin/main (0 *.py, pyproject.toml, or requirements*.txt files).",
+  "allowedPaths": []
+}
