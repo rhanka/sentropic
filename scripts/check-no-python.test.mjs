@@ -100,6 +100,68 @@ test('t1: exact allowlist entries pass, while another *.py in the same directory
   }
 });
 
+test('t1: package.json scripts and shebangs invoking Python fail and name file and line', () => {
+  const cases = [
+    ['package.json', '{\n  "scripts": {\n    "build": "npm run prepare && python3 build.py"\n  }\n}\n', 'package.json:1:'],
+    ['packages/demo/package.json', '{"scripts":{"build":"PATH=/bin env PIP_CONFIG_FILE=/dev/null /usr/bin/pip install demo"}}\n', 'packages/demo/package.json:1:'],
+    ['package.json', JSON.stringify({ scripts: { build: 'echo "$(python --version)"' } }), 'package.json:1:'],
+    ['package.json', JSON.stringify({ scripts: { build: 'echo `pipx --version`' } }), 'package.json:1:'],
+    ['tools/bootstrap', '#!/opt/bin/python3 -u\n', 'tools/bootstrap:1:'],
+    ['tools/run.sh', '#!/usr/bin/env -S uv run --script\n', 'tools/run.sh:1:'],
+  ];
+  for (const [file, content, expected] of cases) {
+    const tree = makeTempTree({ [file]: content });
+    try {
+      const result = runGuard(tree);
+      assert.equal(result.status, 1, `expected failure for ${file}`);
+      assert.ok(result.stderr.includes(expected), `expected ${expected} in ${result.stderr}`);
+    } finally {
+      tree.cleanup();
+    }
+  }
+});
+
+test('t1: stays silent on prose, comments, and non-command arguments', () => {
+  const tree = makeTempTree({
+    'README.md': 'Python projects can run `python3 demo.py`.\n',
+    'package.json': JSON.stringify({
+      description: 'python3 demo.py',
+      scripts: { describe: "echo 'python3 demo.py && $(poetry run demo)'" },
+    }),
+    'tools/clean.sh': '#!/usr/bin/env bash\necho python3\n',
+  });
+  try {
+    const result = runGuard(tree);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(result.stderr, '');
+  } finally {
+    tree.cleanup();
+  }
+});
+
+test('t1: fails closed when inventory is missing or allowlist is invalid or uses globs', () => {
+  const noInv = makeTempTree({ 'src/clean.ts': 'export const x = 1;\n' });
+  try {
+    const env = { ...process.env };
+    delete env.NO_PYTHON_TRACKED_FILE;
+    delete env.NO_PYTHON_UNTRACKED_FILE;
+    const result = spawnSync(process.execPath, [noInv.guardFile], { cwd: noInv.dir, env, encoding: 'utf8' });
+    assert.equal(result.status, 1);
+    assert.match(`${result.stdout}\n${result.stderr}`, /cannot prove zero-python/);
+  } finally {
+    noInv.cleanup();
+  }
+  for (const rawAllowlist of ['not json', '{"allowedPaths":["*.py"]}', '{"allowedPaths":["../a.py"]}']) {
+    const badAllow = makeTempTree({ 'src/clean.ts': 'export const x = 1;\n' }, { rawAllowlist });
+    try {
+      const result = runGuard(badAllow);
+      assert.equal(result.status, 1);
+    } finally {
+      badAllow.cleanup();
+    }
+  }
+});
+
 test('t2: the repository as it is passes', () => {
   const result = spawnSync(process.execPath, [GUARD_PATH], { cwd: REPO_ROOT, env: process.env, encoding: 'utf8' });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
