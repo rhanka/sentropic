@@ -182,6 +182,14 @@ test('should classify CI scripts as toolchain and docs as benign', () => {
   assert.equal(docs.kind, 'documentation-only');
 });
 
+test('should classify Track ledger files as unrelated metadata with no consumer integration', () => {
+  for (const file of ['.track/events.jsonl', '.track/head.json']) {
+    assert.equal(classifyFileArea(file), 'unrelated', file);
+  }
+  const verdict = classifyCompatibility({ files: ['.track/events.jsonl', '.track/head.json'], packages: [] });
+  assert.equal(verdict.kind, 'documentation-only');
+});
+
 test('should classify ui-only edits as ui-only and shared auth-ui assets as shared asset', () => {
   const ui = classifyCompatibility({ files: ['ui/src/routes/+page.svelte'], packages: [] });
   assert.equal(ui.kind, 'ui-only');

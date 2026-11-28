@@ -25,7 +25,7 @@ const DOC = /^(?:README|CHANGELOG)(?:\.(?:md|txt|rst))?$/i;
 
 export function classifyFileArea(file) {
   if (typeof file !== 'string' || file.length === 0) return 'unknown';
-  if (file.endsWith('.md') || file === 'LICENSE') return 'unrelated';
+  if (file.endsWith('.md') || file === 'LICENSE' || file.startsWith('.track/')) return 'unrelated';
   if (file === 'package.json' || file === 'package-lock.json') return 'root-lock';
   if ((file.startsWith('deploy/k8s/') && /\.(?:yaml|yml|json)$/.test(file))
     || file.startsWith('deploy/ci/')) return 'deployment';
