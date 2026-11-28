@@ -50,13 +50,13 @@ Add the `make check-no-python` zero-Python repository guard, its empty allowlist
   - [x] Verify disk space >= 20 GiB free on worktree, `TMPDIR`, and Docker root (66 GiB free recorded).
   - [x] Confirm allowlist is empty (`0` files matching `*.py`, `pyproject.toml`, `requirements*.txt` on `origin/main`).
   - [x] Declare `BR10-EX1` (`BRSJ-EX1`) in `BRANCH.md`.
-- [ ] **Lot 1 — No-Python guard (`SJ-0s`)**
-  - [ ] RED t1: through `make check-no-python`, a tree with `*.py`, `pyproject.toml`, or `requirements*.txt` outside the allowlist fails and names the path.
-  - [ ] RED t2: through `make check-no-python`, the repository as it is passes.
-  - [ ] Implement `scripts/no-python-allowlist.json`, `scripts/check-no-python.mjs`, `Makefile` `check-no-python` target, and `.github/workflows/ci.yml` step.
-  - [ ] Lot gate: `make scope-check ENV=test-cluster-mesh && make check-no-python ENV=test-cluster-mesh`.
+- [x] **Lot 1 — No-Python guard (`SJ-0s`)**
+  - [x] RED t1: through `make check-no-python`, a tree with `*.py`, `pyproject.toml`, or `requirements*.txt` outside the allowlist fails and names the path.
+  - [x] RED t2: through `make check-no-python`, the repository as it is passes.
+  - [x] Implement `scripts/no-python-allowlist.json`, `scripts/check-no-python.mjs`, `Makefile` `check-no-python` target, and `.github/workflows/ci.yml` step.
+  - [x] Lot gate: `make scope-check ENV=test-cluster-mesh && make check-no-python ENV=test-cluster-mesh`.
 - [ ] **Lot 2 — Final validation**
-  - [ ] Verify CI wiring tests (`make test-publishable-manifests ENV=test-cluster-mesh`).
+  - [x] Verify CI wiring tests (`make test-publishable-manifests ENV=test-cluster-mesh`).
   - [ ] Final gate step 1: create PR with title `feat(ci): no-Python guard (SJ-0s, engram plan/10 row 14)` and `BRANCH.md` + evidence.
   - [ ] Final gate step 2: monitor `gh pr checks <n> --watch` until green.
   - [ ] Final gate step 3: leave PR open (no merge, no publish); write report and `.done` marker.
