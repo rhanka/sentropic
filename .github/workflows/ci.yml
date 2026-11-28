@@ -916,6 +916,9 @@ jobs:
           path: tmp/ci-package-candidates
       - name: Check eradicated packages (CLI and focus are owned by h2a)
         run: make check-eradicated-packages ENV=test-ci-manifests
+      # BR10-EX1 (BRSJ-EX1): zero-Python repository guard on every change, no path filter.
+      - name: Check no Python files or invocations exist in the repository
+        run: make check-no-python ENV=test-ci-manifests
       - name: Reject unlocked CI install paths
         run: make test-ci-lockfile-installs ENV=test-ci-manifests
       - name: Test publishable manifest guard and consumer qualification

@@ -1104,6 +1104,14 @@ test-publishable-manifests: ## Run publishable manifest guard fixture tests in D
 check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropic workspace packages (owned by h2a)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/eradicated-packages.mjs
 
+# BR10-EX1 (BRSJ-EX1): zero-Python guard across tracked + untracked files and executable manifests.
+.PHONY: check-no-python
+check-no-python: ## Fail on Python files or Python invocations outside scripts/no-python-allowlist.json (SJ-0s)
+	@set -eu; inv="$$(mktemp -d)"; trap 'rm -rf "$$inv"' EXIT; \
+	git ls-files --cached -z > "$$inv/tracked.z"; \
+	git ls-files --others --exclude-standard -z > "$$inv/untracked.z"; \
+	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e NO_PYTHON_TRACKED_FILE=/inv/tracked.z -e NO_PYTHON_UNTRACKED_FILE=/inv/untracked.z -v "$(CURDIR):/workspace:ro" -v "$$inv:/inv:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -ec 'node --test scripts/check-no-python.test.mjs && node scripts/check-no-python.mjs'
+
 # BR76-EX2 — CI capacity metrics entry points (plan/62-BRANCH_chore-ci-capacity-metrics.md).
 .PHONY: ci-run-metrics ci-expected-results ci-expected-manifest test-ci-run-metrics test-ci-expected-results
 CI_METRICS_DIR ?= tmp/ci-capacity
