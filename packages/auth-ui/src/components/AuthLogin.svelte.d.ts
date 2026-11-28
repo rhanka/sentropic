@@ -24,6 +24,14 @@ export interface AuthLoginProps {
    * buttons below the passkey login. Empty/absent → no federation UI (legacy hosts unaffected).
    */
   federationProviders?: AuthUiFederationProvider[];
+  /**
+   * Per-client policy: show the one-click e-mail magic-link sign-in form as primary flow.
+   */
+  magicLinkSignIn?: boolean;
+  /** Sealed OAuth `continue` parameter forwarded to the magic-link request endpoint. */
+  oauthContinuation?: string;
+  /** Relative `returnUrl` parameter forwarded when no `continue` is present. */
+  returnUrl?: string;
 }
 
 declare class AuthLogin extends SvelteComponent<

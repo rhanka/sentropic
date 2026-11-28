@@ -25,6 +25,18 @@ export interface VerifyEmailCodeResult {
   verificationToken: string;
 }
 
+export interface RequestMagicLinkInput {
+  email: string;
+  continue?: string;
+  returnUrl?: string;
+}
+
+export interface RequestMagicLinkResult {
+  delivery: 'magic_link' | string;
+  expiresAt?: string;
+  success?: boolean;
+}
+
 export interface VerifyMagicLinkInput {
   token: string;
 }
@@ -85,6 +97,7 @@ export interface ApproveDevicePairingResult {
 export interface AuthUiTransport {
   requestEmailCode(input: RequestEmailCodeInput): Promise<AuthUiResult<RequestEmailCodeResult>>;
   verifyEmailCode(input: VerifyEmailCodeInput): Promise<AuthUiResult<VerifyEmailCodeResult>>;
+  requestMagicLink?(input: RequestMagicLinkInput): Promise<AuthUiResult<RequestMagicLinkResult>>;
   verifyMagicLink(input: VerifyMagicLinkInput): Promise<AuthUiResult<AuthUiSession>>;
   createPasskeyRegistrationOptions(
     input: CreatePasskeyRegistrationOptionsInput,

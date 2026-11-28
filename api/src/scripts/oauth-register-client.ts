@@ -86,6 +86,7 @@ export interface OAuthClientRegistrationValues {
   dpopBoundAccessTokens: boolean;
   grantTypes: string[];
   id: string;
+  magicLinkSignIn: boolean | null;
   name: string;
   redirectUris: string[];
   requirePkce: boolean;
@@ -211,6 +212,10 @@ export const buildOAuthClientRegistration = (
   const requiredAcr = parseRequiredAcr(source.OAUTH_CLIENT_REQUIRED_ACR);
   const allowedUserIds = parseList(source.OAUTH_CLIENT_ALLOWED_USER_IDS ?? '');
   const requireTenant = parseOptionalBoolean(source.OAUTH_CLIENT_REQUIRE_TENANT, 'OAUTH_CLIENT_REQUIRE_TENANT');
+  const magicLinkSignIn = parseOptionalBoolean(
+    source.OAUTH_CLIENT_MAGIC_LINK_SIGN_IN,
+    'OAUTH_CLIENT_MAGIC_LINK_SIGN_IN',
+  );
 
   return {
     allowedScopes: scopes,
@@ -221,6 +226,7 @@ export const buildOAuthClientRegistration = (
     dpopBoundAccessTokens: false,
     grantTypes: [...new Set(grantTypes)],
     id: `client-${clientId}`,
+    magicLinkSignIn,
     name,
     redirectUris,
     requirePkce: true,
@@ -302,6 +308,7 @@ const main = async (): Promise<void> => {
       allowedUserIds: oauthClients.allowedUserIds,
       requiredAcr: oauthClients.requiredAcr,
       requireTenant: oauthClients.requireTenant,
+      magicLinkSignIn: oauthClients.magicLinkSignIn,
     })
     .from(oauthClients)
     .where(eq(oauthClients.clientId, values.clientId))
@@ -313,12 +320,13 @@ const main = async (): Promise<void> => {
     { allowedUserIds: values.allowedUserIds, requiredAcr: values.requiredAcr,
       ...(process.env.OAUTH_CLIENT_GRANT_TYPES !== undefined || process.env.OAUTH_CLIENT_PRESET !== undefined ? { grantTypes: values.grantTypes } : {}) }
   );
-  // Omission preserves the stored tenant-optionality; new clients default to tenant-bound.
+  // Omission preserves the stored tenant-optionality and magic-link policy; new clients default to tenant-bound and magic-link off.
   const requireTenant = values.requireTenant ?? stored?.requireTenant ?? true;
+  const magicLinkSignIn = values.magicLinkSignIn ?? stored?.magicLinkSignIn ?? false;
 
   await db
     .insert(oauthClients)
-    .values({ ...values, requireTenant, allowedUserIds: policy.allowedUserIds, requiredAcr: policy.requiredAcr })
+    .values({ ...values, requireTenant, magicLinkSignIn, allowedUserIds: policy.allowedUserIds, requiredAcr: policy.requiredAcr })
     .onConflictDoUpdate({
       set: {
         allowedScopes: values.allowedScopes,
@@ -326,6 +334,7 @@ const main = async (): Promise<void> => {
         clientSecretHash: values.clientSecretHash,
         dpopBoundAccessTokens: values.dpopBoundAccessTokens,
         grantTypes: policy.grantTypes ?? values.grantTypes,
+        magicLinkSignIn,
         name: values.name,
         redirectUris: values.redirectUris,
         requirePkce: values.requirePkce,
@@ -343,6 +352,7 @@ const main = async (): Promise<void> => {
     .select({
       allowedUserIds: oauthClients.allowedUserIds,
       clientId: oauthClients.clientId,
+      magicLinkSignIn: oauthClients.magicLinkSignIn,
       name: oauthClients.name,
       redirectUris: oauthClients.redirectUris,
       requiredAcr: oauthClients.requiredAcr,
@@ -357,6 +367,7 @@ const main = async (): Promise<void> => {
   console.log(`  resource indicators: ${(row?.resourceIndicators ?? values.resourceIndicators).join(', ') || '(none)'}`);
   console.log(`  required ACR: ${row?.requiredAcr ?? policy.requiredAcr ?? '(no policy)'}`);
   console.log(`  allowed user IDs: ${(row?.allowedUserIds ?? policy.allowedUserIds).join(', ') || '(no restriction)'}`);
+  console.log(`  magic-link sign-in: ${row?.magicLinkSignIn ?? magicLinkSignIn}`);
   console.log('  client secret was hashed (sha256); plaintext NOT stored.');
 };
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Alert, Typography } from '@sentropic/design-system-svelte';
+  import { Alert, Button, Typography } from '@sentropic/design-system-svelte';
   import {
     createAuthUiError,
     createDefaultAuthUiLabels,
@@ -16,8 +16,8 @@
     /** Function the host supplies to read the token from its router/URL. */
     tokenSource: () => string | null | undefined;
     onVerified: (session: AuthUiSession) => void | Promise<void>;
-    /** Optional callback the host can use to drive its own redirect (e.g. to /dashboard). */
-    onRedirect?: () => void;
+    /** Optional callback the host can use to drive its own redirect (e.g. to /dashboard or continueUrl). */
+    onRedirect?: (session: AuthUiSession) => void;
     onError?: (error: AuthUiError) => void;
     /** Delay before invoking onRedirect after a successful verify. Defaults to 1000 ms. */
     redirectDelayMs?: number;
@@ -35,19 +35,26 @@
 
   const resolvedLabels = $derived(createDefaultAuthUiLabels(labels ?? {}));
 
-  let loading = $state(true);
+  let token = $state<string | null>(null);
+  let loading = $state(false);
   let success = $state(false);
   let error = $state('');
 
-  onMount(async () => {
-    const token = tokenSource()?.trim();
-    if (!token) {
+  onMount(() => {
+    const rawToken = tokenSource()?.trim();
+    if (!rawToken) {
       const missing = createAuthUiError('invalid_input', resolvedLabels.magicLinkErrorMissingToken);
       error = missing.message;
       onError?.(missing);
-      loading = false;
       return;
     }
+    token = rawToken;
+  });
+
+  async function handleConfirm(): Promise<void> {
+    if (!token || loading || success) return;
+    loading = true;
+    error = '';
 
     const result = await transport.verifyMagicLink({ token });
     loading = false;
@@ -61,14 +68,20 @@
     success = true;
     await onVerified(result.value);
     if (onRedirect) {
-      setTimeout(onRedirect, redirectDelayMs);
+      if (redirectDelayMs <= 0) {
+        onRedirect(result.value);
+      } else {
+        setTimeout(() => onRedirect?.(result.value), redirectDelayMs);
+      }
     }
-  });
+  }
 </script>
 
 <div class="auth-ui-magic-link">
   <header class="auth-ui-header">
-    <Typography variant="h2" align="center">{resolvedLabels.magicLinkTitle}</Typography>
+    <Typography variant="h2" align="center">
+      {loading || success || error ? resolvedLabels.magicLinkTitle : resolvedLabels.magicLinkConfirmTitle}
+    </Typography>
   </header>
 
   {#if loading && !error}
@@ -85,6 +98,15 @@
         <Typography variant="body-sm" tone="muted">{resolvedLabels.magicLinkBackToLogin}</Typography>
       </slot>
     </div>
+  {:else if token}
+    <div class="auth-ui-confirm">
+      <Typography variant="body-sm" tone="muted" align="center">
+        {resolvedLabels.magicLinkConfirmDescription}
+      </Typography>
+      <Button variant="primary" type="button" onclick={handleConfirm} disabled={loading}>
+        {resolvedLabels.magicLinkConfirmButton}
+      </Button>
+    </div>
   {/if}
 </div>
 
@@ -98,6 +120,12 @@
     padding: 2rem 1rem;
   }
   .auth-ui-header {
+    text-align: center;
+  }
+  .auth-ui-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
     text-align: center;
   }
   .auth-ui-loading {

@@ -7,6 +7,7 @@ import {
 } from './consent-decision-handler.js';
 import { createOAuthEndSessionHandler } from './end-session-handler.js';
 import { createOAuthIntrospectHandler } from './introspect-handler.js';
+import { createOAuthLoginPolicyHandler } from './login-policy-handler.js';
 import { createOAuthRevokeHandler } from './revoke-handler.js';
 import { createOAuthTokenHandler } from './token-handler.js';
 import { createOAuthUserInfoHandler } from './userinfo-handler.js';
@@ -22,6 +23,7 @@ export const createOAuthRouter = (options: CreateOAuthRouterOptions): Hono => {
   const prefix = normalizeRoutePrefix(options.routePrefix ?? '/oauth');
 
   router.get(joinRoutePath(prefix, '/authorize'), createOAuthAuthorizeHandler(options));
+  router.get(joinRoutePath(prefix, '/login-policy'), createOAuthLoginPolicyHandler(options));
   router.get(joinRoutePath(prefix, '/consent'), createOAuthConsentDetailsHandler(options));
   router.post(joinRoutePath(prefix, '/consent/decision'), createOAuthConsentDecisionHandler(options));
   router.post(joinRoutePath(prefix, '/token'), createOAuthTokenHandler(options));

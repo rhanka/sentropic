@@ -200,6 +200,7 @@ const toOauthClientRecord = (row: typeof oauthClients.$inferSelect): OauthClient
   dpopBoundAccessTokens: row.dpopBoundAccessTokens,
   grantTypes: row.grantTypes,
   id: row.id,
+  magicLinkSignIn: row.magicLinkSignIn,
   name: row.name,
   ownerUserId: row.ownerUserId,
   redirectUris: row.redirectUris,

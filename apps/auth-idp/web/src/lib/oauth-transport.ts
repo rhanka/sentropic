@@ -1,6 +1,6 @@
 import type { OAuthConsentDetails, OAuthConsentTransport } from '@sentropic/auth-ui';
 
-import { ApiError, apiFetch } from '$lib/api';
+import { ApiError, apiFetch, apiFetchResponse } from '$lib/api';
 
 // BR-39m A0-bis — IdP-origin OAuth consent transport + authorize continuation.
 //
@@ -49,6 +49,44 @@ export const createIdpOAuthConsentTransport = (
 export const resolveOAuthAuthorizeContinuationUrl = (continuation: string): string => {
   const params = new URLSearchParams({ continue: continuation });
   return `${IDP_OAUTH_PATH}/authorize?${params.toString()}`;
+};
+
+export const fetchOAuthLoginPolicy = async (
+  continuation: string,
+): Promise<{ magicLinkSignIn: boolean }> => {
+  try {
+    const params = new URLSearchParams({ continue: continuation });
+    const response = await apiFetchResponse(`${IDP_OAUTH_PATH}/login-policy?${params.toString()}`, {
+      method: 'GET',
+    });
+    if (!response.ok) return { magicLinkSignIn: false };
+    const data = (await response.json()) as { magicLinkSignIn?: unknown };
+    return { magicLinkSignIn: data?.magicLinkSignIn === true };
+  } catch {
+    return { magicLinkSignIn: false };
+  }
+};
+
+const FORWARD_AUTH_PARAMS = ['continue', 'login_hint', 'returnUrl'] as const;
+
+export const buildAuthForwardQuery = (search: string): string => {
+  const incoming = new URLSearchParams(search);
+  const forwarded = new URLSearchParams();
+  for (const key of FORWARD_AUTH_PARAMS) {
+    const value = incoming.get(key);
+    if (value) forwarded.set(key, value);
+  }
+  const encoded = forwarded.toString();
+  return encoded ? `?${encoded}` : '';
+};
+
+export const resolveSafeReturnUrl = (raw: string | null | undefined, fallback = '/auth/signed-in'): string => {
+  if (!raw) return fallback;
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
+    return fallback;
+  }
+  return trimmed;
 };
 
 const withUnauthorizedHandler = async <T>(

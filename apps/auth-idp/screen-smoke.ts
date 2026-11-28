@@ -111,6 +111,45 @@ const main = async (): Promise<void> => {
       .waitFor({ state: 'visible', timeout: 5000 });
     console.log('SCREEN-SMOKE: /authorize -> served /auth/login screen mounted (auth-ui) OK');
 
+    // 1b. Register link forwards `continue` (and `login_hint` when present), and
+    //     register's login link forwards it back.
+    const registerLink = page.getByRole('link', { name: /s'inscrire|sign up/i });
+    const registerHref = await registerLink.getAttribute('href');
+    if (!registerHref || !registerHref.includes('continue=')) {
+      fail(`login screen register link dropped continue param: ${registerHref}`);
+    }
+    await registerLink.click();
+    await page.waitForURL((url) => url.pathname.startsWith('/auth/register'), { timeout: 5000 });
+    const afterRegister = new URL(page.url());
+    if (afterRegister.searchParams.get('continue') !== continuation) {
+      fail(`register screen lost OAuth continuation: ${page.url()}`);
+    }
+    const backToLoginLink = page.getByRole('link', { name: /se connecter|sign in/i });
+    await backToLoginLink.click();
+    await page.waitForURL((url) => url.pathname.startsWith('/auth/login'), { timeout: 5000 });
+    if (new URL(page.url()).searchParams.get('continue') !== continuation) {
+      fail(`register->login link lost OAuth continuation: ${page.url()}`);
+    }
+    console.log('SCREEN-SMOKE: /auth/login <-> /auth/register preserves OAuth continue OK');
+
+    // 1c. Magic-link verify page requires one click before calling /magic-link/verify
+    //     so mail scanners do not consume the single-use token on page load.
+    let verifyRequestsOnLoad = 0;
+    const trackVerify = (req: { url(): string; method(): string }) => {
+      if (req.method() === 'POST' && req.url().includes('/api/v1/auth/magic-link/verify')) {
+        verifyRequestsOnLoad += 1;
+      }
+    };
+    page.on('request', trackVerify);
+    await page.goto('/auth/magic-link/verify?token=scanner-guard-probe', { waitUntil: 'networkidle' });
+    const confirmBtn = page.getByRole('button', { name: /confirmer et se connecter|confirm and sign in/i });
+    await confirmBtn.waitFor({ state: 'visible', timeout: 5000 });
+    page.off('request', trackVerify);
+    if (verifyRequestsOnLoad !== 0) {
+      fail(`magic-link/verify fired ${verifyRequestsOnLoad} verify POST(s) before user click`);
+    }
+    console.log('SCREEN-SMOKE: /auth/magic-link/verify scanner-safe one-click confirm OK');
+
     // 2. Inject the seeded IdP session cookie (deterministic stand-in for a real
     //    passkey login), then resume authorize via the served screen's `continue`.
     await context.addCookies([

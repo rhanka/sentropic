@@ -13,11 +13,11 @@
     "@sentropic/llm-mesh": "0.38.11",
     "@sentropic/mcp-auth": "0.2.1",
     "@sentropic/artifacts": "0.2.28",
-    "@sentropic/auth-hono": "0.18.1",
+    "@sentropic/auth-hono": "0.18.2",
     "@sentropic/mcp-platform": "0.4.2",
     "hono": "4.13.17",
     "jose": "5.10.0",
     "pg": "8.23.1",
-    "@sentropic/auth-ui": "0.9.1"
+    "@sentropic/auth-ui": "0.9.2"
   }
 }

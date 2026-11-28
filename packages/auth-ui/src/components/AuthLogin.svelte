@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Alert, Button, Typography } from '@sentropic/design-system-svelte';
+  import { Alert, Button, Input, Typography } from '@sentropic/design-system-svelte';
   import {
+    createAuthUiError,
     createDefaultAuthUiLabels,
+    normalizeAuthEmail,
     type AuthUiError,
     type AuthUiFederationProvider,
     type AuthUiLabels,
@@ -34,6 +36,15 @@
      * no federation UI (legacy hosts unaffected, K-UI-LEGACY).
      */
     federationProviders?: AuthUiFederationProvider[];
+    /**
+     * Per-client policy: when true, show the one-click e-mail magic-link sign-in form as the
+     * primary flow instead of WebAuthn or 6-digit-code registration.
+     */
+    magicLinkSignIn?: boolean;
+    /** Sealed OAuth `continue` parameter from the current login page, forwarded to magic-link request. */
+    oauthContinuation?: string;
+    /** Relative `returnUrl` parameter from the current login page, forwarded when no `continue` is set. */
+    returnUrl?: string;
   }
 
   let {
@@ -44,6 +55,9 @@
     onError,
     presetEmail,
     federationProviders = [],
+    magicLinkSignIn = false,
+    oauthContinuation,
+    returnUrl,
   }: Props = $props();
 
   const resolvedLabels = $derived(createDefaultAuthUiLabels(labels ?? {}));
@@ -52,13 +66,54 @@
   let error = $state('');
   let webauthnSupported = $state(false);
   let showLostDevice = $state(false);
+  let email = $state(presetEmail ?? '');
+  let magicLinkSent = $state(false);
 
   onMount(() => {
     webauthnSupported = isWebAuthnSupported();
-    if (!webauthnSupported) {
+    if (!magicLinkSignIn && !webauthnSupported) {
       error = resolvedLabels.loginUnsupportedBrowser;
     }
   });
+
+  function isValidEmail(value: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  }
+
+  async function handleRequestMagicLink(event?: SubmitEvent): Promise<void> {
+    event?.preventDefault();
+    const normalized = normalizeAuthEmail(email);
+    if (!normalized || !isValidEmail(normalized)) {
+      error = resolvedLabels.registerErrorInvalidEmail;
+      return;
+    }
+    if (!transport.requestMagicLink) {
+      const unsupported = createAuthUiError('invalid_input', resolvedLabels.magicLinkSendFailed);
+      error = unsupported.message;
+      onError?.(unsupported);
+      return;
+    }
+    email = normalized;
+    loading = true;
+    error = '';
+
+    const result = await transport.requestMagicLink({
+      email: normalized,
+      ...(oauthContinuation ? { continue: oauthContinuation } : returnUrl ? { returnUrl } : {}),
+    });
+    loading = false;
+    if (!result.ok) {
+      error = result.error.message || resolvedLabels.magicLinkSendFailed;
+      onError?.(result.error);
+      return;
+    }
+    magicLinkSent = true;
+  }
+
+  function resetMagicLinkForm(): void {
+    magicLinkSent = false;
+    error = '';
+  }
 
   async function handleLogin(): Promise<void> {
     loading = true;
@@ -106,49 +161,95 @@
 </script>
 
 <div class="auth-ui-login">
-  <header class="auth-ui-header">
-    <Typography variant="h2" align="center">{resolvedLabels.loginTitle}</Typography>
-    <Typography variant="body-sm" tone="muted" align="center">
-      {webauthnSupported ? resolvedLabels.loginSupportedHint : resolvedLabels.loginUnavailable}
-    </Typography>
-  </header>
+  {#if magicLinkSignIn}
+    <header class="auth-ui-header">
+      <Typography variant="h2" align="center">{resolvedLabels.magicLinkLoginTitle}</Typography>
+      <Typography variant="body-sm" tone="muted" align="center">
+        {resolvedLabels.magicLinkLoginSubtitle}
+      </Typography>
+    </header>
 
-  {#if !webauthnSupported}
-    <Alert tone="error" title={error} />
-  {:else if !showLostDevice}
-    <div class="auth-ui-section">
-      {#if error}
-        <Alert tone="error" title={error} />
-      {/if}
-      <Button variant="primary" type="button" onclick={handleLogin} disabled={loading}>
-        {loading ? resolvedLabels.loginButtonLoading : resolvedLabels.loginButton}
-      </Button>
-      <div class="auth-ui-actions">
-        <Button variant="ghost" type="button" onclick={handleLostDevice}>
-          {resolvedLabels.loginLostDevice}
+    {#if magicLinkSent}
+      <div class="auth-ui-section">
+        <Alert
+          tone="success"
+          title={resolvedLabels.magicLinkSentTitle}
+          message={resolvedLabels.magicLinkSentMessage.replace('{email}', email)}
+        />
+        <div class="auth-ui-actions">
+          <Button variant="ghost" type="button" onclick={resetMagicLinkForm}>
+            {resolvedLabels.magicLinkChangeEmail}
+          </Button>
+        </div>
+      </div>
+    {:else}
+      <form class="auth-ui-section" onsubmit={handleRequestMagicLink}>
+        <Input
+          id="auth-ui-magic-link-email"
+          label={resolvedLabels.registerEmailLabel}
+          type="email"
+          required
+          bind:value={email}
+          disabled={loading}
+          placeholder={resolvedLabels.emailPlaceholder}
+        />
+        {#if error}
+          <Alert tone="error" title={error} />
+        {/if}
+        <Button
+          variant="primary"
+          type="submit"
+          disabled={loading || !email.trim() || !isValidEmail(email.trim())}
+        >
+          {loading ? resolvedLabels.magicLinkSending : resolvedLabels.magicLinkSendButton}
         </Button>
-      </div>
-      <div class="auth-ui-actions">
-        <slot name="no-account">
-          <Typography variant="body-sm" tone="muted">{resolvedLabels.loginNoAccount}</Typography>
-        </slot>
-      </div>
-      <AuthFederationButtons providers={federationProviders} {labels} />
-    </div>
+      </form>
+    {/if}
   {:else}
-    <div class="auth-ui-section">
-      <Alert tone="info" title={resolvedLabels.loginLostDeviceTitle} message={resolvedLabels.webauthnRegisterNotice} />
-      <div class="auth-ui-actions">
-        <slot name="register-new-device">
-          <Typography variant="body-sm" tone="muted">{resolvedLabels.loginRegisterNewDevice}</Typography>
-        </slot>
-      </div>
-      <div class="auth-ui-actions">
-        <Button variant="ghost" type="button" onclick={() => (showLostDevice = false)}>
-          {resolvedLabels.loginBackToLogin}
+    <header class="auth-ui-header">
+      <Typography variant="h2" align="center">{resolvedLabels.loginTitle}</Typography>
+      <Typography variant="body-sm" tone="muted" align="center">
+        {webauthnSupported ? resolvedLabels.loginSupportedHint : resolvedLabels.loginUnavailable}
+      </Typography>
+    </header>
+
+    {#if !webauthnSupported}
+      <Alert tone="error" title={error} />
+    {:else if !showLostDevice}
+      <div class="auth-ui-section">
+        {#if error}
+          <Alert tone="error" title={error} />
+        {/if}
+        <Button variant="primary" type="button" onclick={handleLogin} disabled={loading}>
+          {loading ? resolvedLabels.loginButtonLoading : resolvedLabels.loginButton}
         </Button>
+        <div class="auth-ui-actions">
+          <Button variant="ghost" type="button" onclick={handleLostDevice}>
+            {resolvedLabels.loginLostDevice}
+          </Button>
+        </div>
+        <div class="auth-ui-actions">
+          <slot name="no-account">
+            <Typography variant="body-sm" tone="muted">{resolvedLabels.loginNoAccount}</Typography>
+          </slot>
+        </div>
+        <AuthFederationButtons providers={federationProviders} {labels} />
       </div>
-    </div>
+    {:else}
+      <div class="auth-ui-section">
+        <Alert tone="info" title={resolvedLabels.loginLostDeviceTitle} message={resolvedLabels.webauthnRegisterNotice} />
+        <div class="auth-ui-actions">
+          <slot name="register-new-device">
+            <Typography variant="body-sm" tone="muted">{resolvedLabels.loginRegisterNewDevice}</Typography>
+          </slot>
+        </div>
+        <div class="auth-ui-actions">
+          <Button variant="ghost" type="button" onclick={() => (showLostDevice = false)}>
+            {resolvedLabels.loginBackToLogin}
+          </Button>
+        </div>
+      </div>
+    {/if}
   {/if}
 </div>
 

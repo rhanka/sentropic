@@ -33,6 +33,20 @@ describe('default fetch transport', () => {
     );
   });
 
+  it('posts magic-link requests with optional continue/returnUrl', async () => {
+    fetchMock.mockResolvedValue(makeResponse({ delivery: 'magic_link', success: true }));
+    const transport = createDefaultFetchTransport({ baseUrl: '/api/v1/auth', fetch: fetchMock });
+
+    await transport.requestMagicLink?.({ email: 'user@example.com', continue: 'sealed-continue' });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/v1/auth/magic-link/request');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      email: 'user@example.com',
+      continue: 'sealed-continue',
+    });
+  });
+
   it('sends static headers and credentials by default', async () => {
     fetchMock.mockResolvedValue(makeResponse({}));
     const transport = createDefaultFetchTransport({

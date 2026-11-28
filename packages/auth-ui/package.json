@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/auth-ui",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Reusable Svelte authentication UI contracts and browser passkey helpers for Sentropic-compatible apps.",
   "type": "module",
   "license": "MIT",

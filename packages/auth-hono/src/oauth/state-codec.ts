@@ -65,8 +65,14 @@ export const createOAuthHmacStateCodec = ({
       if (!body || !signature || extra !== undefined) return null;
 
       const expected = await sign(body, secret);
-      const actualBytes = base64urlDecode(signature);
-      const expectedBytes = base64urlDecode(expected);
+      let actualBytes: Uint8Array;
+      let expectedBytes: Uint8Array;
+      try {
+        actualBytes = base64urlDecode(signature);
+        expectedBytes = base64urlDecode(expected);
+      } catch {
+        return null;
+      }
       if (!timingSafeEqual(actualBytes, expectedBytes)) return null;
 
       try {

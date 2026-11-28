@@ -35,6 +35,8 @@ export interface AuthUiSession {
   sessionToken?: string;
   refreshToken?: string;
   expiresAt?: string;
+  continueUrl?: string | null;
+  continuationExpired?: boolean;
 }
 
 export interface AuthUiCredential {
@@ -116,6 +118,17 @@ export interface AuthUiLabels {
   magicLinkBackToLogin: string;
   magicLinkErrorMissingToken: string;
   magicLinkErrorVerifyFailed: string;
+  magicLinkLoginTitle: string;
+  magicLinkLoginSubtitle: string;
+  magicLinkSendButton: string;
+  magicLinkSending: string;
+  magicLinkSentTitle: string;
+  magicLinkSentMessage: string;
+  magicLinkSendFailed: string;
+  magicLinkChangeEmail: string;
+  magicLinkConfirmTitle: string;
+  magicLinkConfirmDescription: string;
+  magicLinkConfirmButton: string;
   devicesTitle: string;
   devicesSubtitle: string;
   devicesEmpty: string;
