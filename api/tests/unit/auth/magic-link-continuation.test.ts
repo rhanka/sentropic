@@ -1,7 +1,10 @@
 import { createOAuthHmacStateCodec, type OauthClientRecord } from '@sentropic/auth-hono';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { resolveMagicLinkContinuation } from '../../../src/services/auth/magic-link-continuation';
+import {
+  consumeMagicLinkContinuation,
+  resolveMagicLinkContinuation,
+} from '../../../src/services/auth/magic-link-continuation';
 
 const codec = createOAuthHmacStateCodec({ secret: 'unit-test-secret-0123456789abcdef' });
 const now = new Date('2026-06-01T12:00:00.000Z');
@@ -55,6 +58,7 @@ describe('resolveMagicLinkContinuation', () => {
     expect(result).toEqual({
       ok: true,
       continuationUrl: `/api/v1/auth/oauth/authorize?continue=${encodeURIComponent(continuation)}`,
+      expiresAt: new Date('2026-06-01T12:10:00.000Z'),
     });
   });
 
@@ -133,5 +137,30 @@ describe('resolveMagicLinkContinuation', () => {
       });
       expect(result).toMatchObject({ ok: false, code: 'invalid_continuation' });
     }
+  });
+});
+
+describe('consumeMagicLinkContinuation', () => {
+  it('distinguishes valid, expired, and missing continuations', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [{ continuation_url: '/api/v1/auth/oauth/authorize?continue=c1', expires_at: '2026-06-01T12:05:00.000Z' }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ continuation_url: '/api/v1/auth/oauth/authorize?continue=c2', expires_at: '2026-06-01T11:59:00.000Z' }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(consumeMagicLinkContinuation({ query }, 'hash-1', now)).resolves.toEqual({
+      status: 'ok',
+      continuationUrl: '/api/v1/auth/oauth/authorize?continue=c1',
+    });
+    await expect(consumeMagicLinkContinuation({ query }, 'hash-2', now)).resolves.toEqual({
+      status: 'expired',
+    });
+    await expect(consumeMagicLinkContinuation({ query }, 'hash-3', now)).resolves.toEqual({
+      status: 'missing',
+    });
   });
 });

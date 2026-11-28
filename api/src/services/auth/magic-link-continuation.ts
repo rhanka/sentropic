@@ -21,8 +21,13 @@ const ALLOWED_INTERNAL_RETURN_PREFIXES = [
 ] as const;
 
 export type ResolveMagicLinkContinuationResult =
-  | { ok: true; continuationUrl: string | null }
+  | { ok: true; continuationUrl: string | null; expiresAt: Date | null }
   | { ok: false; code: string; message: string };
+
+export type ConsumeMagicLinkContinuationResult =
+  | { status: 'ok'; continuationUrl: string }
+  | { status: 'expired' }
+  | { status: 'missing' };
 
 const hasControlChars = (value: string): boolean => /[\x00-\x1f\x7f]/u.test(value);
 
@@ -44,11 +49,14 @@ const validateOAuthContinuationToken = async (
   } catch {
     payload = null;
   }
+  const sealedExpiresAt = payload ? new Date(payload.expiresAt) : null;
   if (
     !payload ||
     payload.userId ||
     payload.codeChallengeMethod !== 'S256' ||
-    new Date(payload.expiresAt) <= now
+    !sealedExpiresAt ||
+    Number.isNaN(sealedExpiresAt.getTime()) ||
+    sealedExpiresAt <= now
   ) {
     return {
       ok: false,
@@ -75,6 +83,7 @@ const validateOAuthContinuationToken = async (
   return {
     ok: true,
     continuationUrl: `${normalizedAuthorizePath}?continue=${encodeURIComponent(continuation)}`,
+    expiresAt: sealedExpiresAt,
   };
 };
 
@@ -97,7 +106,7 @@ export const resolveMagicLinkContinuation = async (input: {
   }
 
   if (input.returnUrl === undefined) {
-    return { ok: true, continuationUrl: null };
+    return { ok: true, continuationUrl: null, expiresAt: null };
   }
 
   const raw = input.returnUrl.trim();
@@ -157,6 +166,7 @@ export const resolveMagicLinkContinuation = async (input: {
   return {
     ok: true,
     continuationUrl: `${parsed.pathname}${parsed.search}`,
+    expiresAt: null,
   };
 };
 
@@ -180,16 +190,16 @@ export const consumeMagicLinkContinuation = async (
   hostTx: unknown,
   tokenHash: string,
   now: Date,
-): Promise<string | null> => {
-  if (!hasQuery(hostTx)) return null;
+): Promise<ConsumeMagicLinkContinuationResult> => {
+  if (!hasQuery(hostTx)) return { status: 'missing' };
   const result = await hostTx.query<{ continuation_url: string; expires_at: Date | string }>(
     `DELETE FROM public.magic_link_continuations WHERE token_hash = $1 RETURNING continuation_url, expires_at`,
     [tokenHash],
   );
   const row = result.rows[0];
-  if (!row) return null;
-  if (new Date(row.expires_at) <= now) return null;
-  return row.continuation_url;
+  if (!row) return { status: 'missing' };
+  if (new Date(row.expires_at) <= now) return { status: 'expired' };
+  return { status: 'ok', continuationUrl: row.continuation_url };
 };
 
 export const purgeExpiredMagicLinkContinuations = async (now: Date = new Date()): Promise<number> => {

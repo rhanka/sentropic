@@ -53,10 +53,16 @@ export const createCmMagicLinkHandlers = (
 
       const mail = binding.deferredMail.find(entry => entry.kind === 'magic_link');
       if (mail && mail.kind === 'magic_link') {
+        const mailExpiresAt = new Date(mail.expiresAt);
+        // Bound continuation TTL to the sealed OAuth state so resume never outlives it.
+        const expiresAt =
+          resolved.expiresAt && resolved.expiresAt.getTime() < mailExpiresAt.getTime()
+            ? resolved.expiresAt
+            : mailExpiresAt;
         await saveMagicLinkContinuation(tx.hostTransaction, {
           tokenHash: sha256Hex(mail.token),
           continuationUrl: resolved.continuationUrl,
-          expiresAt: new Date(mail.expiresAt),
+          expiresAt,
         });
       }
       return response;
@@ -84,16 +90,17 @@ export const createCmMagicLinkHandlers = (
     } });
     const response = await handlers.verifyMagicLink!(staged);
     if (!issued) return response;
-    const continueUrl = verifiedToken
+    const consumed = verifiedToken
       ? await consumeMagicLinkContinuation(tx.hostTransaction, sha256Hex(verifiedToken), binding.ports.clock.now())
-      : null;
+      : ({ status: 'missing' } as const);
     return staged.json({
       ...(await response.json() as Record<string, unknown>),
       sessionToken: issued.sessionToken,
       refreshToken: issued.refreshToken,
       expiresAt: issued.expiresAt.toISOString(),
       ...(requiresDeviceRegistration ? { requiresDeviceRegistration: true } : {}),
-      ...(continueUrl ? { continueUrl } : {}),
+      ...(consumed.status === 'ok' ? { continueUrl: consumed.continuationUrl } : {}),
+      ...(consumed.status === 'expired' ? { continuationExpired: true } : {}),
     });
   })),
 });
